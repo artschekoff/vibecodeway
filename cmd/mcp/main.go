@@ -33,7 +33,7 @@ import (
 
 const (
 	serverName    = "context-consolidator-mcp"
-	serverVersion = "1.0.1"
+	serverVersion = "1.0.2"
 )
 
 func main() {
