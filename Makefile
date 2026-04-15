@@ -4,7 +4,7 @@ APP_NAME := context-consolidator
 
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: setup dev build build-desktop build-mcp install-mcp test lint vet fmt validate clean build-all release db-truncate db-reinit
+.PHONY: setup dev build build-desktop build-mcp install-mcp test lint vet fmt validate clean build-all package-desktop release db-truncate db-reinit
 
 setup:
 	cd frontend && npm install
@@ -56,6 +56,15 @@ rulesync-install:
 
 MCP_PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
 
+package-desktop:
+	@mkdir -p $(DIST_DIR)/
+	@echo "Building desktop app..."
+	@wails build
+	@arch=$$(uname -m | sed 's/x86_64/amd64/;s/arm64/arm64/'); \
+	out="$(DIST_DIR)/$(APP_NAME)-desktop_darwin_$${arch}.zip"; \
+	zip -qr "$$out" build/bin/$(APP_NAME).app; \
+	echo "Desktop archive → $$out"
+
 build-all:
 	@rm -rf $(DIST_DIR)/
 	@mkdir -p $(DIST_DIR)/
@@ -68,6 +77,7 @@ build-all:
 		tar -czf "$${out}.tar.gz" -C $(DIST_DIR) "$(APP_NAME)-mcp_$${os}_$${arch}"; \
 		rm $$out; \
 	done
+	@$(MAKE) package-desktop
 	@echo "Archives written to $(DIST_DIR)/"
 
 release:
@@ -80,6 +90,6 @@ release:
 	git tag -a "v$$version" -m "Release v$$version"; \
 	git push origin main --tags; \
 	$(MAKE) build-all; \
-	gh release create "v$$version" $(DIST_DIR)/*.tar.gz \
+	gh release create "v$$version" $(DIST_DIR)/*.tar.gz $(DIST_DIR)/*.zip \
 		--title "v$$version" \
 		--generate-notes
