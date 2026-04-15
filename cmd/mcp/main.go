@@ -75,8 +75,9 @@ func run() error {
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger)
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger)
+	textProvider := jiraservice.NewTextProvider(s, logger)
 
-	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider)
+	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider)
 
 	mcpServer := server.NewMCPServer(
 		serverName,

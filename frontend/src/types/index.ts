@@ -96,3 +96,18 @@ export interface SlackWorkspaceResult {
   id: string;
   name: string;
 }
+
+export interface ContextFile {
+  id: string;
+  contextId: string;
+  name: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TextFilesPayload {
+  newFiles: { name: string; content: string }[];
+  editedFiles: { id: string; name: string; content: string }[];
+  removedIds: string[];
+}

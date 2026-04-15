@@ -9,6 +9,7 @@ import {
   DeleteJiraComment,
   DeleteSlackThread,
   RemoveSlackChannel,
+  DeleteContextFile,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
@@ -129,6 +130,16 @@ export default function ContextDetailPage() {
     }
   };
 
+  const handleDeleteContextFile = async (fileId: string) => {
+    try {
+      await DeleteContextFile(fileId);
+      showToast("Text file removed");
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   if (loading) return <div className="loading">Loading…</div>;
 
   if (!detail) return (
@@ -146,7 +157,8 @@ export default function ContextDetailPage() {
   const issues = detail.issues ?? [];
   const slackChannels = detail.slackChannels ?? [];
   const slackThreads = detail.slackThreads ?? [];
-  const isEmpty = issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0;
+  const contextFiles = detail.contextFiles ?? [];
+  const isEmpty = issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && contextFiles.length === 0;
 
   return (
     <div className="page">
@@ -169,6 +181,11 @@ export default function ContextDetailPage() {
               {slackThreads.length > 0 && (
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                   {slackThreads.length} thread{slackThreads.length !== 1 ? "s" : ""}
+                </span>
+              )}
+              {contextFiles.length > 0 && (
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  {contextFiles.length} text file{contextFiles.length !== 1 ? "s" : ""}
                 </span>
               )}
             </div>
@@ -258,6 +275,32 @@ export default function ContextDetailPage() {
                         onDeleteThread={handleDeleteThread}
                       />
                     ))}
+                </div>
+              </section>
+            )}
+            {/* Text files section */}
+            {contextFiles.length > 0 && (
+              <section className="detail-section">
+                <div className="detail-section-header">
+                  <span className="detail-section-title">Texts</span>
+                  <span className="detail-section-count">{contextFiles.length}</span>
+                </div>
+                <div className="issue-list">
+                  {contextFiles.map((f) => (
+                    <div key={f.id} className="text-file-card">
+                      <div className="text-file-card-header">
+                        <span className="text-file-card-name">{f.name || "Untitled"}</span>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          style={{ color: "var(--danger)", fontSize: 12 }}
+                          title="Remove text file"
+                          onClick={() => void handleDeleteContextFile(f.id)}
+                        >✕</button>
+                      </div>
+                      <pre className="text-file-card-content">{f.content}</pre>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}

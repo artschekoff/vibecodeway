@@ -101,7 +101,7 @@ type RefreshProgressFunc func(current, total int, step string)
 // current is 1-based, total is the number of active contexts being reloaded.
 type ReloadProgressFunc func(current, total int, contextKey string)
 
-// ContextDetail is a Context with its provider configs, Jira issues, and Slack threads.
+// ContextDetail is a Context with its provider configs, Jira issues, Slack threads, and text files.
 type ContextDetail struct {
 	Context       appstore.Context          `json:"context"`
 	Jira          *jirastore.JiraProvider   `json:"jira,omitempty"`
@@ -109,6 +109,7 @@ type ContextDetail struct {
 	Issues        []jirastore.Issue         `json:"issues"`
 	SlackThreads  []slackstore.SlackThread  `json:"slackThreads,omitempty"`
 	SlackChannels []slackstore.SlackChannel `json:"slackChannels,omitempty"`
+	ContextFiles  []appstore.ContextFile    `json:"contextFiles,omitempty"`
 }
 
 // ContextService provides all domain operations for managing contexts.
@@ -227,6 +228,12 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 		return nil, fmt.Errorf("loading slack channels: %w", err)
 	}
 	detail.SlackChannels = channels
+
+	contextFiles, err := svc.store.ListContextFiles(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading context files: %w", err)
+	}
+	detail.ContextFiles = contextFiles
 
 	return detail, nil
 }
@@ -459,6 +466,21 @@ func (svc *ContextService) DeleteJiraComment(ctx context.Context, id string) err
 // DeleteSlackThread removes a single Slack thread by its internal ID.
 func (svc *ContextService) DeleteSlackThread(ctx context.Context, id string) error {
 	return svc.slackRepo.DeleteSlackThread(ctx, id)
+}
+
+// ListContextFiles returns all text files attached to a context.
+func (svc *ContextService) ListContextFiles(ctx context.Context, contextID string) ([]appstore.ContextFile, error) {
+	return svc.store.ListContextFiles(ctx, contextID)
+}
+
+// UpsertContextFile creates a new text file (when id is empty) or updates an existing one.
+func (svc *ContextService) UpsertContextFile(ctx context.Context, id, contextID, name, content string) (*appstore.ContextFile, error) {
+	return svc.store.UpsertContextFile(ctx, id, contextID, name, content)
+}
+
+// DeleteContextFile removes a single text file by its internal ID.
+func (svc *ContextService) DeleteContextFile(ctx context.Context, id string) error {
+	return svc.store.DeleteContextFile(ctx, id)
 }
 
 // RefreshContext re-fetches the latest data for every item already stored in the context

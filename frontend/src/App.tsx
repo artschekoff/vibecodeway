@@ -60,7 +60,7 @@ function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
   );
 }
 
-const isWailsContext = () => typeof (window as Record<string, unknown>)["go"] !== "undefined";
+const isWailsContext = () => typeof (window as unknown as Record<string, unknown>)["go"] !== "undefined";
 
 function App() {
   const [unlocked, setUnlocked] = useState(!isWailsContext());

@@ -5,17 +5,41 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
 )
 
-const (
-	defaultBinPath = "acli"
-	defaultTimeout = 30 * time.Second
-)
+const defaultTimeout = 30 * time.Second
+
+// knownExtraDirs lists common macOS installation prefixes that are not present in
+// the minimal PATH that macOS GUI apps receive when launched outside a terminal
+// (e.g. from Finder or via open(1)). Exposed as a var so tests can override it.
+var knownExtraDirs = []string{
+	"/opt/homebrew/bin", // Apple-Silicon Homebrew
+	"/usr/local/bin",    // Intel Homebrew / manual installs
+}
+
+// resolveBinPath returns the absolute path for name by first consulting the
+// current PATH (via exec.LookPath), then checking each dir in extraDirs.
+// Falls back to returning name unchanged so exec.Command will surface a
+// clear "executable not found" error rather than a silent mismatch.
+func resolveBinPath(name string, extraDirs []string) string {
+	if path, err := exec.LookPath(name); err == nil {
+		return path
+	}
+	for _, dir := range extraDirs {
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return name
+}
 
 // allowedSubcmds is the set of acli subcommand paths this runner may execute.
 // User-supplied data is only ever passed as flag values, never as subcommands.
@@ -47,9 +71,12 @@ func WithTimeout(d time.Duration) Option {
 }
 
 // NewRunner creates a Runner with the given logger and options.
+// It resolves the acli binary at construction time by checking both the current
+// PATH and knownExtraDirs, so that the runner works correctly in macOS GUI apps
+// which inherit a minimal PATH that excludes Homebrew directories.
 func NewRunner(logger *zap.Logger, opts ...Option) *Runner {
 	r := &Runner{
-		binPath: defaultBinPath,
+		binPath: resolveBinPath("acli", knownExtraDirs),
 		timeout: defaultTimeout,
 		logger:  logger,
 	}

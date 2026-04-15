@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
 import Spinner from "./Spinner";
 import { ListSlackWorkspaces, SearchJQL, SearchSlackChannels } from "../../wailsjs/go/main/App";
-import type { Context, Issue, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackSavePayload, SlackWorkspaceResult } from "../types";
+import type { ContextFile, Context, Issue, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload } from "../types";
 
 interface Props {
   initial?: Context;
   initialJqlQuery?: string;
   initialJiraIssues?: Issue[];
   initialSlackChannels?: SlackChannel[];
+  initialContextFiles?: ContextFile[];
   onSave: (
     key: string,
     searchQuery: string,
     status: string | undefined,
     slackPayload?: SlackSavePayload,
     selectedJiraKeys?: string[],
-    removedJiraIssueIds?: string[]
+    removedJiraIssueIds?: string[],
+    textFilesPayload?: TextFilesPayload
   ) => Promise<void>;
   onCancel: () => void;
 }
@@ -43,9 +45,19 @@ interface SelectedChannelItem extends SlackChannelInput {
   workspace: string;
 }
 
-type ActiveTab = "jira" | "slack";
+interface EditableFile extends ContextFile {
+  dirty: boolean;
+}
 
-export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, onSave, onCancel }: Props) {
+interface NewFile {
+  tempId: string;
+  name: string;
+  content: string;
+}
+
+type ActiveTab = "jira" | "slack" | "texts";
+
+export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialContextFiles, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
   const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
   const [status, setStatus] = useState(initial?.status ?? "active");
@@ -72,6 +84,13 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [selectedChannels, setSelectedChannels] = useState<SelectedChannelItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [channelError, setChannelError] = useState("");
+
+  // Text files state
+  const [existingFiles, setExistingFiles] = useState<EditableFile[]>(
+    (initialContextFiles ?? []).map((f) => ({ ...f, dirty: false }))
+  );
+  const [newFiles, setNewFiles] = useState<NewFile[]>([]);
+  const [removedFileIds, setRemovedFileIds] = useState<string[]>([]);
 
   useEffect(() => {
     setWorkspacesLoading(true);
@@ -208,7 +227,20 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       const removedJiraIds = (initialJiraIssues ?? [])
         .filter((i) => !existingJiraIssues.some((e) => e.id === i.id))
         .map((i) => i.id);
-      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined);
+
+      const editedFiles = existingFiles
+        .filter((f) => f.dirty)
+        .map((f) => ({ id: f.id, name: f.name, content: f.content }));
+      const hasTextChanges = newFiles.length > 0 || editedFiles.length > 0 || removedFileIds.length > 0;
+      const textFilesPayload: TextFilesPayload | undefined = hasTextChanges
+        ? {
+            newFiles: newFiles.map((f) => ({ name: f.name, content: f.content })),
+            editedFiles,
+            removedIds: removedFileIds,
+          }
+        : undefined;
+
+      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined, textFilesPayload);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -290,7 +322,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
             </div>
           )}
 
-          {/* Tab bar — both providers are optional */}
+          {/* Tab bar — all providers are optional */}
           <div className="ctx-tabs">
             <button
               type="button"
@@ -312,6 +344,18 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
               Slack
               {slackChannelCount > 0 ? (
                 <span className="ctx-tab-badge">{slackChannelCount}</span>
+              ) : (
+                <span className="ctx-tab-optional">optional</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className={`ctx-tab${activeTab === "texts" ? " ctx-tab--active" : ""}`}
+              onClick={() => setActiveTab("texts")}
+            >
+              Texts
+              {(existingFiles.length + newFiles.length) > 0 ? (
+                <span className="ctx-tab-badge">{existingFiles.length + newFiles.length}</span>
               ) : (
                 <span className="ctx-tab-optional">optional</span>
               )}
@@ -570,6 +614,105 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
                 <div className="form-hint" style={{ marginTop: 8 }}>
                   Search across workspaces — multiple conditions are merged
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Texts panel */}
+          {activeTab === "texts" && (
+            <div className="ctx-panel">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+
+                {/* Existing files */}
+                {existingFiles.map((f) => (
+                  <div key={f.id} className="text-file-block">
+                    <div className="text-file-header">
+                      <input
+                        className="text-file-name"
+                        value={f.name}
+                        onChange={(e) =>
+                          setExistingFiles((prev) =>
+                            prev.map((x) => x.id === f.id ? { ...x, name: e.target.value, dirty: true } : x)
+                          )
+                        }
+                        placeholder="File name (optional)"
+                      />
+                      <button
+                        type="button"
+                        className="channel-remove-btn"
+                        title="Remove text file"
+                        onClick={() => {
+                          setExistingFiles((prev) => prev.filter((x) => x.id !== f.id));
+                          setRemovedFileIds((prev) => [...prev, f.id]);
+                        }}
+                      >✕</button>
+                    </div>
+                    <textarea
+                      className="text-file-content"
+                      value={f.content}
+                      onChange={(e) =>
+                        setExistingFiles((prev) =>
+                          prev.map((x) => x.id === f.id ? { ...x, content: e.target.value, dirty: true } : x)
+                        )
+                      }
+                      placeholder="Paste or type plain text content…"
+                      rows={8}
+                    />
+                  </div>
+                ))}
+
+                {/* New files being added */}
+                {newFiles.map((f) => (
+                  <div key={f.tempId} className="text-file-block text-file-block--new">
+                    <div className="text-file-header">
+                      <input
+                        className="text-file-name"
+                        value={f.name}
+                        onChange={(e) =>
+                          setNewFiles((prev) =>
+                            prev.map((x) => x.tempId === f.tempId ? { ...x, name: e.target.value } : x)
+                          )
+                        }
+                        placeholder="File name (optional)"
+                      />
+                      <button
+                        type="button"
+                        className="channel-remove-btn"
+                        title="Remove"
+                        onClick={() => setNewFiles((prev) => prev.filter((x) => x.tempId !== f.tempId))}
+                      >✕</button>
+                    </div>
+                    <textarea
+                      className="text-file-content"
+                      value={f.content}
+                      onChange={(e) =>
+                        setNewFiles((prev) =>
+                          prev.map((x) => x.tempId === f.tempId ? { ...x, content: e.target.value } : x)
+                        )
+                      }
+                      placeholder="Paste or type plain text content…"
+                      rows={8}
+                    />
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ marginTop: 8 }}
+                  onClick={() =>
+                    setNewFiles((prev) => [
+                      ...prev,
+                      { tempId: crypto.randomUUID(), name: "", content: "" },
+                    ])
+                  }
+                >
+                  + Add text
+                </button>
+
+                <div className="form-hint" style={{ marginTop: 8 }}>
+                  Plain-text documents attached to this context — included in MCP load_context output
                 </div>
               </div>
             </div>

@@ -60,8 +60,9 @@ func (a *App) startup(ctx context.Context) {
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger)
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger)
+	textProvider := jiraservice.NewTextProvider(s, logger)
 
-	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider)
+	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider)
 
 	logger.Info("context-consolidator desktop started")
 }
@@ -233,6 +234,23 @@ func (a *App) ListSlackChannels(contextID string) ([]slackstore.SlackChannel, er
 // RemoveSlackChannel removes a Slack channel from a context by its record ID.
 func (a *App) RemoveSlackChannel(id string) error {
 	return a.svc.RemoveSlackChannel(a.ctx, id)
+}
+
+// --- Context files ---
+
+// ListContextFiles returns all plain-text files attached to a context.
+func (a *App) ListContextFiles(contextID string) ([]appstore.ContextFile, error) {
+	return a.svc.ListContextFiles(a.ctx, contextID)
+}
+
+// UpsertContextFile creates a new text file (when id is empty) or updates an existing one.
+func (a *App) UpsertContextFile(id, contextID, name, content string) (*appstore.ContextFile, error) {
+	return a.svc.UpsertContextFile(a.ctx, id, contextID, name, content)
+}
+
+// DeleteContextFile removes a single text file by its internal ID.
+func (a *App) DeleteContextFile(id string) error {
+	return a.svc.DeleteContextFile(a.ctx, id)
 }
 
 // DeleteJiraIssue removes a single Jira issue and all its comments from a context.

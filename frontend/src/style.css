@@ -1663,3 +1663,87 @@ select {
   padding: 9px 14px;
   font-size: 14px;
 }
+
+/* ── Text file form (ContextForm Texts tab) ─────────────────────────────── */
+
+.text-file-block {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--surface2);
+}
+
+.text-file-block--new {
+  border-color: var(--accent);
+}
+
+.text-file-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.text-file-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.text-file-content {
+  width: 100%;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+/* ── Text file cards (ContextDetail) ─────────────────────────────────────── */
+
+.text-file-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface2);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.text-file-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.text-file-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.text-file-card-content {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+  max-height: 300px;
+  overflow-y: auto;
+}

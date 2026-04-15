@@ -1,6 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 DIST_DIR := dist
 APP_NAME := context-consolidator
+BUNDLE_NAME := ContextConsolidator
 
 INSTALL_DIR := /usr/local/bin
 
@@ -21,12 +22,13 @@ build-mcp:
 	go build -o bin/context-consolidator-mcp ./cmd/mcp
 
 install-mcp: build-mcp
-	sudo cp bin/$(APP_NAME)-mcp $(INSTALL_DIR)/$(APP_NAME)-mcp
+	sudo install -m 755 $(CURDIR)/bin/$(APP_NAME)-mcp $(INSTALL_DIR)/$(APP_NAME)-mcp
 	@echo "Installed → $(INSTALL_DIR)/$(APP_NAME)-mcp"
 
 install-app: build-desktop
-	cp -r build/bin/$(APP_NAME).app /Applications/$(APP_NAME).app
-	@echo "Installed → /Applications/$(APP_NAME).app"
+	sudo rm -rf /Applications/$(BUNDLE_NAME).app
+	sudo cp -r build/bin/$(APP_NAME).app /Applications/$(BUNDLE_NAME).app
+	@echo "Installed → /Applications/$(BUNDLE_NAME).app"
 
 install-all: install-mcp install-app
 
@@ -57,7 +59,13 @@ clean:
 	rm -rf build/bin bin/ $(DIST_DIR)/
 
 clean-frontend:
-	sudo rm -rf frontend/dist
+	@if ! rm -rf frontend/dist 2>/dev/null; then \
+		echo ""; \
+		echo "  Permission denied — frontend/dist is root-owned (was built with sudo)."; \
+		echo "  Fix once with: sudo rm -rf frontend/dist"; \
+		echo ""; \
+		exit 1; \
+	fi
 
 rulesync-install:
 	cp commands/*.md .rulesync/commands/
@@ -71,7 +79,9 @@ package-desktop:
 	@wails build
 	@arch=$$(uname -m | sed 's/x86_64/amd64/;s/arm64/arm64/'); \
 	out="$(DIST_DIR)/$(APP_NAME)-desktop_darwin_$${arch}.zip"; \
-	zip -qr "$$out" build/bin/$(APP_NAME).app; \
+	cp -r build/bin/$(APP_NAME).app build/bin/$(BUNDLE_NAME).app && \
+	zip -qr "$$out" build/bin/$(BUNDLE_NAME).app && \
+	rm -rf build/bin/$(BUNDLE_NAME).app; \
 	echo "Desktop archive → $$out"
 
 build-all:
