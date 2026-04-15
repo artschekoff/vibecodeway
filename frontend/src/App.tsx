@@ -25,8 +25,8 @@ function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
     try {
       await SetSlackPassphrase(value.trim());
       onUnlocked();
-    } catch {
-      setError("Failed to set passphrase — Wails bridge not available.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set passphrase — Wails bridge not available.");
       setSubmitting(false);
     }
   };
@@ -60,8 +60,10 @@ function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
   );
 }
 
+const isWailsContext = () => typeof (window as Record<string, unknown>)["go"] !== "undefined";
+
 function App() {
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(!isWailsContext());
 
   if (!unlocked) {
     return <PassphraseGate onUnlocked={() => setUnlocked(true)} />;

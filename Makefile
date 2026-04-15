@@ -4,7 +4,7 @@ APP_NAME := context-consolidator
 
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: setup dev build build-desktop build-mcp install-mcp test lint vet fmt validate clean build-all package-desktop release db-truncate db-reinit
+.PHONY: setup dev build build-desktop build-mcp install-mcp install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
 
 setup:
 	cd frontend && npm install
@@ -23,6 +23,12 @@ build-mcp:
 install-mcp: build-mcp
 	sudo cp bin/$(APP_NAME)-mcp $(INSTALL_DIR)/$(APP_NAME)-mcp
 	@echo "Installed → $(INSTALL_DIR)/$(APP_NAME)-mcp"
+
+install-app: build-desktop
+	cp -r build/bin/$(APP_NAME).app /Applications/$(APP_NAME).app
+	@echo "Installed → /Applications/$(APP_NAME).app"
+
+install-all: install-mcp install-app
 
 test:
 	go test ./... -race -count=1
@@ -49,6 +55,9 @@ db-reinit:
 
 clean:
 	rm -rf build/bin bin/ $(DIST_DIR)/
+
+clean-frontend:
+	sudo rm -rf frontend/dist
 
 rulesync-install:
 	cp commands/*.md .rulesync/commands/

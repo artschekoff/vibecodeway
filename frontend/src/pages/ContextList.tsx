@@ -26,6 +26,7 @@ export default function ContextList() {
   const [contexts, setContexts] = useState<Context[]>([]);
   const [loading, setLoading] = useState(true);
   const [authWarning, setAuthWarning] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(false);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Context | null>(null);
@@ -48,18 +49,22 @@ export default function ContextList() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
+  const checkAuth = useCallback(async () => {
+    setCheckingAuth(true);
     try {
-      AuthStatus().then((s) => {
-        if (s.toLowerCase().includes("not logged") || s.toLowerCase().includes("error")) {
-          setAuthWarning(true);
-        }
-      });
+      const s = await AuthStatus();
+      setAuthWarning(s.toLowerCase().includes("not logged") || s.toLowerCase().includes("error"));
     } catch {
       // Wails bridge not available (browser dev mode) — ignore
+    } finally {
+      setCheckingAuth(false);
     }
-  }, [load]);
+  }, []);
+
+  useEffect(() => {
+    load();
+    void checkAuth();
+  }, [load, checkAuth]);
 
   const handleCreate = async (
     key: string,
@@ -243,6 +248,14 @@ export default function ContextList() {
       {authWarning && (
         <div className="auth-banner">
           ⚠ acli not authenticated — run <code style={{ margin: "0 4px", background: "#3a2a0a", padding: "1px 5px", borderRadius: 3 }}>acli jira auth login</code> in your terminal
+          <button
+            className="btn-secondary"
+            style={{ marginLeft: 12, padding: "2px 10px", fontSize: "0.8rem" }}
+            onClick={() => void checkAuth()}
+            disabled={checkingAuth}
+          >
+            {checkingAuth ? "Checking…" : "Check again"}
+          </button>
         </div>
       )}
       <div className="topbar">

@@ -17,7 +17,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "Jira Context",
+		Title:  "Context Consolidator",
 		Width:  1280,
 		Height: 800,
 		MinWidth:  900,
