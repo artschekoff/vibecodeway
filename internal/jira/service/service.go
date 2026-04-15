@@ -1,0 +1,613 @@
+// Package service contains business logic shared by both the Wails GUI and MCP server.
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+
+	"github.com/artschekoff/context-consolidator/internal/jira"
+	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	"github.com/artschekoff/context-consolidator/internal/provider"
+	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"go.uber.org/zap"
+)
+
+const (
+	// statusActive is the status value for contexts included in batch operations.
+	statusActive = "active"
+	// providerJira and providerSlack are the canonical provider name strings.
+	providerJira  = "jira"
+	providerSlack = "slack"
+)
+
+// slackMessage is one entry in the messages array returned by slack-cli search-channels.
+type slackMessage struct {
+	User      string `json:"user"`
+	Text      string `json:"text"`
+	Timestamp string `json:"timestamp"`
+}
+
+// SlackChannelResult is one channel returned by SearchSlackChannels.
+// The JSON shape matches what slack-cli search-channels emits:
+// [{id, name, messages:[{user, text, timestamp}]}]
+// Content is derived by formatting Messages and is not present in the raw JSON.
+type SlackChannelResult struct {
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Messages []slackMessage `json:"messages"`
+	Content  string         `json:"content,omitempty"` // formatted from Messages; not in CLI output but sent to frontend
+}
+
+// SlackWorkspaceResult is one workspace returned by ListSlackWorkspaces.
+// The JSON shape matches what slack-cli list-workspaces emits.
+type SlackWorkspaceResult struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// SlackRunner is the interface for executing slack-cli subcommands.
+// Implemented by slack.Runner in production and by test doubles in tests.
+type SlackRunner interface {
+	Run(ctx context.Context, subCmdPath []string, flags []string) (string, error)
+}
+
+// LoadSlackContextArgs holds all parameters for LoadSlackContext.
+type LoadSlackContextArgs struct {
+	ContextID   string
+	Workspace   string
+	ChannelID   string
+	ThreadTS    string
+	ChannelName string
+	Permalink   string
+	SearchQuery string
+}
+
+// SearchDiff contains the result of running a context's saved JQL and
+// comparing it against the issues already stored for that context.
+type SearchDiff struct {
+	ContextID string              `json:"contextId"`
+	New       []jira.SearchResult `json:"new"`
+	Existing  []jira.SearchResult `json:"existing"`
+}
+
+// RefreshResult summarises what was updated during a RefreshContext run.
+type RefreshResult struct {
+	IssuesRefreshed  int `json:"issuesRefreshed"`
+	NewComments      int `json:"newComments"`
+	ThreadsRefreshed int `json:"threadsRefreshed"`
+}
+
+// ReloadAllResult summarises what was fetched for one context during a ReloadAllContexts run.
+type ReloadAllResult struct {
+	ContextID        string `json:"contextId"`
+	ContextKey       string `json:"contextKey"`
+	NewIssues        int    `json:"newIssues"`
+	NewComments      int    `json:"newComments"`
+	ThreadsRefreshed int    `json:"threadsRefreshed"`
+	Error            string `json:"error,omitempty"`
+}
+
+// RefreshProgressFunc is called before each provider refresh step inside RefreshContext.
+// current is 1-based; total is the number of providers.
+type RefreshProgressFunc func(current, total int, step string)
+
+// ReloadProgressFunc is called after each context is processed during ReloadAllContexts.
+// current is 1-based, total is the number of active contexts being reloaded.
+type ReloadProgressFunc func(current, total int, contextKey string)
+
+// ContextDetail is a Context with its provider configs, Jira issues, and Slack threads.
+type ContextDetail struct {
+	Context       appstore.Context          `json:"context"`
+	Jira          *jirastore.JiraProvider   `json:"jira,omitempty"`
+	Slack         *slackstore.SlackProvider `json:"slack,omitempty"`
+	Issues        []jirastore.Issue         `json:"issues"`
+	SlackThreads  []slackstore.SlackThread  `json:"slackThreads,omitempty"`
+	SlackChannels []slackstore.SlackChannel `json:"slackChannels,omitempty"`
+}
+
+// ContextService provides all domain operations for managing contexts.
+type ContextService struct {
+	store     *appstore.Store
+	jiraRepo  *jirastore.Repo
+	slackRepo *slackstore.Repo
+	jira      *jira.Client
+	slack     SlackRunner
+	logger    *zap.Logger
+	providers []provider.Provider
+}
+
+// NewContextService creates a new ContextService.
+// Pass provider implementations as variadic arguments to enable cross-cutting operations
+// (Refresh, Reload, FormatContext). Each provider must have a unique Name().
+// slack may be nil if Slack support is not needed.
+func NewContextService(s *appstore.Store, j *jira.Client, jiraRepo *jirastore.Repo, slackRepo *slackstore.Repo, slack SlackRunner, logger *zap.Logger, providers ...provider.Provider) *ContextService {
+	return &ContextService{
+		store:     s,
+		jiraRepo:  jiraRepo,
+		slackRepo: slackRepo,
+		jira:      j,
+		slack:     slack,
+		logger:    logger,
+		providers: providers,
+	}
+}
+
+// AuthStatus returns the current acli authentication status.
+func (svc *ContextService) AuthStatus(ctx context.Context) (string, error) {
+	return svc.jira.AuthStatus(ctx)
+}
+
+// ListContexts returns all saved contexts.
+func (svc *ContextService) ListContexts(ctx context.Context) ([]appstore.Context, error) {
+	return svc.store.ListContexts(ctx)
+}
+
+// CreateContext creates a new context with the given key.
+func (svc *ContextService) CreateContext(ctx context.Context, key string) (*appstore.Context, error) {
+	if key == "" {
+		return nil, fmt.Errorf("key is required")
+	}
+	return svc.store.CreateContext(ctx, key)
+}
+
+// UpdateContext updates mutable fields of a context.
+func (svc *ContextService) UpdateContext(ctx context.Context, id, key, status string) (*appstore.Context, error) {
+	return svc.store.UpdateContext(ctx, id, key, status)
+}
+
+// DeleteContext removes a context and all its data.
+func (svc *ContextService) DeleteContext(ctx context.Context, id string) error {
+	return svc.store.DeleteContext(ctx, id)
+}
+
+// SetJiraConfig creates or updates the Jira provider config for a context.
+func (svc *ContextService) SetJiraConfig(ctx context.Context, contextID, searchQuery string) (*jirastore.JiraProvider, error) {
+	if searchQuery == "" {
+		return nil, fmt.Errorf("jira search query is required")
+	}
+	return svc.jiraRepo.UpsertJiraProvider(ctx, contextID, searchQuery)
+}
+
+// SetSlackConfig creates or updates the Slack provider config for a context.
+func (svc *ContextService) SetSlackConfig(ctx context.Context, contextID, workspace, searchQuery string) (*slackstore.SlackProvider, error) {
+	if workspace == "" {
+		return nil, fmt.Errorf("slack workspace is required")
+	}
+	return svc.slackRepo.UpsertSlackProvider(ctx, contextID, workspace, searchQuery)
+}
+
+// GetContextDetail returns a context with provider configs, Jira issues, and Slack threads.
+func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*ContextDetail, error) {
+	c, err := svc.store.GetContext(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading context: %w", err)
+	}
+
+	detail := &ContextDetail{Context: *c}
+
+	jp, err := svc.jiraRepo.GetJiraProvider(ctx, id)
+	if err != nil && !errors.Is(err, jirastore.ErrNotFound) {
+		return nil, fmt.Errorf("loading jira provider: %w", err)
+	}
+	detail.Jira = jp
+
+	sp, err := svc.slackRepo.GetSlackProvider(ctx, id)
+	if err != nil && !errors.Is(err, slackstore.ErrNotFound) {
+		return nil, fmt.Errorf("loading slack provider: %w", err)
+	}
+	detail.Slack = sp
+
+	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading issues: %w", err)
+	}
+	for i, issue := range issues {
+		comments, err := svc.jiraRepo.GetCommentsByIssue(ctx, issue.ID)
+		if err != nil {
+			return nil, fmt.Errorf("loading comments for %s: %w", issue.JiraKey, err)
+		}
+		issues[i].Comments = comments
+	}
+	detail.Issues = issues
+
+	threads, err := svc.slackRepo.ListSlackThreads(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading slack threads: %w", err)
+	}
+	detail.SlackThreads = threads
+
+	channels, err := svc.slackRepo.ListSlackChannels(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading slack channels: %w", err)
+	}
+	detail.SlackChannels = channels
+
+	return detail, nil
+}
+
+// GetContextDetailByKey is like GetContextDetail but looks up by user-assigned key.
+func (svc *ContextService) GetContextDetailByKey(ctx context.Context, key string) (*ContextDetail, error) {
+	c, err := svc.store.GetContextByKey(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("loading context by key: %w", err)
+	}
+	return svc.GetContextDetail(ctx, c.ID)
+}
+
+// SearchNewIssues runs the context's saved JQL and returns a diff of new vs existing issues.
+func (svc *ContextService) SearchNewIssues(ctx context.Context, contextID string) (*SearchDiff, error) {
+	jp, err := svc.jiraRepo.GetJiraProvider(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("loading jira config: %w", err)
+	}
+
+	results, err := svc.jira.Search(ctx, jp.SearchQuery)
+	if err != nil {
+		return nil, fmt.Errorf("searching jira: %w", err)
+	}
+
+	existingKeys, err := svc.jiraRepo.GetIssueJiraKeys(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("loading existing keys: %w", err)
+	}
+
+	diff := &SearchDiff{ContextID: contextID}
+	for _, r := range results {
+		if existingKeys[r.Key] {
+			diff.Existing = append(diff.Existing, r)
+		} else {
+			diff.New = append(diff.New, r)
+		}
+	}
+	return diff, nil
+}
+
+// AddIssuesToContext fetches full details for the given Jira keys and upserts them into the context.
+// Returns the count of issues successfully added or updated.
+func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID string, jiraKeys []string) (int, error) {
+	if len(jiraKeys) == 0 {
+		return 0, nil
+	}
+	added := 0
+	for _, key := range jiraKeys {
+		detail, err := svc.jira.ViewIssue(ctx, key)
+		if err != nil {
+			svc.logger.Warn("failed to view issue", zap.String("key", key), zap.Error(err))
+			continue
+		}
+		_, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
+			detail.Key, detail.Summary, detail.Status, detail.Assignee,
+			detail.IssueType, detail.Description, detail.Updated,
+		)
+		if err != nil {
+			return added, fmt.Errorf("upserting issue %s: %w", key, err)
+		}
+		added++
+	}
+	return added, svc.store.TouchContext(ctx, contextID)
+}
+
+// SyncAllComments fetches and deduplicates comments for every issue in a context.
+// Returns the total number of new comments inserted.
+func (svc *ContextService) SyncAllComments(ctx context.Context, contextID string) (int, error) {
+	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, contextID)
+	if err != nil {
+		return 0, fmt.Errorf("loading issues: %w", err)
+	}
+	return syncIssueComments(ctx, svc.jira, svc.jiraRepo, issues, svc.logger)
+}
+
+// syncIssueComments fetches and deduplicates comments for the given issues.
+// Errors per-issue are logged and skipped; returns the count of newly inserted comments.
+func syncIssueComments(ctx context.Context, jiraClient *jira.Client, jiraRepo *jirastore.Repo, issues []jirastore.Issue, logger *zap.Logger) (int, error) {
+	total := 0
+	for _, issue := range issues {
+		comments, err := jiraClient.ListComments(ctx, issue.JiraKey)
+		if err != nil {
+			logger.Warn("sync comments: list failed", zap.String("key", issue.JiraKey), zap.Error(err))
+			continue
+		}
+		for _, c := range comments {
+			inserted, err := jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
+			if err != nil {
+				logger.Warn("sync comments: upsert failed",
+					zap.String("issue", issue.JiraKey), zap.String("jiraID", c.ID), zap.Error(err))
+				continue
+			}
+			if inserted {
+				total++
+			}
+		}
+	}
+	return total, nil
+}
+
+// LoadSlackContext calls slack-cli load-context, stores the markdown output for the given thread.
+func (svc *ContextService) LoadSlackContext(ctx context.Context, args LoadSlackContextArgs) error {
+	if _, err := svc.store.GetContext(ctx, args.ContextID); err != nil {
+		return fmt.Errorf("loading context: %w", err)
+	}
+
+	flags := []string{args.Workspace, args.ChannelID, args.ThreadTS}
+	if args.ChannelName != "" {
+		flags = append(flags, "--channel-name", args.ChannelName)
+	}
+	if args.Permalink != "" {
+		flags = append(flags, "--permalink", args.Permalink)
+	}
+	if args.SearchQuery != "" {
+		flags = append(flags, "--search-query", args.SearchQuery)
+	}
+
+	content, err := svc.slack.Run(ctx, []string{"load-context"}, flags)
+	if err != nil {
+		return fmt.Errorf("loading slack context: %w", err)
+	}
+
+	_, err = svc.slackRepo.UpsertSlackThread(ctx, args.ContextID, slackstore.UpsertSlackThreadArgs{
+		Workspace:   args.Workspace,
+		ChannelID:   args.ChannelID,
+		ThreadTS:    args.ThreadTS,
+		ChannelName: args.ChannelName,
+		Permalink:   args.Permalink,
+		SearchQuery: args.SearchQuery,
+		Content:     content,
+	})
+	if err != nil {
+		return fmt.Errorf("storing slack thread: %w", err)
+	}
+	return svc.store.TouchContext(ctx, args.ContextID)
+}
+
+// ListSlackThreads returns all stored Slack threads for a context.
+func (svc *ContextService) ListSlackThreads(ctx context.Context, contextID string) ([]slackstore.SlackThread, error) {
+	return svc.slackRepo.ListSlackThreads(ctx, contextID)
+}
+
+// SearchSlackChannels calls slack-cli search-channels with a glob name pattern and returns
+// the matching channels. namePattern may use glob-style wildcards (e.g. "*deploy*").
+func (svc *ContextService) SearchSlackChannels(ctx context.Context, workspace, namePattern string) ([]SlackChannelResult, error) {
+	if workspace == "" {
+		return nil, fmt.Errorf("slack workspace is required")
+	}
+	if namePattern == "" {
+		return nil, fmt.Errorf("channel name pattern is required")
+	}
+
+	output, err := svc.slack.Run(ctx, []string{"search-channels"}, []string{workspace, namePattern})
+	if err != nil {
+		return nil, fmt.Errorf("searching slack channels: %w", err)
+	}
+
+	var results []SlackChannelResult
+	if err := json.Unmarshal([]byte(output), &results); err != nil {
+		return nil, fmt.Errorf("parsing slack channel results: %w", err)
+	}
+	// Populate Content from Messages so callers (add-channel flow) can store it immediately.
+	for i := range results {
+		if len(results[i].Messages) > 0 {
+			results[i].Content = formatMessages(results[i].Name, results[i].Messages)
+		}
+	}
+	return results, nil
+}
+
+// AddSlackChannels upserts multiple Slack channels into a context.
+// If a channel carries Content (pre-loaded by slack-cli search-channels), it is also
+// stored immediately as a slack_thread so the user sees data without a separate Refresh.
+func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, workspace string, channels []slackstore.SlackChannelInput) error {
+	if workspace == "" {
+		return fmt.Errorf("slack workspace is required")
+	}
+	if len(channels) == 0 {
+		return fmt.Errorf("at least one channel is required")
+	}
+	if _, err := svc.store.GetContext(ctx, contextID); err != nil {
+		return fmt.Errorf("loading context: %w", err)
+	}
+	for _, ch := range channels {
+		if _, err := svc.slackRepo.UpsertSlackChannel(ctx, contextID, workspace, ch.ChannelID, ch.ChannelName); err != nil {
+			return fmt.Errorf("upserting channel %q: %w", ch.ChannelName, err)
+		}
+		if ch.Content != "" {
+			// thread_ts="" is intentional: this represents the whole-channel snapshot,
+			// not a specific thread. The upsert key (context_id, channel_id, thread_ts)
+			// ensures re-adding the channel updates rather than duplicates the record.
+			if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+				Workspace:   workspace,
+				ChannelID:   ch.ChannelID,
+				ThreadTS:    "",
+				ChannelName: ch.ChannelName,
+				Content:     ch.Content,
+			}); err != nil {
+				svc.logger.Warn("add channels: upsert thread failed",
+					zap.String("channel", ch.ChannelName), zap.Error(err))
+			}
+		}
+	}
+	return svc.store.TouchContext(ctx, contextID)
+}
+
+// ListSlackChannels returns all Slack channels configured for a context.
+func (svc *ContextService) ListSlackChannels(ctx context.Context, contextID string) ([]slackstore.SlackChannel, error) {
+	return svc.slackRepo.ListSlackChannels(ctx, contextID)
+}
+
+// RemoveSlackChannel removes a Slack channel from a context by its record ID.
+// All slack_threads belonging to the same channel are also removed.
+func (svc *ContextService) RemoveSlackChannel(ctx context.Context, id string) error {
+	return svc.slackRepo.RemoveSlackChannel(ctx, id)
+}
+
+// DeleteJiraIssue removes a single Jira issue by its internal ID.
+// All comments for the issue are cascade-deleted via the FK constraint.
+func (svc *ContextService) DeleteJiraIssue(ctx context.Context, id string) error {
+	return svc.jiraRepo.DeleteIssue(ctx, id)
+}
+
+// DeleteJiraComment removes a single Jira comment by its internal ID.
+func (svc *ContextService) DeleteJiraComment(ctx context.Context, id string) error {
+	return svc.jiraRepo.DeleteComment(ctx, id)
+}
+
+// DeleteSlackThread removes a single Slack thread by its internal ID.
+func (svc *ContextService) DeleteSlackThread(ctx context.Context, id string) error {
+	return svc.slackRepo.DeleteSlackThread(ctx, id)
+}
+
+// RefreshContext re-fetches the latest data for every item already stored in the context
+// by delegating to each registered provider. It does NOT execute JQL or add new items.
+// An optional onProgress callback is called before each provider with a 1-based index.
+func (svc *ContextService) RefreshContext(ctx context.Context, contextID string, onProgress ...RefreshProgressFunc) (*RefreshResult, error) {
+	result := &RefreshResult{}
+
+	var notify RefreshProgressFunc
+	if len(onProgress) > 0 && onProgress[0] != nil {
+		notify = onProgress[0]
+	}
+
+	for i, p := range svc.providers {
+		if notify != nil {
+			notify(i+1, len(svc.providers), p.Name())
+		}
+		stats, err := p.Refresh(ctx, contextID)
+		if err != nil {
+			svc.logger.Warn("refresh: provider failed",
+				zap.String("provider", p.Name()), zap.String("contextID", contextID), zap.Error(err))
+			continue
+		}
+		// Map each provider's stats to the named result fields for frontend compatibility.
+		switch p.Name() {
+		case providerJira:
+			result.IssuesRefreshed += stats.ItemsRefreshed
+			result.NewComments += stats.NewItems
+		case providerSlack:
+			result.ThreadsRefreshed += stats.ItemsRefreshed
+		}
+	}
+
+	if err := svc.store.TouchContext(ctx, contextID); err != nil {
+		svc.logger.Warn("refresh: touch context failed", zap.String("contextID", contextID), zap.Error(err))
+	}
+
+	return result, nil
+}
+
+// FormatContext writes a human-readable summary of all provider data for contextID to w.
+// filter limits output to a specific provider name (e.g. "jira", "slack"); empty = all providers.
+// Only items on or after startAt are included; pass a zero time for no filter.
+func (svc *ContextService) FormatContext(ctx context.Context, w io.Writer, contextID string, filter string, startAt time.Time) error {
+	for _, p := range svc.providers {
+		if filter != "" && filter != p.Name() {
+			continue
+		}
+		if err := p.WriteContext(ctx, w, contextID, startAt); err != nil {
+			svc.logger.Warn("format context: provider failed",
+				zap.String("provider", p.Name()), zap.String("contextID", contextID), zap.Error(err))
+		}
+	}
+	return nil
+}
+
+// ReloadAllContexts iterates over every active context and delegates a full reload to each
+// registered provider. It returns one result per context regardless of errors so the caller
+// always receives a complete picture.
+// An optional onProgress callback is invoked before each context is processed; current is
+// 1-based and total reflects the number of active contexts being reloaded.
+func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...ReloadProgressFunc) ([]ReloadAllResult, error) {
+	contexts, err := svc.store.ListContexts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing contexts: %w", err)
+	}
+
+	active := make([]appstore.Context, 0, len(contexts))
+	for _, c := range contexts {
+		if c.Status == statusActive {
+			active = append(active, c)
+		}
+	}
+
+	var notify ReloadProgressFunc
+	if len(onProgress) > 0 && onProgress[0] != nil {
+		notify = onProgress[0]
+	}
+
+	results := make([]ReloadAllResult, 0, len(active))
+	for i, c := range active {
+		// Notify before processing so the frontend shows which context is being worked on.
+		if notify != nil {
+			notify(i+1, len(active), c.Key)
+		}
+
+		r := ReloadAllResult{ContextID: c.ID, ContextKey: c.Key}
+
+		var errs []string
+		for _, p := range svc.providers {
+			stats, err := p.Reload(ctx, c.ID)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v", p.Name(), err))
+				svc.logger.Warn("reload: provider failed",
+					zap.String("provider", p.Name()), zap.String("contextID", c.ID), zap.Error(err))
+				continue
+			}
+		// Map each provider's stats to the named result fields for frontend compatibility.
+		switch p.Name() {
+		case providerJira:
+			r.NewIssues += stats.ItemsRefreshed // new issues found by JQL
+			r.NewComments += stats.NewItems      // new comments
+		case providerSlack:
+			r.ThreadsRefreshed += stats.ItemsRefreshed
+		}
+		}
+		if len(errs) > 0 {
+			r.Error = strings.Join(errs, "; ")
+		}
+
+		results = append(results, r)
+	}
+	return results, nil
+}
+
+// SearchJQL runs an arbitrary JQL query and returns matching issues.
+// This is intended for query preview / validation without saving to a context.
+func (svc *ContextService) SearchJQL(ctx context.Context, jql string) ([]jira.SearchResult, error) {
+	if jql == "" {
+		return nil, fmt.Errorf("jql query is required")
+	}
+	results, err := svc.jira.Search(ctx, jql)
+	if err != nil {
+		return nil, fmt.Errorf("searching jira: %w", err)
+	}
+	return results, nil
+}
+
+// ListSlackWorkspaces calls slack-cli list-workspaces and returns the available workspaces.
+// slack-cli list-workspaces emits one workspace name per line (plain text, no JSON).
+func (svc *ContextService) ListSlackWorkspaces(ctx context.Context) ([]SlackWorkspaceResult, error) {
+	output, err := svc.slack.Run(ctx, []string{"list-workspaces"}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("listing slack workspaces: %w", err)
+	}
+
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return nil, nil
+	}
+
+	lines := strings.Split(output, "\n")
+	results := make([]SlackWorkspaceResult, 0, len(lines))
+	for _, line := range lines {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		results = append(results, SlackWorkspaceResult{ID: name, Name: name})
+	}
+	return results, nil
+}

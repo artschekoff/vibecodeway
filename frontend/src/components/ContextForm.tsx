@@ -1,0 +1,597 @@
+import { useEffect, useState } from "react";
+import Spinner from "./Spinner";
+import { ListSlackWorkspaces, SearchJQL, SearchSlackChannels } from "../../wailsjs/go/main/App";
+import type { Context, Issue, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackSavePayload, SlackWorkspaceResult } from "../types";
+
+interface Props {
+  initial?: Context;
+  initialJqlQuery?: string;
+  initialJiraIssues?: Issue[];
+  initialSlackChannels?: SlackChannel[];
+  onSave: (
+    key: string,
+    searchQuery: string,
+    status: string | undefined,
+    slackPayload?: SlackSavePayload,
+    selectedJiraKeys?: string[],
+    removedJiraIssueIds?: string[]
+  ) => Promise<void>;
+  onCancel: () => void;
+}
+
+interface JqlTemplate {
+  label: string;
+  query: string;
+}
+
+const JQL_TEMPLATES: JqlTemplate[] = [
+  { label: "Single issue",       query: 'key = PROJ-123' },
+  { label: "Multiple issues",    query: 'key in (PROJ-1, PROJ-2, PROJ-3)' },
+  { label: "Open sprint",        query: 'project = PROJ AND sprint in openSprints() ORDER BY priority DESC' },
+  { label: "My open issues",     query: 'project = PROJ AND assignee = currentUser() AND status != Done ORDER BY updated DESC' },
+  { label: "In Progress",        query: 'project = PROJ AND status = "In Progress" ORDER BY updated DESC' },
+  { label: "Updated this week",  query: 'project = PROJ AND updated >= -7d ORDER BY updated DESC' },
+  { label: "Fix version",        query: 'project = PROJ AND fixVersion = "v1.0" ORDER BY priority DESC' },
+  { label: "Unassigned bugs",    query: 'project = PROJ AND issuetype = Bug AND assignee is EMPTY ORDER BY priority DESC' },
+];
+
+interface ChannelResultItem extends SlackChannelResult {
+  workspace: string;
+}
+
+interface SelectedChannelItem extends SlackChannelInput {
+  workspace: string;
+}
+
+type ActiveTab = "jira" | "slack";
+
+export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, onSave, onCancel }: Props) {
+  const [key, setKey] = useState(initial?.key ?? "");
+  const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
+  const [status, setStatus] = useState(initial?.status ?? "active");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("jira");
+
+  const [jqlFocused, setJqlFocused] = useState(false);
+  const [jqlResults, setJqlResults] = useState<SearchResult[]>([]);
+  const [jqlSearching, setJqlSearching] = useState(false);
+  const [jqlSearchError, setJqlSearchError] = useState("");
+  const [existingJiraIssues, setExistingJiraIssues] = useState<Issue[]>(initialJiraIssues ?? []);
+  const [selectedJiraIssues, setSelectedJiraIssues] = useState<SearchResult[]>([]);
+
+  const [workspaces, setWorkspaces] = useState<SlackWorkspaceResult[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
+  const [workspacesError, setWorkspacesError] = useState("");
+
+  const [slackWorkspace, setSlackWorkspace] = useState(initialSlackChannels?.[0]?.workspace ?? "");
+  const [slackPattern, setSlackPattern] = useState("");
+
+  const [channelResults, setChannelResults] = useState<ChannelResultItem[]>([]);
+  const [existingChannels, setExistingChannels] = useState<SlackChannel[]>(initialSlackChannels ?? []);
+  const [selectedChannels, setSelectedChannels] = useState<SelectedChannelItem[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [channelError, setChannelError] = useState("");
+
+  useEffect(() => {
+    setWorkspacesLoading(true);
+    ListSlackWorkspaces()
+      .then((results) => {
+        const ws = results ?? [];
+        setWorkspaces(ws);
+        if (ws.length > 0) {
+          setSlackWorkspace((prev) => prev || ws[0].name);
+        }
+      })
+      .catch((err: unknown) => setWorkspacesError(String(err)))
+      .finally(() => setWorkspacesLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const isEdit = !!initial;
+
+  const handleSearchJQL = async () => {
+    if (!searchQuery.trim()) {
+      setJqlSearchError("Enter a JQL query to search.");
+      return;
+    }
+    setJqlSearching(true);
+    setJqlSearchError("");
+    setJqlResults([]);
+    try {
+      const results = await SearchJQL(searchQuery.trim());
+      setJqlResults(results ?? []);
+      if (!results || results.length === 0) {
+        setJqlSearchError("No issues found matching the query.");
+      }
+    } catch (err) {
+      setJqlSearchError(String(err));
+    } finally {
+      setJqlSearching(false);
+    }
+  };
+
+  const isJiraSelected = (key: string) => selectedJiraIssues.some((i) => i.key === key);
+
+  const toggleJiraIssue = (issue: SearchResult) => {
+    setSelectedJiraIssues((prev) =>
+      prev.some((i) => i.key === issue.key)
+        ? prev.filter((i) => i.key !== issue.key)
+        : [...prev, issue]
+    );
+  };
+
+  const removeSelectedJiraIssue = (key: string) => {
+    setSelectedJiraIssues((prev) => prev.filter((i) => i.key !== key));
+  };
+
+  const removeExistingJiraIssue = (id: string) => {
+    setExistingJiraIssues((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const toggleAllJiraIssues = () => {
+    const unselected = jqlResults.filter((r) => !isJiraSelected(r.key));
+    if (unselected.length === 0) {
+      // all already selected — deselect all from current results
+      const resultKeys = new Set(jqlResults.map((r) => r.key));
+      setSelectedJiraIssues((prev) => prev.filter((i) => !resultKeys.has(i.key)));
+    } else {
+      setSelectedJiraIssues((prev) => {
+        const existing = new Map(prev.map((i) => [i.key, i]));
+        for (const r of jqlResults) existing.set(r.key, r);
+        return [...existing.values()];
+      });
+    }
+  };
+
+
+  const handleSearchChannels = async () => {
+    if (!slackWorkspace.trim() || !slackPattern.trim()) {
+      setChannelError("Select a workspace and enter a pattern to search.");
+      return;
+    }
+
+    setSearching(true);
+    setChannelError("");
+    setChannelResults([]);
+
+    const alreadyAdded = new Set([
+      ...existingChannels.map((ch) => ch.channelId),
+      ...selectedChannels.map((ch) => ch.channelId),
+    ]);
+
+    try {
+      const res = await SearchSlackChannels(slackWorkspace.trim(), slackPattern.trim());
+      const results = (res ?? []).map((r) => ({ ...r, workspace: slackWorkspace.trim() }));
+      const filtered = results.filter((r) => !alreadyAdded.has(r.id));
+      setChannelResults(filtered);
+
+      if (filtered.length === 0 && results.length > 0) {
+        setChannelError("All matching channels are already added.");
+      } else if (results.length === 0) {
+        setChannelError("No channels found matching the given pattern.");
+      }
+    } catch (err) {
+      setChannelError(String(err));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!key.trim()) {
+      setError("Key is required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const removedChannelIds = (initialSlackChannels ?? [])
+        .filter((ch) => !existingChannels.some((e) => e.id === ch.id))
+        .map((ch) => ch.id);
+
+      const groupMap = new Map<string, SlackChannelInput[]>();
+      for (const ch of selectedChannels) {
+        const arr = groupMap.get(ch.workspace) ?? [];
+        arr.push({ channelId: ch.channelId, channelName: ch.channelName, content: ch.content });
+        groupMap.set(ch.workspace, arr);
+      }
+      const groups = [...groupMap.entries()].map(([workspace, channels]) => ({ workspace, channels }));
+
+      const hasChanges = groups.length > 0 || removedChannelIds.length > 0;
+      const slackPayload: SlackSavePayload | undefined = hasChanges
+        ? { groups, removedChannelIds }
+        : undefined;
+
+      const jiraKeys = selectedJiraIssues.length > 0 ? selectedJiraIssues.map((i) => i.key) : undefined;
+      const removedJiraIds = (initialJiraIssues ?? [])
+        .filter((i) => !existingJiraIssues.some((e) => e.id === i.id))
+        .map((i) => i.id);
+      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleChannel = (result: ChannelResultItem) => {
+    setSelectedChannels((prev) => {
+      if (prev.some((ch) => ch.channelId === result.id)) {
+        return prev.filter((ch) => ch.channelId !== result.id);
+      }
+      return [...prev, { channelId: result.id, channelName: result.name, workspace: result.workspace, content: result.content }];
+    });
+  };
+
+  const removeSelectedChannel = (channelId: string) => {
+    setSelectedChannels((prev) => prev.filter((ch) => ch.channelId !== channelId));
+  };
+
+  const removeExistingChannel = (id: string) => {
+    setExistingChannels((prev) => prev.filter((ch) => ch.id !== id));
+  };
+
+  const isSelected = (id: string) => selectedChannels.some((ch) => ch.channelId === id);
+
+  const workspaceSelect = (
+    <select
+      value={slackWorkspace}
+      onChange={(e) => setSlackWorkspace(e.target.value)}
+      disabled={workspacesLoading}
+      style={{
+        flex: "0 0 150px",
+        opacity: workspacesLoading ? 0.5 : 1,
+        borderColor: workspacesError ? "var(--danger)" : undefined,
+      }}
+    >
+      {workspacesLoading && <option value="">Loading…</option>}
+      {!workspacesLoading && workspaces.length === 0 && <option value="">No workspaces</option>}
+      {!workspacesLoading && workspaces.length > 0 && !slackWorkspace && (
+        <option value="">Select workspace</option>
+      )}
+      {workspaces.map((ws) => (
+        <option key={ws.id} value={ws.name}>{ws.name}</option>
+      ))}
+    </select>
+  );
+
+  const slackChannelCount = existingChannels.length + selectedChannels.length;
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal modal--wide" onClick={(e) => e.stopPropagation()}>
+        <h2>{initial ? "Edit Context" : "New Context"}</h2>
+
+        {error && <div className="error-banner">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-scroll-body">
+          {/* Always-visible fields */}
+          <div className="form-group">
+            <label>Key</label>
+            <input
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="e.g. sprint-42, auth-refactor"
+              autoFocus
+            />
+            <div className="form-hint">A short human-readable name for this context</div>
+          </div>
+
+          {initial && (
+            <div className="form-group">
+              <label>Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          )}
+
+          {/* Tab bar — both providers are optional */}
+          <div className="ctx-tabs">
+            <button
+              type="button"
+              className={`ctx-tab${activeTab === "jira" ? " ctx-tab--active" : ""}`}
+              onClick={() => setActiveTab("jira")}
+            >
+              Jira
+              {(existingJiraIssues.length > 0 || selectedJiraIssues.length > 0) ? (
+                <span className="ctx-tab-badge">{existingJiraIssues.length + selectedJiraIssues.length}</span>
+              ) : (
+                <span className="ctx-tab-optional">optional</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className={`ctx-tab${activeTab === "slack" ? " ctx-tab--active" : ""}`}
+              onClick={() => setActiveTab("slack")}
+            >
+              Slack
+              {slackChannelCount > 0 ? (
+                <span className="ctx-tab-badge">{slackChannelCount}</span>
+              ) : (
+                <span className="ctx-tab-optional">optional</span>
+              )}
+            </button>
+          </div>
+
+          {/* Jira panel */}
+          {activeTab === "jira" && (
+            <div className="ctx-panel">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+
+                {/* Saved tickets */}
+                {existingJiraIssues.length > 0 && (
+                  <div className="channel-saved-list" style={{ marginBottom: 12 }}>
+                    <div className="channel-saved-header">
+                      Saved tickets
+                      <span className="channel-saved-count">{existingJiraIssues.length}</span>
+                    </div>
+                    {existingJiraIssues.map((issue) => (
+                      <div key={issue.id} className="channel-saved-row">
+                        <span className="jira-saved-key">{issue.jiraKey}</span>
+                        <span className="channel-saved-name" style={{ fontWeight: 400 }}>{issue.summary}</span>
+                        <span className="jql-result-status" style={{ marginRight: 0 }}>{issue.status}</span>
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove ticket"
+                          onClick={() => removeExistingJiraIssue(issue.id)}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Selected issues — to be added */}
+                {selectedJiraIssues.length > 0 && (
+                  <div className="channel-saved-list channel-saved-list--new" style={{ marginBottom: 12 }}>
+                    <div className="channel-saved-header">To be added</div>
+                    {selectedJiraIssues.map((issue) => (
+                      <div key={issue.key} className="channel-saved-row channel-saved-row--new">
+                        <span className="jira-saved-key">{issue.key}</span>
+                        <span className="channel-saved-name" style={{ fontWeight: 400 }}>{issue.summary}</span>
+                        <span className="jql-result-status" style={{ marginRight: 0 }}>{issue.status}</span>
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove"
+                          onClick={() => removeSelectedJiraIssue(issue.key)}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* JQL search section */}
+                <div className="channel-search-section">
+                  <div className="channel-search-label">Search issues (JQL)</div>
+                  <textarea
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => setJqlFocused(true)}
+                    onBlur={() => setJqlFocused(false)}
+                    placeholder='project = PROJ AND sprint in openSprints() ORDER BY updated DESC'
+                    rows={3}
+                    style={{ marginBottom: 6 }}
+                  />
+                  {jqlFocused && (
+                    <div className="jql-suggestions" style={{ marginTop: 0, marginBottom: 6 }}>
+                      {JQL_TEMPLATES.map((t) => (
+                        <button
+                          key={t.label}
+                          type="button"
+                          className="jql-chip"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSearchQuery(t.query);
+                          }}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="slack-conditions-footer" style={{ marginBottom: 0 }}>
+                    <span className="form-hint" style={{ margin: 0 }}>
+                      Jira Query Language — click a template above to start
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => void handleSearchJQL()}
+                      disabled={jqlSearching}
+                    >
+                      {jqlSearching ? "Searching…" : "Search"}
+                    </button>
+                  </div>
+
+                  {jqlSearchError && (
+                    <div className="field-error" style={{ marginTop: 6 }}>{jqlSearchError}</div>
+                  )}
+
+                  {jqlResults.length > 0 && (
+                    <div className="jql-results" style={{ marginTop: 8 }}>
+                      <label className="jql-select-all">
+                        <input
+                          type="checkbox"
+                          checked={jqlResults.every((r) => isJiraSelected(r.key))}
+                          ref={(el) => {
+                            if (el) {
+                              const count = jqlResults.filter((r) => isJiraSelected(r.key)).length;
+                              el.indeterminate = count > 0 && count < jqlResults.length;
+                            }
+                          }}
+                          onChange={toggleAllJiraIssues}
+                        />
+                        <span>{jqlResults.every((r) => isJiraSelected(r.key)) ? "Deselect all" : "Select all"}</span>
+                        {jqlResults.some((r) => isJiraSelected(r.key)) && (
+                          <span className="jql-selection-count">
+                            {jqlResults.filter((r) => isJiraSelected(r.key)).length} of {jqlResults.length} selected
+                          </span>
+                        )}
+                      </label>
+                      {jqlResults.map((issue) => (
+                        <label
+                          key={issue.key}
+                          className={`jql-result-row${isJiraSelected(issue.key) ? " jql-result-row--selected" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isJiraSelected(issue.key)}
+                            onChange={() => toggleJiraIssue(issue)}
+                          />
+                          <span className="jql-result-key">{issue.key}</span>
+                          <span className="jql-result-summary">{issue.summary}</span>
+                          <span className="jql-result-status">{issue.status}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Slack panel */}
+          {activeTab === "slack" && (
+            <div className="ctx-panel">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Channels
+                  <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)" }}>optional</span>
+                </label>
+
+                {/* Saved channels */}
+                {existingChannels.length > 0 && (
+                  <div className="channel-saved-list">
+                    <div className="channel-saved-header">
+                      Saved channels
+                      <span className="channel-saved-count">{existingChannels.length}</span>
+                    </div>
+                    {existingChannels.map((ch) => (
+                      <div key={ch.id} className="channel-saved-row">
+                        <span className="channel-saved-name">
+                          <span className="channel-hash">#</span>{ch.channelName}
+                        </span>
+                        <span className="channel-saved-workspace">{ch.workspace}</span>
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove channel"
+                          onClick={() => removeExistingChannel(ch.id)}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Newly selected channels */}
+                {selectedChannels.length > 0 && (
+                  <div className="channel-saved-list channel-saved-list--new">
+                    <div className="channel-saved-header">To be added</div>
+                    {selectedChannels.map((ch) => (
+                      <div key={ch.channelId} className="channel-saved-row channel-saved-row--new">
+                        <span className="channel-saved-name">
+                          <span className="channel-hash">#</span>{ch.channelName}
+                        </span>
+                        <span className="channel-saved-workspace">{ch.workspace}</span>
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove"
+                          onClick={() => removeSelectedChannel(ch.channelId)}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Search form */}
+                <div className="channel-search-section">
+                  <div className="channel-search-label">Search channels</div>
+                  <div className="slack-condition-row" style={{ marginBottom: 8 }}>
+                    {workspaceSelect}
+                    <input
+                      value={slackPattern}
+                      onChange={(e) => setSlackPattern(e.target.value)}
+                      placeholder="*channel-name*"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); void handleSearchChannels(); }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => void handleSearchChannels()}
+                      disabled={searching}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {searching ? "Searching…" : "Search"}
+                    </button>
+                  </div>
+
+                  {workspacesError && (
+                    <div className="field-error" style={{ marginTop: 4 }}>{workspacesError}</div>
+                  )}
+                  {channelError && (
+                    <div className="field-error" style={{ marginTop: 4 }}>{channelError}</div>
+                  )}
+
+                  {channelResults.length > 0 && (
+                    <div className="channel-results">
+                      {channelResults.map((ch) => (
+                        <label
+                          key={ch.id}
+                          className={`channel-result-row${isSelected(ch.id) ? " selected" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected(ch.id)}
+                            onChange={() => toggleChannel(ch)}
+                          />
+                          <div className="channel-result-info">
+                            <span className="channel-result-name">
+                              <span>#</span>{ch.name}
+                            </span>
+                            <div className="channel-result-badges">
+                              <span className="channel-result-workspace">{ch.workspace}</span>
+                              <span className="channel-result-id">{ch.id}</span>
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-hint" style={{ marginTop: 8 }}>
+                  Search across workspaces — multiple conditions are merged
+                </div>
+              </div>
+            </div>
+          )}
+
+          </div>{/* end modal-scroll-body */}
+
+          <div className="modal-footer">
+            <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? (
+                <span className="btn-with-spinner">
+                  <Spinner size={14} color="#fff" />
+                  Saving…
+                </span>
+              ) : (
+                initial ? "Save Changes" : "Create"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
