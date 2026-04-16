@@ -224,7 +224,7 @@ func TestRunnerPassphraseEnvVar(t *testing.T) {
 
 	t.Run("SetPassphrase updates env var dynamically", func(t *testing.T) {
 		r := NewRunner(logger, WithBinPath(bin), WithTimeout(5*time.Second))
-		r.SetPassphrase("updated-secret")
+		require.NoError(t, r.SetPassphrase("updated-secret"))
 		out, err := r.Run(context.Background(), []string{"search"}, []string{"ws", "q"})
 		require.NoError(t, err)
 		assert.Equal(t, "updated-secret", out)

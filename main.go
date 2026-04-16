@@ -17,9 +17,9 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "Context Consolidator",
-		Width:  1280,
-		Height: 800,
+		Title:     "Context Consolidator",
+		Width:     1280,
+		Height:    800,
 		MinWidth:  900,
 		MinHeight: 600,
 		AssetServer: &assetserver.Options{
@@ -32,7 +32,6 @@ func main() {
 			app,
 		},
 	})
-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}

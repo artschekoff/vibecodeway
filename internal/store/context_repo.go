@@ -13,9 +13,20 @@ import (
 // ErrNotFound is returned when a requested record does not exist.
 var ErrNotFound = errors.New("record not found")
 
-// ListContexts returns all contexts ordered by updated_at desc.
+const (
+	contextStatusActive   = "active"
+	contextStatusArchived = "archived"
+)
+
+// ListContexts returns contexts ordered by updated_at desc.
+// When includeArchived is false only active contexts are returned.
 // LastItemAt is the newest created_at across issues, comments, and slack threads.
-func (s *Store) ListContexts(ctx context.Context) ([]Context, error) {
+func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Context, error) {
+	// Pass 1 to bypass the status filter (include all), 0 to restrict to active only.
+	var includeArchivedParam int
+	if includeArchived {
+		includeArchivedParam = 1
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT c.id, c.key, c.status, c.created_at, c.updated_at,
 		       COUNT(DISTINCT i.id) AS issue_count,
@@ -35,13 +46,14 @@ func (s *Store) ListContexts(ctx context.Context) ([]Context, error) {
 		       ), '') AS last_item_at
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
+		WHERE (? OR c.status = 'active')
 		GROUP BY c.id
 		ORDER BY c.updated_at DESC
-	`)
+	`, includeArchivedParam)
 	if err != nil {
 		return nil, fmt.Errorf("listing contexts: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var contexts []Context
 	for rows.Next() {
@@ -92,7 +104,7 @@ func (s *Store) CreateContext(ctx context.Context, key string) (*Context, error)
 	c := &Context{
 		ID:        uuid.New().String(),
 		Key:       key,
-		Status:    "active",
+		Status:    contextStatusActive,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -140,6 +152,24 @@ func (s *Store) DeleteContext(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ToggleContextStatus atomically flips the status between "active" and "archived".
+func (s *Store) ToggleContextStatus(ctx context.Context, id string) (*Context, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE contexts
+		SET status     = CASE WHEN status = 'active' THEN 'archived' ELSE 'active' END,
+		    updated_at = ?
+		WHERE id = ?
+	`, now, id)
+	if err != nil {
+		return nil, fmt.Errorf("toggling context status: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, ErrNotFound
+	}
+	return s.GetContext(ctx, id)
 }
 
 // TouchContext updates the updated_at timestamp of a context.

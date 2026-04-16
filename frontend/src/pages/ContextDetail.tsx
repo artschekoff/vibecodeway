@@ -10,6 +10,11 @@ import {
   DeleteSlackThread,
   RemoveSlackChannel,
   DeleteContextFile,
+  ToggleIssueActive,
+  ToggleCommentActive,
+  ToggleSlackChannelActive,
+  ToggleSlackThreadActive,
+  ToggleContextFileActive,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
@@ -140,6 +145,51 @@ export default function ContextDetailPage() {
     }
   };
 
+  const handleToggleIssue = async (issueId: string) => {
+    try {
+      await ToggleIssueActive(issueId);
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleToggleComment = async (commentId: string) => {
+    try {
+      await ToggleCommentActive(commentId);
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleToggleChannel = async (channelId: string) => {
+    try {
+      await ToggleSlackChannelActive(channelId);
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleToggleThread = async (threadId: string) => {
+    try {
+      await ToggleSlackThreadActive(threadId);
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleToggleContextFile = async (fileId: string) => {
+    try {
+      await ToggleContextFileActive(fileId);
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   if (loading) return <div className="loading">Loading…</div>;
 
   if (!detail) return (
@@ -236,6 +286,8 @@ export default function ContextDetailPage() {
                       issue={issue}
                       onDeleteIssue={handleDeleteIssue}
                       onDeleteComment={handleDeleteComment}
+                      onToggleIssue={(id) => void handleToggleIssue(id)}
+                      onToggleComment={(id) => void handleToggleComment(id)}
                     />
                   ))}
                 </div>
@@ -261,6 +313,8 @@ export default function ContextDetailPage() {
                       threads={slackThreads.filter((t) => t.channelId === ch.channelId)}
                       onDeleteChannel={handleDeleteChannel}
                       onDeleteThread={handleDeleteThread}
+                      onToggleChannel={(id) => void handleToggleChannel(id)}
+                      onToggleThread={(id) => void handleToggleThread(id)}
                     />
                   ))}
 
@@ -270,9 +324,10 @@ export default function ContextDetailPage() {
                     .map((t) => (
                       <SlackChannelCard
                         key={t.id}
-                        channel={{ id: t.id, workspace: t.workspace, channelId: t.channelId, channelName: t.channelName, createdAt: t.createdAt }}
+                        channel={{ id: t.id, workspace: t.workspace, channelId: t.channelId, channelName: t.channelName, createdAt: t.createdAt, isActive: t.isActive }}
                         threads={[t]}
                         onDeleteThread={handleDeleteThread}
+                        onToggleThread={(id) => void handleToggleThread(id)}
                       />
                     ))}
                 </div>
@@ -287,9 +342,17 @@ export default function ContextDetailPage() {
                 </div>
                 <div className="issue-list">
                   {contextFiles.map((f) => (
-                    <div key={f.id} className="text-file-card">
+                    <div key={f.id} className={`text-file-card${!f.isActive ? " text-file-card--inactive" : ""}`}>
                       <div className="text-file-card-header">
-                        <span className="text-file-card-name">{f.name || "Untitled"}</span>
+                        <label
+                          className="item-active-toggle"
+                          title={f.isActive ? "Active — click to deactivate" : "Inactive — click to activate"}
+                          onClick={(e) => { e.stopPropagation(); void handleToggleContextFile(f.id); }}
+                        >
+                          <input type="checkbox" checked={f.isActive} onChange={() => {}} />
+                          <span className={`item-active-indicator${f.isActive ? " item-active-indicator--on" : ""}`} />
+                        </label>
+                        <span className={`text-file-card-name${!f.isActive ? " item--inactive" : ""}`}>{f.name || "Untitled"}</span>
                         <button
                           type="button"
                           className="btn-ghost"

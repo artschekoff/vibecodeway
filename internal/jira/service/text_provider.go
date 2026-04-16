@@ -30,7 +30,7 @@ func (p *TextProvider) Name() string { return providerText }
 
 // IsConfigured reports whether the context has any text files attached.
 func (p *TextProvider) IsConfigured(ctx context.Context, contextID string) (bool, error) {
-	files, err := p.store.ListContextFiles(ctx, contextID)
+	files, err := p.store.ListContextFiles(ctx, contextID, false)
 	if err != nil {
 		return false, fmt.Errorf("checking text files: %w", err)
 	}
@@ -47,24 +47,25 @@ func (p *TextProvider) Reload(_ context.Context, _ string) (provider.Stats, erro
 	return provider.Stats{}, nil
 }
 
-// WriteContext appends all text files for the context to w.
+// WriteContext appends active text files for the context to w.
 // startAt is ignored because text files are not time-stamped data.
 func (p *TextProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, _ time.Time) error {
-	files, err := p.store.ListContextFiles(ctx, contextID)
+	files, err := p.store.ListContextFiles(ctx, contextID, true)
 	if err != nil {
 		return fmt.Errorf("loading text files: %w", err)
 	}
+
 	if len(files) == 0 {
 		return nil
 	}
 
-	fmt.Fprintf(w, "--- TEXT FILES (%d file%s) ---\n\n", len(files), plural(len(files)))
+	_, _ = fmt.Fprintf(w, "--- TEXT FILES (%d file%s) ---\n\n", len(files), plural(len(files)))
 	for _, f := range files {
 		if f.Name != "" {
-			fmt.Fprintf(w, "### %s\n\n", f.Name)
+			_, _ = fmt.Fprintf(w, "### %s\n\n", f.Name)
 		}
-		fmt.Fprint(w, f.Content)
-		fmt.Fprint(w, "\n\n")
+		_, _ = fmt.Fprint(w, f.Content)
+		_, _ = fmt.Fprint(w, "\n\n")
 	}
 	return nil
 }

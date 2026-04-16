@@ -52,32 +52,49 @@ func (r *Repo) UpsertSlackThread(ctx context.Context, contextID string, args Ups
 	return r.getSlackThread(ctx, id)
 }
 
-// ListSlackThreads returns all Slack threads for a context, ordered by created_at.
-func (r *Repo) ListSlackThreads(ctx context.Context, contextID string) ([]SlackThread, error) {
-	rows, err := r.db.QueryContext(ctx, `
+// ListSlackThreads returns Slack threads for a context, ordered by created_at.
+// When activeOnly is true only rows with is_active = 1 are returned.
+func (r *Repo) ListSlackThreads(ctx context.Context, contextID string, activeOnly bool) ([]SlackThread, error) {
+	q := `
 		SELECT id, context_id, COALESCE(slack_channel_id, ''), workspace, channel_id, thread_ts,
-		       channel_name, permalink, search_query, content, created_at
+		       channel_name, permalink, search_query, content, created_at, is_active
 		FROM slack_threads
-		WHERE context_id = ?
-		ORDER BY created_at ASC
-	`, contextID)
+		WHERE context_id = ?`
+	if activeOnly {
+		q += " AND is_active = 1"
+	}
+	q += " ORDER BY created_at ASC"
+	rows, err := r.db.QueryContext(ctx, q, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("listing slack threads: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var threads []SlackThread
 	for rows.Next() {
 		var t SlackThread
 		if err := rows.Scan(
 			&t.ID, &t.ContextID, &t.SlackChannelID, &t.Workspace, &t.ChannelID, &t.ThreadTS,
-			&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt,
+			&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive,
 		); err != nil {
 			return nil, fmt.Errorf("scanning slack thread: %w", err)
 		}
 		threads = append(threads, t)
 	}
 	return threads, rows.Err()
+}
+
+// ToggleSlackThreadActive flips the is_active flag for the given thread and returns the updated record.
+// Returns ErrNotFound if no thread with that ID exists.
+func (r *Repo) ToggleSlackThreadActive(ctx context.Context, id string) (*SlackThread, error) {
+	res, err := r.db.ExecContext(ctx, "UPDATE slack_threads SET is_active = NOT is_active WHERE id = ?", id)
+	if err != nil {
+		return nil, fmt.Errorf("toggling slack thread active: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, ErrNotFound
+	}
+	return r.getSlackThread(ctx, id)
 }
 
 // DeleteSlackThread removes a single Slack thread by its internal ID.
@@ -101,12 +118,15 @@ func (r *Repo) getSlackThread(ctx context.Context, id string) (*SlackThread, err
 	var t SlackThread
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, context_id, COALESCE(slack_channel_id, ''), workspace, channel_id, thread_ts,
-		       channel_name, permalink, search_query, content, created_at
+		       channel_name, permalink, search_query, content, created_at, is_active
 		FROM slack_threads WHERE id = ?
 	`, id).Scan(
 		&t.ID, &t.ContextID, &t.SlackChannelID, &t.Workspace, &t.ChannelID, &t.ThreadTS,
-		&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt,
+		&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive,
 	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("getting slack thread: %w", err)
 	}

@@ -13,7 +13,7 @@ func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err, "open store")
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -96,5 +96,63 @@ func TestGetContextByKey(t *testing.T) {
 func TestGetContextNotFound(t *testing.T) {
 	s := openTestStore(t)
 	_, err := s.GetContext(context.Background(), "non-existent-id")
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestListContexts_DefaultExcludesArchived(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	_, err := s.CreateContext(ctx, "active-ctx")
+	require.NoError(t, err)
+
+	archived, err := s.CreateContext(ctx, "archived-ctx")
+	require.NoError(t, err)
+	_, err = s.UpdateContext(ctx, archived.ID, archived.Key, "archived")
+	require.NoError(t, err)
+
+	list, err := s.ListContexts(ctx, false)
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
+	assert.Equal(t, "active-ctx", list[0].Key)
+}
+
+func TestListContexts_IncludeArchivedReturnsAll(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	_, err := s.CreateContext(ctx, "active-ctx")
+	require.NoError(t, err)
+
+	archived, err := s.CreateContext(ctx, "archived-ctx")
+	require.NoError(t, err)
+	_, err = s.UpdateContext(ctx, archived.ID, archived.Key, "archived")
+	require.NoError(t, err)
+
+	list, err := s.ListContexts(ctx, true)
+	require.NoError(t, err)
+	assert.Len(t, list, 2)
+}
+
+func TestToggleContextStatus(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "toggle-ctx")
+	require.NoError(t, err)
+	assert.Equal(t, "active", c.Status)
+
+	updated, err := s.ToggleContextStatus(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "archived", updated.Status)
+
+	updated, err = s.ToggleContextStatus(ctx, updated.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "active", updated.Status)
+}
+
+func TestToggleContextStatus_NotFound(t *testing.T) {
+	s := openTestStore(t)
+	_, err := s.ToggleContextStatus(context.Background(), "non-existent")
 	assert.ErrorIs(t, err, ErrNotFound)
 }

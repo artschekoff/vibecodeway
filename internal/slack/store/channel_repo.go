@@ -47,28 +47,45 @@ func (r *Repo) UpsertSlackChannel(ctx context.Context, contextID, workspace, cha
 	return r.getSlackChannel(ctx, id)
 }
 
-// ListSlackChannels returns all channels configured for the given context, ordered by channel_name.
-func (r *Repo) ListSlackChannels(ctx context.Context, contextID string) ([]SlackChannel, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, context_id, workspace, channel_id, channel_name, created_at
+// ListSlackChannels returns channels for the given context, ordered by channel_name.
+// When activeOnly is true only rows with is_active = 1 are returned.
+func (r *Repo) ListSlackChannels(ctx context.Context, contextID string, activeOnly bool) ([]SlackChannel, error) {
+	q := `
+		SELECT id, context_id, workspace, channel_id, channel_name, created_at, is_active
 		FROM slack_channels
-		WHERE context_id = ?
-		ORDER BY channel_name
-	`, contextID)
+		WHERE context_id = ?`
+	if activeOnly {
+		q += " AND is_active = 1"
+	}
+	q += " ORDER BY channel_name"
+	rows, err := r.db.QueryContext(ctx, q, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("listing slack channels: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var channels []SlackChannel
 	for rows.Next() {
 		var ch SlackChannel
-		if err := rows.Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.CreatedAt); err != nil {
+		if err := rows.Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.CreatedAt, &ch.IsActive); err != nil {
 			return nil, fmt.Errorf("scanning slack channel: %w", err)
 		}
 		channels = append(channels, ch)
 	}
 	return channels, rows.Err()
+}
+
+// ToggleSlackChannelActive flips the is_active flag for the given channel and returns the updated record.
+// Returns ErrNotFound if no channel with that ID exists.
+func (r *Repo) ToggleSlackChannelActive(ctx context.Context, id string) (*SlackChannel, error) {
+	res, err := r.db.ExecContext(ctx, "UPDATE slack_channels SET is_active = NOT is_active WHERE id = ?", id)
+	if err != nil {
+		return nil, fmt.Errorf("toggling slack channel active: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, ErrNotFound
+	}
+	return r.getSlackChannel(ctx, id)
 }
 
 // RemoveSlackChannel deletes a channel record by its primary key ID and cascade-deletes
@@ -124,9 +141,12 @@ func (r *Repo) RemoveSlackChannel(ctx context.Context, id string) error {
 func (r *Repo) getSlackChannel(ctx context.Context, id string) (*SlackChannel, error) {
 	var ch SlackChannel
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, context_id, workspace, channel_id, channel_name, created_at
+		SELECT id, context_id, workspace, channel_id, channel_name, created_at, is_active
 		FROM slack_channels WHERE id = ?
-	`, id).Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.CreatedAt)
+	`, id).Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.CreatedAt, &ch.IsActive)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("getting slack channel by id: %w", err)
 	}

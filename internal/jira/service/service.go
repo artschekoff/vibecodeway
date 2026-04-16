@@ -19,8 +19,6 @@ import (
 )
 
 const (
-	// statusActive is the status value for contexts included in batch operations.
-	statusActive = "active"
 	// providerJira and providerSlack are the canonical provider name strings.
 	providerJira  = "jira"
 	providerSlack = "slack"
@@ -144,9 +142,19 @@ func (svc *ContextService) AuthStatus(ctx context.Context) (string, error) {
 	return svc.jira.AuthStatus(ctx)
 }
 
-// ListContexts returns all saved contexts.
+// ListContexts returns active contexts only.
 func (svc *ContextService) ListContexts(ctx context.Context) ([]appstore.Context, error) {
-	return svc.store.ListContexts(ctx)
+	return svc.store.ListContexts(ctx, false)
+}
+
+// ListAllContexts returns all contexts including archived ones.
+func (svc *ContextService) ListAllContexts(ctx context.Context) ([]appstore.Context, error) {
+	return svc.store.ListContexts(ctx, true)
+}
+
+// ToggleContextStatus flips the status between "active" and "archived".
+func (svc *ContextService) ToggleContextStatus(ctx context.Context, id string) (*appstore.Context, error) {
+	return svc.store.ToggleContextStatus(ctx, id)
 }
 
 // CreateContext creates a new context with the given key.
@@ -204,12 +212,12 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 	}
 	detail.Slack = sp
 
-	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, id)
+	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, id, false)
 	if err != nil {
 		return nil, fmt.Errorf("loading issues: %w", err)
 	}
 	for i, issue := range issues {
-		comments, err := svc.jiraRepo.GetCommentsByIssue(ctx, issue.ID)
+		comments, err := svc.jiraRepo.GetCommentsByIssue(ctx, issue.ID, false)
 		if err != nil {
 			return nil, fmt.Errorf("loading comments for %s: %w", issue.JiraKey, err)
 		}
@@ -217,19 +225,19 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 	}
 	detail.Issues = issues
 
-	threads, err := svc.slackRepo.ListSlackThreads(ctx, id)
+	threads, err := svc.slackRepo.ListSlackThreads(ctx, id, false)
 	if err != nil {
 		return nil, fmt.Errorf("loading slack threads: %w", err)
 	}
 	detail.SlackThreads = threads
 
-	channels, err := svc.slackRepo.ListSlackChannels(ctx, id)
+	channels, err := svc.slackRepo.ListSlackChannels(ctx, id, false)
 	if err != nil {
 		return nil, fmt.Errorf("loading slack channels: %w", err)
 	}
 	detail.SlackChannels = channels
 
-	contextFiles, err := svc.store.ListContextFiles(ctx, id)
+	contextFiles, err := svc.store.ListContextFiles(ctx, id, false)
 	if err != nil {
 		return nil, fmt.Errorf("loading context files: %w", err)
 	}
@@ -303,7 +311,7 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 // SyncAllComments fetches and deduplicates comments for every issue in a context.
 // Returns the total number of new comments inserted.
 func (svc *ContextService) SyncAllComments(ctx context.Context, contextID string) (int, error) {
-	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, contextID)
+	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, contextID, false)
 	if err != nil {
 		return 0, fmt.Errorf("loading issues: %w", err)
 	}
@@ -374,7 +382,7 @@ func (svc *ContextService) LoadSlackContext(ctx context.Context, args LoadSlackC
 
 // ListSlackThreads returns all stored Slack threads for a context.
 func (svc *ContextService) ListSlackThreads(ctx context.Context, contextID string) ([]slackstore.SlackThread, error) {
-	return svc.slackRepo.ListSlackThreads(ctx, contextID)
+	return svc.slackRepo.ListSlackThreads(ctx, contextID, false)
 }
 
 // SearchSlackChannels calls slack-cli search-channels with a glob name pattern and returns
@@ -443,7 +451,7 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 
 // ListSlackChannels returns all Slack channels configured for a context.
 func (svc *ContextService) ListSlackChannels(ctx context.Context, contextID string) ([]slackstore.SlackChannel, error) {
-	return svc.slackRepo.ListSlackChannels(ctx, contextID)
+	return svc.slackRepo.ListSlackChannels(ctx, contextID, false)
 }
 
 // RemoveSlackChannel removes a Slack channel from a context by its record ID.
@@ -470,7 +478,7 @@ func (svc *ContextService) DeleteSlackThread(ctx context.Context, id string) err
 
 // ListContextFiles returns all text files attached to a context.
 func (svc *ContextService) ListContextFiles(ctx context.Context, contextID string) ([]appstore.ContextFile, error) {
-	return svc.store.ListContextFiles(ctx, contextID)
+	return svc.store.ListContextFiles(ctx, contextID, false)
 }
 
 // UpsertContextFile creates a new text file (when id is empty) or updates an existing one.
@@ -481,6 +489,31 @@ func (svc *ContextService) UpsertContextFile(ctx context.Context, id, contextID,
 // DeleteContextFile removes a single text file by its internal ID.
 func (svc *ContextService) DeleteContextFile(ctx context.Context, id string) error {
 	return svc.store.DeleteContextFile(ctx, id)
+}
+
+// ToggleIssueActive flips the is_active flag for a Jira issue.
+func (svc *ContextService) ToggleIssueActive(ctx context.Context, id string) (*jirastore.Issue, error) {
+	return svc.jiraRepo.ToggleIssueActive(ctx, id)
+}
+
+// ToggleCommentActive flips the is_active flag for a Jira comment.
+func (svc *ContextService) ToggleCommentActive(ctx context.Context, id string) (*jirastore.Comment, error) {
+	return svc.jiraRepo.ToggleCommentActive(ctx, id)
+}
+
+// ToggleSlackChannelActive flips the is_active flag for a Slack channel.
+func (svc *ContextService) ToggleSlackChannelActive(ctx context.Context, id string) (*slackstore.SlackChannel, error) {
+	return svc.slackRepo.ToggleSlackChannelActive(ctx, id)
+}
+
+// ToggleSlackThreadActive flips the is_active flag for a Slack thread.
+func (svc *ContextService) ToggleSlackThreadActive(ctx context.Context, id string) (*slackstore.SlackThread, error) {
+	return svc.slackRepo.ToggleSlackThreadActive(ctx, id)
+}
+
+// ToggleContextFileActive flips the is_active flag for a text file.
+func (svc *ContextService) ToggleContextFileActive(ctx context.Context, id string) (*appstore.ContextFile, error) {
+	return svc.store.ToggleContextFileActive(ctx, id)
 }
 
 // RefreshContext re-fetches the latest data for every item already stored in the context
@@ -543,16 +576,9 @@ func (svc *ContextService) FormatContext(ctx context.Context, w io.Writer, conte
 // An optional onProgress callback is invoked before each context is processed; current is
 // 1-based and total reflects the number of active contexts being reloaded.
 func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...ReloadProgressFunc) ([]ReloadAllResult, error) {
-	contexts, err := svc.store.ListContexts(ctx)
+	active, err := svc.store.ListContexts(ctx, false)
 	if err != nil {
 		return nil, fmt.Errorf("listing contexts: %w", err)
-	}
-
-	active := make([]appstore.Context, 0, len(contexts))
-	for _, c := range contexts {
-		if c.Status == statusActive {
-			active = append(active, c)
-		}
 	}
 
 	var notify ReloadProgressFunc
@@ -578,14 +604,14 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 					zap.String("provider", p.Name()), zap.String("contextID", c.ID), zap.Error(err))
 				continue
 			}
-		// Map each provider's stats to the named result fields for frontend compatibility.
-		switch p.Name() {
-		case providerJira:
-			r.NewIssues += stats.ItemsRefreshed // new issues found by JQL
-			r.NewComments += stats.NewItems      // new comments
-		case providerSlack:
-			r.ThreadsRefreshed += stats.ItemsRefreshed
-		}
+			// Map each provider's stats to the named result fields for frontend compatibility.
+			switch p.Name() {
+			case providerJira:
+				r.NewIssues += stats.ItemsRefreshed // new issues found by JQL
+				r.NewComments += stats.NewItems     // new comments
+			case providerSlack:
+				r.ThreadsRefreshed += stats.ItemsRefreshed
+			}
 		}
 		if len(errs) > 0 {
 			r.Error = strings.Join(errs, "; ")

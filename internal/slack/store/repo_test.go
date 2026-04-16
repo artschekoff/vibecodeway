@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +15,7 @@ func openTestDB(t *testing.T) (*appstore.Store, *slackstore.Repo) {
 	t.Helper()
 	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s, slackstore.NewRepo(s.DB())
 }
 
@@ -106,7 +106,7 @@ func TestUpsertAndListSlackThreads(t *testing.T) {
 	assert.Equal(t, "1700000000.123456", thread.ThreadTS)
 	assert.Equal(t, "# Slack Context\n\nSome messages here.", thread.Content)
 
-	threads, err := repo.ListSlackThreads(ctx, c.ID)
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
 	require.NoError(t, err)
 	require.Len(t, threads, 1)
 	assert.Equal(t, thread.ID, threads[0].ID)
@@ -130,7 +130,7 @@ func TestUpsertSlackThreadUpdatesOnDuplicate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, t1.ID, t2.ID, "same ID on duplicate upsert")
 
-	threads, err := repo.ListSlackThreads(ctx, c.ID)
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
 	require.NoError(t, err)
 	require.Len(t, threads, 1)
 	assert.Equal(t, "updated", threads[0].Content)
@@ -150,7 +150,7 @@ func TestDeleteContextCascadesToSlackThreads(t *testing.T) {
 
 	require.NoError(t, s.DeleteContext(ctx, c.ID))
 
-	threads, err := repo.ListSlackThreads(ctx, c.ID)
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, threads, "threads should be deleted with context (cascade)")
 }
@@ -172,7 +172,7 @@ func TestUpsertAndListSlackChannels(t *testing.T) {
 	assert.Equal(t, "C01234567", ch.ChannelID)
 	assert.Equal(t, "general", ch.ChannelName)
 
-	channels, err := repo.ListSlackChannels(ctx, c.ID)
+	channels, err := repo.ListSlackChannels(ctx, c.ID, false)
 	require.NoError(t, err)
 	require.Len(t, channels, 1)
 	assert.Equal(t, ch.ID, channels[0].ID)
@@ -207,7 +207,7 @@ func TestListSlackChannels_MultipleChannels(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	channels, err := repo.ListSlackChannels(ctx, c.ID)
+	channels, err := repo.ListSlackChannels(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Len(t, channels, 3)
 }
@@ -224,7 +224,7 @@ func TestListSlackChannels_EmptyForOtherContext(t *testing.T) {
 	_, err = repo.UpsertSlackChannel(ctx, c1.ID, "acme", "C1", "general")
 	require.NoError(t, err)
 
-	channels, err := repo.ListSlackChannels(ctx, c2.ID)
+	channels, err := repo.ListSlackChannels(ctx, c2.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, channels)
 }
@@ -241,7 +241,7 @@ func TestRemoveSlackChannel_Success(t *testing.T) {
 
 	require.NoError(t, repo.RemoveSlackChannel(ctx, ch.ID))
 
-	channels, err := repo.ListSlackChannels(ctx, c.ID)
+	channels, err := repo.ListSlackChannels(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, channels)
 }
@@ -271,15 +271,99 @@ func TestRemoveSlackChannel_CascadesToThreads(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	threads, err := repo.ListSlackThreads(ctx, c.ID)
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
 	require.NoError(t, err)
 	require.Len(t, threads, 1, "thread should exist before channel deletion")
 
 	require.NoError(t, repo.RemoveSlackChannel(ctx, ch.ID))
 
-	threads, err = repo.ListSlackThreads(ctx, c.ID)
+	threads, err = repo.ListSlackThreads(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, threads, "threads should cascade-delete when their channel is removed")
+}
+
+// --- IsActive toggle ---
+
+func TestSlackChannelActiveByDefault(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "ch-ctx")
+	require.NoError(t, err)
+	_, err = repo.UpsertSlackChannel(ctx, c.ID, "acme", "C1", "general")
+	require.NoError(t, err)
+
+	channels, err := repo.ListSlackChannels(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, channels, 1)
+	assert.True(t, channels[0].IsActive, "new channel should be active by default")
+}
+
+func TestToggleSlackChannelActive(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "ch-ctx")
+	require.NoError(t, err)
+	ch, err := repo.UpsertSlackChannel(ctx, c.ID, "acme", "C1", "general")
+	require.NoError(t, err)
+
+	toggled, err := repo.ToggleSlackChannelActive(ctx, ch.ID)
+	require.NoError(t, err)
+	assert.False(t, toggled.IsActive)
+
+	toggled, err = repo.ToggleSlackChannelActive(ctx, ch.ID)
+	require.NoError(t, err)
+	assert.True(t, toggled.IsActive)
+}
+
+func TestToggleSlackChannelActive_NotFound(t *testing.T) {
+	_, repo := openTestDB(t)
+	_, err := repo.ToggleSlackChannelActive(context.Background(), "nonexistent")
+	assert.ErrorIs(t, err, slackstore.ErrNotFound)
+}
+
+func TestSlackThreadActiveByDefault(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "ch-ctx")
+	require.NoError(t, err)
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "1.1", Content: "msg",
+	})
+	require.NoError(t, err)
+
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 1)
+	assert.True(t, threads[0].IsActive, "new thread should be active by default")
+}
+
+func TestToggleSlackThreadActive(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "ch-ctx")
+	require.NoError(t, err)
+	thread, err := repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "1.1", Content: "msg",
+	})
+	require.NoError(t, err)
+
+	toggled, err := repo.ToggleSlackThreadActive(ctx, thread.ID)
+	require.NoError(t, err)
+	assert.False(t, toggled.IsActive)
+
+	toggled, err = repo.ToggleSlackThreadActive(ctx, thread.ID)
+	require.NoError(t, err)
+	assert.True(t, toggled.IsActive)
+}
+
+func TestToggleSlackThreadActive_NotFound(t *testing.T) {
+	_, repo := openTestDB(t)
+	_, err := repo.ToggleSlackThreadActive(context.Background(), "nonexistent")
+	assert.ErrorIs(t, err, slackstore.ErrNotFound)
 }
 
 func TestDeleteContextCascadesToSlackChannels(t *testing.T) {
@@ -294,7 +378,7 @@ func TestDeleteContextCascadesToSlackChannels(t *testing.T) {
 
 	require.NoError(t, s.DeleteContext(ctx, c.ID))
 
-	channels, err := repo.ListSlackChannels(ctx, c.ID)
+	channels, err := repo.ListSlackChannels(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, channels, "channels should be deleted with context (cascade)")
 }

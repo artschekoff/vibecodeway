@@ -31,7 +31,7 @@ func openTestStore(t *testing.T) *appstore.Store {
 	t.Helper()
 	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -48,6 +48,53 @@ func createCtx(t *testing.T, svc *ContextService, key string) *appstore.Context 
 	c, err := svc.store.CreateContext(context.Background(), key)
 	require.NoError(t, err)
 	return c
+}
+
+// --- ListContexts filtering ---
+
+func TestListContexts_DefaultExcludesArchived(t *testing.T) {
+	svc := newTestService(t, nil)
+	ctx := context.Background()
+
+	createCtx(t, svc, "active-one")
+	archived := createCtx(t, svc, "archived-one")
+	_, err := svc.UpdateContext(ctx, archived.ID, archived.Key, "archived")
+	require.NoError(t, err)
+
+	list, err := svc.ListContexts(ctx)
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
+	assert.Equal(t, "active-one", list[0].Key)
+}
+
+func TestListAllContexts_IncludesArchived(t *testing.T) {
+	svc := newTestService(t, nil)
+	ctx := context.Background()
+
+	createCtx(t, svc, "active-one")
+	archived := createCtx(t, svc, "archived-one")
+	_, err := svc.UpdateContext(ctx, archived.ID, archived.Key, "archived")
+	require.NoError(t, err)
+
+	list, err := svc.ListAllContexts(ctx)
+	require.NoError(t, err)
+	assert.Len(t, list, 2)
+}
+
+func TestToggleContextStatus(t *testing.T) {
+	svc := newTestService(t, nil)
+	ctx := context.Background()
+
+	c := createCtx(t, svc, "toggle-ctx")
+	assert.Equal(t, "active", c.Status)
+
+	toggled, err := svc.ToggleContextStatus(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "archived", toggled.Status)
+
+	toggled, err = svc.ToggleContextStatus(ctx, toggled.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "active", toggled.Status)
 }
 
 // --- SetJiraConfig ---
@@ -129,7 +176,7 @@ func TestLoadSlackContext_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	threads, err := svc.slackRepo.ListSlackThreads(ctx, c.ID)
+	threads, err := svc.slackRepo.ListSlackThreads(ctx, c.ID, false)
 	require.NoError(t, err)
 	require.Len(t, threads, 1)
 	assert.Equal(t, markdownOutput, threads[0].Content)

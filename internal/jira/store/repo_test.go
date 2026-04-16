@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +15,7 @@ func openTestDB(t *testing.T) (*appstore.Store, *jirastore.Repo) {
 	t.Helper()
 	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s, jirastore.NewRepo(s.DB())
 }
 
@@ -91,7 +91,7 @@ func TestUpsertAndGetIssues(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, issueID)
 
-	issues, err := repo.GetIssuesByContext(ctx, c.ID)
+	issues, err := repo.GetIssuesByContext(ctx, c.ID, false)
 	require.NoError(t, err)
 	require.Len(t, issues, 1)
 	assert.Equal(t, "TEST-1", issues[0].JiraKey)
@@ -112,7 +112,7 @@ func TestUpsertIssueUpdatesOnDuplicate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, id1, id2, "same ID on duplicate upsert")
 
-	issues, err := repo.GetIssuesByContext(ctx, c.ID)
+	issues, err := repo.GetIssuesByContext(ctx, c.ID, false)
 	require.NoError(t, err)
 	require.Len(t, issues, 1)
 	assert.Equal(t, "updated", issues[0].Summary)
@@ -138,8 +138,96 @@ func TestUpsertAndGetComments(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, inserted2, "duplicate should not be inserted")
 
-	comments, err := repo.GetCommentsByIssue(ctx, issueID)
+	comments, err := repo.GetCommentsByIssue(ctx, issueID, false)
 	require.NoError(t, err)
 	require.Len(t, comments, 1)
 	assert.Equal(t, "jira-cmt-1", comments[0].JiraID)
+}
+
+// --- IsActive toggle ---
+
+func TestIssueActiveByDefault(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "test-ctx")
+	require.NoError(t, err)
+	_, err = repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	require.NoError(t, err)
+
+	issues, err := repo.GetIssuesByContext(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.True(t, issues[0].IsActive, "new issue should be active by default")
+}
+
+func TestToggleIssueActive(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "test-ctx")
+	require.NoError(t, err)
+	id, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	require.NoError(t, err)
+
+	issue, err := repo.ToggleIssueActive(ctx, id)
+	require.NoError(t, err)
+	assert.False(t, issue.IsActive)
+
+	issue, err = repo.ToggleIssueActive(ctx, id)
+	require.NoError(t, err)
+	assert.True(t, issue.IsActive)
+}
+
+func TestToggleIssueActive_NotFound(t *testing.T) {
+	_, repo := openTestDB(t)
+	_, err := repo.ToggleIssueActive(context.Background(), "nonexistent")
+	assert.ErrorIs(t, err, jirastore.ErrNotFound)
+}
+
+func TestCommentActiveByDefault(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "test-ctx")
+	require.NoError(t, err)
+	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	require.NoError(t, err)
+	_, err = repo.UpsertComment(ctx, issueID, "cmt-1", "alice", "body", "2024-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	comments, err := repo.GetCommentsByIssue(ctx, issueID, false)
+	require.NoError(t, err)
+	require.Len(t, comments, 1)
+	assert.True(t, comments[0].IsActive, "new comment should be active by default")
+}
+
+func TestToggleCommentActive(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "test-ctx")
+	require.NoError(t, err)
+	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	require.NoError(t, err)
+	_, err = repo.UpsertComment(ctx, issueID, "cmt-1", "alice", "body", "2024-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	comments, err := repo.GetCommentsByIssue(ctx, issueID, false)
+	require.NoError(t, err)
+	commentID := comments[0].ID
+
+	toggled, err := repo.ToggleCommentActive(ctx, commentID)
+	require.NoError(t, err)
+	assert.False(t, toggled.IsActive)
+
+	toggled, err = repo.ToggleCommentActive(ctx, commentID)
+	require.NoError(t, err)
+	assert.True(t, toggled.IsActive)
+}
+
+func TestToggleCommentActive_NotFound(t *testing.T) {
+	_, repo := openTestDB(t)
+	_, err := repo.ToggleCommentActive(context.Background(), "nonexistent")
+	assert.ErrorIs(t, err, jirastore.ErrNotFound)
 }

@@ -72,7 +72,7 @@ type acliIssue struct {
 	Fields map[string]json.RawMessage `json:"fields"`
 }
 
-func (a acliIssue) key() string   { return parseString(a.Key) }
+func (a acliIssue) key() string { return parseString(a.Key) }
 func (a acliIssue) field(k string) string {
 	return parseString(a.Fields[k])
 }

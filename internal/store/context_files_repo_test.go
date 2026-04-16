@@ -54,7 +54,7 @@ func TestListContextFiles_empty(t *testing.T) {
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
 
-	files, err := s.ListContextFiles(ctx, c.ID)
+	files, err := s.ListContextFiles(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, files)
 }
@@ -71,7 +71,7 @@ func TestListContextFiles_returnsAll(t *testing.T) {
 	_, err = s.UpsertContextFile(ctx, "", c.ID, "Doc 2", "content two")
 	require.NoError(t, err)
 
-	files, err := s.ListContextFiles(ctx, c.ID)
+	files, err := s.ListContextFiles(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Len(t, files, 2)
 }
@@ -90,12 +90,12 @@ func TestListContextFiles_isolatedByContext(t *testing.T) {
 	_, err = s.UpsertContextFile(ctx, "", c2.ID, "Doc B", "content b")
 	require.NoError(t, err)
 
-	files1, err := s.ListContextFiles(ctx, c1.ID)
+	files1, err := s.ListContextFiles(ctx, c1.ID, false)
 	require.NoError(t, err)
 	assert.Len(t, files1, 1)
 	assert.Equal(t, "Doc A", files1[0].Name)
 
-	files2, err := s.ListContextFiles(ctx, c2.ID)
+	files2, err := s.ListContextFiles(ctx, c2.ID, false)
 	require.NoError(t, err)
 	assert.Len(t, files2, 1)
 	assert.Equal(t, "Doc B", files2[0].Name)
@@ -114,7 +114,7 @@ func TestDeleteContextFile(t *testing.T) {
 	err = s.DeleteContextFile(ctx, f.ID)
 	require.NoError(t, err)
 
-	files, err := s.ListContextFiles(ctx, c.ID)
+	files, err := s.ListContextFiles(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, files)
 }
@@ -139,9 +139,50 @@ func TestContextFilesDeletedWithContext(t *testing.T) {
 	require.NoError(t, err)
 
 	// context_files should be cascade-deleted
-	files, err := s.ListContextFiles(ctx, c.ID)
+	files, err := s.ListContextFiles(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, files)
+}
+
+// --- IsActive toggle ---
+
+func TestContextFileActiveByDefault(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+	_, err = s.UpsertContextFile(ctx, "", c.ID, "Doc", "content")
+	require.NoError(t, err)
+
+	files, err := s.ListContextFiles(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	assert.True(t, files[0].IsActive, "new file should be active by default")
+}
+
+func TestToggleContextFileActive(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+	f, err := s.UpsertContextFile(ctx, "", c.ID, "Doc", "content")
+	require.NoError(t, err)
+
+	toggled, err := s.ToggleContextFileActive(ctx, f.ID)
+	require.NoError(t, err)
+	assert.False(t, toggled.IsActive)
+
+	toggled, err = s.ToggleContextFileActive(ctx, f.ID)
+	require.NoError(t, err)
+	assert.True(t, toggled.IsActive)
+}
+
+func TestToggleContextFileActive_NotFound(t *testing.T) {
+	s := openTestStore(t)
+	_, err := s.ToggleContextFileActive(context.Background(), "nonexistent")
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestUpsertContextFile_largeContent(t *testing.T) {

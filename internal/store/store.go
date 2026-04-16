@@ -34,13 +34,13 @@ func Open(dbPath string) (*Store, error) {
 	}
 
 	if err := configure(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 	return s, nil
@@ -66,6 +66,11 @@ func (s *Store) Close() error {
 }
 
 func configure(db *sql.DB) error {
+	// SQLite supports only one writer at a time. Constraining the pool to a
+	// single connection ensures PRAGMAs are applied to every query and
+	// eliminates SQLITE_BUSY contention from competing pool connections.
+	db.SetMaxOpenConns(1)
+
 	pragmas := []string{
 		"PRAGMA journal_mode = WAL",
 		"PRAGMA foreign_keys = ON",

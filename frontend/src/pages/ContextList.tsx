@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Spinner from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
 import {
-  ListContexts,
+  ListAllContexts,
   CreateContext,
   UpdateContext,
   DeleteContext,
@@ -15,6 +15,7 @@ import {
   ReloadAllContexts,
   UpsertContextFile,
   DeleteContextFile,
+  ToggleContextStatus,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { ContextFile, Context, Issue, SlackChannel, SlackSavePayload, TextFilesPayload } from "../types";
@@ -43,7 +44,7 @@ export default function ContextList() {
 
   const load = useCallback(async () => {
     try {
-      const list = await ListContexts();
+      const list = await ListAllContexts();
       setContexts(list ?? []);
     } catch {
       // Wails bridge not available (browser dev mode) or load failed — fail silently
@@ -257,6 +258,18 @@ export default function ContextList() {
     }
   };
 
+  const handleToggleStatus = async (e: React.MouseEvent, c: Context) => {
+    e.stopPropagation();
+    try {
+      const updated = await ToggleContextStatus(c.id);
+      setContexts((prev) =>
+        prev.map((ctx) => (ctx.id === updated.id ? { ...ctx, status: updated.status } : ctx))
+      );
+    } catch {
+      // best-effort
+    }
+  };
+
   const formatDate = (iso: string) => {
     try {
       return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -327,51 +340,61 @@ export default function ContextList() {
           <table className="context-table">
             <thead>
               <tr>
+                <th style={{ width: 40 }}>Active</th>
                 <th>Key</th>
                 <th>Issues</th>
-                <th>Status</th>
                 <th>Updated</th>
                 <th>Latest item</th>
                 <th style={{ width: 72 }}></th>
               </tr>
             </thead>
             <tbody>
-              {contexts.map((c) => (
-                <tr
-                  key={c.id}
-                  className={`context-row${c.status === "active" ? " context-row-active" : ""}`}
-                  onClick={() => navigate(`/context/${c.id}`)}
-                >
-                  <td><span className="context-key">{c.key}</span></td>
-                  <td><span className="context-meta">{c.issueCount ?? 0}</span></td>
-                  <td>
-                    <span className={`badge badge-${c.status}`}>{c.status}</span>
-                  </td>
-                  <td><span className="context-meta">{formatDate(c.updatedAt)}</span></td>
-                  <td>
-                    {c.lastItemAt ? (
-                      <span className="context-meta context-last-item">{formatDateTime(c.lastItemAt)}</span>
-                    ) : (
-                      <span className="context-meta" style={{ opacity: 0.35 }}>—</span>
-                    )}
-                  </td>
-                  <td>
-                    <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className="btn-ghost"
-                        title="Edit"
-                        onClick={(e) => { e.stopPropagation(); void openEditForm(c); }}
-                      >✏</button>
-                      <button
-                        className="btn-ghost"
-                        title="Delete"
-                        style={{ color: "var(--danger)" }}
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(c); }}
-                      >✕</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {contexts.map((c) => {
+                const isActive = c.status === "active";
+                return (
+                  <tr
+                    key={c.id}
+                    className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
+                    onClick={() => navigate(`/context/${c.id}`)}
+                  >
+                    <td className="active-cell" onClick={(e) => e.stopPropagation()}>
+                      <label className="active-toggle" title={isActive ? "Archive this context" : "Reactivate this context"}>
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          onChange={() => void handleToggleStatus({ stopPropagation: () => {} } as React.MouseEvent, c)}
+                        />
+                        <span className={`active-indicator${isActive ? " active-indicator--on" : ""}`} />
+                      </label>
+                    </td>
+                    <td><span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span></td>
+                    <td><span className="context-meta">{c.issueCount ?? 0}</span></td>
+                    <td><span className="context-meta">{formatDate(c.updatedAt)}</span></td>
+                    <td>
+                      {c.lastItemAt ? (
+                        <span className="context-meta context-last-item">{formatDateTime(c.lastItemAt)}</span>
+                      ) : (
+                        <span className="context-meta" style={{ opacity: 0.35 }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="btn-ghost"
+                          title="Edit"
+                          onClick={(e) => { e.stopPropagation(); void openEditForm(c); }}
+                        >✏</button>
+                        <button
+                          className="btn-ghost"
+                          title="Delete"
+                          style={{ color: "var(--danger)" }}
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(c); }}
+                        >✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

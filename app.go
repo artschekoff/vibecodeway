@@ -92,15 +92,25 @@ func (a *App) AuthStatus() string {
 
 // SetSlackPassphrase stores the SLACK_MCP_PASSPHRASE value that will be injected
 // as an environment variable into every subsequent slack-cli invocation.
-func (a *App) SetSlackPassphrase(passphrase string) {
-	a.slackRunner.SetPassphrase(passphrase)
+func (a *App) SetSlackPassphrase(passphrase string) error {
+	return a.slackRunner.SetPassphrase(passphrase)
 }
 
 // --- Context CRUD ---
 
-// ListContexts returns all saved contexts.
+// ListContexts returns active contexts only.
 func (a *App) ListContexts() ([]appstore.Context, error) {
 	return a.svc.ListContexts(a.ctx)
+}
+
+// ListAllContexts returns all contexts including archived ones.
+func (a *App) ListAllContexts() ([]appstore.Context, error) {
+	return a.svc.ListAllContexts(a.ctx)
+}
+
+// ToggleContextStatus flips a context between "active" and "archived".
+func (a *App) ToggleContextStatus(id string) (*appstore.Context, error) {
+	return a.svc.ToggleContextStatus(a.ctx, id)
 }
 
 // CreateContext creates a new context.
@@ -266,6 +276,31 @@ func (a *App) DeleteJiraComment(id string) error {
 // DeleteSlackThread removes a single Slack thread by its internal ID.
 func (a *App) DeleteSlackThread(id string) error {
 	return a.svc.DeleteSlackThread(a.ctx, id)
+}
+
+// ToggleIssueActive flips the is_active flag for a Jira issue.
+func (a *App) ToggleIssueActive(id string) (*jirastore.Issue, error) {
+	return a.svc.ToggleIssueActive(a.ctx, id)
+}
+
+// ToggleCommentActive flips the is_active flag for a Jira comment.
+func (a *App) ToggleCommentActive(id string) (*jirastore.Comment, error) {
+	return a.svc.ToggleCommentActive(a.ctx, id)
+}
+
+// ToggleSlackChannelActive flips the is_active flag for a Slack channel.
+func (a *App) ToggleSlackChannelActive(id string) (*slackstore.SlackChannel, error) {
+	return a.svc.ToggleSlackChannelActive(a.ctx, id)
+}
+
+// ToggleSlackThreadActive flips the is_active flag for a Slack thread.
+func (a *App) ToggleSlackThreadActive(id string) (*slackstore.SlackThread, error) {
+	return a.svc.ToggleSlackThreadActive(a.ctx, id)
+}
+
+// ToggleContextFileActive flips the is_active flag for a text file.
+func (a *App) ToggleContextFileActive(id string) (*appstore.ContextFile, error) {
+	return a.svc.ToggleContextFileActive(a.ctx, id)
 }
 
 // SearchJQL runs an arbitrary JQL query and returns matching issues for preview / validation.

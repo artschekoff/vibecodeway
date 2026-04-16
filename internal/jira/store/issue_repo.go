@@ -10,32 +10,65 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetIssuesByContext returns all issues for a context, ordered by created_at.
-func (r *Repo) GetIssuesByContext(ctx context.Context, contextID string) ([]Issue, error) {
-	rows, err := r.db.QueryContext(ctx, `
+// GetIssuesByContext returns issues for a context, ordered by created_at.
+// When activeOnly is true only rows with is_active = 1 are returned.
+func (r *Repo) GetIssuesByContext(ctx context.Context, contextID string, activeOnly bool) ([]Issue, error) {
+	q := `
 		SELECT id, context_id, jira_key, summary, status, assignee, issue_type,
-		       description, jira_updated, created_at
+		       description, jira_updated, created_at, is_active
 		FROM jira_issues
-		WHERE context_id = ?
-		ORDER BY created_at ASC
-	`, contextID)
+		WHERE context_id = ?`
+	if activeOnly {
+		q += " AND is_active = 1"
+	}
+	q += " ORDER BY created_at ASC"
+	rows, err := r.db.QueryContext(ctx, q, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("listing issues: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var issues []Issue
 	for rows.Next() {
 		var i Issue
 		if err := rows.Scan(
 			&i.ID, &i.ContextID, &i.JiraKey, &i.Summary, &i.Status,
-			&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt,
+			&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive,
 		); err != nil {
 			return nil, fmt.Errorf("scanning issue: %w", err)
 		}
 		issues = append(issues, i)
 	}
 	return issues, rows.Err()
+}
+
+// ToggleIssueActive flips the is_active flag for the given issue and returns the updated record.
+// Returns ErrNotFound if no issue with that ID exists.
+func (r *Repo) ToggleIssueActive(ctx context.Context, id string) (*Issue, error) {
+	res, err := r.db.ExecContext(ctx, "UPDATE jira_issues SET is_active = NOT is_active WHERE id = ?", id)
+	if err != nil {
+		return nil, fmt.Errorf("toggling issue active: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, ErrNotFound
+	}
+
+	var i Issue
+	err = r.db.QueryRowContext(ctx, `
+		SELECT id, context_id, jira_key, summary, status, assignee, issue_type,
+		       description, jira_updated, created_at, is_active
+		FROM jira_issues WHERE id = ?
+	`, id).Scan(
+		&i.ID, &i.ContextID, &i.JiraKey, &i.Summary, &i.Status,
+		&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("fetching updated issue: %w", err)
+	}
+	return &i, nil
 }
 
 // GetIssueJiraKeys returns all jira_key values for a context (for dedup checks).
@@ -45,7 +78,7 @@ func (r *Repo) GetIssueJiraKeys(ctx context.Context, contextID string) (map[stri
 	if err != nil {
 		return nil, fmt.Errorf("getting issue keys: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	keys := make(map[string]bool)
 	for rows.Next() {

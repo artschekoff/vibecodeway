@@ -23,6 +23,7 @@ type SlackThread struct {
 	SearchQuery    string `json:"searchQuery"`
 	Content        string `json:"content"`
 	CreatedAt      string `json:"createdAt"`
+	IsActive       bool   `json:"isActive"`
 }
 
 // UpsertSlackThreadArgs holds all fields for UpsertSlackThread.
@@ -45,6 +46,7 @@ type SlackChannel struct {
 	ChannelID   string `json:"channelId"`
 	ChannelName string `json:"channelName"`
 	CreatedAt   string `json:"createdAt"`
+	IsActive    bool   `json:"isActive"`
 }
 
 // SlackChannelInput carries the fields needed to add a channel to a context.

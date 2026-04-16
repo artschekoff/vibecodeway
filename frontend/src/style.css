@@ -283,6 +283,71 @@ select {
 
 .context-row-active:hover { background: rgba(79, 142, 247, 0.12); }
 
+.context-row-archived {
+  opacity: 0.5;
+}
+
+.context-row-archived:hover { opacity: 0.7; }
+
+.context-key--archived {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.active-cell {
+  text-align: center;
+  width: 40px;
+}
+
+.active-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.active-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.active-indicator {
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.active-indicator::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.active-indicator--on {
+  background: rgba(76, 175, 125, 0.2);
+  border-color: var(--success);
+}
+
+.active-indicator--on::after {
+  transform: translateX(14px);
+  background: var(--success);
+}
+
 .context-row td {
   padding: 12px;
   vertical-align: middle;
@@ -1746,4 +1811,88 @@ select {
   color: var(--text-muted);
   max-height: 300px;
   overflow-y: auto;
+}
+
+/* ── Item-level active toggle (smaller, inline) ──────────────────────────── */
+.item-active-toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  margin-right: 4px;
+}
+
+.item-active-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.item-active-indicator {
+  display: inline-block;
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.item-active-indicator::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.item-active-indicator--on {
+  background: rgba(76, 175, 125, 0.2);
+  border-color: var(--success);
+}
+
+.item-active-indicator--on::after {
+  transform: translateX(12px);
+  background: var(--success);
+}
+
+/* ── Inactive item styles ────────────────────────────────────────────────── */
+.item--inactive {
+  text-decoration: line-through;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.issue-card--inactive {
+  opacity: 0.65;
+}
+
+.issue-card--inactive .issue-card-header {
+  background: transparent;
+}
+
+.comment--inactive {
+  opacity: 0.6;
+}
+
+.slack-thread-row--inactive {
+  opacity: 0.6;
+}
+
+.text-file-card--inactive {
+  opacity: 0.65;
+}
+
+.text-file-card--inactive .text-file-card-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
 }

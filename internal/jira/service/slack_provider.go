@@ -30,14 +30,14 @@ func (p *SlackProvider) Name() string { return "slack" }
 
 // IsConfigured implements provider.Provider.
 func (p *SlackProvider) IsConfigured(ctx context.Context, contextID string) (bool, error) {
-	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID)
+	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID, false)
 	if err != nil {
 		return false, err
 	}
 	if len(channels) > 0 {
 		return true, nil
 	}
-	threads, err := p.slackRepo.ListSlackThreads(ctx, contextID)
+	threads, err := p.slackRepo.ListSlackThreads(ctx, contextID, false)
 	if err != nil {
 		return false, err
 	}
@@ -56,7 +56,7 @@ func (p *SlackProvider) Reload(ctx context.Context, contextID string) (provider.
 }
 
 func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.Stats, error) {
-	threads, err := p.slackRepo.ListSlackThreads(ctx, contextID)
+	threads, err := p.slackRepo.ListSlackThreads(ctx, contextID, false)
 	if err != nil {
 		return provider.Stats{}, fmt.Errorf("listing threads: %w", err)
 	}
@@ -128,7 +128,7 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 
 	// Discover threads for configured channels that have no threads yet.
 	// This populates the initial content when a channel is first added.
-	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID)
+	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID, false)
 	if err != nil {
 		p.logger.Warn("slack refresh: list channels failed", zap.String("contextID", contextID), zap.Error(err))
 		return stats, nil
@@ -228,13 +228,13 @@ func formatMessages(channelName string, msgs []slackMessage) string {
 	return sb.String()
 }
 
-// WriteContext appends Slack channels and threads for contextID to w.
+// WriteContext appends active Slack channels and threads for contextID to w.
 func (p *SlackProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time) error {
-	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID)
+	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID, true)
 	if err != nil {
 		return fmt.Errorf("loading channels: %w", err)
 	}
-	threads, err := p.slackRepo.ListSlackThreads(ctx, contextID)
+	threads, err := p.slackRepo.ListSlackThreads(ctx, contextID, true)
 	if err != nil {
 		return fmt.Errorf("loading threads: %w", err)
 	}
@@ -257,23 +257,23 @@ func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads 
 		filtered = append(filtered, t)
 	}
 
-	fmt.Fprintf(w, "--- SLACK (%d channel%s, %d thread%s) ---\n\n",
+	_, _ = fmt.Fprintf(w, "--- SLACK (%d channel%s, %d thread%s) ---\n\n",
 		len(channels), plural(len(channels)),
 		len(filtered), plural(len(filtered)),
 	)
 
 	if len(channels) > 0 {
-		fmt.Fprint(w, "Monitored channels: ")
+		_, _ = fmt.Fprint(w, "Monitored channels: ")
 		names := make([]string, len(channels))
 		for i, ch := range channels {
 			names[i] = fmt.Sprintf("#%s (%s)", ch.ChannelName, ch.Workspace)
 		}
-		fmt.Fprint(w, strings.Join(names, ", "))
-		fmt.Fprint(w, "\n\n")
+		_, _ = fmt.Fprint(w, strings.Join(names, ", "))
+		_, _ = fmt.Fprint(w, "\n\n")
 	}
 
 	if len(filtered) == 0 {
-		fmt.Fprint(w, "No Slack threads match the given criteria.\n\n")
+		_, _ = fmt.Fprint(w, "No Slack threads match the given criteria.\n\n")
 		return
 	}
 
@@ -282,17 +282,17 @@ func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads 
 		if chanLabel == "" {
 			chanLabel = t.ChannelID
 		}
-		fmt.Fprintf(w, "#%s (%s)", chanLabel, t.Workspace)
+		_, _ = fmt.Fprintf(w, "#%s (%s)", chanLabel, t.Workspace)
 		if t.Permalink != "" {
-			fmt.Fprintf(w, " — %s", t.Permalink)
+			_, _ = fmt.Fprintf(w, " — %s", t.Permalink)
 		}
-		fmt.Fprint(w, "\n")
+		_, _ = fmt.Fprint(w, "\n")
 
 		if t.Content != "" {
-			fmt.Fprint(w, t.Content)
+			_, _ = fmt.Fprint(w, t.Content)
 		} else {
-			fmt.Fprint(w, "(no content — run Refresh to load)")
+			_, _ = fmt.Fprint(w, "(no content — run Refresh to load)")
 		}
-		fmt.Fprint(w, "\n\n")
+		_, _ = fmt.Fprint(w, "\n\n")
 	}
 }

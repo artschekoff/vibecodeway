@@ -41,7 +41,7 @@ func (p *JiraProvider) IsConfigured(ctx context.Context, contextID string) (bool
 // It does NOT run the JQL query or add new issues.
 // Stats.ItemsRefreshed = issues updated; Stats.NewItems = new comments inserted.
 func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.Stats, error) {
-	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID)
+	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, false)
 	if err != nil {
 		return provider.Stats{}, fmt.Errorf("loading issues: %w", err)
 	}
@@ -118,7 +118,7 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 	}
 
 	// Re-fetch the full list (including newly added issues) for comment sync.
-	allIssues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID)
+	allIssues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, false)
 	if err != nil {
 		p.logger.Warn("jira reload: list issues failed", zap.String("contextID", contextID), zap.Error(err))
 	} else {
@@ -132,14 +132,15 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 	return stats, nil
 }
 
-// WriteContext appends Jira issues and their comments for contextID to w.
+// WriteContext appends active Jira issues and their active comments for contextID to w.
 func (p *JiraProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time) error {
-	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID)
+	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, true)
 	if err != nil {
 		return fmt.Errorf("loading issues: %w", err)
 	}
+
 	for i, issue := range issues {
-		comments, err := p.jiraRepo.GetCommentsByIssue(ctx, issue.ID)
+		comments, err := p.jiraRepo.GetCommentsByIssue(ctx, issue.ID, true)
 		if err != nil {
 			return fmt.Errorf("loading comments for %s: %w", issue.JiraKey, err)
 		}
@@ -180,31 +181,31 @@ func writeJiraSection(w io.Writer, issues []jirastore.Issue, startAt time.Time) 
 		}
 	}
 
-	fmt.Fprintf(w, "--- JIRA (%d issue%s) ---\n\n", len(filtered), plural(len(filtered)))
+	_, _ = fmt.Fprintf(w, "--- JIRA (%d issue%s) ---\n\n", len(filtered), plural(len(filtered)))
 
 	if len(filtered) == 0 {
-		fmt.Fprint(w, "No Jira issues match the given criteria.\n\n")
+		_, _ = fmt.Fprint(w, "No Jira issues match the given criteria.\n\n")
 		return
 	}
 
 	for _, issue := range filtered {
-		fmt.Fprintf(w, "[%s] %s\n", issue.JiraKey, issue.Summary)
-		fmt.Fprintf(w, "Status: %s", issue.Status)
+		_, _ = fmt.Fprintf(w, "[%s] %s\n", issue.JiraKey, issue.Summary)
+		_, _ = fmt.Fprintf(w, "Status: %s", issue.Status)
 		if issue.Assignee != "" {
-			fmt.Fprintf(w, " | Assignee: %s", issue.Assignee)
+			_, _ = fmt.Fprintf(w, " | Assignee: %s", issue.Assignee)
 		}
 		if issue.IssueType != "" {
-			fmt.Fprintf(w, " | Type: %s", issue.IssueType)
+			_, _ = fmt.Fprintf(w, " | Type: %s", issue.IssueType)
 		}
 		if issue.JiraUpdated != "" {
-			fmt.Fprintf(w, " | Updated: %s", formatDateStr(issue.JiraUpdated))
+			_, _ = fmt.Fprintf(w, " | Updated: %s", formatDateStr(issue.JiraUpdated))
 		}
-		fmt.Fprint(w, "\n")
+		_, _ = fmt.Fprint(w, "\n")
 
 		if issue.Description != "" {
-			fmt.Fprint(w, "\nDescription:\n")
-			fmt.Fprint(w, indent(issue.Description, "  "))
-			fmt.Fprint(w, "\n")
+			_, _ = fmt.Fprint(w, "\nDescription:\n")
+			_, _ = fmt.Fprint(w, indent(issue.Description, "  "))
+			_, _ = fmt.Fprint(w, "\n")
 		}
 
 		comments := issue.Comments
@@ -219,18 +220,18 @@ func writeJiraSection(w io.Writer, issues []jirastore.Issue, startAt time.Time) 
 		}
 
 		if len(comments) > 0 {
-			fmt.Fprintf(w, "\nComments (%d):\n", len(comments))
+			_, _ = fmt.Fprintf(w, "\nComments (%d):\n", len(comments))
 			for _, c := range comments {
 				author := c.Author
 				if author == "" {
 					author = "Unknown"
 				}
-				fmt.Fprintf(w, "  [%s] %s:\n", formatDateStr(c.JiraCreated), author)
-				fmt.Fprint(w, indent(c.Body, "    "))
-				fmt.Fprint(w, "\n")
+				_, _ = fmt.Fprintf(w, "  [%s] %s:\n", formatDateStr(c.JiraCreated), author)
+				_, _ = fmt.Fprint(w, indent(c.Body, "    "))
+				_, _ = fmt.Fprint(w, "\n")
 			}
 		}
 
-		fmt.Fprint(w, "\n")
+		_, _ = fmt.Fprint(w, "\n")
 	}
 }

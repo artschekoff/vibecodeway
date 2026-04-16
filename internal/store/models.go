@@ -23,4 +23,5 @@ type ContextFile struct {
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+	IsActive  bool   `json:"isActive"`
 }

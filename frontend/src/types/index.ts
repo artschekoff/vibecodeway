@@ -16,6 +16,7 @@ export interface Comment {
   body: string;
   jiraCreated: string;
   createdAt: string;
+  isActive: boolean;
 }
 
 export interface Issue {
@@ -29,6 +30,7 @@ export interface Issue {
   description: string;
   jiraUpdated: string;
   createdAt: string;
+  isActive: boolean;
   comments?: Comment[];
 }
 
@@ -84,6 +86,7 @@ export interface SlackChannel {
   channelId: string;
   channelName: string;
   createdAt: string;
+  isActive: boolean;
 }
 
 export interface SlackChannelResult {
@@ -104,6 +107,7 @@ export interface ContextFile {
   content: string;
   createdAt: string;
   updatedAt: string;
+  isActive: boolean;
 }
 
 export interface TextFilesPayload {

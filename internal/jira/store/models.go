@@ -21,6 +21,7 @@ type Issue struct {
 	Description string    `json:"description"`
 	JiraUpdated string    `json:"jiraUpdated"`
 	CreatedAt   string    `json:"createdAt"`
+	IsActive    bool      `json:"isActive"`
 	Comments    []Comment `json:"comments,omitempty"`
 }
 
@@ -33,4 +34,5 @@ type Comment struct {
 	Body        string `json:"body"`
 	JiraCreated string `json:"jiraCreated"`
 	CreatedAt   string `json:"createdAt"`
+	IsActive    bool   `json:"isActive"`
 }

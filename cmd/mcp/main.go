@@ -64,7 +64,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	aRunner := acli.NewRunner(logger)
 	jiraClient := jira.NewClient(aRunner, logger)

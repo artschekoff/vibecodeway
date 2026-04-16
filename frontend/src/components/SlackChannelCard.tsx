@@ -17,12 +17,22 @@ function TrashIcon() {
   );
 }
 
+function ActiveToggle({ isActive, onToggle }: { isActive: boolean; onToggle: (e: React.MouseEvent) => void }) {
+  return (
+    <label className="item-active-toggle" onClick={(e) => e.stopPropagation()} title={isActive ? "Active — click to deactivate" : "Inactive — click to activate"}>
+      <input type="checkbox" checked={isActive} onChange={() => {}} onClick={onToggle} />
+      <span className={`item-active-indicator${isActive ? " item-active-indicator--on" : ""}`} />
+    </label>
+  );
+}
+
 interface SlackChannel {
   id: string;
   workspace: string;
   channelId: string;
   channelName: string;
   createdAt: string;
+  isActive: boolean;
 }
 
 interface SlackThread {
@@ -34,6 +44,7 @@ interface SlackThread {
   searchQuery: string;
   content: string;
   createdAt: string;
+  isActive: boolean;
 }
 
 interface Props {
@@ -41,10 +52,13 @@ interface Props {
   threads: SlackThread[];
   onDeleteChannel?: (id: string) => void;
   onDeleteThread?: (id: string) => void;
+  onToggleChannel?: (id: string) => void;
+  onToggleThread?: (id: string) => void;
 }
 
-function ThreadRow({ thread, onDelete }: { thread: SlackThread; onDelete?: (id: string) => void }) {
+function ThreadRow({ thread, onDelete, onToggle }: { thread: SlackThread; onDelete?: (id: string) => void; onToggle?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const isInactive = !thread.isActive;
 
   const preview = thread.content
     ? thread.content.slice(0, 120).replace(/\n+/g, " ").trim() + (thread.content.length > 120 ? "…" : "")
@@ -56,13 +70,16 @@ function ThreadRow({ thread, onDelete }: { thread: SlackThread; onDelete?: (id: 
   };
 
   return (
-    <div className="slack-thread-row">
+    <div className={`slack-thread-row${isInactive ? " slack-thread-row--inactive" : ""}`}>
       <div
         className={`slack-thread-row-header${expanded ? " slack-thread-row-header--open" : ""}`}
         onClick={() => setExpanded(!expanded)}
       >
         <span className="slack-tree-connector">└</span>
-        <span className="slack-thread-row-preview">{preview}</span>
+        {onToggle && (
+          <ActiveToggle isActive={thread.isActive} onToggle={(e) => { e.stopPropagation(); onToggle(thread.id); }} />
+        )}
+        <span className={`slack-thread-row-preview${isInactive ? " item--inactive" : ""}`}>{preview}</span>
         <div className="slack-thread-row-meta">
           {thread.permalink && (
             <a
@@ -99,9 +116,10 @@ function ThreadRow({ thread, onDelete }: { thread: SlackThread; onDelete?: (id: 
   );
 }
 
-export default function SlackChannelCard({ channel, threads, onDeleteChannel, onDeleteThread }: Props) {
+export default function SlackChannelCard({ channel, threads, onDeleteChannel, onDeleteThread, onToggleChannel, onToggleThread }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const isInactive = !channel.isActive;
 
   const copyName = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -117,13 +135,16 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
   };
 
   return (
-    <div className="issue-card">
+    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}`}>
       <div
         className="issue-card-header"
         onClick={() => setExpanded(!expanded)}
       >
+        {onToggleChannel && (
+          <ActiveToggle isActive={channel.isActive} onToggle={(e) => { e.stopPropagation(); onToggleChannel(channel.id); }} />
+        )}
         <span className="slack-thread-hash">#</span>
-        <span className="issue-summary">{channel.channelName || channel.channelId}</span>
+        <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{channel.channelName || channel.channelId}</span>
         <button className="copy-btn" onClick={copyName} title="Copy channel name">
           {copied ? "✓" : <CopyIcon />}
         </button>
@@ -156,7 +177,7 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
       {expanded && threads.length > 0 && (
         <div className="issue-body slack-channel-threads">
           {threads.map((t) => (
-            <ThreadRow key={t.id} thread={t} onDelete={onDeleteThread} />
+            <ThreadRow key={t.id} thread={t} onDelete={onDeleteThread} onToggle={onToggleThread} />
           ))}
         </div>
       )}

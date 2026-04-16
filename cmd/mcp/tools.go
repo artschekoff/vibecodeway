@@ -8,6 +8,9 @@ import (
 	"time"
 
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
+	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"go.uber.org/zap"
@@ -35,7 +38,10 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, logger 
 
 	s.AddTool(
 		mcp.NewTool("context_list",
-			mcp.WithDescription("List all saved Jira contexts with their key, JQL search query, status, and issue count. Call this first to discover available contexts."),
+			mcp.WithDescription("List saved contexts with their key, status, and issue count. By default only active contexts are returned. Call this first to discover available contexts."),
+			mcp.WithString("include_archived",
+				mcp.Description("Set to 'true' to include archived (inactive) contexts in the results. Defaults to active-only."),
+			),
 		),
 		h.handleContextList,
 	)
@@ -70,12 +76,15 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, logger 
 
 	s.AddTool(
 		mcp.NewTool("context_get",
-			mcp.WithDescription("Get the full contents of a context: all issues with their comments sorted by date. Use this to feed context data to your analysis."),
+			mcp.WithDescription("Get the full contents of a context: issues, comments, Slack channels/threads, and text files. By default only active items are returned. Use include_inactive='true' to also retrieve items that have been deactivated."),
 			mcp.WithString("context_id",
 				mcp.Description("Context UUID. Use either context_id or context_key."),
 			),
 			mcp.WithString("context_key",
 				mcp.Description("Context user-assigned key. Use either context_id or context_key."),
+			),
+			mcp.WithString("include_inactive",
+				mcp.Description("Set to 'true' to include inactive (deactivated) items in the results. Defaults to active-only."),
 			),
 		),
 		h.handleContextGet,
@@ -87,8 +96,18 @@ type handlers struct {
 	logger *zap.Logger
 }
 
-func (h *handlers) handleContextList(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	contexts, err := h.svc.ListContexts(ctx)
+func (h *handlers) handleContextList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	includeArchived := strings.EqualFold(strings.TrimSpace(req.GetString("include_archived", "")), "true")
+
+	var (
+		contexts []appstore.Context
+		err      error
+	)
+	if includeArchived {
+		contexts, err = h.svc.ListAllContexts(ctx)
+	} else {
+		contexts, err = h.svc.ListContexts(ctx)
+	}
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("listing contexts: %v", err)), nil
 	}
@@ -156,11 +175,64 @@ func (h *handlers) handleContextGet(ctx context.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(fmt.Sprintf("loading context: %v", err)), nil
 	}
 
+	includeInactive := strings.EqualFold(strings.TrimSpace(req.GetString("include_inactive", "")), "true")
+	if !includeInactive {
+		detail = filterActiveItems(detail)
+	}
+
 	data, err := json.MarshalIndent(detail, "", "  ")
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
 	}
 	return mcp.NewToolResultText(string(data)), nil
+}
+
+// filterActiveItems returns a shallow copy of detail containing only active issues,
+// comments, Slack channels, Slack threads, and text files.
+func filterActiveItems(detail *jiraservice.ContextDetail) *jiraservice.ContextDetail {
+	filtered := *detail
+
+	issues := make([]jirastore.Issue, 0, len(detail.Issues))
+	for _, iss := range detail.Issues {
+		if !iss.IsActive {
+			continue
+		}
+		activeComments := make([]jirastore.Comment, 0, len(iss.Comments))
+		for _, c := range iss.Comments {
+			if c.IsActive {
+				activeComments = append(activeComments, c)
+			}
+		}
+		iss.Comments = activeComments
+		issues = append(issues, iss)
+	}
+	filtered.Issues = issues
+
+	channels := make([]slackstore.SlackChannel, 0, len(detail.SlackChannels))
+	for _, ch := range detail.SlackChannels {
+		if ch.IsActive {
+			channels = append(channels, ch)
+		}
+	}
+	filtered.SlackChannels = channels
+
+	threads := make([]slackstore.SlackThread, 0, len(detail.SlackThreads))
+	for _, t := range detail.SlackThreads {
+		if t.IsActive {
+			threads = append(threads, t)
+		}
+	}
+	filtered.SlackThreads = threads
+
+	files := make([]appstore.ContextFile, 0, len(detail.ContextFiles))
+	for _, f := range detail.ContextFiles {
+		if f.IsActive {
+			files = append(files, f)
+		}
+	}
+	filtered.ContextFiles = files
+
+	return &filtered
 }
 
 // resolveContextID returns the context UUID from either context_id or context_key parameter.

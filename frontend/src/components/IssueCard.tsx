@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Issue } from "../types";
+import type { Issue, Comment } from "../types";
 
 function CopyIcon() {
   return (
@@ -18,13 +18,24 @@ function TrashIcon() {
   );
 }
 
+function ActiveToggle({ isActive, onToggle }: { isActive: boolean; onToggle: (e: React.MouseEvent) => void }) {
+  return (
+    <label className="item-active-toggle" onClick={(e) => e.stopPropagation()} title={isActive ? "Active — click to deactivate" : "Inactive — click to activate"}>
+      <input type="checkbox" checked={isActive} onChange={() => {}} onClick={onToggle} />
+      <span className={`item-active-indicator${isActive ? " item-active-indicator--on" : ""}`} />
+    </label>
+  );
+}
+
 interface Props {
   issue: Issue;
   onDeleteIssue?: (id: string) => void;
   onDeleteComment?: (id: string) => void;
+  onToggleIssue?: (id: string) => void;
+  onToggleComment?: (id: string) => void;
 }
 
-export default function IssueCard({ issue, onDeleteIssue, onDeleteComment }: Props) {
+export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -54,15 +65,19 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment }: Pro
   };
 
   const comments = issue.comments ?? [];
+  const isInactive = !issue.isActive;
 
   return (
-    <div className="issue-card">
+    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}`}>
       <div className="issue-card-header" onClick={() => setExpanded(!expanded)}>
-        <span className="issue-key">{issue.jiraKey}</span>
+        {onToggleIssue && (
+          <ActiveToggle isActive={issue.isActive} onToggle={(e) => { e.stopPropagation(); onToggleIssue(issue.id); }} />
+        )}
+        <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
         <button className="copy-btn" onClick={copyKey} title="Copy ticket number">
           {copied ? "✓" : <CopyIcon />}
         </button>
-        <span className="issue-summary">{issue.summary}</span>
+        <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{issue.summary}</span>
         <div className="issue-meta">
           {issue.assignee && <span className="issue-assignee">@{issue.assignee}</span>}
           <span className="status-badge">{issue.status}</span>
@@ -93,10 +108,13 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment }: Pro
             {comments.length === 0 ? (
               <div className="no-comments">No comments yet</div>
             ) : (
-              comments.map((c) => (
-                <div key={c.id} className="comment">
+              comments.map((c: Comment) => (
+                <div key={c.id} className={`comment${!c.isActive ? " comment--inactive" : ""}`}>
                   <div className="comment-header">
-                    <span className="comment-author">{c.author || "Unknown"}</span>
+                    {onToggleComment && (
+                      <ActiveToggle isActive={c.isActive} onToggle={() => onToggleComment(c.id)} />
+                    )}
+                    <span className={`comment-author${!c.isActive ? " item--inactive" : ""}`}>{c.author || "Unknown"}</span>
                     <span className="comment-date">{formatDate(c.jiraCreated)}</span>
                     {onDeleteComment && (
                       <button
@@ -108,7 +126,7 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment }: Pro
                       </button>
                     )}
                   </div>
-                  <div className="comment-body">{c.body}</div>
+                  <div className={`comment-body${!c.isActive ? " item--inactive" : ""}`}>{c.body}</div>
                 </div>
               ))
             )}
