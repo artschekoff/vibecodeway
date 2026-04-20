@@ -25,3 +25,12 @@ type ContextFile struct {
 	UpdatedAt string `json:"updatedAt"`
 	IsActive  bool   `json:"isActive"`
 }
+
+// AISettings holds OpenAI configuration stored in the local database.
+// The raw API key is never persisted or serialised — only the flag HasKey is exposed.
+type AISettings struct {
+	HasKey    bool   `json:"hasKey"`
+	Model     string `json:"model"`
+	BaseURL   string `json:"baseUrl"`
+	UpdatedAt string `json:"updatedAt"`
+}

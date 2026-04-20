@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	"github.com/artschekoff/context-consolidator/internal/provider"
@@ -24,11 +26,50 @@ const (
 	providerSlack = "slack"
 )
 
-// slackMessage is one entry in the messages array returned by slack-cli search-channels.
+// slackMessage is one entry in the messages array returned by slack-cli search-channels
+// and list-dms --with-messages.
+// search-channels uses "user" (display name); list-dms uses "userId" (Slack user ID).
 type slackMessage struct {
 	User      string `json:"user"`
+	UserID    string `json:"userId"`
 	Text      string `json:"text"`
 	Timestamp string `json:"timestamp"`
+}
+
+// displayUser returns the best available user label: display name when present, user ID otherwise.
+func (m slackMessage) displayUser() string {
+	if m.User != "" {
+		return m.User
+	}
+	return m.UserID
+}
+
+// slackDMEntry is one DM conversation returned by slack-cli list-dms --with-messages.
+// The CLI may return the message as "lastMessage" (current), "message" (singular), or
+// "messages" (array). All three are decoded for forward/backward compatibility.
+type slackDMEntry struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	UserID      string         `json:"userId"`
+	UserName    string         `json:"userName"`
+	IsIM        bool           `json:"isIm"`
+	Messages    []slackMessage `json:"messages"`
+	Message     *slackMessage  `json:"message"`
+	LastMessage *slackMessage  `json:"lastMessage"`
+}
+
+// allMessages returns all messages for this DM entry across all possible field shapes.
+func (e slackDMEntry) allMessages() []slackMessage {
+	if len(e.Messages) > 0 {
+		return e.Messages
+	}
+	if e.LastMessage != nil {
+		return []slackMessage{*e.LastMessage}
+	}
+	if e.Message != nil {
+		return []slackMessage{*e.Message}
+	}
+	return nil
 }
 
 // SlackChannelResult is one channel returned by SearchSlackChannels.
@@ -79,6 +120,7 @@ type RefreshResult struct {
 	IssuesRefreshed  int `json:"issuesRefreshed"`
 	NewComments      int `json:"newComments"`
 	ThreadsRefreshed int `json:"threadsRefreshed"`
+	DMsRefreshed     int `json:"dmsRefreshed"`
 }
 
 // ReloadAllResult summarises what was fetched for one context during a ReloadAllContexts run.
@@ -88,6 +130,7 @@ type ReloadAllResult struct {
 	NewIssues        int    `json:"newIssues"`
 	NewComments      int    `json:"newComments"`
 	ThreadsRefreshed int    `json:"threadsRefreshed"`
+	DMsRefreshed     int    `json:"dmsRefreshed"`
 	Error            string `json:"error,omitempty"`
 }
 
@@ -101,24 +144,37 @@ type ReloadProgressFunc func(current, total int, contextKey string)
 
 // ContextDetail is a Context with its provider configs, Jira issues, Slack threads, and text files.
 type ContextDetail struct {
-	Context       appstore.Context          `json:"context"`
-	Jira          *jirastore.JiraProvider   `json:"jira,omitempty"`
-	Slack         *slackstore.SlackProvider `json:"slack,omitempty"`
-	Issues        []jirastore.Issue         `json:"issues"`
-	SlackThreads  []slackstore.SlackThread  `json:"slackThreads,omitempty"`
-	SlackChannels []slackstore.SlackChannel `json:"slackChannels,omitempty"`
-	ContextFiles  []appstore.ContextFile    `json:"contextFiles,omitempty"`
+	Context        appstore.Context          `json:"context"`
+	Jira           *jirastore.JiraProvider   `json:"jira,omitempty"`
+	Slack          *slackstore.SlackProvider `json:"slack,omitempty"`
+	Issues         []jirastore.Issue         `json:"issues"`
+	SlackThreads   []slackstore.SlackThread  `json:"slackThreads,omitempty"`
+	SlackChannels  []slackstore.SlackChannel `json:"slackChannels,omitempty"`
+	SlackDMConfigs []slackstore.SlackDMConfig `json:"slackDMConfigs,omitempty"`
+	ContextFiles   []appstore.ContextFile    `json:"contextFiles,omitempty"`
 }
 
 // ContextService provides all domain operations for managing contexts.
 type ContextService struct {
-	store     *appstore.Store
-	jiraRepo  *jirastore.Repo
-	slackRepo *slackstore.Repo
-	jira      *jira.Client
-	slack     SlackRunner
-	logger    *zap.Logger
-	providers []provider.Provider
+	store      *appstore.Store
+	jiraRepo   *jirastore.Repo
+	slackRepo  *slackstore.Repo
+	jira       *jira.Client
+	slack      SlackRunner
+	logger     *zap.Logger
+	providers  []provider.Provider
+	contextLog *contextlog.Service
+}
+
+// SetContextLog attaches a contextlog.Service for refresh/reload change recording.
+// Passing nil disables logging hooks. Safe to call after construction.
+func (svc *ContextService) SetContextLog(cl *contextlog.Service) {
+	svc.contextLog = cl
+}
+
+// ContextLog returns the currently attached contextlog.Service, or nil if none.
+func (svc *ContextService) ContextLog() *contextlog.Service {
+	return svc.contextLog
 }
 
 // NewContextService creates a new ContextService.
@@ -236,6 +292,12 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 		return nil, fmt.Errorf("loading slack channels: %w", err)
 	}
 	detail.SlackChannels = channels
+
+	dmConfigs, err := svc.slackRepo.ListSlackDMConfigs(ctx, id, false)
+	if err != nil {
+		return nil, fmt.Errorf("loading slack dm configs: %w", err)
+	}
+	detail.SlackDMConfigs = dmConfigs
 
 	contextFiles, err := svc.store.ListContextFiles(ctx, id, false)
 	if err != nil {
@@ -427,7 +489,7 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 		return fmt.Errorf("loading context: %w", err)
 	}
 	for _, ch := range channels {
-		if _, err := svc.slackRepo.UpsertSlackChannel(ctx, contextID, workspace, ch.ChannelID, ch.ChannelName); err != nil {
+		if _, err := svc.slackRepo.UpsertSlackChannel(ctx, contextID, workspace, ch.ChannelID, ch.ChannelName, ch.StartFrom); err != nil {
 			return fmt.Errorf("upserting channel %q: %w", ch.ChannelName, err)
 		}
 		if ch.Content != "" {
@@ -527,6 +589,8 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		notify = onProgress[0]
 	}
 
+	before := svc.snapshotBefore(ctx, contextID)
+
 	for i, p := range svc.providers {
 		if notify != nil {
 			notify(i+1, len(svc.providers), p.Name())
@@ -544,14 +608,50 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 			result.NewComments += stats.NewItems
 		case providerSlack:
 			result.ThreadsRefreshed += stats.ItemsRefreshed
+			result.DMsRefreshed += stats.NewItems
 		}
 	}
+
+	svc.recordContextChange(ctx, contextID, contextlog.TriggerRefresh, before)
 
 	if err := svc.store.TouchContext(ctx, contextID); err != nil {
 		svc.logger.Warn("refresh: touch context failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 
 	return result, nil
+}
+
+// snapshotBefore takes a snapshot for change-log diffing, or returns nil if logging
+// is disabled or the snapshot fails (in which case RecordChange is skipped).
+func (svc *ContextService) snapshotBefore(ctx context.Context, contextID string) contextlog.Snapshot {
+	if svc.contextLog == nil {
+		return nil
+	}
+	snap, err := svc.contextLog.Repo().SnapshotFull(ctx, contextID)
+	if err != nil {
+		svc.logger.Warn("contextlog: snapshot before failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		return nil
+	}
+	return snap
+}
+
+// recordContextChange takes an "after" snapshot and records the diff through contextlog.
+// A nil before (typically from snapshotBefore failure or disabled logging) is skipped.
+func (svc *ContextService) recordContextChange(ctx context.Context, contextID, trigger string, before contextlog.Snapshot) {
+	if svc.contextLog == nil || before == nil {
+		return
+	}
+	after, err := svc.contextLog.Repo().SnapshotFull(ctx, contextID)
+	if err != nil {
+		svc.logger.Warn("contextlog: snapshot after failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		return
+	}
+	if _, err := svc.contextLog.RecordChange(ctx, contextID, trigger, before, after); err != nil {
+		svc.logger.Warn("contextlog: record change failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
 }
 
 // FormatContext writes a human-readable summary of all provider data for contextID to w.
@@ -595,6 +695,8 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 
 		r := ReloadAllResult{ContextID: c.ID, ContextKey: c.Key}
 
+		before := svc.snapshotBefore(ctx, c.ID)
+
 		var errs []string
 		for _, p := range svc.providers {
 			stats, err := p.Reload(ctx, c.ID)
@@ -611,15 +713,143 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 				r.NewComments += stats.NewItems     // new comments
 			case providerSlack:
 				r.ThreadsRefreshed += stats.ItemsRefreshed
+				r.DMsRefreshed += stats.NewItems
 			}
 		}
 		if len(errs) > 0 {
 			r.Error = strings.Join(errs, "; ")
 		}
 
+		svc.recordContextChange(ctx, c.ID, contextlog.TriggerReload, before)
+
 		results = append(results, r)
 	}
 	return results, nil
+}
+
+// ListSlackDMConfigs returns all DM load configurations for a context.
+func (svc *ContextService) ListSlackDMConfigs(ctx context.Context, contextID string) ([]slackstore.SlackDMConfig, error) {
+	return svc.slackRepo.ListSlackDMConfigs(ctx, contextID, false)
+}
+
+// UpsertSlackDMConfig creates or updates a DM load configuration and immediately
+// loads the DM content via slack-cli list-dms for the given workspace and startFrom date.
+func (svc *ContextService) UpsertSlackDMConfig(ctx context.Context, contextID, workspace, startFrom string) (*slackstore.SlackDMConfig, error) {
+	if workspace == "" {
+		return nil, fmt.Errorf("slack workspace is required")
+	}
+	if _, err := svc.store.GetContext(ctx, contextID); err != nil {
+		return nil, fmt.Errorf("loading context: %w", err)
+	}
+
+	cfg, err := svc.slackRepo.UpsertSlackDMConfig(ctx, contextID, workspace, startFrom)
+	if err != nil {
+		return nil, fmt.Errorf("upserting dm config: %w", err)
+	}
+
+	content, err := svc.fetchDMContent(ctx, workspace, startFrom)
+	if err != nil {
+		svc.logger.Warn("upsert dm config: fetching dm content failed",
+			zap.String("contextID", contextID), zap.String("workspace", workspace), zap.Error(err))
+	} else if content != "" {
+		if err := svc.slackRepo.UpdateSlackDMConfigContent(ctx, cfg.ID, content); err != nil {
+			svc.logger.Warn("upsert dm config: storing content failed",
+				zap.String("contextID", contextID), zap.Error(err))
+		} else {
+			cfg.Content = content
+		}
+	}
+
+	return cfg, svc.store.TouchContext(ctx, contextID)
+}
+
+// DeleteSlackDMConfig removes a DM load configuration by its record ID.
+func (svc *ContextService) DeleteSlackDMConfig(ctx context.Context, id string) error {
+	return svc.slackRepo.DeleteSlackDMConfig(ctx, id)
+}
+
+// ToggleSlackDMConfigActive flips the is_active flag for a Slack DM config.
+func (svc *ContextService) ToggleSlackDMConfigActive(ctx context.Context, id string) (*slackstore.SlackDMConfig, error) {
+	return svc.slackRepo.ToggleSlackDMConfigActive(ctx, id)
+}
+
+// RemoveSlackDMEntry removes a single DM conversation entry from a DM config's content.
+func (svc *ContextService) RemoveSlackDMEntry(ctx context.Context, dmConfigID, entryID string) error {
+	return svc.slackRepo.RemoveSlackDMEntry(ctx, dmConfigID, entryID)
+}
+
+// PreviewSlackDMs calls slack-cli list-dms for the given workspace and startFrom date
+// and returns the formatted output without persisting anything.
+// Returns an empty string when no personal messages are found.
+func (svc *ContextService) PreviewSlackDMs(ctx context.Context, workspace, startFrom string) (string, error) {
+	if workspace == "" {
+		return "", fmt.Errorf("slack workspace is required")
+	}
+	return svc.fetchDMContent(ctx, workspace, startFrom)
+}
+
+// fetchDMContent calls slack-cli list-dms --with-messages and returns formatted output.
+func (svc *ContextService) fetchDMContent(ctx context.Context, workspace, startFrom string) (string, error) {
+	flags := []string{workspace, "--with-messages"}
+	if startFrom != "" {
+		flags = append(flags, "--start-from", startFrom)
+	}
+	raw, err := svc.slack.Run(ctx, []string{"list-dms"}, flags)
+	if err != nil {
+		return "", err
+	}
+	return formatDMContent(raw), nil
+}
+
+// formatDMContent parses the JSON array returned by list-dms --with-messages
+// and renders each conversation's messages into a readable plain-text block.
+func formatDMContent(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	var entries []slackDMEntry
+	if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+		return raw
+	}
+	if len(entries) == 0 {
+		return ""
+	}
+
+	// Sort newest-first: lexicographic comparison works for "YYYY-MM-DD HH:MM UTC" timestamps.
+	sort.Slice(entries, func(i, j int) bool {
+		ti, tj := "", ""
+		if mi := entries[i].allMessages(); len(mi) > 0 {
+			ti = mi[0].Timestamp
+		}
+		if mj := entries[j].allMessages(); len(mj) > 0 {
+			tj = mj[0].Timestamp
+		}
+		return ti > tj
+	})
+
+	var sb strings.Builder
+	for _, e := range entries {
+		label := e.UserName
+		if label == "" {
+			label = e.Name
+		}
+		if label == "" {
+			label = e.ID
+		}
+
+		msgs := e.allMessages()
+		if len(msgs) == 0 {
+			fmt.Fprintf(&sb, "# DM with %s\n(no messages)\n\n", label)
+			continue
+		}
+		fmt.Fprintf(&sb, "# DM with %s\n\n", label)
+		for _, m := range msgs {
+			fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.displayUser(), m.Text)
+		}
+		sb.WriteString("\n")
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 // SearchJQL runs an arbitrary JQL query and returns matching issues.

@@ -41,7 +41,14 @@ func (p *SlackProvider) IsConfigured(ctx context.Context, contextID string) (boo
 	if err != nil {
 		return false, err
 	}
-	return len(threads) > 0, nil
+	if len(threads) > 0 {
+		return true, nil
+	}
+	dmConfigs, err := p.slackRepo.ListSlackDMConfigs(ctx, contextID, false)
+	if err != nil {
+		return false, err
+	}
+	return len(dmConfigs) > 0, nil
 }
 
 // Refresh reloads all Slack threads stored for contextID.
@@ -63,12 +70,53 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 
 	stats := provider.Stats{}
 
+	// Refresh DM configs.
+	dmConfigs, err := p.slackRepo.ListSlackDMConfigs(ctx, contextID, false)
+	if err != nil {
+		p.logger.Warn("slack refresh: listing dm configs failed", zap.String("contextID", contextID), zap.Error(err))
+	}
+	for _, cfg := range dmConfigs {
+		flags := []string{cfg.Workspace, "--with-messages"}
+		if cfg.StartFrom != "" {
+			flags = append(flags, "--start-from", cfg.StartFrom)
+		}
+		raw, err := p.slack.Run(ctx, []string{"list-dms"}, flags)
+		if err != nil {
+			p.logger.Warn("slack refresh: list-dms failed",
+				zap.String("contextID", contextID), zap.String("workspace", cfg.Workspace), zap.Error(err))
+			continue
+		}
+		content := formatDMContent(raw)
+		if content == "" {
+			continue
+		}
+		if err := p.slackRepo.UpdateSlackDMConfigContent(ctx, cfg.ID, content); err != nil {
+			p.logger.Warn("slack refresh: updating dm config content failed",
+				zap.String("contextID", contextID), zap.Error(err))
+			continue
+		}
+		stats.NewItems++
+	}
+
+	// Build channelID → SlackChannel lookup so we can forward start_from per channel.
+	channelList, err := p.slackRepo.ListSlackChannels(ctx, contextID, false)
+	if err != nil {
+		p.logger.Warn("slack refresh: listing channels for start_from lookup failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	channelByID := make(map[string]slackstore.SlackChannel, len(channelList))
+	for _, ch := range channelList {
+		channelByID[ch.ChannelID] = ch
+	}
+
 	// Re-fetch content for every thread already in the database.
 	for _, t := range threads {
 		var (
-			content string
-			err     error
+			content  string
+			fetchErr error
 		)
+
+		chStartFrom := channelByID[t.ChannelID].StartFrom
 
 		if t.ThreadTS == "" {
 			// This record was created by search-channels (whole-channel snapshot).
@@ -78,10 +126,14 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 					zap.String("contextID", contextID), zap.String("channelID", t.ChannelID))
 				continue
 			}
-			content, err = p.slack.Run(ctx, []string{"search-channels"}, []string{t.Workspace, t.ChannelName})
-			if err != nil {
+			flags := []string{t.Workspace, t.ChannelName}
+			if chStartFrom != "" {
+				flags = append(flags, "--start-from", chStartFrom)
+			}
+			content, fetchErr = p.slack.Run(ctx, []string{"search-channels"}, flags)
+			if fetchErr != nil {
 				p.logger.Warn("slack refresh: search-channels failed",
-					zap.String("contextID", contextID), zap.String("channel", t.ChannelName), zap.Error(err))
+					zap.String("contextID", contextID), zap.String("channel", t.ChannelName), zap.Error(fetchErr))
 				continue
 			}
 			// search-channels returns a JSON array; extract the content field of the matching entry.
@@ -97,10 +149,13 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 			if t.SearchQuery != "" {
 				flags = append(flags, "--search-query", t.SearchQuery)
 			}
-			content, err = p.slack.Run(ctx, []string{"load-context"}, flags)
-			if err != nil {
+			if chStartFrom != "" {
+				flags = append(flags, "--start-from", chStartFrom)
+			}
+			content, fetchErr = p.slack.Run(ctx, []string{"load-context"}, flags)
+			if fetchErr != nil {
 				p.logger.Warn("slack refresh: load context failed",
-					zap.String("contextID", contextID), zap.String("channel", t.ChannelID), zap.Error(err))
+					zap.String("contextID", contextID), zap.String("channel", t.ChannelID), zap.Error(fetchErr))
 				continue
 			}
 		}
@@ -109,7 +164,7 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 			continue
 		}
 
-		_, err = p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+		_, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 			Workspace:   t.Workspace,
 			ChannelID:   t.ChannelID,
 			ThreadTS:    t.ThreadTS,
@@ -118,9 +173,9 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 			SearchQuery: t.SearchQuery,
 			Content:     content,
 		})
-		if err != nil {
+		if upsertErr != nil {
 			p.logger.Warn("slack refresh: upsert thread failed",
-				zap.String("contextID", contextID), zap.Error(err))
+				zap.String("contextID", contextID), zap.Error(upsertErr))
 			continue
 		}
 		stats.ItemsRefreshed++
@@ -158,7 +213,11 @@ func (p *SlackProvider) discoverAndLoadThreads(ctx context.Context, contextID st
 			zap.String("channelID", ch.ChannelID))
 		return
 	}
-	raw, err := p.slack.Run(ctx, []string{"search-channels"}, []string{ch.Workspace, ch.ChannelName})
+	flags := []string{ch.Workspace, ch.ChannelName}
+	if ch.StartFrom != "" {
+		flags = append(flags, "--start-from", ch.StartFrom)
+	}
+	raw, err := p.slack.Run(ctx, []string{"search-channels"}, flags)
 	if err != nil {
 		p.logger.Warn("slack discover: search-channels failed",
 			zap.String("channel", ch.ChannelName), zap.Error(err))
@@ -223,12 +282,12 @@ func formatMessages(channelName string, msgs []slackMessage) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "# #%s\n\n", channelName)
 	for _, m := range msgs {
-		fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.User, m.Text)
+		fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.displayUser(), m.Text)
 	}
 	return sb.String()
 }
 
-// WriteContext appends active Slack channels and threads for contextID to w.
+// WriteContext appends active Slack channels, threads, and DM configs for contextID to w.
 func (p *SlackProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time) error {
 	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID, true)
 	if err != nil {
@@ -238,13 +297,17 @@ func (p *SlackProvider) WriteContext(ctx context.Context, w io.Writer, contextID
 	if err != nil {
 		return fmt.Errorf("loading threads: %w", err)
 	}
-	writeSlackSection(w, channels, threads, startAt)
+	dmConfigs, err := p.slackRepo.ListSlackDMConfigs(ctx, contextID, true)
+	if err != nil {
+		return fmt.Errorf("loading dm configs: %w", err)
+	}
+	writeSlackSection(w, channels, threads, dmConfigs, startAt)
 	return nil
 }
 
-// writeSlackSection renders Slack channels and threads as human-readable text into w.
+// writeSlackSection renders Slack channels, threads and DM configs as human-readable text into w.
 // Threads older than startAt are skipped when startAt is non-zero.
-func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads []slackstore.SlackThread, startAt time.Time) {
+func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads []slackstore.SlackThread, dmConfigs []slackstore.SlackDMConfig, startAt time.Time) {
 	filtered := make([]slackstore.SlackThread, 0, len(threads))
 	for _, t := range threads {
 		if !startAt.IsZero() {
@@ -257,9 +320,10 @@ func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads 
 		filtered = append(filtered, t)
 	}
 
-	_, _ = fmt.Fprintf(w, "--- SLACK (%d channel%s, %d thread%s) ---\n\n",
+	_, _ = fmt.Fprintf(w, "--- SLACK (%d channel%s, %d thread%s, %d DM config%s) ---\n\n",
 		len(channels), plural(len(channels)),
 		len(filtered), plural(len(filtered)),
+		len(dmConfigs), plural(len(dmConfigs)),
 	)
 
 	if len(channels) > 0 {
@@ -272,7 +336,7 @@ func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads 
 		_, _ = fmt.Fprint(w, "\n\n")
 	}
 
-	if len(filtered) == 0 {
+	if len(filtered) == 0 && len(dmConfigs) == 0 {
 		_, _ = fmt.Fprint(w, "No Slack threads match the given criteria.\n\n")
 		return
 	}
@@ -290,6 +354,20 @@ func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads 
 
 		if t.Content != "" {
 			_, _ = fmt.Fprint(w, t.Content)
+		} else {
+			_, _ = fmt.Fprint(w, "(no content — run Refresh to load)")
+		}
+		_, _ = fmt.Fprint(w, "\n\n")
+	}
+
+	for _, dm := range dmConfigs {
+		label := fmt.Sprintf("DMs (%s)", dm.Workspace)
+		if dm.StartFrom != "" {
+			label += fmt.Sprintf(" since %s", dm.StartFrom)
+		}
+		_, _ = fmt.Fprintf(w, "%s\n", label)
+		if dm.Content != "" {
+			_, _ = fmt.Fprint(w, dm.Content)
 		} else {
 			_, _ = fmt.Fprint(w, "(no content — run Refresh to load)")
 		}

@@ -12,7 +12,7 @@ import (
 
 // UpsertSlackChannel creates or updates a Slack channel configuration for a context.
 // Uniqueness is keyed on (context_id, workspace, channel_name).
-func (r *Repo) UpsertSlackChannel(ctx context.Context, contextID, workspace, channelID, channelName string) (*SlackChannel, error) {
+func (r *Repo) UpsertSlackChannel(ctx context.Context, contextID, workspace, channelID, channelName, startFrom string) (*SlackChannel, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing string
@@ -23,8 +23,8 @@ func (r *Repo) UpsertSlackChannel(ctx context.Context, contextID, workspace, cha
 
 	if err == nil {
 		_, err = r.db.ExecContext(ctx,
-			"UPDATE slack_channels SET channel_id = ? WHERE id = ?",
-			channelID, existing,
+			"UPDATE slack_channels SET channel_id = ?, start_from = ? WHERE id = ?",
+			channelID, startFrom, existing,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("updating slack channel: %w", err)
@@ -38,9 +38,9 @@ func (r *Repo) UpsertSlackChannel(ctx context.Context, contextID, workspace, cha
 
 	id := uuid.New().String()
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO slack_channels (id, context_id, workspace, channel_id, channel_name, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, contextID, workspace, channelID, channelName, now)
+		INSERT INTO slack_channels (id, context_id, workspace, channel_id, channel_name, start_from, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, id, contextID, workspace, channelID, channelName, startFrom, now)
 	if err != nil {
 		return nil, fmt.Errorf("inserting slack channel: %w", err)
 	}
@@ -51,7 +51,7 @@ func (r *Repo) UpsertSlackChannel(ctx context.Context, contextID, workspace, cha
 // When activeOnly is true only rows with is_active = 1 are returned.
 func (r *Repo) ListSlackChannels(ctx context.Context, contextID string, activeOnly bool) ([]SlackChannel, error) {
 	q := `
-		SELECT id, context_id, workspace, channel_id, channel_name, created_at, is_active
+		SELECT id, context_id, workspace, channel_id, channel_name, start_from, created_at, is_active
 		FROM slack_channels
 		WHERE context_id = ?`
 	if activeOnly {
@@ -67,7 +67,7 @@ func (r *Repo) ListSlackChannels(ctx context.Context, contextID string, activeOn
 	var channels []SlackChannel
 	for rows.Next() {
 		var ch SlackChannel
-		if err := rows.Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.CreatedAt, &ch.IsActive); err != nil {
+		if err := rows.Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.StartFrom, &ch.CreatedAt, &ch.IsActive); err != nil {
 			return nil, fmt.Errorf("scanning slack channel: %w", err)
 		}
 		channels = append(channels, ch)
@@ -141,9 +141,9 @@ func (r *Repo) RemoveSlackChannel(ctx context.Context, id string) error {
 func (r *Repo) getSlackChannel(ctx context.Context, id string) (*SlackChannel, error) {
 	var ch SlackChannel
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, context_id, workspace, channel_id, channel_name, created_at, is_active
+		SELECT id, context_id, workspace, channel_id, channel_name, start_from, created_at, is_active
 		FROM slack_channels WHERE id = ?
-	`, id).Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.CreatedAt, &ch.IsActive)
+	`, id).Scan(&ch.ID, &ch.ContextID, &ch.Workspace, &ch.ChannelID, &ch.ChannelName, &ch.StartFrom, &ch.CreatedAt, &ch.IsActive)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

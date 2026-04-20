@@ -66,6 +66,7 @@ export interface SearchDiff {
 export interface SlackChannelInput {
   channelId: string;
   channelName: string;
+  startFrom?: string;
   content?: string;
 }
 
@@ -74,9 +75,27 @@ export interface SlackChannelGroup {
   channels: SlackChannelInput[];
 }
 
+export interface SlackDMConfig {
+  id: string;
+  contextId: string;
+  workspace: string;
+  startFrom: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+}
+
+export interface SlackDMConfigInput {
+  workspace: string;
+  startFrom: string;
+}
+
 export interface SlackSavePayload {
   groups: SlackChannelGroup[];
   removedChannelIds: string[];
+  dmConfigs?: SlackDMConfigInput[];
+  removedDMConfigIds?: string[];
 }
 
 export interface SlackChannel {
@@ -85,6 +104,7 @@ export interface SlackChannel {
   workspace: string;
   channelId: string;
   channelName: string;
+  startFrom: string;
   createdAt: string;
   isActive: boolean;
 }
@@ -114,4 +134,45 @@ export interface TextFilesPayload {
   newFiles: { name: string; content: string }[];
   editedFiles: { id: string; name: string; content: string }[];
   removedIds: string[];
+}
+
+export interface ContextLog {
+  id: string;
+  contextId: string;
+  trigger: string;
+  source?: string;
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  diffJson?: string;
+  summaryMd: string;
+  isManual: boolean;
+  editedAt?: string;
+  createdAt: string;
+}
+
+export interface ConsolidatedLog {
+  contextId: string;
+  contentMd: string;
+  version: number;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  contextId: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  proposedConsolidatedMd?: string;
+  appliedAt?: string;
+  createdAt: string;
+}
+
+export interface AISettings {
+  hasKey: boolean;
+  model: string;
+  baseUrl: string;
+  source: "env" | "db" | "none";
+  updatedAt: string;
 }

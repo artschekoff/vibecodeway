@@ -1,10 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
@@ -25,6 +28,20 @@ type fakeSlackRunner struct {
 
 func (f *fakeSlackRunner) Run(_ context.Context, _ []string, _ []string) (string, error) {
 	return f.output, f.err
+}
+
+// cmdRoutingRunner returns different output depending on the subcommand path.
+type cmdRoutingRunner struct {
+	outputs map[string]string
+}
+
+func (r *cmdRoutingRunner) Run(_ context.Context, subCmdPath []string, _ []string) (string, error) {
+	if len(subCmdPath) > 0 {
+		if out, ok := r.outputs[subCmdPath[0]]; ok {
+			return out, nil
+		}
+	}
+	return "", nil
 }
 
 func openTestStore(t *testing.T) *appstore.Store {
@@ -474,6 +491,281 @@ func TestGetContextDetail_IncludesSlackChannels(t *testing.T) {
 	ids := []string{detail.SlackChannels[0].ChannelID, detail.SlackChannels[1].ChannelID}
 	assert.ElementsMatch(t, []string{"C01", "C02"}, ids)
 	assert.Equal(t, "acme", detail.SlackChannels[0].Workspace)
+}
+
+func TestGetContextDetail_IncludesSlackDMConfigs(t *testing.T) {
+	svc := newTestService(t, nil)
+	ctx := context.Background()
+
+	c := createCtx(t, svc, "dm-ctx")
+
+	cfg, err := svc.slackRepo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2024-01-01")
+	require.NoError(t, err)
+
+	detail, err := svc.GetContextDetail(ctx, c.ID)
+	require.NoError(t, err)
+	require.Len(t, detail.SlackDMConfigs, 1)
+	assert.Equal(t, cfg.ID, detail.SlackDMConfigs[0].ID)
+	assert.Equal(t, "acme", detail.SlackDMConfigs[0].Workspace)
+	assert.Equal(t, "2024-01-01", detail.SlackDMConfigs[0].StartFrom)
+}
+
+// TestGetContextDetail_NoProvidersOmitsDMConfigs verifies that an empty DM config list is excluded.
+func TestGetContextDetail_NoProvidersOmitsDMConfigs(t *testing.T) {
+	svc := newTestService(t, nil)
+	ctx := context.Background()
+
+	c := createCtx(t, svc, "bare-dm-ctx")
+
+	detail, err := svc.GetContextDetail(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Empty(t, detail.SlackDMConfigs)
+}
+
+// --- RefreshContext DM tracking ---
+
+func TestRefreshContext_SeparatesDMsFromThreads(t *testing.T) {
+	dmJSON := `[{"id":"D1","userId":"U1","userName":"alice","isIm":true,"messages":[{"user":"alice","text":"hello","timestamp":"2024-01-01 10:00"}]}]`
+	threadContent := "# thread content"
+
+	runner := &cmdRoutingRunner{
+		outputs: map[string]string{
+			"list-dms":     dmJSON,
+			"load-context": threadContent,
+		},
+	}
+
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	jRepo := jirastore.NewRepo(s.DB())
+	sRepo := slackstore.NewRepo(s.DB())
+
+	slackProv := NewSlackProvider(sRepo, runner, logger)
+	svc := NewContextService(s, nil, jRepo, sRepo, runner, logger, slackProv)
+
+	ctx := context.Background()
+	c := createCtx(t, svc, "refresh-dm-ctx")
+
+	_, err := sRepo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2024-01-01")
+	require.NoError(t, err)
+
+	_, err = sRepo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "1.1", ChannelName: "general", Content: "old",
+	})
+	require.NoError(t, err)
+
+	result, err := svc.RefreshContext(ctx, c.ID)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, result.ThreadsRefreshed, "should count only threads")
+	assert.Equal(t, 1, result.DMsRefreshed, "should count only DM configs")
+}
+
+func TestReloadAllContexts_SeparatesDMsFromThreads(t *testing.T) {
+	dmJSON := `[{"id":"D1","userId":"U1","userName":"bob","isIm":true,"messages":[{"user":"bob","text":"hi","timestamp":"2024-02-01 09:00"}]}]`
+	threadContent := "# reloaded thread"
+
+	runner := &cmdRoutingRunner{
+		outputs: map[string]string{
+			"list-dms":     dmJSON,
+			"load-context": threadContent,
+		},
+	}
+
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	jRepo := jirastore.NewRepo(s.DB())
+	sRepo := slackstore.NewRepo(s.DB())
+
+	slackProv := NewSlackProvider(sRepo, runner, logger)
+	svc := NewContextService(s, nil, jRepo, sRepo, runner, logger, slackProv)
+
+	ctx := context.Background()
+	c := createCtx(t, svc, "reload-dm-ctx")
+
+	_, err := sRepo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2024-02-01")
+	require.NoError(t, err)
+
+	_, err = sRepo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C2", ThreadTS: "2.2", ChannelName: "deploy", Content: "old",
+	})
+	require.NoError(t, err)
+
+	results, err := svc.ReloadAllContexts(ctx)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	assert.Equal(t, 1, results[0].ThreadsRefreshed, "should count only threads")
+	assert.Equal(t, 1, results[0].DMsRefreshed, "should count only DM configs")
+}
+
+// --- writeSlackSection DM output ---
+
+func TestWriteSlackSection_DMsWrittenWithoutThreads(t *testing.T) {
+	dmConfigs := []slackstore.SlackDMConfig{
+		{ID: "dm1", Workspace: "acme", StartFrom: "2024-01-01", Content: "# DM with alice\n\n[2024-01-01] alice: hello"},
+	}
+
+	var buf bytes.Buffer
+	writeSlackSection(&buf, nil, nil, dmConfigs, time.Time{})
+	output := buf.String()
+
+	assert.Contains(t, output, "1 DM config)", "header should count DM configs")
+	assert.Contains(t, output, "DMs (acme) since 2024-01-01", "DM label should be present")
+	assert.Contains(t, output, "# DM with alice", "DM content should be present")
+	assert.NotContains(t, output, "No Slack threads match", "should not show empty-threads message when DMs exist")
+}
+
+func TestWriteSlackSection_DMsWrittenAlongsideThreads(t *testing.T) {
+	threads := []slackstore.SlackThread{
+		{ID: "t1", Workspace: "acme", ChannelID: "C1", ChannelName: "general", Content: "thread content"},
+	}
+	dmConfigs := []slackstore.SlackDMConfig{
+		{ID: "dm1", Workspace: "acme", Content: "dm content"},
+	}
+
+	var buf bytes.Buffer
+	writeSlackSection(&buf, nil, threads, dmConfigs, time.Time{})
+	output := buf.String()
+
+	assert.Contains(t, output, "thread content")
+	assert.Contains(t, output, "dm content")
+}
+
+// --- formatDMContent ---
+
+func TestFormatDMContent_PluralmessagesField(t *testing.T) {
+	raw := `[{"id":"D1","userId":"U1","userName":"alice","isIm":true,"messages":[{"user":"alice","text":"hello","timestamp":"2024-01-01 10:00"}]}]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "# DM with alice")
+	assert.Contains(t, got, "alice: hello")
+}
+
+func TestFormatDMContent_LastMessageField_GroupDM(t *testing.T) {
+	raw := `[{"id":"C01","name":"mpdm-alice--bob-1","isIm":false,"lastMessage":{"userId":"U123","text":"hey there","timestamp":"2024-01-15 09:30 UTC"}}]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "# DM with mpdm-alice--bob-1", "should use name field for group DMs")
+	assert.Contains(t, got, "hey there", "should render message text")
+	assert.Contains(t, got, "2024-01-15 09:30 UTC", "should render timestamp")
+}
+
+func TestFormatDMContent_LastMessageField_DirectDM(t *testing.T) {
+	raw := `[{"id":"D01","userId":"U1","userName":"alice","isIm":true,"lastMessage":{"userId":"U1","text":"hi from alice","timestamp":"2024-02-10 11:00 UTC"}}]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "# DM with alice", "should use userName for 1:1 DMs")
+	assert.Contains(t, got, "hi from alice")
+}
+
+func TestFormatDMContent_LastMessageField_MultipleConversations(t *testing.T) {
+	raw := `[
+		{"id":"C01","name":"mpdm-alice--bob-1","isIm":false,"lastMessage":{"userId":"U1","text":"group msg","timestamp":"2024-01-15 UTC"}},
+		{"id":"D01","userId":"U2","userName":"carol","isIm":true,"lastMessage":{"userId":"U2","text":"direct msg","timestamp":"2024-01-16 UTC"}}
+	]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "group msg")
+	assert.Contains(t, got, "direct msg")
+}
+
+func TestFormatDMContent_NoLastMessageAndNoMessages_ShowsPlaceholder(t *testing.T) {
+	raw := `[{"id":"C01","name":"mpdm-alice--bob-1","isIm":false}]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "# DM with mpdm-alice--bob-1")
+	assert.Contains(t, got, "no messages")
+}
+
+func TestFormatDMContent_SortsNewestFirst(t *testing.T) {
+	raw := `[
+		{"id":"D1","userName":"alice","isIm":true,"lastMessage":{"userId":"U1","text":"older","timestamp":"2024-01-01 10:00 UTC"}},
+		{"id":"D2","userName":"bob","isIm":true,"lastMessage":{"userId":"U2","text":"newest","timestamp":"2024-03-15 12:00 UTC"}},
+		{"id":"D3","userName":"carol","isIm":true,"lastMessage":{"userId":"U3","text":"middle","timestamp":"2024-02-10 09:00 UTC"}}
+	]`
+	got := formatDMContent(raw)
+	bobPos := strings.Index(got, "# DM with bob")
+	carolPos := strings.Index(got, "# DM with carol")
+	alicePos := strings.Index(got, "# DM with alice")
+	assert.True(t, bobPos < carolPos, "bob (newest) should appear before carol")
+	assert.True(t, carolPos < alicePos, "carol (middle) should appear before alice (oldest)")
+}
+
+func TestFormatDMContent_EntriesWithoutMessages_SortedLast(t *testing.T) {
+	raw := `[
+		{"id":"D1","userName":"alice","isIm":true,"lastMessage":{"userId":"U1","text":"hi","timestamp":"2024-01-01 10:00 UTC"}},
+		{"id":"D2","userName":"silent","isIm":true}
+	]`
+	got := formatDMContent(raw)
+	alicePos := strings.Index(got, "# DM with alice")
+	silentPos := strings.Index(got, "# DM with silent")
+	assert.True(t, alicePos < silentPos, "entry with message should appear before entry without")
+}
+
+func TestFormatDMContent_SingularMessageField(t *testing.T) {
+	raw := `[{"id":"D1","userId":"U1","userName":"alice","isIm":true,"message":{"user":"alice","text":"hello world","timestamp":"2024-01-15 09:30"}}]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "# DM with alice", "should render DM header with user name")
+	assert.Contains(t, got, "alice: hello world", "should render message text")
+	assert.Contains(t, got, "2024-01-15 09:30", "should render timestamp")
+}
+
+func TestFormatDMContent_SingularMessageField_MultipleConversations(t *testing.T) {
+	raw := `[
+		{"id":"D1","userId":"U1","userName":"alice","isIm":true,"message":{"user":"alice","text":"hey","timestamp":"2024-01-15"}},
+		{"id":"D2","userId":"U2","userName":"bob","isIm":true,"message":{"user":"bob","text":"sup","timestamp":"2024-01-16"}}
+	]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "# DM with alice")
+	assert.Contains(t, got, "alice: hey")
+	assert.Contains(t, got, "# DM with bob")
+	assert.Contains(t, got, "bob: sup")
+}
+
+func TestFormatDMContent_NoMessage_ShowsPlaceholder(t *testing.T) {
+	raw := `[{"id":"D1","userId":"U1","userName":"alice","isIm":true}]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "# DM with alice", "DM entry should still appear even with no messages")
+	assert.Contains(t, got, "no messages", "placeholder text should be shown when no messages exist")
+}
+
+func TestFormatDMContent_MixedSingularAndPlural(t *testing.T) {
+	raw := `[
+		{"id":"D1","userId":"U1","userName":"alice","isIm":true,"message":{"user":"alice","text":"singular","timestamp":"2024-01-15"}},
+		{"id":"D2","userId":"U2","userName":"bob","isIm":true,"messages":[{"user":"bob","text":"plural","timestamp":"2024-01-16"}]}
+	]`
+	got := formatDMContent(raw)
+	assert.Contains(t, got, "alice: singular")
+	assert.Contains(t, got, "bob: plural")
+}
+
+func TestRefreshContext_SavesDMContent_LastMessageField(t *testing.T) {
+	dmJSON := `[{"id":"D1","userId":"U1","userName":"alice","isIm":true,"lastMessage":{"userId":"U1","text":"hello from refresh","timestamp":"2024-03-01 10:00 UTC"}}]`
+
+	runner := &cmdRoutingRunner{
+		outputs: map[string]string{
+			"list-dms": dmJSON,
+		},
+	}
+
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	sRepo := slackstore.NewRepo(s.DB())
+	slackProv := NewSlackProvider(sRepo, runner, logger)
+	svc := NewContextService(s, nil, jirastore.NewRepo(s.DB()), sRepo, runner, logger, slackProv)
+
+	ctx := context.Background()
+	c := createCtx(t, svc, "refresh-dm-lastmsg")
+
+	cfg, err := sRepo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2024-01-01")
+	require.NoError(t, err)
+	require.Empty(t, cfg.Content, "content should be empty before refresh")
+
+	result, err := svc.RefreshContext(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.DMsRefreshed, "DM should be counted as refreshed")
+
+	configs, err := sRepo.ListSlackDMConfigs(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, configs, 1)
+	assert.Contains(t, configs[0].Content, "# DM with alice", "content should be saved to DB")
+	assert.Contains(t, configs[0].Content, "hello from refresh")
 }
 
 // TestEditContext_UpdatesJiraAndSlack verifies the full edit-context workflow:

@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	openaiclient "github.com/artschekoff/context-consolidator/internal/openai"
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
@@ -22,6 +24,8 @@ import (
 type App struct {
 	ctx           context.Context
 	svc           *jiraservice.ContextService
+	contextLog    *contextlog.Service
+	openAI        *openaiclient.Client
 	db            *appstore.Store
 	logger        *zap.Logger
 	slackRunner   *slack.Runner
@@ -63,6 +67,12 @@ func (a *App) startup(ctx context.Context) {
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
 	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider)
+
+	openAI := openaiclient.NewClient(s, slackRunner.Passphrase, logger)
+	a.openAI = openAI
+	contextLogRepo := contextlog.NewRepo(s.DB())
+	a.contextLog = contextlog.NewService(contextLogRepo, openAI.AsContextLogClient(), logger)
+	a.svc.SetContextLog(a.contextLog)
 
 	logger.Info("context-consolidator desktop started")
 }
@@ -246,6 +256,41 @@ func (a *App) RemoveSlackChannel(id string) error {
 	return a.svc.RemoveSlackChannel(a.ctx, id)
 }
 
+// --- Slack DM configs ---
+
+// ListSlackDMConfigs returns all DM load configurations for a context.
+func (a *App) ListSlackDMConfigs(contextID string) ([]slackstore.SlackDMConfig, error) {
+	return a.svc.ListSlackDMConfigs(a.ctx, contextID)
+}
+
+// UpsertSlackDMConfig creates or updates a DM load configuration and immediately loads DM content.
+// startFrom is a date string in YYYY-MM-DD format; pass an empty string for no date filter.
+func (a *App) UpsertSlackDMConfig(contextID, workspace, startFrom string) (*slackstore.SlackDMConfig, error) {
+	return a.svc.UpsertSlackDMConfig(a.ctx, contextID, workspace, startFrom)
+}
+
+// DeleteSlackDMConfig removes a DM load configuration by its record ID.
+func (a *App) DeleteSlackDMConfig(id string) error {
+	return a.svc.DeleteSlackDMConfig(a.ctx, id)
+}
+
+// ToggleSlackDMConfigActive flips the is_active flag for a Slack DM config.
+func (a *App) ToggleSlackDMConfigActive(id string) (*slackstore.SlackDMConfig, error) {
+	return a.svc.ToggleSlackDMConfigActive(a.ctx, id)
+}
+
+// RemoveSlackDMEntry removes a single DM conversation entry from a DM config's JSON content.
+func (a *App) RemoveSlackDMEntry(dmConfigID, entryID string) error {
+	return a.svc.RemoveSlackDMEntry(a.ctx, dmConfigID, entryID)
+}
+
+// PreviewSlackDMs calls slack-cli list-dms for the given workspace and optional startFrom date
+// without persisting anything. Returns the formatted text content, or an empty string when
+// no personal messages are found. Use this to preview DMs before adding them to a context.
+func (a *App) PreviewSlackDMs(workspace, startFrom string) (string, error) {
+	return a.svc.PreviewSlackDMs(a.ctx, workspace, startFrom)
+}
+
 // --- Context files ---
 
 // ListContextFiles returns all plain-text files attached to a context.
@@ -321,6 +366,114 @@ func (a *App) ReloadAllContexts() ([]jiraservice.ReloadAllResult, error) {
 			"contextKey": contextKey,
 		})
 	})
+}
+
+// --- Context logs ---
+
+// ListContextLogs returns all change-log entries for a context, newest first.
+func (a *App) ListContextLogs(contextID string) ([]contextlog.ContextLog, error) {
+	return a.contextLog.ListLogs(a.ctx, contextID)
+}
+
+// CreateContextLog adds a manual (user-authored) log entry and refreshes the consolidated log.
+func (a *App) CreateContextLog(contextID, summaryMd string) (*contextlog.ContextLog, error) {
+	return a.contextLog.CreateManualLog(a.ctx, contextID, summaryMd)
+}
+
+// UpdateContextLog edits the summary of an existing log entry and refreshes the consolidated log.
+func (a *App) UpdateContextLog(id, summaryMd string) (*contextlog.ContextLog, error) {
+	return a.contextLog.UpdateLog(a.ctx, id, summaryMd)
+}
+
+// DeleteContextLog removes a single log entry and refreshes the consolidated log.
+func (a *App) DeleteContextLog(id string) error {
+	return a.contextLog.DeleteLog(a.ctx, id)
+}
+
+// --- Consolidated log ---
+
+// GetConsolidatedContextLog returns the consolidated log for a context (may be nil).
+func (a *App) GetConsolidatedContextLog(contextID string) (*contextlog.ConsolidatedLog, error) {
+	return a.contextLog.GetConsolidated(a.ctx, contextID)
+}
+
+// UpdateConsolidatedContextLog overwrites the consolidated log with user-provided markdown.
+func (a *App) UpdateConsolidatedContextLog(contextID, contentMd string) (*contextlog.ConsolidatedLog, error) {
+	return a.contextLog.UpdateConsolidatedManual(a.ctx, contextID, contentMd)
+}
+
+// InitializeConsolidatedLog performs the AI-driven bootstrap of a fresh consolidated log.
+// Uses the current snapshot of all context objects as the source of truth.
+func (a *App) InitializeConsolidatedLog(contextID string) (*contextlog.ConsolidatedLog, error) {
+	snap, err := a.contextLog.Repo().SnapshotFull(a.ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("snapshotting context: %w", err)
+	}
+	return a.contextLog.Initialize(a.ctx, contextID, snap)
+}
+
+// AnalyzeContextChanges triggers an on-demand change-log analysis using the current snapshot
+// as "after" and an empty snapshot as "before" (i.e. treats everything as new).
+func (a *App) AnalyzeContextChanges(contextID string) (*contextlog.ContextLog, error) {
+	snap, err := a.contextLog.Repo().SnapshotFull(a.ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("snapshotting context: %w", err)
+	}
+	return a.contextLog.AnalyzeNow(a.ctx, contextID, snap)
+}
+
+// --- Chat ---
+
+// ListContextChat returns the full chat transcript for a context (oldest first).
+func (a *App) ListContextChat(contextID string) ([]contextlog.ChatMessage, error) {
+	return a.contextLog.ListChat(a.ctx, contextID)
+}
+
+// ChatWithContext appends a user message and returns the AI assistant reply.
+func (a *App) ChatWithContext(contextID, userMessage string) (*contextlog.ChatMessage, error) {
+	return a.contextLog.ChatSend(a.ctx, contextID, userMessage)
+}
+
+// ApplyChatSuggestion applies an assistant-proposed consolidated rewrite to the consolidated log.
+func (a *App) ApplyChatSuggestion(messageID string) (*contextlog.ConsolidatedLog, error) {
+	return a.contextLog.ApplyChatSuggestion(a.ctx, messageID)
+}
+
+// --- AI settings ---
+
+// AISettingsResponse is the shape returned to the frontend; the raw API key is never included.
+type AISettingsResponse struct {
+	HasKey    bool   `json:"hasKey"`
+	Model     string `json:"model"`
+	BaseURL   string `json:"baseUrl"`
+	Source    string `json:"source"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+// GetAISettings returns the current AI configuration metadata (without the raw key).
+func (a *App) GetAISettings() (*AISettingsResponse, error) {
+	settings, src, err := a.openAI.DescribeSettings(a.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &AISettingsResponse{
+		HasKey:    settings.HasKey,
+		Model:     settings.Model,
+		BaseURL:   settings.BaseURL,
+		Source:    string(src),
+		UpdatedAt: settings.UpdatedAt,
+	}, nil
+}
+
+// SetAISettings upserts the AI configuration. When apiKey is non-empty it is encrypted
+// with the current Slack passphrase; passing an empty apiKey preserves the existing key
+// and only updates model / baseURL.
+func (a *App) SetAISettings(apiKey, model, baseURL string) error {
+	passphrase := a.slackRunner.Passphrase()
+	if apiKey != "" && passphrase == "" {
+		return fmt.Errorf("set Slack passphrase first (used to encrypt the API key)")
+	}
+	return a.db.SetAISettings(a.ctx, apiKey, model, baseURL, passphrase)
 }
 
 func buildLogger() (*zap.Logger, error) {

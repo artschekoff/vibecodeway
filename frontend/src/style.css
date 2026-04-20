@@ -1015,6 +1015,18 @@ select {
   font-size: 13px;
 }
 
+.toast--error {
+  background: rgba(48, 28, 28, 0.97);
+  border: 1px solid rgba(220, 80, 80, 0.45);
+  color: var(--danger);
+}
+
+.toast--error::before {
+  content: "✕";
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1635,6 +1647,95 @@ select {
   margin: 0;
 }
 
+/* DM conversation rendering */
+.dm-conversations {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dm-conversation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.dm-entry-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.dm-conversation:hover .dm-entry-delete-btn {
+  opacity: 1;
+}
+
+.dm-entry-delete-btn:hover {
+  color: var(--danger);
+  background: var(--danger-bg, rgba(220, 53, 69, 0.08));
+}
+
+.dm-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dm-message {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  padding: 4px 0;
+}
+
+.dm-message-author {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.dm-message-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+
+.dm-message-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  grid-column: 1 / -1;
+  grid-row: 2;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.dm-no-messages {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
+
 .no-threads-hint {
   font-size: 12px;
   color: var(--text-muted);
@@ -1896,3 +1997,409 @@ select {
   text-decoration: line-through;
   color: var(--text-muted);
 }
+
+/* ─── react-datepicker dark theme overrides ─── */
+.dm-datepicker-wrapper {
+  flex: 1;
+}
+
+.dm-datepicker-input {
+  width: 100%;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.dm-datepicker-input:focus {
+  border-color: var(--accent);
+}
+
+.react-datepicker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.react-datepicker__header {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 8px 0 4px;
+}
+
+.react-datepicker__current-month,
+.react-datepicker__day-name,
+.react-datepicker-time__header {
+  color: var(--text);
+}
+
+.react-datepicker__navigation-icon::before {
+  border-color: var(--text-muted);
+}
+
+.react-datepicker__navigation:hover .react-datepicker__navigation-icon::before {
+  border-color: var(--text);
+}
+
+.react-datepicker__day {
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+
+.react-datepicker__day:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
+.react-datepicker__day--today {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.react-datepicker__day--outside-month {
+  color: var(--text-muted);
+}
+
+.react-datepicker__day--disabled {
+  color: var(--border);
+}
+
+.react-datepicker__triangle {
+  display: none;
+}
+
+.react-datepicker-popper {
+  z-index: 9999;
+}
+
+.react-datepicker__close-icon::after {
+  background: var(--text-muted);
+  color: var(--bg);
+  font-size: 11px;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+}
+
+/* === ContextDetail side panel (Chat / Logs / Consolidated) === */
+
+.content--split {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.detail-primary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.detail-sidepanel {
+  flex: 0 0 440px;
+  min-width: 360px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sidepanel-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.sidepanel-tab {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.sidepanel-tab:hover:not(.sidepanel-tab--active) {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.sidepanel-tab--active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  background: var(--surface);
+  font-weight: 500;
+}
+
+.sidepanel-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* === Chat === */
+
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 28px 18px;
+}
+
+.chat-message {
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.chat-message--user {
+  background: var(--surface2);
+  align-self: flex-end;
+  max-width: 85%;
+}
+
+.chat-message--assistant {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  max-width: 95%;
+}
+
+.chat-message-role {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.chat-message-body p:first-child { margin-top: 0; }
+.chat-message-body p:last-child { margin-bottom: 0; }
+.chat-message-body code {
+  background: var(--surface2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.chat-message-body pre {
+  background: var(--surface2);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.chat-proposal {
+  margin-top: 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--surface2);
+}
+
+.chat-proposal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.chat-proposal-applied {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.chat-proposal-body {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* === Logs === */
+
+.log-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.log-panel-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.log-entry {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface2);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.log-entry--editing {
+  border-color: var(--accent);
+}
+
+.log-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.log-entry-when {
+  font-variant-numeric: tabular-nums;
+}
+
+.log-entry-trigger {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.log-entry-trigger--refresh { border-color: var(--accent); color: var(--accent); }
+.log-entry-trigger--reload { border-color: var(--accent); color: var(--accent); }
+.log-entry-trigger--manual { border-color: var(--text-muted); color: var(--text-muted); }
+.log-entry-trigger--init { border-color: #9C6; color: #9C6; }
+
+.log-entry-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.log-entry-body {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.log-entry-body p:first-child { margin-top: 0; }
+.log-entry-body p:last-child { margin-bottom: 0; }
+
+.log-entry-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* === Consolidated === */
+
+.consolidated-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.consolidated-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.consolidated-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.consolidated-body p:first-child { margin-top: 0; }
+.consolidated-body h1,
+.consolidated-body h2,
+.consolidated-body h3 { margin-top: 1em; }
+
+.consolidated-body code {
+  background: var(--surface2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.consolidated-body pre {
+  background: var(--surface2);
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+

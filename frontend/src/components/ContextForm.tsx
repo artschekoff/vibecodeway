@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
-import { ListSlackWorkspaces, SearchJQL, SearchSlackChannels } from "../../wailsjs/go/main/App";
-import type { ContextFile, Context, Issue, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload } from "../types";
+import { ListSlackWorkspaces, PreviewSlackDMs, SearchJQL, SearchSlackChannels } from "../../wailsjs/go/main/App";
+import type { ContextFile, Context, Issue, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload } from "../types";
 
 interface Props {
   initial?: Context;
   initialJqlQuery?: string;
   initialJiraIssues?: Issue[];
   initialSlackChannels?: SlackChannel[];
+  initialSlackDMConfigs?: SlackDMConfig[];
   initialContextFiles?: ContextFile[];
   onSave: (
     key: string,
@@ -43,6 +46,13 @@ interface ChannelResultItem extends SlackChannelResult {
 
 interface SelectedChannelItem extends SlackChannelInput {
   workspace: string;
+  startFrom: string;
+}
+
+interface DMPreviewResult {
+  workspace: string;
+  startFrom: string;
+  content: string;
 }
 
 interface EditableFile extends ContextFile {
@@ -57,7 +67,7 @@ interface NewFile {
 
 type ActiveTab = "jira" | "slack" | "texts";
 
-export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialContextFiles, onSave, onCancel }: Props) {
+export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextFiles, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
   const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
   const [status, setStatus] = useState(initial?.status ?? "active");
@@ -78,12 +88,24 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
   const [slackWorkspace, setSlackWorkspace] = useState(initialSlackChannels?.[0]?.workspace ?? "");
   const [slackPattern, setSlackPattern] = useState("");
+  const [channelStartFrom, setChannelStartFrom] = useState("");
 
   const [channelResults, setChannelResults] = useState<ChannelResultItem[]>([]);
   const [existingChannels, setExistingChannels] = useState<SlackChannel[]>(initialSlackChannels ?? []);
   const [selectedChannels, setSelectedChannels] = useState<SelectedChannelItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [channelError, setChannelError] = useState("");
+
+  // DM configs state
+  const [existingDMConfigs, setExistingDMConfigs] = useState<SlackDMConfig[]>(initialSlackDMConfigs ?? []);
+  const [newDMConfigs, setNewDMConfigs] = useState<SlackDMConfigInput[]>([]);
+  const [removedDMConfigIds, setRemovedDMConfigIds] = useState<string[]>([]);
+  const [dmWorkspace, setDmWorkspace] = useState("");
+  const [dmStartFrom, setDmStartFrom] = useState("");
+  const [dmLoading, setDmLoading] = useState(false);
+  const [dmLoadError, setDmLoadError] = useState("");
+  const [dmPreviewResults, setDmPreviewResults] = useState<DMPreviewResult[]>([]);
+  const [selectedDMPreviews, setSelectedDMPreviews] = useState<DMPreviewResult[]>([]);
 
   // Text files state
   const [existingFiles, setExistingFiles] = useState<EditableFile[]>(
@@ -100,6 +122,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
         setWorkspaces(ws);
         if (ws.length > 0) {
           setSlackWorkspace((prev) => prev || ws[0].name);
+          setDmWorkspace((prev) => prev || ws[0].name);
         }
       })
       .catch((err: unknown) => setWorkspacesError(String(err)))
@@ -211,16 +234,33 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
         .map((ch) => ch.id);
 
       const groupMap = new Map<string, SlackChannelInput[]>();
+      // Include newly selected channels.
       for (const ch of selectedChannels) {
         const arr = groupMap.get(ch.workspace) ?? [];
-        arr.push({ channelId: ch.channelId, channelName: ch.channelName, content: ch.content });
+        arr.push({ channelId: ch.channelId, channelName: ch.channelName, startFrom: ch.startFrom || undefined, content: ch.content });
         groupMap.set(ch.workspace, arr);
+      }
+      // Re-upsert existing channels whose startFrom was edited (to persist the new date).
+      const initialByID = new Map((initialSlackChannels ?? []).map((ch) => [ch.id, ch]));
+      for (const ch of existingChannels) {
+        const orig = initialByID.get(ch.id);
+        if (orig && ch.startFrom !== (orig.startFrom ?? "")) {
+          const arr = groupMap.get(ch.workspace) ?? [];
+          arr.push({ channelId: ch.channelId, channelName: ch.channelName, startFrom: ch.startFrom || undefined });
+          groupMap.set(ch.workspace, arr);
+        }
       }
       const groups = [...groupMap.entries()].map(([workspace, channels]) => ({ workspace, channels }));
 
-      const hasChanges = groups.length > 0 || removedChannelIds.length > 0;
+      // Collect pending DM configs: date-updated existing ones + newly selected previews
+      const pendingDMConfigs: SlackDMConfigInput[] = [
+        ...newDMConfigs,
+        ...selectedDMPreviews.map((r) => ({ workspace: r.workspace, startFrom: r.startFrom })),
+      ];
+
+      const hasChanges = groups.length > 0 || removedChannelIds.length > 0 || pendingDMConfigs.length > 0 || removedDMConfigIds.length > 0;
       const slackPayload: SlackSavePayload | undefined = hasChanges
-        ? { groups, removedChannelIds }
+        ? { groups, removedChannelIds, dmConfigs: pendingDMConfigs.length > 0 ? pendingDMConfigs : undefined, removedDMConfigIds: removedDMConfigIds.length > 0 ? removedDMConfigIds : undefined }
         : undefined;
 
       const jiraKeys = selectedJiraIssues.length > 0 ? selectedJiraIssues.map((i) => i.key) : undefined;
@@ -253,7 +293,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       if (prev.some((ch) => ch.channelId === result.id)) {
         return prev.filter((ch) => ch.channelId !== result.id);
       }
-      return [...prev, { channelId: result.id, channelName: result.name, workspace: result.workspace, content: result.content }];
+      return [...prev, { channelId: result.id, channelName: result.name, workspace: result.workspace, startFrom: channelStartFrom, content: result.content }];
     });
   };
 
@@ -266,6 +306,57 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   };
 
   const isSelected = (id: string) => selectedChannels.some((ch) => ch.channelId === id);
+
+  const removeExistingDMConfig = (id: string) => {
+    setExistingDMConfigs((prev) => prev.filter((dm) => dm.id !== id));
+    setRemovedDMConfigIds((prev) => [...prev, id]);
+  };
+
+  const updateExistingDMConfig = (id: string, startFrom: string) => {
+    setExistingDMConfigs((prev) => prev.map((dm) => dm.id === id ? { ...dm, startFrom } : dm));
+    // Mark for re-upsert by including it in newDMConfigs with updated date
+    setNewDMConfigs((prev) => {
+      const existing = prev.find((dm) => dm.workspace === existingDMConfigs.find((e) => e.id === id)?.workspace);
+      const ws = existingDMConfigs.find((e) => e.id === id)?.workspace ?? "";
+      if (!ws) return prev;
+      if (existing) return prev.map((dm) => dm.workspace === ws ? { ...dm, startFrom } : dm);
+      return [...prev, { workspace: ws, startFrom }];
+    });
+    setRemovedDMConfigIds((prev) => [...prev, id]);
+    setExistingDMConfigs((prev) => prev.filter((dm) => dm.id !== id));
+  };
+
+  const handleLoadDMs = async () => {
+    if (!dmWorkspace.trim()) {
+      setDmLoadError("Select a workspace first.");
+      return;
+    }
+    setDmLoading(true);
+    setDmLoadError("");
+    try {
+      const content = await PreviewSlackDMs(dmWorkspace.trim(), dmStartFrom.trim());
+      const key = `${dmWorkspace.trim()}::${dmStartFrom.trim()}`;
+      setDmPreviewResults((prev) => {
+        const filtered = prev.filter((r) => `${r.workspace}::${r.startFrom}` !== key);
+        return [...filtered, { workspace: dmWorkspace.trim(), startFrom: dmStartFrom.trim(), content: content ?? "" }];
+      });
+    } catch (err) {
+      setDmLoadError(String(err));
+    } finally {
+      setDmLoading(false);
+    }
+  };
+
+  const isDMPreviewSelected = (r: DMPreviewResult) =>
+    selectedDMPreviews.some((p) => p.workspace === r.workspace && p.startFrom === r.startFrom);
+
+  const toggleDMPreview = (r: DMPreviewResult) => {
+    setSelectedDMPreviews((prev) =>
+      isDMPreviewSelected(r)
+        ? prev.filter((p) => !(p.workspace === r.workspace && p.startFrom === r.startFrom))
+        : [...prev, r]
+    );
+  };
 
   const workspaceSelect = (
     <select
@@ -290,6 +381,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   );
 
   const slackChannelCount = existingChannels.length + selectedChannels.length;
+  const slackDMCount = existingDMConfigs.length + newDMConfigs.length + selectedDMPreviews.length;
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -342,8 +434,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
               onClick={() => setActiveTab("slack")}
             >
               Slack
-              {slackChannelCount > 0 ? (
-                <span className="ctx-tab-badge">{slackChannelCount}</span>
+              {(slackChannelCount + slackDMCount) > 0 ? (
+                <span className="ctx-tab-badge">{slackChannelCount + slackDMCount}</span>
               ) : (
                 <span className="ctx-tab-optional">optional</span>
               )}
@@ -522,6 +614,19 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           <span className="channel-hash">#</span>{ch.channelName}
                         </span>
                         <span className="channel-saved-workspace">{ch.workspace}</span>
+                        <DatePicker
+                          selected={ch.startFrom ? new Date(ch.startFrom) : null}
+                          onChange={(date: Date | null) =>
+                            setExistingChannels((prev) =>
+                              prev.map((x) => x.id === ch.id ? { ...x, startFrom: date ? date.toISOString().slice(0, 10) : "" } : x)
+                            )
+                          }
+                          dateFormat="yyyy-MM-dd"
+                          placeholderText="all time"
+                          isClearable
+                          className="dm-datepicker-input"
+                          popperPlacement="bottom-end"
+                        />
                         <button
                           type="button"
                           className="channel-remove-btn"
@@ -543,6 +648,9 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           <span className="channel-hash">#</span>{ch.channelName}
                         </span>
                         <span className="channel-saved-workspace">{ch.workspace}</span>
+                        {ch.startFrom && (
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>since {ch.startFrom}</span>
+                        )}
                         <button
                           type="button"
                           className="channel-remove-btn"
@@ -566,6 +674,16 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                       onKeyDown={(e) => {
                         if (e.key === "Enter") { e.preventDefault(); void handleSearchChannels(); }
                       }}
+                    />
+                    <DatePicker
+                      selected={channelStartFrom ? new Date(channelStartFrom) : null}
+                      onChange={(date: Date | null) => setChannelStartFrom(date ? date.toISOString().slice(0, 10) : "")}
+                      dateFormat="yyyy-MM-dd"
+                      placeholderText="since (optional)"
+                      isClearable
+                      className="dm-datepicker-input"
+                      wrapperClassName="dm-datepicker-wrapper"
+                      popperPlacement="bottom-end"
                     />
                     <button
                       type="button"
@@ -614,6 +732,155 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
                 <div className="form-hint" style={{ marginTop: 8 }}>
                   Search across workspaces — multiple conditions are merged
+                </div>
+              </div>
+
+              {/* DM configs section */}
+              <div className="form-group" style={{ marginBottom: 0, marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Personal messages
+                  <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)" }}>optional</span>
+                </label>
+
+                {/* Saved DM configs */}
+                {existingDMConfigs.length > 0 && (
+                  <div className="channel-saved-list" style={{ marginBottom: 12 }}>
+                    <div className="channel-saved-header">
+                      Saved DM configs
+                      <span className="channel-saved-count">{existingDMConfigs.length}</span>
+                    </div>
+                    {existingDMConfigs.map((dm) => (
+                      <div key={dm.id} className="channel-saved-row">
+                        <span className="channel-saved-workspace">{dm.workspace}</span>
+                        <span className="channel-saved-name" style={{ flex: 1, fontWeight: 400 }}>
+                          {dm.startFrom ? `since ${dm.startFrom}` : "all time"}
+                        </span>
+                        <DatePicker
+                          selected={dm.startFrom ? new Date(dm.startFrom) : null}
+                          onChange={(date: Date | null) => updateExistingDMConfig(dm.id, date ? date.toISOString().slice(0, 10) : "")}
+                          dateFormat="yyyy-MM-dd"
+                          placeholderText="all time"
+                          isClearable
+                          className="dm-datepicker-input"
+                          popperPlacement="bottom-end"
+                        />
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove DM config"
+                          onClick={() => removeExistingDMConfig(dm.id)}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* New DM configs to be added */}
+                {newDMConfigs.length > 0 && (
+                  <div className="channel-saved-list channel-saved-list--new" style={{ marginBottom: 12 }}>
+                    <div className="channel-saved-header">To be added</div>
+                    {newDMConfigs.map((dm, i) => (
+                      <div key={`${dm.workspace}-${i}`} className="channel-saved-row channel-saved-row--new">
+                        <span className="channel-saved-workspace">{dm.workspace}</span>
+                        <span className="channel-saved-name" style={{ flex: 1, fontWeight: 400 }}>
+                          {dm.startFrom ? `since ${dm.startFrom}` : "all time"}
+                        </span>
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove"
+                          onClick={() => setNewDMConfigs((prev) => prev.filter((_, idx) => idx !== i))}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Load button row */}
+                <div className="channel-search-section">
+                  <div className="channel-search-label">Load personal messages</div>
+                  <div className="slack-condition-row" style={{ marginBottom: 8 }}>
+                    <select
+                      value={dmWorkspace}
+                      onChange={(e) => setDmWorkspace(e.target.value)}
+                      disabled={workspacesLoading}
+                      style={{ flex: "0 0 150px", opacity: workspacesLoading ? 0.5 : 1 }}
+                    >
+                      {workspacesLoading && <option value="">Loading…</option>}
+                      {!workspacesLoading && workspaces.length === 0 && <option value="">No workspaces</option>}
+                      {!workspacesLoading && workspaces.length > 0 && !dmWorkspace && (
+                        <option value="">Select workspace</option>
+                      )}
+                      {workspaces.map((ws) => (
+                        <option key={ws.id} value={ws.name}>{ws.name}</option>
+                      ))}
+                    </select>
+                    <DatePicker
+                      selected={dmStartFrom ? new Date(dmStartFrom) : null}
+                      onChange={(date: Date | null) => setDmStartFrom(date ? date.toISOString().slice(0, 10) : "")}
+                      dateFormat="yyyy-MM-dd"
+                      placeholderText="since (optional)"
+                      isClearable
+                      className="dm-datepicker-input"
+                      wrapperClassName="dm-datepicker-wrapper"
+                      popperPlacement="bottom-start"
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => void handleLoadDMs()}
+                      disabled={dmLoading}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {dmLoading ? "Loading…" : "Load"}
+                    </button>
+                  </div>
+
+                  {dmLoadError && (
+                    <div className="field-error" style={{ marginTop: 4 }}>{dmLoadError}</div>
+                  )}
+
+                  {dmPreviewResults.length > 0 && (
+                    <div className="channel-results">
+                      {dmPreviewResults.map((r) => {
+                        const selected = isDMPreviewSelected(r);
+                        const preview = r.content
+                          ? r.content.split("\n").filter(Boolean).slice(0, 2).join(" · ") || r.content.slice(0, 120)
+                          : null;
+                        return (
+                          <label
+                            key={`${r.workspace}::${r.startFrom}`}
+                            className={`channel-result-row${selected ? " selected" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              disabled={!r.content}
+                              onChange={() => toggleDMPreview(r)}
+                            />
+                            <div className="channel-result-info">
+                              <span className="channel-result-name">
+                                DMs · {r.workspace}{r.startFrom ? ` since ${r.startFrom}` : " (all time)"}
+                              </span>
+                              <div className="channel-result-badges">
+                                {r.content ? (
+                                  <span className="channel-result-workspace" style={{ maxWidth: 340, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {preview}
+                                  </span>
+                                ) : (
+                                  <span className="channel-result-id" style={{ color: "var(--text-muted)" }}>No messages found</span>
+                                )}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="form-hint" style={{ marginTop: 8 }}>
+                    Loads personal messages via slack-cli list-dms · select results to add to context
+                  </div>
                 </div>
               </div>
             </div>

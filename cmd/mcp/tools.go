@@ -89,6 +89,22 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, logger 
 		),
 		h.handleContextGet,
 	)
+
+	s.AddTool(
+		mcp.NewTool("context_log",
+			mcp.WithDescription("Return the AI-maintained context log. By default returns the rolling consolidated log for the context as Markdown. Pass history='true' to receive a JSON array of every individual change-log entry (newest first) instead."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key. Use either context_id or context_key."),
+			),
+			mcp.WithString("history",
+				mcp.Description("Set to 'true' to return the full history of context_log entries as JSON. Omit or set to anything else to get the consolidated log as Markdown."),
+			),
+		),
+		h.handleContextLog,
+	)
 }
 
 type handlers struct {
@@ -232,6 +248,14 @@ func filterActiveItems(detail *jiraservice.ContextDetail) *jiraservice.ContextDe
 	}
 	filtered.ContextFiles = files
 
+	dmConfigs := make([]slackstore.SlackDMConfig, 0, len(detail.SlackDMConfigs))
+	for _, dm := range detail.SlackDMConfigs {
+		if dm.IsActive {
+			dmConfigs = append(dmConfigs, dm)
+		}
+	}
+	filtered.SlackDMConfigs = dmConfigs
+
 	return &filtered
 }
 
@@ -249,6 +273,40 @@ func (h *handlers) resolveContextID(ctx context.Context, req mcp.CallToolRequest
 		return "", fmt.Errorf("context with key %q not found: %w", key, err)
 	}
 	return detail.Context.ID, nil
+}
+
+func (h *handlers) handleContextLog(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id, err := h.resolveContextID(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	cl := h.svc.ContextLog()
+	if cl == nil {
+		return mcp.NewToolResultError("context log service is not configured"), nil
+	}
+
+	history := strings.EqualFold(strings.TrimSpace(req.GetString("history", "")), "true")
+	if history {
+		logs, err := cl.ListLogs(ctx, id)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("listing context logs: %v", err)), nil
+		}
+		data, err := json.MarshalIndent(logs, "", "  ")
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
+		}
+		return mcp.NewToolResultText(string(data)), nil
+	}
+
+	consolidated, err := cl.GetConsolidated(ctx, id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("loading consolidated log: %v", err)), nil
+	}
+	if consolidated == nil || consolidated.ContentMd == "" {
+		return mcp.NewToolResultText("_(consolidated context log is empty — run InitializeConsolidatedLog in the app)_"), nil
+	}
+	return mcp.NewToolResultText(consolidated.ContentMd), nil
 }
 
 func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

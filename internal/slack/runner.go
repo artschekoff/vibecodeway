@@ -26,6 +26,7 @@ var allowedSubcmds = map[string]bool{
 	"search-channels": true,
 	"load-context":    true,
 	"list-workspaces": true,
+	"list-dms":        true,
 }
 
 // Runner executes slack-cli subcommands via exec.CommandContext.
@@ -70,6 +71,14 @@ func (r *Runner) SetPassphrase(passphrase string) error {
 	r.passphrase = passphrase
 	r.mu.Unlock()
 	return nil
+}
+
+// Passphrase returns the current passphrase. Empty string when unset.
+// Safe for concurrent use.
+func (r *Runner) Passphrase() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.passphrase
 }
 
 // NewRunner creates a Runner with the given logger and options.

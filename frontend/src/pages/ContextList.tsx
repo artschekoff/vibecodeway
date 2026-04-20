@@ -16,9 +16,12 @@ import {
   UpsertContextFile,
   DeleteContextFile,
   ToggleContextStatus,
+  UpsertSlackDMConfig,
+  DeleteSlackDMConfig,
+  ListSlackDMConfigs,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
-import type { ContextFile, Context, Issue, SlackChannel, SlackSavePayload, TextFilesPayload } from "../types";
+import type { ContextFile, Context, Issue, SlackChannel, SlackDMConfig, SlackSavePayload, TextFilesPayload } from "../types";
 import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
@@ -36,6 +39,7 @@ export default function ContextList() {
   const [editJqlQuery, setEditJqlQuery] = useState<string | undefined>(undefined);
   const [editJiraIssues, setEditJiraIssues] = useState<Issue[] | undefined>(undefined);
   const [editSlackChannels, setEditSlackChannels] = useState<SlackChannel[] | undefined>(undefined);
+  const [editSlackDMConfigs, setEditSlackDMConfigs] = useState<SlackDMConfig[] | undefined>(undefined);
   const [editContextFiles, setEditContextFiles] = useState<ContextFile[] | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Context | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -81,12 +85,14 @@ export default function ContextList() {
   ) => {
     const jiraKeys = selectedJiraKeys ?? [];
     const slackGroups = (slackPayload?.groups ?? []).filter((g) => g.channels.length > 0);
+    const dmConfigs = slackPayload?.dmConfigs ?? [];
     const newTextFiles = textFilesPayload?.newFiles ?? [];
     const itemLabels = [
       ...jiraKeys,
       ...slackGroups.flatMap((g) =>
         g.channels.map((ch) => `#${ch.channelName}  ·  ${g.workspace}`)
       ),
+      ...dmConfigs.map((dm) => `DMs from ${dm.workspace}`),
       ...newTextFiles.map((f) => f.name || "Text file"),
     ];
 
@@ -109,6 +115,11 @@ export default function ContextList() {
         try { await AddSlackChannels(ctx.id, group.workspace, group.channels); } catch { /* best-effort */ }
       }
 
+      for (const dm of dmConfigs) {
+        progress.next(`Loading DMs from ${dm.workspace}`);
+        try { await UpsertSlackDMConfig(ctx.id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
+      }
+
       for (const f of newTextFiles) {
         progress.next(`Saving ${f.name || "text file"}`);
         try { await UpsertContextFile("", ctx.id, f.name, f.content); } catch { /* best-effort */ }
@@ -125,19 +136,25 @@ export default function ContextList() {
     let jql = "";
     let issues: Issue[] = [];
     let channels: SlackChannel[] = [];
+    let dmConfigs: SlackDMConfig[] = [];
     let contextFiles: ContextFile[] = [];
     try {
-      const detail = await GetContextDetail(c.id);
+      const [detail, dms] = await Promise.all([
+        GetContextDetail(c.id),
+        ListSlackDMConfigs(c.id),
+      ]);
       jql = detail.jira?.searchQuery ?? "";
       issues = detail.issues ?? [];
       channels = detail.slackChannels ?? [];
       contextFiles = detail.contextFiles ?? [];
+      dmConfigs = dms ?? [];
     } catch {
       // best-effort — open with empty values
     }
     setEditJqlQuery(jql);
     setEditJiraIssues(issues);
     setEditSlackChannels(channels);
+    setEditSlackDMConfigs(dmConfigs);
     setEditContextFiles(contextFiles);
     setEditTarget(c);
   };
@@ -147,6 +164,7 @@ export default function ContextList() {
     setEditJqlQuery(undefined);
     setEditJiraIssues(undefined);
     setEditSlackChannels(undefined);
+    setEditSlackDMConfigs(undefined);
     setEditContextFiles(undefined);
   };
 
@@ -164,6 +182,8 @@ export default function ContextList() {
     const jiraKeys = selectedJiraKeys ?? [];
     const slackGroups = (slackPayload?.groups ?? []).filter((g) => g.channels.length > 0);
     const removedChannelIds = slackPayload?.removedChannelIds ?? [];
+    const dmConfigs = slackPayload?.dmConfigs ?? [];
+    const removedDMConfigIds = slackPayload?.removedDMConfigIds ?? [];
     const newTextFiles = textFilesPayload?.newFiles ?? [];
     const editedTextFiles = textFilesPayload?.editedFiles ?? [];
     const removedTextFileIds = textFilesPayload?.removedIds ?? [];
@@ -172,6 +192,7 @@ export default function ContextList() {
       ...slackGroups.flatMap((g) =>
         g.channels.map((ch) => `#${ch.channelName}  ·  ${g.workspace}`)
       ),
+      ...dmConfigs.map((dm) => `DMs from ${dm.workspace}`),
       ...newTextFiles.map((f) => f.name || "Text file"),
     ];
 
@@ -196,6 +217,15 @@ export default function ContextList() {
         const names = group.channels.map((ch) => `#${ch.channelName}`).join(", ");
         progress.next(`Adding ${names} from ${group.workspace}`);
         try { await AddSlackChannels(editTarget.id, group.workspace, group.channels); } catch { /* best-effort */ }
+      }
+
+      for (const id of removedDMConfigIds) {
+        try { await DeleteSlackDMConfig(id); } catch { /* best-effort */ }
+      }
+
+      for (const dm of dmConfigs) {
+        progress.next(`Loading DMs from ${dm.workspace}`);
+        try { await UpsertSlackDMConfig(editTarget.id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
       }
 
       for (const id of removedTextFileIds) {
@@ -320,6 +350,13 @@ export default function ContextList() {
               </span>
             ) : "↺ Reload All"}
           </button>
+          <button
+            className="btn-ghost"
+            onClick={() => navigate("/settings")}
+            title="OpenAI settings"
+          >
+            ⚙
+          </button>
           <button className="btn-primary" onClick={() => setShowForm(true)}>+ New Context</button>
         </div>
       </div>
@@ -413,6 +450,7 @@ export default function ContextList() {
           initialJqlQuery={editJqlQuery}
           initialJiraIssues={editJiraIssues}
           initialSlackChannels={editSlackChannels}
+          initialSlackDMConfigs={editSlackDMConfigs}
           initialContextFiles={editContextFiles}
           onSave={handleUpdate}
           onCancel={closeEditForm}
@@ -446,7 +484,7 @@ export default function ContextList() {
             ) : (
               <div className="reload-results-list">
                 {reloadResults.map((r) => {
-                  const hasNew = r.newIssues > 0 || r.newComments > 0 || r.threadsRefreshed > 0;
+                  const hasNew = r.newIssues > 0 || r.newComments > 0 || r.threadsRefreshed > 0 || r.dmsRefreshed > 0;
                   return (
                     <div key={r.contextId} className={`reload-result-item${hasNew ? " reload-result-item--new" : ""}`}>
                       <span className="reload-result-key">{r.contextKey}</span>
@@ -458,6 +496,7 @@ export default function ContextList() {
                             r.newIssues > 0 && `${r.newIssues} new issue${r.newIssues !== 1 ? "s" : ""}`,
                             r.newComments > 0 && `${r.newComments} new comment${r.newComments !== 1 ? "s" : ""}`,
                             r.threadsRefreshed > 0 && `${r.threadsRefreshed} thread${r.threadsRefreshed !== 1 ? "s" : ""} refreshed`,
+                            r.dmsRefreshed > 0 && `${r.dmsRefreshed} DM${r.dmsRefreshed !== 1 ? "s" : ""} refreshed`,
                           ].filter(Boolean).join(" · ")
                         ) : (
                           <span className="reload-result-none">No new items</span>

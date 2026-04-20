@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
@@ -78,6 +79,12 @@ func run() error {
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
 	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider)
+
+	// MCP only reads context logs, so no AI client is required; pass nil to disable
+	// AI-dependent paths while keeping CRUD/list endpoints functional.
+	contextLogRepo := contextlog.NewRepo(s.DB())
+	contextLogSvc := contextlog.NewService(contextLogRepo, nil, logger)
+	svc.SetContextLog(contextLogSvc)
 
 	mcpServer := server.NewMCPServer(
 		serverName,
