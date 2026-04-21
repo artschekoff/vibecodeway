@@ -142,16 +142,17 @@ type RefreshProgressFunc func(current, total int, step string)
 // current is 1-based, total is the number of active contexts being reloaded.
 type ReloadProgressFunc func(current, total int, contextKey string)
 
-// ContextDetail is a Context with its provider configs, Jira issues, Slack threads, and text files.
+// ContextDetail is a Context with its provider configs, Jira issues, Slack threads, and texts.
 type ContextDetail struct {
-	Context        appstore.Context          `json:"context"`
-	Jira           *jirastore.JiraProvider   `json:"jira,omitempty"`
-	Slack          *slackstore.SlackProvider `json:"slack,omitempty"`
-	Issues         []jirastore.Issue         `json:"issues"`
-	SlackThreads   []slackstore.SlackThread  `json:"slackThreads,omitempty"`
-	SlackChannels  []slackstore.SlackChannel `json:"slackChannels,omitempty"`
-	SlackDMConfigs []slackstore.SlackDMConfig `json:"slackDMConfigs,omitempty"`
-	ContextFiles   []appstore.ContextFile    `json:"contextFiles,omitempty"`
+	Context             appstore.Context             `json:"context"`
+	Jira                *jirastore.JiraProvider      `json:"jira,omitempty"`
+	Slack               *slackstore.SlackProvider    `json:"slack,omitempty"`
+	Issues              []jirastore.Issue             `json:"issues"`
+	SlackThreads        []slackstore.SlackThread      `json:"slackThreads,omitempty"`
+	SlackChannels       []slackstore.SlackChannel     `json:"slackChannels,omitempty"`
+	SlackDMConfigs      []slackstore.SlackDMConfig    `json:"slackDMConfigs,omitempty"`
+	ContextTexts        []appstore.ContextText        `json:"contextTexts,omitempty"`
+	UploadedFiles       []appstore.ContextUploadedFile `json:"uploadedFiles,omitempty"`
 }
 
 // ContextService provides all domain operations for managing contexts.
@@ -299,11 +300,17 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 	}
 	detail.SlackDMConfigs = dmConfigs
 
-	contextFiles, err := svc.store.ListContextFiles(ctx, id, false)
+	contextTexts, err := svc.store.ListContextTexts(ctx, id, false)
 	if err != nil {
-		return nil, fmt.Errorf("loading context files: %w", err)
+		return nil, fmt.Errorf("loading context texts: %w", err)
 	}
-	detail.ContextFiles = contextFiles
+	detail.ContextTexts = contextTexts
+
+	uploadedFiles, err := svc.store.ListUploadedFiles(ctx, id, false)
+	if err != nil {
+		return nil, fmt.Errorf("loading uploaded files: %w", err)
+	}
+	detail.UploadedFiles = uploadedFiles
 
 	return detail, nil
 }
@@ -538,19 +545,19 @@ func (svc *ContextService) DeleteSlackThread(ctx context.Context, id string) err
 	return svc.slackRepo.DeleteSlackThread(ctx, id)
 }
 
-// ListContextFiles returns all text files attached to a context.
-func (svc *ContextService) ListContextFiles(ctx context.Context, contextID string) ([]appstore.ContextFile, error) {
-	return svc.store.ListContextFiles(ctx, contextID, false)
+// ListContextTexts returns all text entries attached to a context.
+func (svc *ContextService) ListContextTexts(ctx context.Context, contextID string) ([]appstore.ContextText, error) {
+	return svc.store.ListContextTexts(ctx, contextID, false)
 }
 
-// UpsertContextFile creates a new text file (when id is empty) or updates an existing one.
-func (svc *ContextService) UpsertContextFile(ctx context.Context, id, contextID, name, content string) (*appstore.ContextFile, error) {
-	return svc.store.UpsertContextFile(ctx, id, contextID, name, content)
+// UpsertContextText creates a new text entry (when id is empty) or updates an existing one.
+func (svc *ContextService) UpsertContextText(ctx context.Context, id, contextID, name, content string) (*appstore.ContextText, error) {
+	return svc.store.UpsertContextText(ctx, id, contextID, name, content)
 }
 
-// DeleteContextFile removes a single text file by its internal ID.
-func (svc *ContextService) DeleteContextFile(ctx context.Context, id string) error {
-	return svc.store.DeleteContextFile(ctx, id)
+// DeleteContextText removes a single text entry by its internal ID.
+func (svc *ContextService) DeleteContextText(ctx context.Context, id string) error {
+	return svc.store.DeleteContextText(ctx, id)
 }
 
 // ToggleIssueActive flips the is_active flag for a Jira issue.
@@ -573,9 +580,9 @@ func (svc *ContextService) ToggleSlackThreadActive(ctx context.Context, id strin
 	return svc.slackRepo.ToggleSlackThreadActive(ctx, id)
 }
 
-// ToggleContextFileActive flips the is_active flag for a text file.
-func (svc *ContextService) ToggleContextFileActive(ctx context.Context, id string) (*appstore.ContextFile, error) {
-	return svc.store.ToggleContextFileActive(ctx, id)
+// ToggleContextTextActive flips the is_active flag for a text entry.
+func (svc *ContextService) ToggleContextTextActive(ctx context.Context, id string) (*appstore.ContextText, error) {
+	return svc.store.ToggleContextTextActive(ctx, id)
 }
 
 // RefreshContext re-fetches the latest data for every item already stored in the context
@@ -850,6 +857,26 @@ func formatDMContent(raw string) string {
 		sb.WriteString("\n")
 	}
 	return strings.TrimSpace(sb.String())
+}
+
+// ListUploadedFiles returns all uploaded files attached to a context.
+func (svc *ContextService) ListUploadedFiles(ctx context.Context, contextID string) ([]appstore.ContextUploadedFile, error) {
+	return svc.store.ListUploadedFiles(ctx, contextID, false)
+}
+
+// InsertUploadedFile stores an already-extracted document (plus its original binary) for a context.
+func (svc *ContextService) InsertUploadedFile(ctx context.Context, contextID, originalName, fileType, extractedText string, fileContent []byte, fileSize int64) (*appstore.ContextUploadedFile, error) {
+	return svc.store.InsertUploadedFile(ctx, contextID, originalName, fileType, extractedText, fileContent, fileSize)
+}
+
+// DeleteUploadedFile removes a single uploaded file by its internal ID.
+func (svc *ContextService) DeleteUploadedFile(ctx context.Context, id string) error {
+	return svc.store.DeleteUploadedFile(ctx, id)
+}
+
+// ToggleUploadedFileActive flips the is_active flag for an uploaded file.
+func (svc *ContextService) ToggleUploadedFileActive(ctx context.Context, id string) (*appstore.ContextUploadedFile, error) {
+	return svc.store.ToggleUploadedFileActive(ctx, id)
 }
 
 // SearchJQL runs an arbitrary JQL query and returns matching issues.

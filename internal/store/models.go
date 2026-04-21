@@ -14,9 +14,9 @@ type Context struct {
 	LastItemAt string `json:"lastItemAt,omitempty"`
 }
 
-// ContextFile is a plain-text document associated with a context.
-// Multiple files can be attached to a single context (1 context : many files).
-type ContextFile struct {
+// ContextText is a plain-text entry associated with a context.
+// Multiple texts can be attached to a single context (1 context : many texts).
+type ContextText struct {
 	ID        string `json:"id"`
 	ContextID string `json:"contextId"`
 	Name      string `json:"name"`
@@ -24,6 +24,24 @@ type ContextFile struct {
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
 	IsActive  bool   `json:"isActive"`
+}
+
+// ContextUploadedFile is a document (PDF, DOCX, RTF, TXT, ODT) whose text has been
+// extracted and stored alongside the context. Mirrors ContextText but records source
+// file metadata (original name, type, size) separately from the extracted text.
+// FileContent holds the original binary blob and is excluded from JSON serialisation
+// (tag "-") so it is never sent over the Wails IPC bridge.
+type ContextUploadedFile struct {
+	ID            string `json:"id"`
+	ContextID     string `json:"contextId"`
+	OriginalName  string `json:"originalName"`
+	FileType      string `json:"fileType"`
+	ExtractedText string `json:"extractedText"`
+	FileContent   []byte `json:"-"`
+	FileSize      int64  `json:"fileSize"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+	IsActive      bool   `json:"isActive"`
 }
 
 // AISettings holds OpenAI configuration stored in the local database.

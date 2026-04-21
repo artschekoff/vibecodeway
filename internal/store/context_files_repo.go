@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// ListContextFiles returns text files for the given context, ordered by created_at asc.
+// ListContextTexts returns text entries for the given context, ordered by created_at asc.
 // When activeOnly is true only rows with is_active = 1 are returned.
-func (s *Store) ListContextFiles(ctx context.Context, contextID string, activeOnly bool) ([]ContextFile, error) {
+func (s *Store) ListContextTexts(ctx context.Context, contextID string, activeOnly bool) ([]ContextText, error) {
 	q := "SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_files WHERE context_id = ?"
 	if activeOnly {
 		q += " AND is_active = 1"
@@ -20,49 +20,49 @@ func (s *Store) ListContextFiles(ctx context.Context, contextID string, activeOn
 	q += " ORDER BY created_at ASC"
 	rows, err := s.db.QueryContext(ctx, q, contextID)
 	if err != nil {
-		return nil, fmt.Errorf("listing context files: %w", err)
+		return nil, fmt.Errorf("listing context texts: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var files []ContextFile
+	var texts []ContextText
 	for rows.Next() {
-		var f ContextFile
-		if err := rows.Scan(&f.ID, &f.ContextID, &f.Name, &f.Content, &f.CreatedAt, &f.UpdatedAt, &f.IsActive); err != nil {
-			return nil, fmt.Errorf("scanning context file: %w", err)
+		var t ContextText
+		if err := rows.Scan(&t.ID, &t.ContextID, &t.Name, &t.Content, &t.CreatedAt, &t.UpdatedAt, &t.IsActive); err != nil {
+			return nil, fmt.Errorf("scanning context text: %w", err)
 		}
-		files = append(files, f)
+		texts = append(texts, t)
 	}
-	return files, rows.Err()
+	return texts, rows.Err()
 }
 
-// ToggleContextFileActive flips the is_active flag for the given file and returns the updated record.
-// Returns ErrNotFound if no file with that ID exists.
-func (s *Store) ToggleContextFileActive(ctx context.Context, id string) (*ContextFile, error) {
+// ToggleContextTextActive flips the is_active flag for the given text entry and returns the updated record.
+// Returns ErrNotFound if no entry with that ID exists.
+func (s *Store) ToggleContextTextActive(ctx context.Context, id string) (*ContextText, error) {
 	res, err := s.db.ExecContext(ctx, "UPDATE context_files SET is_active = NOT is_active WHERE id = ?", id)
 	if err != nil {
-		return nil, fmt.Errorf("toggling context file active: %w", err)
+		return nil, fmt.Errorf("toggling context text active: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, ErrNotFound
 	}
 
-	var f ContextFile
+	var t ContextText
 	err = s.db.QueryRowContext(ctx,
 		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_files WHERE id = ?", id,
-	).Scan(&f.ID, &f.ContextID, &f.Name, &f.Content, &f.CreatedAt, &f.UpdatedAt, &f.IsActive)
+	).Scan(&t.ID, &t.ContextID, &t.Name, &t.Content, &t.CreatedAt, &t.UpdatedAt, &t.IsActive)
 	if err != nil {
-		return nil, fmt.Errorf("fetching updated context file: %w", err)
+		return nil, fmt.Errorf("fetching updated context text: %w", err)
 	}
-	return &f, nil
+	return &t, nil
 }
 
-// UpsertContextFile creates a new text file when id is empty, or updates an existing one.
-// Returns the resulting ContextFile record.
-func (s *Store) UpsertContextFile(ctx context.Context, id, contextID, name, content string) (*ContextFile, error) {
+// UpsertContextText creates a new text entry when id is empty, or updates an existing one.
+// Returns the resulting ContextText record.
+func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, content string) (*ContextText, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	if id == "" {
-		f := &ContextFile{
+		t := &ContextText{
 			ID:        uuid.New().String(),
 			ContextID: contextID,
 			Name:      name,
@@ -72,12 +72,12 @@ func (s *Store) UpsertContextFile(ctx context.Context, id, contextID, name, cont
 		}
 		_, err := s.db.ExecContext(ctx,
 			"INSERT INTO context_files (id, context_id, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-			f.ID, f.ContextID, f.Name, f.Content, f.CreatedAt, f.UpdatedAt,
+			t.ID, t.ContextID, t.Name, t.Content, t.CreatedAt, t.UpdatedAt,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("inserting context file: %w", err)
+			return nil, fmt.Errorf("inserting context text: %w", err)
 		}
-		return f, nil
+		return t, nil
 	}
 
 	res, err := s.db.ExecContext(ctx,
@@ -85,7 +85,7 @@ func (s *Store) UpsertContextFile(ctx context.Context, id, contextID, name, cont
 		name, content, now, id,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("updating context file: %w", err)
+		return nil, fmt.Errorf("updating context text: %w", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -95,25 +95,25 @@ func (s *Store) UpsertContextFile(ctx context.Context, id, contextID, name, cont
 		return nil, ErrNotFound
 	}
 
-	var f ContextFile
+	var t ContextText
 	err = s.db.QueryRowContext(ctx,
 		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_files WHERE id = ?", id,
-	).Scan(&f.ID, &f.ContextID, &f.Name, &f.Content, &f.CreatedAt, &f.UpdatedAt, &f.IsActive)
+	).Scan(&t.ID, &t.ContextID, &t.Name, &t.Content, &t.CreatedAt, &t.UpdatedAt, &t.IsActive)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("fetching updated context file: %w", err)
+		return nil, fmt.Errorf("fetching updated context text: %w", err)
 	}
-	return &f, nil
+	return &t, nil
 }
 
-// DeleteContextFile removes a single context file by its ID.
+// DeleteContextText removes a single context text by its ID.
 // Returns ErrNotFound if no record with that ID exists.
-func (s *Store) DeleteContextFile(ctx context.Context, id string) error {
+func (s *Store) DeleteContextText(ctx context.Context, id string) error {
 	res, err := s.db.ExecContext(ctx, "DELETE FROM context_files WHERE id = ?", id)
 	if err != nil {
-		return fmt.Errorf("deleting context file: %w", err)
+		return fmt.Errorf("deleting context text: %w", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

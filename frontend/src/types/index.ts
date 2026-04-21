@@ -120,7 +120,7 @@ export interface SlackWorkspaceResult {
   name: string;
 }
 
-export interface ContextFile {
+export interface ContextText {
   id: string;
   contextId: string;
   name: string;
@@ -134,6 +134,26 @@ export interface TextFilesPayload {
   newFiles: { name: string; content: string }[];
   editedFiles: { id: string; name: string; content: string }[];
   removedIds: string[];
+}
+
+export interface UploadedFile {
+  id: string;
+  contextId: string;
+  originalName: string;
+  fileType: string;
+  extractedText: string;
+  fileSize: number;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+}
+
+export interface PendingUploadPreview {
+  tempId: string;
+  originalName: string;
+  fileType: string;
+  extractedText: string;
+  fileSize: number;
 }
 
 export interface ContextLog {

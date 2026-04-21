@@ -71,11 +71,16 @@ Add to your Cursor `mcp.json`:
   "mcpServers": {
     "context-consolidator": {
       "type": "stdio",
-      "command": "/path/to/bin/context-consolidator-mcp"
+      "command": "/path/to/bin/context-consolidator-mcp",
+      "env": {
+        "SLACK_MCP_PASSPHRASE": "<your-slack-passphrase>"
+      }
     }
   }
 }
 ```
+
+`SLACK_MCP_PASSPHRASE` is injected into every `slack-cli` invocation. If you don't use Slack integration, you can omit it.
 
 ### MCP Tools
 

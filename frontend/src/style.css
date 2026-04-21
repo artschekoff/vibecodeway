@@ -1998,6 +1998,112 @@ select {
   color: var(--text-muted);
 }
 
+/* ── Uploaded File Card (expandable, Jira/Slack-style) ─────────────────── */
+.uploaded-file-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.uploaded-file-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  user-select: none;
+}
+
+.uploaded-file-header--clickable {
+  cursor: pointer;
+}
+
+.uploaded-file-header--clickable:hover {
+  background: var(--surface2);
+}
+
+.uploaded-file-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.uploaded-file-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uploaded-file-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.uploaded-file-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.uploaded-file-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.uploaded-file-size {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.uploaded-file-body {
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.uploaded-file-content {
+  margin: 0;
+  padding: 14px;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.uploaded-file-empty {
+  padding: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.uploaded-file-card--inactive {
+  opacity: 0.65;
+}
+
+.uploaded-file-card--inactive .uploaded-file-header {
+  background: transparent;
+}
+
+.uploaded-file-card--inactive .uploaded-file-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
 /* ─── react-datepicker dark theme overrides ─── */
 .dm-datepicker-wrapper {
   flex: 1;

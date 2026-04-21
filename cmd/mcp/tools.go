@@ -240,13 +240,13 @@ func filterActiveItems(detail *jiraservice.ContextDetail) *jiraservice.ContextDe
 	}
 	filtered.SlackThreads = threads
 
-	files := make([]appstore.ContextFile, 0, len(detail.ContextFiles))
-	for _, f := range detail.ContextFiles {
-		if f.IsActive {
-			files = append(files, f)
+	texts := make([]appstore.ContextText, 0, len(detail.ContextTexts))
+	for _, t := range detail.ContextTexts {
+		if t.IsActive {
+			texts = append(texts, t)
 		}
 	}
-	filtered.ContextFiles = files
+	filtered.ContextTexts = texts
 
 	dmConfigs := make([]slackstore.SlackDMConfig, 0, len(detail.SlackDMConfigs))
 	for _, dm := range detail.SlackDMConfigs {

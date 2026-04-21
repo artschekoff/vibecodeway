@@ -14,7 +14,7 @@ const (
 	KeyPrefixJiraIssue   = "jira_issue:"
 	KeyPrefixJiraComment = "jira_comment:"
 	KeyPrefixSlackThread = "slack_thread:"
-	KeyPrefixContextFile = "context_file:"
+	KeyPrefixContextText = "context_file:"
 )
 
 // SnapshotFull reads every context object (jira_issues, jira_comments, slack_threads,
@@ -32,7 +32,7 @@ func (r *Repo) SnapshotFull(ctx context.Context, contextID string) (Snapshot, er
 	if err := r.collectSlackThreads(ctx, contextID, snap); err != nil {
 		return nil, err
 	}
-	if err := r.collectContextFiles(ctx, contextID, snap); err != nil {
+	if err := r.collectContextTexts(ctx, contextID, snap); err != nil {
 		return nil, err
 	}
 	return snap, nil
@@ -105,23 +105,23 @@ func (r *Repo) collectSlackThreads(ctx context.Context, contextID string, out Sn
 	return rows.Err()
 }
 
-func (r *Repo) collectContextFiles(ctx context.Context, contextID string, out Snapshot) error {
+func (r *Repo) collectContextTexts(ctx context.Context, contextID string, out Snapshot) error {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, name, content
 		FROM context_files
 		WHERE context_id = ? AND is_active = 1`, contextID)
 	if err != nil {
-		return fmt.Errorf("snapshot context files: %w", err)
+		return fmt.Errorf("snapshot context texts: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
-		var id, name, fileContent string
-		if err := rows.Scan(&id, &name, &fileContent); err != nil {
-			return fmt.Errorf("scan context file: %w", err)
+		var id, name, textContent string
+		if err := rows.Scan(&id, &name, &textContent); err != nil {
+			return fmt.Errorf("scan context text: %w", err)
 		}
-		content := fmt.Sprintf("name=%s\n\n%s", name, fileContent)
-		out[KeyPrefixContextFile+id] = ObjectSnapshot{Hash: hashOf(content), Content: content}
+		content := fmt.Sprintf("name=%s\n\n%s", name, textContent)
+		out[KeyPrefixContextText+id] = ObjectSnapshot{Hash: hashOf(content), Content: content}
 	}
 	return rows.Err()
 }

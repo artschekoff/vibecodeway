@@ -1,0 +1,99 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import ContextForm from "../ContextForm";
+
+vi.mock("../../../wailsjs/go/main/App", () => ({
+  ListSlackWorkspaces: vi.fn().mockResolvedValue([]),
+  PickAndExtractFiles: vi.fn().mockResolvedValue([]),
+  PickAndExtractFilesPreview: vi.fn().mockResolvedValue([]),
+  CommitPendingUploads: vi.fn().mockResolvedValue([]),
+  DiscardPendingUpload: vi.fn().mockResolvedValue(undefined),
+  PreviewSlackDMs: vi.fn().mockResolvedValue(""),
+  SearchJQL: vi.fn().mockResolvedValue([]),
+  SearchSlackChannels: vi.fn().mockResolvedValue([]),
+  DeleteUploadedFile: vi.fn().mockResolvedValue(undefined),
+}));
+
+describe("ContextForm — Files tab (creation mode)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("upload button is enabled when creating a new context", async () => {
+    const user = userEvent.setup();
+    render(<ContextForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    const filesTab = screen.getByRole("button", { name: /files/i });
+    await user.click(filesTab);
+
+    const uploadBtn = screen.getByRole("button", { name: /upload files/i });
+    expect(uploadBtn).not.toBeDisabled();
+  });
+
+  it("does not show 'create the context first' hint during creation", async () => {
+    const user = userEvent.setup();
+    render(<ContextForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    const filesTab = screen.getByRole("button", { name: /files/i });
+    await user.click(filesTab);
+
+    expect(screen.queryByText(/create the context first/i)).not.toBeInTheDocument();
+  });
+
+  it("calls PickAndExtractFilesPreview (not PickAndExtractFiles) during creation", async () => {
+    const { PickAndExtractFilesPreview, PickAndExtractFiles } = await import(
+      "../../../wailsjs/go/main/App"
+    );
+
+    const user = userEvent.setup();
+    render(<ContextForm onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    const filesTab = screen.getByRole("button", { name: /files/i });
+    await user.click(filesTab);
+
+    const uploadBtn = screen.getByRole("button", { name: /upload files/i });
+    await user.click(uploadBtn);
+
+    expect(PickAndExtractFilesPreview).toHaveBeenCalled();
+    expect(PickAndExtractFiles).not.toHaveBeenCalled();
+  });
+
+  it("passes pending upload temp IDs to onSave", async () => {
+    const { PickAndExtractFilesPreview } = await import(
+      "../../../wailsjs/go/main/App"
+    );
+    vi.mocked(PickAndExtractFilesPreview).mockResolvedValue([
+      {
+        tempId: "tmp-1",
+        originalName: "report.pdf",
+        fileType: "pdf",
+        extractedText: "some text",
+        fileSize: 1024,
+      },
+    ]);
+
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<ContextForm onSave={onSave} onCancel={vi.fn()} />);
+
+    // Fill required key field
+    const keyInput = screen.getByPlaceholderText(/sprint-42/i);
+    await user.type(keyInput, "test-ctx");
+
+    // Upload a file
+    const filesTab = screen.getByRole("button", { name: /files/i });
+    await user.click(filesTab);
+    const uploadBtn = screen.getByRole("button", { name: /upload files/i });
+    await user.click(uploadBtn);
+
+    // Submit the form
+    const createBtn = screen.getByRole("button", { name: /create/i });
+    await user.click(createBtn);
+
+    expect(onSave).toHaveBeenCalled();
+    const lastCallArgs = onSave.mock.calls[0];
+    const pendingUploadTempIds = lastCallArgs[lastCallArgs.length - 1];
+    expect(pendingUploadTempIds).toEqual(["tmp-1"]);
+  });
+});

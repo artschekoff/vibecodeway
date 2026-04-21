@@ -195,3 +195,6 @@ rulesync.local.jsonc
 **/.agents/skills/
 **/.warp/
 **/WARP.md
+.rulesync
+.cursor
+rulesync.jsonc

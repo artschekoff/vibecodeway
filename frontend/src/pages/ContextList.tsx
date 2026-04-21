@@ -13,15 +13,17 @@ import {
   RemoveSlackChannel,
   GetContextDetail,
   ReloadAllContexts,
-  UpsertContextFile,
-  DeleteContextFile,
+  UpsertContextText,
+  DeleteContextText,
+  DeleteUploadedFile,
   ToggleContextStatus,
   UpsertSlackDMConfig,
   DeleteSlackDMConfig,
   ListSlackDMConfigs,
+  CommitPendingUploads,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
-import type { ContextFile, Context, Issue, SlackChannel, SlackDMConfig, SlackSavePayload, TextFilesPayload } from "../types";
+import type { ContextText, Context, Issue, SlackChannel, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile } from "../types";
 import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
@@ -40,7 +42,8 @@ export default function ContextList() {
   const [editJiraIssues, setEditJiraIssues] = useState<Issue[] | undefined>(undefined);
   const [editSlackChannels, setEditSlackChannels] = useState<SlackChannel[] | undefined>(undefined);
   const [editSlackDMConfigs, setEditSlackDMConfigs] = useState<SlackDMConfig[] | undefined>(undefined);
-  const [editContextFiles, setEditContextFiles] = useState<ContextFile[] | undefined>(undefined);
+  const [editContextTexts, setEditContextTexts] = useState<ContextText[] | undefined>(undefined);
+  const [editUploadedFiles, setEditUploadedFiles] = useState<UploadedFile[] | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Context | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [reloadingAll, setReloadingAll] = useState(false);
@@ -81,12 +84,15 @@ export default function ContextList() {
     slackPayload?: SlackSavePayload,
     selectedJiraKeys?: string[],
     _removedJiraIssueIds?: string[],
-    textFilesPayload?: TextFilesPayload
+    textFilesPayload?: TextFilesPayload,
+    _removedUploadedFileIds?: string[],
+    pendingUploadTempIds?: string[]
   ) => {
     const jiraKeys = selectedJiraKeys ?? [];
     const slackGroups = (slackPayload?.groups ?? []).filter((g) => g.channels.length > 0);
     const dmConfigs = slackPayload?.dmConfigs ?? [];
     const newTextFiles = textFilesPayload?.newFiles ?? [];
+    const pendingIds = pendingUploadTempIds ?? [];
     const itemLabels = [
       ...jiraKeys,
       ...slackGroups.flatMap((g) =>
@@ -94,6 +100,7 @@ export default function ContextList() {
       ),
       ...dmConfigs.map((dm) => `DMs from ${dm.workspace}`),
       ...newTextFiles.map((f) => f.name || "Text file"),
+      ...pendingIds.map(() => "Uploading file"),
     ];
 
     progress.begin("Creating Context", itemLabels);
@@ -122,7 +129,12 @@ export default function ContextList() {
 
       for (const f of newTextFiles) {
         progress.next(`Saving ${f.name || "text file"}`);
-        try { await UpsertContextFile("", ctx.id, f.name, f.content); } catch { /* best-effort */ }
+        try { await UpsertContextText("", ctx.id, f.name, f.content); } catch { /* best-effort */ }
+      }
+
+      if (pendingIds.length > 0) {
+        progress.next("Saving uploaded files");
+        try { await CommitPendingUploads(ctx.id, pendingIds); } catch { /* best-effort */ }
       }
     } finally {
       progress.done();
@@ -137,7 +149,8 @@ export default function ContextList() {
     let issues: Issue[] = [];
     let channels: SlackChannel[] = [];
     let dmConfigs: SlackDMConfig[] = [];
-    let contextFiles: ContextFile[] = [];
+    let contextTexts: ContextText[] = [];
+    let uploadedFiles: UploadedFile[] = [];
     try {
       const [detail, dms] = await Promise.all([
         GetContextDetail(c.id),
@@ -146,7 +159,8 @@ export default function ContextList() {
       jql = detail.jira?.searchQuery ?? "";
       issues = detail.issues ?? [];
       channels = detail.slackChannels ?? [];
-      contextFiles = detail.contextFiles ?? [];
+      contextTexts = detail.contextTexts ?? [];
+      uploadedFiles = (detail.uploadedFiles ?? []) as UploadedFile[];
       dmConfigs = dms ?? [];
     } catch {
       // best-effort — open with empty values
@@ -155,7 +169,8 @@ export default function ContextList() {
     setEditJiraIssues(issues);
     setEditSlackChannels(channels);
     setEditSlackDMConfigs(dmConfigs);
-    setEditContextFiles(contextFiles);
+    setEditContextTexts(contextTexts);
+    setEditUploadedFiles(uploadedFiles);
     setEditTarget(c);
   };
 
@@ -165,7 +180,8 @@ export default function ContextList() {
     setEditJiraIssues(undefined);
     setEditSlackChannels(undefined);
     setEditSlackDMConfigs(undefined);
-    setEditContextFiles(undefined);
+    setEditContextTexts(undefined);
+    setEditUploadedFiles(undefined);
   };
 
   const handleUpdate = async (
@@ -175,7 +191,8 @@ export default function ContextList() {
     slackPayload?: SlackSavePayload,
     selectedJiraKeys?: string[],
     _removedJiraIssueIds?: string[],
-    textFilesPayload?: TextFilesPayload
+    textFilesPayload?: TextFilesPayload,
+    removedUploadedFileIds?: string[]
   ) => {
     if (!editTarget) return;
 
@@ -229,16 +246,20 @@ export default function ContextList() {
       }
 
       for (const id of removedTextFileIds) {
-        try { await DeleteContextFile(id); } catch { /* best-effort */ }
+        try { await DeleteContextText(id); } catch { /* best-effort */ }
       }
 
       for (const f of editedTextFiles) {
-        try { await UpsertContextFile(f.id, editTarget.id, f.name, f.content); } catch { /* best-effort */ }
+        try { await UpsertContextText(f.id, editTarget.id, f.name, f.content); } catch { /* best-effort */ }
       }
 
       for (const f of newTextFiles) {
         progress.next(`Saving ${f.name || "text file"}`);
-        try { await UpsertContextFile("", editTarget.id, f.name, f.content); } catch { /* best-effort */ }
+        try { await UpsertContextText("", editTarget.id, f.name, f.content); } catch { /* best-effort */ }
+      }
+
+      for (const fId of (removedUploadedFileIds ?? [])) {
+        try { await DeleteUploadedFile(fId); } catch { /* best-effort */ }
       }
     } finally {
       progress.done();
@@ -451,7 +472,8 @@ export default function ContextList() {
           initialJiraIssues={editJiraIssues}
           initialSlackChannels={editSlackChannels}
           initialSlackDMConfigs={editSlackDMConfigs}
-          initialContextFiles={editContextFiles}
+          initialContextTexts={editContextTexts}
+          initialUploadedFiles={editUploadedFiles}
           onSave={handleUpdate}
           onCancel={closeEditForm}
         />

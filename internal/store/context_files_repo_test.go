@@ -13,70 +13,70 @@ func TestContextFilesTableExists(t *testing.T) {
 	assertTableExists(t, s, "context_files")
 }
 
-func TestUpsertContextFile_create(t *testing.T) {
+func TestUpsertContextText_create(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
 
-	f, err := s.UpsertContextFile(ctx, "", c.ID, "My Doc", "Hello world content")
+	ct, err := s.UpsertContextText(ctx, "", c.ID, "My Doc", "Hello world content")
 	require.NoError(t, err)
-	assert.NotEmpty(t, f.ID)
-	assert.Equal(t, c.ID, f.ContextID)
-	assert.Equal(t, "My Doc", f.Name)
-	assert.Equal(t, "Hello world content", f.Content)
-	assert.NotEmpty(t, f.CreatedAt)
-	assert.NotEmpty(t, f.UpdatedAt)
+	assert.NotEmpty(t, ct.ID)
+	assert.Equal(t, c.ID, ct.ContextID)
+	assert.Equal(t, "My Doc", ct.Name)
+	assert.Equal(t, "Hello world content", ct.Content)
+	assert.NotEmpty(t, ct.CreatedAt)
+	assert.NotEmpty(t, ct.UpdatedAt)
 }
 
-func TestUpsertContextFile_update(t *testing.T) {
+func TestUpsertContextText_update(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
 
-	f, err := s.UpsertContextFile(ctx, "", c.ID, "Original", "original content")
+	ct, err := s.UpsertContextText(ctx, "", c.ID, "Original", "original content")
 	require.NoError(t, err)
 
-	updated, err := s.UpsertContextFile(ctx, f.ID, c.ID, "Updated Name", "updated content")
+	updated, err := s.UpsertContextText(ctx, ct.ID, c.ID, "Updated Name", "updated content")
 	require.NoError(t, err)
-	assert.Equal(t, f.ID, updated.ID)
+	assert.Equal(t, ct.ID, updated.ID)
 	assert.Equal(t, "Updated Name", updated.Name)
 	assert.Equal(t, "updated content", updated.Content)
 }
 
-func TestListContextFiles_empty(t *testing.T) {
+func TestListContextTexts_empty(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
 
-	files, err := s.ListContextFiles(ctx, c.ID, false)
+	texts, err := s.ListContextTexts(ctx, c.ID, false)
 	require.NoError(t, err)
-	assert.Empty(t, files)
+	assert.Empty(t, texts)
 }
 
-func TestListContextFiles_returnsAll(t *testing.T) {
+func TestListContextTexts_returnsAll(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
 
-	_, err = s.UpsertContextFile(ctx, "", c.ID, "Doc 1", "content one")
+	_, err = s.UpsertContextText(ctx, "", c.ID, "Doc 1", "content one")
 	require.NoError(t, err)
-	_, err = s.UpsertContextFile(ctx, "", c.ID, "Doc 2", "content two")
+	_, err = s.UpsertContextText(ctx, "", c.ID, "Doc 2", "content two")
 	require.NoError(t, err)
 
-	files, err := s.ListContextFiles(ctx, c.ID, false)
+	texts, err := s.ListContextTexts(ctx, c.ID, false)
 	require.NoError(t, err)
-	assert.Len(t, files, 2)
+	assert.Len(t, texts, 2)
 }
 
-func TestListContextFiles_isolatedByContext(t *testing.T) {
+func TestListContextTexts_isolatedByContext(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
@@ -85,107 +85,107 @@ func TestListContextFiles_isolatedByContext(t *testing.T) {
 	c2, err := s.CreateContext(ctx, "ctx-2")
 	require.NoError(t, err)
 
-	_, err = s.UpsertContextFile(ctx, "", c1.ID, "Doc A", "content a")
+	_, err = s.UpsertContextText(ctx, "", c1.ID, "Doc A", "content a")
 	require.NoError(t, err)
-	_, err = s.UpsertContextFile(ctx, "", c2.ID, "Doc B", "content b")
+	_, err = s.UpsertContextText(ctx, "", c2.ID, "Doc B", "content b")
 	require.NoError(t, err)
 
-	files1, err := s.ListContextFiles(ctx, c1.ID, false)
+	texts1, err := s.ListContextTexts(ctx, c1.ID, false)
 	require.NoError(t, err)
-	assert.Len(t, files1, 1)
-	assert.Equal(t, "Doc A", files1[0].Name)
+	assert.Len(t, texts1, 1)
+	assert.Equal(t, "Doc A", texts1[0].Name)
 
-	files2, err := s.ListContextFiles(ctx, c2.ID, false)
+	texts2, err := s.ListContextTexts(ctx, c2.ID, false)
 	require.NoError(t, err)
-	assert.Len(t, files2, 1)
-	assert.Equal(t, "Doc B", files2[0].Name)
+	assert.Len(t, texts2, 1)
+	assert.Equal(t, "Doc B", texts2[0].Name)
 }
 
-func TestDeleteContextFile(t *testing.T) {
+func TestDeleteContextText(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
 
-	f, err := s.UpsertContextFile(ctx, "", c.ID, "To Delete", "some content")
+	ct, err := s.UpsertContextText(ctx, "", c.ID, "To Delete", "some content")
 	require.NoError(t, err)
 
-	err = s.DeleteContextFile(ctx, f.ID)
+	err = s.DeleteContextText(ctx, ct.ID)
 	require.NoError(t, err)
 
-	files, err := s.ListContextFiles(ctx, c.ID, false)
+	texts, err := s.ListContextTexts(ctx, c.ID, false)
 	require.NoError(t, err)
-	assert.Empty(t, files)
+	assert.Empty(t, texts)
 }
 
-func TestDeleteContextFile_notFound(t *testing.T) {
+func TestDeleteContextText_notFound(t *testing.T) {
 	s := openTestStore(t)
-	err := s.DeleteContextFile(context.Background(), "non-existent-id")
+	err := s.DeleteContextText(context.Background(), "non-existent-id")
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestContextFilesDeletedWithContext(t *testing.T) {
+func TestContextTextsDeletedWithContext(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
 
-	_, err = s.UpsertContextFile(ctx, "", c.ID, "Doc", "content")
+	_, err = s.UpsertContextText(ctx, "", c.ID, "Doc", "content")
 	require.NoError(t, err)
 
 	err = s.DeleteContext(ctx, c.ID)
 	require.NoError(t, err)
 
 	// context_files should be cascade-deleted
-	files, err := s.ListContextFiles(ctx, c.ID, false)
+	texts, err := s.ListContextTexts(ctx, c.ID, false)
 	require.NoError(t, err)
-	assert.Empty(t, files)
+	assert.Empty(t, texts)
 }
 
 // --- IsActive toggle ---
 
-func TestContextFileActiveByDefault(t *testing.T) {
+func TestContextTextActiveByDefault(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
-	_, err = s.UpsertContextFile(ctx, "", c.ID, "Doc", "content")
+	_, err = s.UpsertContextText(ctx, "", c.ID, "Doc", "content")
 	require.NoError(t, err)
 
-	files, err := s.ListContextFiles(ctx, c.ID, false)
+	texts, err := s.ListContextTexts(ctx, c.ID, false)
 	require.NoError(t, err)
-	require.Len(t, files, 1)
-	assert.True(t, files[0].IsActive, "new file should be active by default")
+	require.Len(t, texts, 1)
+	assert.True(t, texts[0].IsActive, "new text should be active by default")
 }
 
-func TestToggleContextFileActive(t *testing.T) {
+func TestToggleContextTextActive(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
 	c, err := s.CreateContext(ctx, "my-ctx")
 	require.NoError(t, err)
-	f, err := s.UpsertContextFile(ctx, "", c.ID, "Doc", "content")
+	ct, err := s.UpsertContextText(ctx, "", c.ID, "Doc", "content")
 	require.NoError(t, err)
 
-	toggled, err := s.ToggleContextFileActive(ctx, f.ID)
+	toggled, err := s.ToggleContextTextActive(ctx, ct.ID)
 	require.NoError(t, err)
 	assert.False(t, toggled.IsActive)
 
-	toggled, err = s.ToggleContextFileActive(ctx, f.ID)
+	toggled, err = s.ToggleContextTextActive(ctx, ct.ID)
 	require.NoError(t, err)
 	assert.True(t, toggled.IsActive)
 }
 
-func TestToggleContextFileActive_NotFound(t *testing.T) {
+func TestToggleContextTextActive_NotFound(t *testing.T) {
 	s := openTestStore(t)
-	_, err := s.ToggleContextFileActive(context.Background(), "nonexistent")
+	_, err := s.ToggleContextTextActive(context.Background(), "nonexistent")
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestUpsertContextFile_largeContent(t *testing.T) {
+func TestUpsertContextText_largeContent(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
@@ -198,7 +198,130 @@ func TestUpsertContextFile_largeContent(t *testing.T) {
 		largeContent[i] = 'a' + byte(i%26)
 	}
 
-	f, err := s.UpsertContextFile(ctx, "", c.ID, "Large Doc", string(largeContent))
+	ct, err := s.UpsertContextText(ctx, "", c.ID, "Large Doc", string(largeContent))
 	require.NoError(t, err)
-	assert.Equal(t, string(largeContent), f.Content)
+	assert.Equal(t, string(largeContent), ct.Content)
+}
+
+// --- Uploaded files ---
+
+func TestUploadedFilesTableExists(t *testing.T) {
+	s := openTestStore(t)
+	assertTableExists(t, s, "context_uploaded_files")
+}
+
+func TestInsertUploadedFile(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+
+	f, err := s.InsertUploadedFile(ctx, c.ID, "report.pdf", "pdf", "extracted text here", []byte("raw-pdf-bytes"), 42)
+	require.NoError(t, err)
+	assert.NotEmpty(t, f.ID)
+	assert.Equal(t, c.ID, f.ContextID)
+	assert.Equal(t, "report.pdf", f.OriginalName)
+	assert.Equal(t, "pdf", f.FileType)
+	assert.Equal(t, "extracted text here", f.ExtractedText)
+	assert.Equal(t, int64(42), f.FileSize)
+	assert.True(t, f.IsActive)
+	assert.NotEmpty(t, f.CreatedAt)
+}
+
+func TestListUploadedFiles(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+
+	_, err = s.InsertUploadedFile(ctx, c.ID, "a.pdf", "pdf", "text a", []byte{}, 10)
+	require.NoError(t, err)
+	_, err = s.InsertUploadedFile(ctx, c.ID, "b.docx", "docx", "text b", []byte{}, 20)
+	require.NoError(t, err)
+
+	files, err := s.ListUploadedFiles(ctx, c.ID, false)
+	require.NoError(t, err)
+	assert.Len(t, files, 2)
+}
+
+func TestListUploadedFiles_activeOnly(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+
+	f1, err := s.InsertUploadedFile(ctx, c.ID, "a.pdf", "pdf", "text a", []byte{}, 10)
+	require.NoError(t, err)
+	_, err = s.InsertUploadedFile(ctx, c.ID, "b.docx", "docx", "text b", []byte{}, 20)
+	require.NoError(t, err)
+
+	// Deactivate first file
+	_, err = s.ToggleUploadedFileActive(ctx, f1.ID)
+	require.NoError(t, err)
+
+	files, err := s.ListUploadedFiles(ctx, c.ID, true)
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+	assert.Equal(t, "b.docx", files[0].OriginalName)
+}
+
+func TestDeleteUploadedFile(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+
+	f, err := s.InsertUploadedFile(ctx, c.ID, "report.pdf", "pdf", "text", []byte{}, 10)
+	require.NoError(t, err)
+
+	err = s.DeleteUploadedFile(ctx, f.ID)
+	require.NoError(t, err)
+
+	files, err := s.ListUploadedFiles(ctx, c.ID, false)
+	require.NoError(t, err)
+	assert.Empty(t, files)
+}
+
+func TestDeleteUploadedFile_notFound(t *testing.T) {
+	s := openTestStore(t)
+	err := s.DeleteUploadedFile(context.Background(), "non-existent-id")
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestGetUploadedFileContent(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+
+	content := []byte("binary-content-here")
+	f, err := s.InsertUploadedFile(ctx, c.ID, "doc.pdf", "pdf", "extracted", content, int64(len(content)))
+	require.NoError(t, err)
+
+	got, err := s.GetUploadedFileContent(ctx, f.ID)
+	require.NoError(t, err)
+	assert.Equal(t, content, got)
+}
+
+func TestUploadedFilesDeletedWithContext(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "my-ctx")
+	require.NoError(t, err)
+
+	_, err = s.InsertUploadedFile(ctx, c.ID, "report.pdf", "pdf", "text", []byte{}, 10)
+	require.NoError(t, err)
+
+	err = s.DeleteContext(ctx, c.ID)
+	require.NoError(t, err)
+
+	files, err := s.ListUploadedFiles(ctx, c.ID, false)
+	require.NoError(t, err)
+	assert.Empty(t, files)
 }

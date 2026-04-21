@@ -9,18 +9,20 @@ import {
   DeleteJiraComment,
   DeleteSlackThread,
   RemoveSlackChannel,
-  DeleteContextFile,
+  DeleteContextText,
+  DeleteUploadedFile,
   ToggleIssueActive,
   ToggleCommentActive,
   ToggleSlackChannelActive,
   ToggleSlackThreadActive,
-  ToggleContextFileActive,
+  ToggleContextTextActive,
+  ToggleUploadedFileActive,
   ToggleSlackDMConfigActive,
   UpdateContext,
   SetJiraConfig,
   AddIssuesToContext,
   AddSlackChannels,
-  UpsertContextFile,
+  UpsertContextText,
   UpsertSlackDMConfig,
   DeleteSlackDMConfig,
   RemoveSlackDMEntry,
@@ -28,13 +30,14 @@ import {
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextFile, SlackDMConfig, SlackSavePayload, TextFilesPayload } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile } from "../types";
 import IssueCard from "../components/IssueCard";
 import SlackChannelCard from "../components/SlackChannelCard";
 import SlackDMConfigCard from "../components/SlackDMConfigCard";
 import ContextChatPanel from "../components/ContextChatPanel";
 import ContextLogList from "../components/ContextLogList";
 import ConsolidatedLogView from "../components/ConsolidatedLogView";
+import UploadedFileCard from "../components/UploadedFileCard";
 import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
 
@@ -56,7 +59,8 @@ export default function ContextDetailPage() {
   const [editJiraIssues, setEditJiraIssues] = useState<Issue[] | undefined>(undefined);
   const [editSlackChannels, setEditSlackChannels] = useState<SlackChannel[] | undefined>(undefined);
   const [editSlackDMConfigs, setEditSlackDMConfigs] = useState<SlackDMConfig[] | undefined>(undefined);
-  const [editContextFiles, setEditContextFiles] = useState<ContextFile[] | undefined>(undefined);
+  const [editContextTexts, setEditContextTexts] = useState<ContextText[] | undefined>(undefined);
+  const [editUploadedFiles, setEditUploadedFiles] = useState<UploadedFile[] | undefined>(undefined);
 
   const load = useCallback(async (silent = false) => {
     if (!id) return;
@@ -119,7 +123,7 @@ export default function ContextDetailPage() {
     let issues: Issue[] = [];
     let channels: SlackChannel[] = [];
     let dmConfigs: SlackDMConfig[] = [];
-    let contextFiles: ContextFile[] = [];
+    let contextTexts: ContextText[] = [];
     try {
       const [det, dms] = await Promise.all([
         GetContextDetail(id),
@@ -128,7 +132,7 @@ export default function ContextDetailPage() {
       jql = det.jira?.searchQuery ?? "";
       issues = det.issues ?? [];
       channels = det.slackChannels ?? [];
-      contextFiles = det.contextFiles ?? [];
+      contextTexts = det.contextTexts ?? [];
       dmConfigs = dms ?? [];
     } catch {
       // best-effort — open with empty values
@@ -137,7 +141,8 @@ export default function ContextDetailPage() {
     setEditJiraIssues(issues);
     setEditSlackChannels(channels);
     setEditSlackDMConfigs(dmConfigs);
-    setEditContextFiles(contextFiles);
+    setEditContextTexts(contextTexts);
+    setEditUploadedFiles((detail?.uploadedFiles ?? []) as UploadedFile[]);
     setEditOpen(true);
   };
 
@@ -147,7 +152,8 @@ export default function ContextDetailPage() {
     setEditJiraIssues(undefined);
     setEditSlackChannels(undefined);
     setEditSlackDMConfigs(undefined);
-    setEditContextFiles(undefined);
+    setEditContextTexts(undefined);
+    setEditUploadedFiles(undefined);
   };
 
   const handleUpdate = async (
@@ -157,7 +163,8 @@ export default function ContextDetailPage() {
     slackPayload?: SlackSavePayload,
     selectedJiraKeys?: string[],
     _removedJiraIssueIds?: string[],
-    textFilesPayload?: TextFilesPayload
+    textFilesPayload?: TextFilesPayload,
+    removedUploadedFileIds?: string[]
   ) => {
     if (!id || !detail) return;
     const jiraKeys = selectedJiraKeys ?? [];
@@ -204,14 +211,19 @@ export default function ContextDetailPage() {
         try { await UpsertSlackDMConfig(id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
       }
       for (const fId of removedTextFileIds) {
-        try { await DeleteContextFile(fId); } catch { /* best-effort */ }
+        try { await DeleteContextText(fId); } catch { /* best-effort */ }
       }
       for (const f of editedTextFiles) {
-        try { await UpsertContextFile(f.id, id, f.name, f.content); } catch { /* best-effort */ }
+        try { await UpsertContextText(f.id, id, f.name, f.content); } catch { /* best-effort */ }
       }
       for (const f of newTextFiles) {
         progress.next(`Saving ${f.name || "text file"}`);
-        try { await UpsertContextFile("", id, f.name, f.content); } catch { /* best-effort */ }
+        try { await UpsertContextText("", id, f.name, f.content); } catch { /* best-effort */ }
+      }
+      // Uploaded file removals are already applied eagerly inside ContextForm;
+      // call again as safety net in case the form state diverged.
+      for (const fId of (removedUploadedFileIds ?? [])) {
+        try { await DeleteUploadedFile(fId); } catch { /* best-effort */ }
       }
     } finally {
       progress.done();
@@ -268,10 +280,29 @@ export default function ContextDetailPage() {
     }
   };
 
-  const handleDeleteContextFile = async (fileId: string) => {
+  const handleDeleteContextText = async (textId: string) => {
     try {
-      await DeleteContextFile(fileId);
-      showToast("Text file removed");
+      await DeleteContextText(textId);
+      showToast("Text removed");
+      load(true);
+    } catch (e) {
+      showToast(String(e), "error");
+    }
+  };
+
+  const handleDeleteUploadedFile = async (fileId: string) => {
+    try {
+      await DeleteUploadedFile(fileId);
+      showToast("File removed");
+      load(true);
+    } catch (e) {
+      showToast(String(e), "error");
+    }
+  };
+
+  const handleToggleUploadedFile = async (fileId: string) => {
+    try {
+      await ToggleUploadedFileActive(fileId);
       load(true);
     } catch (e) {
       showToast(String(e), "error");
@@ -314,9 +345,9 @@ export default function ContextDetailPage() {
     }
   };
 
-  const handleToggleContextFile = async (fileId: string) => {
+  const handleToggleContextText = async (textId: string) => {
     try {
-      await ToggleContextFileActive(fileId);
+      await ToggleContextTextActive(textId);
       load(true);
     } catch (e) {
       showToast(String(e), "error");
@@ -370,8 +401,9 @@ export default function ContextDetailPage() {
   const slackChannels = detail.slackChannels ?? [];
   const slackThreads = detail.slackThreads ?? [];
   const slackDMConfigs = detail.slackDMConfigs ?? [];
-  const contextFiles = detail.contextFiles ?? [];
-  const isEmpty = issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && slackDMConfigs.length === 0 && contextFiles.length === 0;
+  const contextTexts = detail.contextTexts ?? [];
+  const uploadedFiles = (detail.uploadedFiles ?? []) as UploadedFile[];
+  const isEmpty = issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && slackDMConfigs.length === 0 && contextTexts.length === 0 && uploadedFiles.length === 0;
 
   return (
     <div className="page">
@@ -401,9 +433,14 @@ export default function ContextDetailPage() {
                   {slackDMConfigs.length} DM config{slackDMConfigs.length !== 1 ? "s" : ""}
                 </span>
               )}
-              {contextFiles.length > 0 && (
+              {contextTexts.length > 0 && (
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {contextFiles.length} text file{contextFiles.length !== 1 ? "s" : ""}
+                  {contextTexts.length} text file{contextTexts.length !== 1 ? "s" : ""}
+                </span>
+              )}
+              {uploadedFiles.length > 0 && (
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  {uploadedFiles.length} uploaded file{uploadedFiles.length !== 1 ? "s" : ""}
                 </span>
               )}
             </div>
@@ -521,20 +558,20 @@ export default function ContextDetailPage() {
               </section>
             )}
             {/* Text files section */}
-            {contextFiles.length > 0 && (
+            {contextTexts.length > 0 && (
               <section className="detail-section">
                 <div className="detail-section-header">
                   <span className="detail-section-title">Texts</span>
-                  <span className="detail-section-count">{contextFiles.length}</span>
+                  <span className="detail-section-count">{contextTexts.length}</span>
                 </div>
                 <div className="issue-list">
-                  {contextFiles.map((f) => (
+                  {contextTexts.map((f) => (
                     <div key={f.id} className={`text-file-card${!f.isActive ? " text-file-card--inactive" : ""}`}>
                       <div className="text-file-card-header">
                         <label
                           className="item-active-toggle"
                           title={f.isActive ? "Active — click to deactivate" : "Inactive — click to activate"}
-                          onClick={(e) => { e.stopPropagation(); void handleToggleContextFile(f.id); }}
+                          onClick={(e) => { e.stopPropagation(); void handleToggleContextText(f.id); }}
                         >
                           <input type="checkbox" checked={f.isActive} onChange={() => {}} />
                           <span className={`item-active-indicator${f.isActive ? " item-active-indicator--on" : ""}`} />
@@ -545,11 +582,30 @@ export default function ContextDetailPage() {
                           className="btn-ghost"
                           style={{ color: "var(--danger)", fontSize: 12 }}
                           title="Remove text file"
-                          onClick={() => void handleDeleteContextFile(f.id)}
+                          onClick={() => void handleDeleteContextText(f.id)}
                         >✕</button>
                       </div>
                       <pre className="text-file-card-content">{f.content}</pre>
                     </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            {/* Uploaded files section */}
+            {uploadedFiles.length > 0 && (
+              <section className="detail-section">
+                <div className="detail-section-header">
+                  <span className="detail-section-title">Files</span>
+                  <span className="detail-section-count">{uploadedFiles.length}</span>
+                </div>
+                <div className="issue-list">
+                  {uploadedFiles.map((f) => (
+                    <UploadedFileCard
+                      key={f.id}
+                      file={f}
+                      onDelete={(id) => void handleDeleteUploadedFile(id)}
+                      onToggle={(id) => void handleToggleUploadedFile(id)}
+                    />
                   ))}
                 </div>
               </section>
@@ -608,7 +664,8 @@ export default function ContextDetailPage() {
           initialJiraIssues={editJiraIssues}
           initialSlackChannels={editSlackChannels}
           initialSlackDMConfigs={editSlackDMConfigs}
-          initialContextFiles={editContextFiles}
+          initialContextTexts={editContextTexts}
+          initialUploadedFiles={editUploadedFiles}
           onSave={handleUpdate}
           onCancel={closeEditForm}
         />

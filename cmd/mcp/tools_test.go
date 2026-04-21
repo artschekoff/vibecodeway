@@ -47,16 +47,16 @@ func TestFilterActiveItems_FiltersInactiveThreads(t *testing.T) {
 	assert.Equal(t, "t1", filtered.SlackThreads[0].ID)
 }
 
-func TestFilterActiveItems_FiltersInactiveContextFiles(t *testing.T) {
+func TestFilterActiveItems_FiltersInactiveContextTexts(t *testing.T) {
 	detail := &jiraservice.ContextDetail{
-		ContextFiles: []appstore.ContextFile{
+		ContextTexts: []appstore.ContextText{
 			{ID: "f1", IsActive: true},
 			{ID: "f2", IsActive: false},
 		},
 	}
 	filtered := filterActiveItems(detail)
-	require.Len(t, filtered.ContextFiles, 1)
-	assert.Equal(t, "f1", filtered.ContextFiles[0].ID)
+	require.Len(t, filtered.ContextTexts, 1)
+	assert.Equal(t, "f1", filtered.ContextTexts[0].ID)
 }
 
 func TestFilterActiveItems_FiltersInactiveDMConfigs(t *testing.T) {

@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
-import { ListSlackWorkspaces, PreviewSlackDMs, SearchJQL, SearchSlackChannels } from "../../wailsjs/go/main/App";
-import type { ContextFile, Context, Issue, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload } from "../types";
+import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload } from "../../wailsjs/go/main/App";
+import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadedFile } from "../types";
 
 interface Props {
   initial?: Context;
@@ -11,7 +11,8 @@ interface Props {
   initialJiraIssues?: Issue[];
   initialSlackChannels?: SlackChannel[];
   initialSlackDMConfigs?: SlackDMConfig[];
-  initialContextFiles?: ContextFile[];
+  initialContextTexts?: ContextText[];
+  initialUploadedFiles?: UploadedFile[];
   onSave: (
     key: string,
     searchQuery: string,
@@ -19,7 +20,9 @@ interface Props {
     slackPayload?: SlackSavePayload,
     selectedJiraKeys?: string[],
     removedJiraIssueIds?: string[],
-    textFilesPayload?: TextFilesPayload
+    textFilesPayload?: TextFilesPayload,
+    removedUploadedFileIds?: string[],
+    pendingUploadTempIds?: string[]
   ) => Promise<void>;
   onCancel: () => void;
 }
@@ -55,7 +58,7 @@ interface DMPreviewResult {
   content: string;
 }
 
-interface EditableFile extends ContextFile {
+interface EditableFile extends ContextText {
   dirty: boolean;
 }
 
@@ -65,9 +68,9 @@ interface NewFile {
   content: string;
 }
 
-type ActiveTab = "jira" | "slack" | "texts";
+type ActiveTab = "jira" | "slack" | "texts" | "files";
 
-export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextFiles, onSave, onCancel }: Props) {
+export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
   const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
   const [status, setStatus] = useState(initial?.status ?? "active");
@@ -109,10 +112,17 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
   // Text files state
   const [existingFiles, setExistingFiles] = useState<EditableFile[]>(
-    (initialContextFiles ?? []).map((f) => ({ ...f, dirty: false }))
+    (initialContextTexts ?? []).map((f) => ({ ...f, dirty: false }))
   );
   const [newFiles, setNewFiles] = useState<NewFile[]>([]);
   const [removedFileIds, setRemovedFileIds] = useState<string[]>([]);
+
+  // Uploaded document files state
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>(initialUploadedFiles ?? []);
+  const [removedUploadedIds, setRemovedUploadedIds] = useState<string[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<PendingUploadPreview[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     setWorkspacesLoading(true);
@@ -280,7 +290,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
           }
         : undefined;
 
-      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined, textFilesPayload);
+      const pendingTempIds = pendingUploads.length > 0 ? pendingUploads.map((f) => f.tempId) : undefined;
+      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined, textFilesPayload, removedUploadedIds.length > 0 ? removedUploadedIds : undefined, pendingTempIds);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -358,6 +369,45 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     );
   };
 
+  const handleUploadFiles = async () => {
+    setUploading(true);
+    setUploadError("");
+    try {
+      if (initial?.id) {
+        const picked = await PickAndExtractFiles(initial.id);
+        if (picked && picked.length > 0) {
+          setUploadedFiles((prev) => [...prev, ...picked]);
+        }
+      } else {
+        const previews = await PickAndExtractFilesPreview();
+        if (previews && previews.length > 0) {
+          setPendingUploads((prev) => [...prev, ...previews]);
+        }
+      }
+    } catch (err) {
+      setUploadError(String(err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removePendingUpload = (tempId: string) => {
+    setPendingUploads((prev) => prev.filter((f) => f.tempId !== tempId));
+    DiscardPendingUpload(tempId).catch(() => {});
+  };
+
+  const removeUploadedFile = async (id: string) => {
+    // If this is an existing file we mark it for deletion on save.
+    // We also eagerly call DeleteUploadedFile since PickAndExtractFiles already persisted it.
+    try {
+      await DeleteUploadedFile(id);
+    } catch {
+      // best-effort
+    }
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+    setRemovedUploadedIds((prev) => [...prev, id]);
+  };
+
   const workspaceSelect = (
     <select
       value={slackWorkspace}
@@ -382,6 +432,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
   const slackChannelCount = existingChannels.length + selectedChannels.length;
   const slackDMCount = existingDMConfigs.length + newDMConfigs.length + selectedDMPreviews.length;
+  const uploadedCount = uploadedFiles.length + pendingUploads.length;
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -448,6 +499,18 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
               Texts
               {(existingFiles.length + newFiles.length) > 0 ? (
                 <span className="ctx-tab-badge">{existingFiles.length + newFiles.length}</span>
+              ) : (
+                <span className="ctx-tab-optional">optional</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className={`ctx-tab${activeTab === "files" ? " ctx-tab--active" : ""}`}
+              onClick={() => setActiveTab("files")}
+            >
+              Files
+              {uploadedCount > 0 ? (
+                <span className="ctx-tab-badge">{uploadedCount}</span>
               ) : (
                 <span className="ctx-tab-optional">optional</span>
               )}
@@ -980,6 +1043,83 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
                 <div className="form-hint" style={{ marginTop: 8 }}>
                   Plain-text documents attached to this context — included in MCP load_context output
+                </div>
+              </div>
+          </div>
+        )}
+
+          {/* Files panel — upload documents (PDF, DOCX, RTF, ODT, TXT) */}
+          {activeTab === "files" && (
+            <div className="ctx-panel">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+
+                {uploadedFiles.map((f) => (
+                  <div key={f.id} className="text-file-block">
+                    <div className="text-file-header">
+                      <span className="text-file-name" style={{ flex: 1, fontWeight: 500 }}>
+                        {f.originalName}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 8 }}>
+                        {f.fileType.toUpperCase()} · {(f.fileSize / 1024).toFixed(1)} KB
+                      </span>
+                      <button
+                        type="button"
+                        className="channel-remove-btn"
+                        title="Remove uploaded file"
+                        onClick={() => void removeUploadedFile(f.id)}
+                      >✕</button>
+                    </div>
+                    <pre className="text-file-content" style={{ maxHeight: 80, overflow: "hidden", fontSize: 11, opacity: 0.7 }}>
+                      {f.extractedText.slice(0, 300)}{f.extractedText.length > 300 ? "…" : ""}
+                    </pre>
+                  </div>
+                ))}
+
+                {pendingUploads.map((f) => (
+                  <div key={f.tempId} className="text-file-block text-file-block--new">
+                    <div className="text-file-header">
+                      <span className="text-file-name" style={{ flex: 1, fontWeight: 500 }}>
+                        {f.originalName}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 8 }}>
+                        {f.fileType.toUpperCase()} · {(f.fileSize / 1024).toFixed(1)} KB
+                      </span>
+                      <button
+                        type="button"
+                        className="channel-remove-btn"
+                        title="Remove pending file"
+                        onClick={() => removePendingUpload(f.tempId)}
+                      >✕</button>
+                    </div>
+                    <pre className="text-file-content" style={{ maxHeight: 80, overflow: "hidden", fontSize: 11, opacity: 0.7 }}>
+                      {f.extractedText.slice(0, 300)}{f.extractedText.length > 300 ? "…" : ""}
+                    </pre>
+                  </div>
+                ))}
+
+                {uploadError && (
+                  <div className="field-error" style={{ marginBottom: 8 }}>{uploadError}</div>
+                )}
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ marginTop: (uploadedFiles.length + pendingUploads.length) > 0 ? 8 : 0 }}
+                  onClick={() => void handleUploadFiles()}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <span className="btn-with-spinner">
+                      <Spinner size={14} color="var(--text)" />
+                      Extracting…
+                    </span>
+                  ) : (
+                    "↑ Upload files"
+                  )}
+                </button>
+
+                <div className="form-hint" style={{ marginTop: 8 }}>
+                  Supported: PDF, DOCX, RTF, ODT, TXT — text is extracted and stored in the context
                 </div>
               </div>
             </div>
