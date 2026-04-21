@@ -512,6 +512,71 @@ func TestRemoveSlackDMEntry_PlainTextEntryNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, slackstore.ErrNotFound, "out-of-range conv index should return not found")
 }
 
+// --- Slack DM config CRUD ---
+
+func TestUpsertSlackDMConfigIsIdempotent(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "dm-ctx")
+	require.NoError(t, err)
+
+	dm1, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
+	require.NoError(t, err)
+	require.NotEmpty(t, dm1.ID)
+
+	dm2, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-06-01")
+	require.NoError(t, err)
+
+	assert.Equal(t, dm1.ID, dm2.ID, "same row on duplicate upsert")
+	assert.Equal(t, "2025-06-01", dm2.StartFrom, "start_from should be updated")
+
+	configs, err := repo.ListSlackDMConfigs(ctx, c.ID, false)
+	require.NoError(t, err)
+	assert.Len(t, configs, 1, "duplicate upsert must not create extra rows")
+}
+
+func TestUpsertSlackDMConfigPreservesContent(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "dm-ctx")
+	require.NoError(t, err)
+
+	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
+	require.NoError(t, err)
+
+	require.NoError(t, repo.UpdateSlackDMConfigContent(ctx, dm.ID, "# DM with alice\nhello"))
+
+	dm2, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-06-01")
+	require.NoError(t, err)
+	assert.Equal(t, dm.ID, dm2.ID)
+	assert.Equal(t, "# DM with alice\nhello", dm2.Content, "content must survive date upsert")
+}
+
+func TestDeleteSlackDMConfig_Success(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "dm-ctx")
+	require.NoError(t, err)
+
+	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
+	require.NoError(t, err)
+
+	require.NoError(t, repo.DeleteSlackDMConfig(ctx, dm.ID))
+
+	configs, err := repo.ListSlackDMConfigs(ctx, c.ID, false)
+	require.NoError(t, err)
+	assert.Empty(t, configs, "config should be deleted")
+}
+
+func TestDeleteSlackDMConfig_NotFound(t *testing.T) {
+	_, repo := openTestDB(t)
+	err := repo.DeleteSlackDMConfig(context.Background(), "nonexistent-id")
+	assert.ErrorIs(t, err, slackstore.ErrNotFound)
+}
+
 func TestDeleteContextCascadesToSlackChannels(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()

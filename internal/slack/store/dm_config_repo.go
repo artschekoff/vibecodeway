@@ -13,40 +13,24 @@ import (
 )
 
 // UpsertSlackDMConfig creates or updates a DM load configuration for a context.
-// Uniqueness is keyed on (context_id, workspace).
+// Uniqueness is keyed on (context_id, workspace). Uses an atomic INSERT … ON
+// CONFLICT to avoid TOCTOU races and stale-schema duplicates.
 func (r *Repo) UpsertSlackDMConfig(ctx context.Context, contextID, workspace, startFrom string) (*SlackDMConfig, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-
-	var existing string
-	err := r.db.QueryRowContext(ctx,
-		"SELECT id FROM slack_dm_configs WHERE context_id = ? AND workspace = ?",
-		contextID, workspace,
-	).Scan(&existing)
-
-	if err == nil {
-		_, err = r.db.ExecContext(ctx,
-			"UPDATE slack_dm_configs SET start_from = ?, updated_at = ? WHERE id = ?",
-			startFrom, now, existing,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("updating slack dm config: %w", err)
-		}
-		return r.getSlackDMConfig(ctx, existing)
-	}
-
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("querying slack dm config: %w", err)
-	}
-
 	id := uuid.New().String()
-	_, err = r.db.ExecContext(ctx, `
+
+	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO slack_dm_configs (id, context_id, workspace, start_from, content, created_at, updated_at, is_active)
 		VALUES (?, ?, ?, ?, '', ?, ?, 1)
+		ON CONFLICT (context_id, workspace) DO UPDATE SET
+			start_from = excluded.start_from,
+			updated_at = excluded.updated_at
 	`, id, contextID, workspace, startFrom, now, now)
 	if err != nil {
-		return nil, fmt.Errorf("inserting slack dm config: %w", err)
+		return nil, fmt.Errorf("upserting slack dm config: %w", err)
 	}
-	return r.getSlackDMConfig(ctx, id)
+
+	return r.getSlackDMConfigByKey(ctx, contextID, workspace)
 }
 
 // UpdateSlackDMConfigContent stores the fetched DM content for a given config ID.
@@ -216,6 +200,23 @@ func splitDMSections(content string) []string {
 		sections = append(sections, current.String())
 	}
 	return sections
+}
+
+func (r *Repo) getSlackDMConfigByKey(ctx context.Context, contextID, workspace string) (*SlackDMConfig, error) {
+	var c SlackDMConfig
+	var isActive int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, context_id, workspace, start_from, content, created_at, updated_at, is_active
+		FROM slack_dm_configs WHERE context_id = ? AND workspace = ?
+	`, contextID, workspace).Scan(&c.ID, &c.ContextID, &c.Workspace, &c.StartFrom, &c.Content, &c.CreatedAt, &c.UpdatedAt, &isActive)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting slack dm config by key: %w", err)
+	}
+	c.IsActive = isActive == 1
+	return &c, nil
 }
 
 func (r *Repo) getSlackDMConfig(ctx context.Context, id string) (*SlackDMConfig, error) {
