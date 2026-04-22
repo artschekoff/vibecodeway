@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -15,9 +16,34 @@ import (
 )
 
 const (
-	defaultBinPath = "slack-cli"
+	defaultBinName = "slack-cli"
 	defaultTimeout = 60 * time.Second
 )
+
+// knownExtraDirs lists common macOS installation prefixes that are not present in
+// the minimal PATH that macOS GUI apps receive when launched outside a terminal
+// (e.g. from Finder or via open(1)). Exposed as a var so tests can override it.
+var knownExtraDirs = []string{
+	"/opt/homebrew/bin",
+	"/usr/local/bin",
+}
+
+// resolveBinPath returns the absolute path for name by first consulting the
+// current PATH (via exec.LookPath), then checking each dir in extraDirs.
+// Falls back to returning name unchanged so exec.Command will surface a
+// clear "executable not found" error rather than a silent mismatch.
+func resolveBinPath(name string, extraDirs []string) string {
+	if path, err := exec.LookPath(name); err == nil {
+		return path
+	}
+	for _, dir := range extraDirs {
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return name
+}
 
 // allowedSubcmds is the set of slack-cli subcommands this runner may execute.
 // User-supplied data is only ever passed as flag values, never as subcommands.
@@ -41,7 +67,7 @@ type Runner struct {
 // Option configures a Runner.
 type Option func(*Runner)
 
-// WithBinPath overrides the slack-cli binary path (default: "slack-cli" resolved via PATH).
+// WithBinPath overrides the slack-cli binary path (default: resolved via PATH + knownExtraDirs).
 func WithBinPath(path string) Option {
 	return func(r *Runner) { r.binPath = path }
 }
@@ -82,9 +108,12 @@ func (r *Runner) Passphrase() string {
 }
 
 // NewRunner creates a Runner with the given logger and options.
+// It resolves the slack-cli binary at construction time by checking both the
+// current PATH and knownExtraDirs, so that the runner works correctly in macOS
+// GUI apps which inherit a minimal PATH that excludes Homebrew directories.
 func NewRunner(logger *zap.Logger, opts ...Option) *Runner {
 	r := &Runner{
-		binPath: defaultBinPath,
+		binPath: resolveBinPath(defaultBinName, knownExtraDirs),
 		timeout: defaultTimeout,
 		logger:  logger,
 	}

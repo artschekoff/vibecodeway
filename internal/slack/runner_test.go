@@ -13,6 +13,77 @@ import (
 	"go.uber.org/zap"
 )
 
+// buildFakeSlackCLI compiles a tiny Go program into dir/slack-cli that prints its args and exits 0.
+func buildFakeSlackCLI(t *testing.T, dir string) string {
+	t.Helper()
+	const src = `package main
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+func main() {
+	fmt.Println(strings.Join(os.Args[1:], " "))
+}
+`
+	srcFile := filepath.Join(dir, "fake_slack_cli_src.go")
+	bin := filepath.Join(dir, "slack-cli")
+	require.NoError(t, os.WriteFile(srcFile, []byte(src), 0o600))
+	cmd := exec.Command("go", "build", "-o", bin, srcFile)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "build fake slack-cli: %s", out)
+	return bin
+}
+
+func TestResolveBinPath(t *testing.T) {
+	t.Run("returns binary from current PATH when found", func(t *testing.T) {
+		dir := t.TempDir()
+		buildFakeSlackCLI(t, dir)
+
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+		got := resolveBinPath("slack-cli", nil)
+		assert.Equal(t, filepath.Join(dir, "slack-cli"), got)
+	})
+
+	t.Run("falls back to extra dirs when not in PATH", func(t *testing.T) {
+		dir := t.TempDir()
+		buildFakeSlackCLI(t, dir)
+
+		t.Setenv("PATH", "/usr/bin:/bin")
+
+		got := resolveBinPath("slack-cli", []string{dir})
+		assert.Equal(t, filepath.Join(dir, "slack-cli"), got)
+	})
+
+	t.Run("returns name unchanged when not found anywhere", func(t *testing.T) {
+		got := resolveBinPath("nonexistent-binary-zzz", []string{"/nonexistent-dir"})
+		assert.Equal(t, "nonexistent-binary-zzz", got)
+	})
+}
+
+func TestNewRunnerUsesExpandedPath(t *testing.T) {
+	dir := t.TempDir()
+	bin := buildFakeSlackCLI(t, dir)
+
+	// Simulate macOS GUI-app scenario: PATH has only system dirs, no Homebrew.
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	origDirs := knownExtraDirs
+	knownExtraDirs = []string{dir}
+	t.Cleanup(func() { knownExtraDirs = origDirs })
+
+	logger, _ := zap.NewDevelopment()
+	r := NewRunner(logger, WithTimeout(5*time.Second))
+
+	assert.Equal(t, bin, r.binPath, "runner should store absolute path to slack-cli")
+
+	ctx := t.Context()
+	out, err := r.Run(ctx, []string{"list-workspaces"}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "list-workspaces", out)
+}
+
 // buildFakeBinary compiles the testhelper program into a temp dir and returns its path.
 // The helper prints its args to stdout and exits 0, simulating a successful slack-cli run.
 func buildFakeBinary(t *testing.T) string {
