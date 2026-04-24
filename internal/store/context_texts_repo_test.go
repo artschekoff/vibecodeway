@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestContextFilesTableExists(t *testing.T) {
+func TestContextTextsTableExists(t *testing.T) {
 	s := openTestStore(t)
-	assertTableExists(t, s, "context_files")
+	assertTableExists(t, s, "context_texts")
 }
 
 func TestUpsertContextText_create(t *testing.T) {
@@ -138,7 +138,7 @@ func TestContextTextsDeletedWithContext(t *testing.T) {
 	err = s.DeleteContext(ctx, c.ID)
 	require.NoError(t, err)
 
-	// context_files should be cascade-deleted
+	// context_texts should be cascade-deleted
 	texts, err := s.ListContextTexts(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, texts)

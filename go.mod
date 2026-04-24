@@ -12,6 +12,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	go.uber.org/zap v1.27.0
+	golang.design/x/hotkey v0.4.1
 	golang.org/x/crypto v0.33.0
 	modernc.org/sqlite v1.48.2
 )

@@ -14,11 +14,11 @@ const (
 	KeyPrefixJiraIssue   = "jira_issue:"
 	KeyPrefixJiraComment = "jira_comment:"
 	KeyPrefixSlackThread = "slack_thread:"
-	KeyPrefixContextText = "context_file:"
+	KeyPrefixContextText = "context_text:"
 )
 
 // SnapshotFull reads every context object (jira_issues, jira_comments, slack_threads,
-// context_files) for contextID in one pass and returns a map keyed by object key.
+// context_texts) for contextID in one pass and returns a map keyed by object key.
 // Only active rows (is_active = 1) are included — deactivated items are treated as absent.
 func (r *Repo) SnapshotFull(ctx context.Context, contextID string) (Snapshot, error) {
 	snap := make(Snapshot)
@@ -108,7 +108,7 @@ func (r *Repo) collectSlackThreads(ctx context.Context, contextID string, out Sn
 func (r *Repo) collectContextTexts(ctx context.Context, contextID string, out Snapshot) error {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, name, content
-		FROM context_files
+		FROM context_texts
 		WHERE context_id = ? AND is_active = 1`, contextID)
 	if err != nil {
 		return fmt.Errorf("snapshot context texts: %w", err)

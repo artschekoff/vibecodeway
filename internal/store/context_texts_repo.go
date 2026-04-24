@@ -13,7 +13,7 @@ import (
 // ListContextTexts returns text entries for the given context, ordered by created_at asc.
 // When activeOnly is true only rows with is_active = 1 are returned.
 func (s *Store) ListContextTexts(ctx context.Context, contextID string, activeOnly bool) ([]ContextText, error) {
-	q := "SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_files WHERE context_id = ?"
+	q := "SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_texts WHERE context_id = ?"
 	if activeOnly {
 		q += " AND is_active = 1"
 	}
@@ -38,7 +38,7 @@ func (s *Store) ListContextTexts(ctx context.Context, contextID string, activeOn
 // ToggleContextTextActive flips the is_active flag for the given text entry and returns the updated record.
 // Returns ErrNotFound if no entry with that ID exists.
 func (s *Store) ToggleContextTextActive(ctx context.Context, id string) (*ContextText, error) {
-	res, err := s.db.ExecContext(ctx, "UPDATE context_files SET is_active = NOT is_active WHERE id = ?", id)
+	res, err := s.db.ExecContext(ctx, "UPDATE context_texts SET is_active = NOT is_active WHERE id = ?", id)
 	if err != nil {
 		return nil, fmt.Errorf("toggling context text active: %w", err)
 	}
@@ -48,7 +48,7 @@ func (s *Store) ToggleContextTextActive(ctx context.Context, id string) (*Contex
 
 	var t ContextText
 	err = s.db.QueryRowContext(ctx,
-		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_files WHERE id = ?", id,
+		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_texts WHERE id = ?", id,
 	).Scan(&t.ID, &t.ContextID, &t.Name, &t.Content, &t.CreatedAt, &t.UpdatedAt, &t.IsActive)
 	if err != nil {
 		return nil, fmt.Errorf("fetching updated context text: %w", err)
@@ -71,7 +71,7 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 			UpdatedAt: now,
 		}
 		_, err := s.db.ExecContext(ctx,
-			"INSERT INTO context_files (id, context_id, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO context_texts (id, context_id, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 			t.ID, t.ContextID, t.Name, t.Content, t.CreatedAt, t.UpdatedAt,
 		)
 		if err != nil {
@@ -81,7 +81,7 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 	}
 
 	res, err := s.db.ExecContext(ctx,
-		"UPDATE context_files SET name = ?, content = ?, updated_at = ? WHERE id = ?",
+		"UPDATE context_texts SET name = ?, content = ?, updated_at = ? WHERE id = ?",
 		name, content, now, id,
 	)
 	if err != nil {
@@ -97,7 +97,7 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 
 	var t ContextText
 	err = s.db.QueryRowContext(ctx,
-		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_files WHERE id = ?", id,
+		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_texts WHERE id = ?", id,
 	).Scan(&t.ID, &t.ContextID, &t.Name, &t.Content, &t.CreatedAt, &t.UpdatedAt, &t.IsActive)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -111,7 +111,7 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 // DeleteContextText removes a single context text by its ID.
 // Returns ErrNotFound if no record with that ID exists.
 func (s *Store) DeleteContextText(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM context_files WHERE id = ?", id)
+	res, err := s.db.ExecContext(ctx, "DELETE FROM context_texts WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("deleting context text: %w", err)
 	}

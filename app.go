@@ -4,11 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/extract"
+	"github.com/artschekoff/context-consolidator/internal/hotkey"
+	"github.com/google/uuid"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
@@ -53,6 +59,12 @@ type App struct {
 
 	pendingMu      sync.Mutex
 	pendingUploads map[string]*PendingUpload
+
+	hotkeyService  *hotkey.Service
+	pickerMu       sync.Mutex
+	pendingText    string
+	hotkeyInFlight atomic.Bool
+	a11yPolling    atomic.Bool
 }
 
 // NewApp creates a new App with uninitialized service (configured in startup).
@@ -96,11 +108,25 @@ func (a *App) startup(ctx context.Context) {
 	a.contextLog = contextlog.NewService(contextLogRepo, openAI.AsContextLogClient(), logger)
 	a.svc.SetContextLog(a.contextLog)
 
+	a.hotkeyService = hotkey.New(a.onHotkey)
+	if err := a.hotkeyService.Start(); err != nil {
+		logger.Warn("failed to register global hotkey Cmd+Shift+C", zap.Error(err))
+	} else {
+		logger.Info("global hotkey Cmd+Shift+C registered")
+	}
+
 	logger.Info("context-consolidator desktop started")
 }
 
+// domReady is called by Wails once the frontend DOM is loaded and event listeners
+// are active.
+func (a *App) domReady(_ context.Context) {}
+
 // shutdown is called by Wails when the app is closing.
 func (a *App) shutdown(_ context.Context) {
+	if a.hotkeyService != nil {
+		a.hotkeyService.Stop()
+	}
 	if a.db != nil {
 		if err := a.db.Close(); err != nil {
 			a.logger.Warn("closing database", zap.Error(err))
@@ -666,6 +692,188 @@ func (a *App) SetAISettings(apiKey, model, baseURL string) error {
 		return fmt.Errorf("set Slack passphrase first (used to encrypt the API key)")
 	}
 	return a.db.SetAISettings(a.ctx, apiKey, model, baseURL, passphrase)
+}
+
+// --- Quick Text Attach ---
+
+// clipboardCopyWait is how long to wait for Cmd+C to reach the clipboard
+// when using the CGEvent fallback path.
+const clipboardCopyWait = 300 * time.Millisecond
+
+// maxCapturedTextBytes is the maximum size of text forwarded to the frontend.
+// Larger payloads are truncated to prevent UI freezes and excessive AI token use.
+const maxCapturedTextBytes = 100 * 1024 // 100 KB
+
+// a11yPollInterval is how often the accessibility poller checks for permission.
+const a11yPollInterval = 2 * time.Second
+
+// onHotkey is called by the HotkeyService when Cmd+Shift+C is pressed.
+// Strategy:
+//  1. Try AXUIElement — reads selected text directly without touching the clipboard.
+//  2. Fall back to CGEvent Cmd+C for apps that don't expose AX (Mail, Slack, etc.).
+//     Clipboard is read via NSPasteboard in CGo — no subprocess fork (which can
+//     corrupt Carbon event loops) and no Wails main-thread dispatch (which can
+//     steal focus from the target app before the simulated Cmd+C fires).
+func (a *App) onHotkey() {
+	// Drop concurrent invocations (rapid double-press).
+	// The hotkeyInFlight guard serialises all access below, including the
+	// separate pickerMu check-and-set, so the two-lock pattern is safe.
+	if !a.hotkeyInFlight.CompareAndSwap(false, true) {
+		return
+	}
+	defer a.hotkeyInFlight.Store(false)
+
+	// Emit accessibility:needed on the first hotkey invocation when permission
+	// is absent — deferred from domReady to avoid false-positives on freshly
+	// rebuilt binaries whose trust has not yet been cached by the OS.
+	if !hotkey.CheckAccessibility() {
+		runtime.EventsEmit(a.ctx, "accessibility:needed")
+		return
+	}
+
+	// Drop if picker is already waiting for a response.
+	a.pickerMu.Lock()
+	alreadyPending := a.pendingText != ""
+	a.pickerMu.Unlock()
+	if alreadyPending {
+		return
+	}
+
+	// --- Primary path: AX API, no clipboard side-effects ---
+	text := hotkey.GetSelectedText()
+
+	if strings.TrimSpace(text) == "" {
+		// --- Fallback: simulate Cmd+C and detect clipboard change ---
+		before := hotkey.ReadClipboard()
+		hotkey.SimulateCmdC()
+		time.Sleep(clipboardCopyWait)
+		after := hotkey.ReadClipboard()
+		if after == before || strings.TrimSpace(after) == "" {
+			runtime.EventsEmit(a.ctx, "hotkey:no-selection")
+			return
+		}
+		text = after
+	}
+
+	// Cap by byte length, then strip any trailing UTF-8 continuation bytes so we
+	// never split a multi-byte rune. This correctly handles all of ASCII, CJK, emoji,
+	// etc., and avoids the /4 over-truncation that would cap 100 KB of ASCII to ~25 KB.
+	if len(text) > maxCapturedTextBytes {
+		text = text[:maxCapturedTextBytes]
+		// Continuation bytes are 0x80–0xBF (bit pattern 10xxxxxx). Walk backwards
+		// until we land on an ASCII byte or a multi-byte lead byte.
+		for len(text) > 0 && text[len(text)-1]&0xC0 == 0x80 {
+			text = text[:len(text)-1]
+		}
+	}
+
+	a.pickerMu.Lock()
+	a.pendingText = text
+	a.pickerMu.Unlock()
+
+	runtime.WindowShow(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	runtime.EventsEmit(a.ctx, "hotkey:show-picker", text)
+}
+
+// GetPendingText returns the last text captured by the hotkey. Useful as a
+// fallback if the frontend misses the event (e.g. during page navigation).
+func (a *App) GetPendingText() string {
+	a.pickerMu.Lock()
+	defer a.pickerMu.Unlock()
+	return a.pendingText
+}
+
+// QuickAttachText saves content to the given context as a new ContextText entry.
+// The name is derived from the first 80 rune characters of the content.
+// Clears always-on-top and the pending text on success.
+func (a *App) QuickAttachText(contextID, content string) (*appstore.ContextText, error) {
+	if contextID == "" {
+		return nil, fmt.Errorf("contextID is required")
+	}
+	// Validate UUID format before passing to the DB layer.
+	if _, err := uuid.Parse(contextID); err != nil {
+		return nil, fmt.Errorf("invalid contextID format")
+	}
+	if strings.TrimSpace(content) == "" {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
+	// Hard IPC-boundary cap — prevents oversized payloads that bypass the
+	// hotkey-side cap (e.g. via a direct frontend call).
+	const maxContentBytes = 1024 * 1024 // 1 MB
+	if len(content) > maxContentBytes {
+		return nil, fmt.Errorf("content too large (max 1 MB)")
+	}
+
+	// Always clear always-on-top, even on error, so the window is not stuck on top.
+	defer runtime.WindowSetAlwaysOnTop(a.ctx, false)
+
+	name := content
+	if len([]rune(name)) > 80 {
+		name = string([]rune(name)[:80]) + "…"
+	}
+	result, err := a.svc.UpsertContextText(a.ctx, "", contextID, name, content)
+	if err != nil {
+		// Log the full error server-side; return a generic message so internals
+		// (DB connection strings, file paths, SQL details) are not exposed via IPC.
+		a.logger.Error("quick attach: save failed", zap.Error(err), zap.String("contextID", contextID))
+		return nil, fmt.Errorf("failed to save text")
+	}
+	a.pickerMu.Lock()
+	a.pendingText = ""
+	a.pickerMu.Unlock()
+	return result, nil
+}
+
+// CheckAccessibility returns true when this process has the Accessibility
+// permission needed to simulate keyboard input via System Events.
+func (a *App) CheckAccessibility() bool {
+	return hotkey.CheckAccessibility()
+}
+
+// OpenAccessibilityPreferences opens the macOS Privacy & Security → Accessibility
+// pane so the user can grant permission for the Cmd+Shift+C hotkey feature.
+// It also starts a background poller (at most one at a time) that emits
+// "accessibility:granted" once the permission is detected so the frontend
+// banner can auto-dismiss.
+func (a *App) OpenAccessibilityPreferences() {
+	if err := exec.Command("open",
+		"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility").Run(); err != nil {
+		a.logger.Warn("failed to open Accessibility preferences pane", zap.Error(err))
+	}
+	// Only one poller at a time — guard against multiple button clicks.
+	if !a.a11yPolling.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer a.a11yPolling.Store(false)
+		for i := 0; i < 60; i++ { // poll for up to 2 minutes
+			select {
+			case <-a.ctx.Done():
+				return
+			case <-time.After(a11yPollInterval):
+			}
+			if hotkey.CheckAccessibility() {
+				// Guard against emitting after app shutdown.
+				select {
+				case <-a.ctx.Done():
+					return
+				default:
+				}
+				runtime.EventsEmit(a.ctx, "accessibility:granted")
+				return
+			}
+		}
+	}()
+}
+
+// DismissPicker clears the always-on-top state and pending text without saving.
+// Called when the user cancels the quick-attach overlay.
+func (a *App) DismissPicker() {
+	a.pickerMu.Lock()
+	a.pendingText = ""
+	a.pickerMu.Unlock()
+	runtime.WindowSetAlwaysOnTop(a.ctx, false)
 }
 
 func buildLogger() (*zap.Logger, error) {

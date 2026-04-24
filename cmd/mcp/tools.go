@@ -21,13 +21,13 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, logger 
 
 	s.AddTool(
 		mcp.NewTool("load_context",
-			mcp.WithDescription("Load all saved Jira issues (with comments) and Slack thread content for a context, formatted as readable text for analysis. Use the filter parameter to request only jira or only slack data. Use start_at to receive only items updated or created after that date."),
+			mcp.WithDescription("Load all saved content for a context formatted as readable text: Jira issues (with comments), Slack channels/threads/DMs, plain-text entries, and uploaded file contents. Use the filter parameter to request only one source type. Use start_at to limit Jira/Slack items by date (text files are always included regardless of start_at)."),
 			mcp.WithString("name",
 				mcp.Required(),
 				mcp.Description("Context key (human-readable name), e.g. 'sprint-42'."),
 			),
 			mcp.WithString("filter",
-				mcp.Description("Which sources to include: 'jira', 'slack', or omit for both."),
+				mcp.Description("Which sources to include: 'jira', 'slack', 'text' (plain texts + uploaded files), or omit for all sources."),
 			),
 			mcp.WithString("start_at",
 				mcp.Description("ISO 8601 date (e.g. '2024-01-15' or '2024-01-15T09:00:00Z'). Only items updated or created on or after this date are included."),
