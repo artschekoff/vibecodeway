@@ -3,7 +3,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
 import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload } from "../../wailsjs/go/main/App";
-import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadedFile } from "../types";
+import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile } from "../types";
 
 interface Props {
   initial?: Context;
@@ -374,14 +374,20 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     setUploadError("");
     try {
       if (initial?.id) {
-        const picked = await PickAndExtractFiles(initial.id);
-        if (picked && picked.length > 0) {
-          setUploadedFiles((prev) => [...prev, ...picked]);
+        const result = (await PickAndExtractFiles(initial.id)) as unknown as UploadBatchResult;
+        if (result.files?.length > 0) {
+          setUploadedFiles((prev) => [...prev, ...result.files]);
+        }
+        if (result.errors?.length > 0) {
+          setUploadError(result.errors.join("\n"));
         }
       } else {
-        const previews = await PickAndExtractFilesPreview();
-        if (previews && previews.length > 0) {
-          setPendingUploads((prev) => [...prev, ...previews]);
+        const result = (await PickAndExtractFilesPreview()) as unknown as UploadPreviewBatchResult;
+        if (result.previews?.length > 0) {
+          setPendingUploads((prev) => [...prev, ...result.previews]);
+        }
+        if (result.errors?.length > 0) {
+          setUploadError(result.errors.join("\n"));
         }
       }
     } catch (err) {
@@ -1119,7 +1125,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                 </button>
 
                 <div className="form-hint" style={{ marginTop: 8 }}>
-                  Supported: PDF, DOCX, RTF, ODT, TXT — text is extracted and stored in the context
+                  Supported: PDF, DOCX, RTF, ODT, TXT, PNG, JPG, JPEG, WEBP — text is extracted and stored in the context
                 </div>
               </div>
             </div>

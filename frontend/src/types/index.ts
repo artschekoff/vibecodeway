@@ -156,6 +156,16 @@ export interface PendingUploadPreview {
   fileSize: number;
 }
 
+export interface UploadBatchResult {
+  files: UploadedFile[];
+  errors: string[];
+}
+
+export interface UploadPreviewBatchResult {
+  previews: PendingUploadPreview[];
+  errors: string[];
+}
+
 export interface ContextLog {
   id: string;
   contextId: string;

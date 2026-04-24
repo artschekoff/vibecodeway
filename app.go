@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,6 +44,36 @@ type PendingUploadPreview struct {
 	FileType      string `json:"fileType"`
 	ExtractedText string `json:"extractedText"`
 	FileSize      int64  `json:"fileSize"`
+}
+
+// userVisibleExtractionError returns a non-empty user-facing message for errors
+// that should be shown directly to the user (e.g. blank image, file too large).
+// Returns "" for internal errors that should only be logged.
+func userVisibleExtractionError(err error, name string) string {
+	var noText *extract.ErrNoTextFound
+	if errors.As(err, &noText) {
+		return name + ": no readable text found — the image may be blank or contain non-text content"
+	}
+	var tooLarge *extract.ErrFileTooLarge
+	if errors.As(err, &tooLarge) {
+		return fmt.Sprintf("%s: file is too large (%d MB, max %d MB)", name,
+			tooLarge.Size/(1024*1024), extract.MaxFileBytes/(1024*1024))
+	}
+	return ""
+}
+
+// UploadBatchResult is returned by PickAndExtractFiles. Files contains the
+// successfully processed uploads; Errors contains user-readable messages for
+// files that were rejected (e.g. images with no readable text).
+type UploadBatchResult struct {
+	Files  []appstore.ContextUploadedFile `json:"files"`
+	Errors []string                        `json:"errors"`
+}
+
+// UploadPreviewBatchResult is returned by PickAndExtractFilesPreview.
+type UploadPreviewBatchResult struct {
+	Previews []PendingUploadPreview `json:"previews"`
+	Errors   []string               `json:"errors"`
 }
 
 // App is the Wails application struct. All exported methods are bound to the frontend.
@@ -399,15 +430,16 @@ func (a *App) ToggleContextTextActive(id string) (*appstore.ContextText, error) 
 // --- Uploaded files (document text extraction) ---
 
 // PickAndExtractFiles opens a native file picker, extracts text from each selected document
-// (PDF, DOCX, RTF, ODT, TXT), persists the result and returns the created records.
-// Files that cannot be processed are logged and skipped rather than causing the call to fail.
-func (a *App) PickAndExtractFiles(contextID string) ([]appstore.ContextUploadedFile, error) {
+// (PDF, DOCX, RTF, ODT, TXT) or image (PNG, JPG, JPEG, WEBP via OCR), persists the result
+// and returns the created records. Files that cannot be processed are logged and skipped.
+// Images with no readable text are reported in result.Errors rather than silently dropped.
+func (a *App) PickAndExtractFiles(contextID string) (*UploadBatchResult, error) {
 	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select documents to attach",
+		Title: "Select documents or images to attach",
 		Filters: []runtime.FileFilter{
 			{
-				DisplayName: "Supported documents (*.pdf;*.docx;*.rtf;*.odt;*.txt)",
-				Pattern:     "*.pdf;*.docx;*.rtf;*.odt;*.txt",
+				DisplayName: "Documents & images (*.pdf;*.docx;*.rtf;*.odt;*.txt;*.png;*.jpg;*.jpeg;*.webp)",
+				Pattern:     "*.pdf;*.docx;*.rtf;*.odt;*.txt;*.png;*.jpg;*.jpeg;*.webp",
 			},
 		},
 	})
@@ -415,10 +447,10 @@ func (a *App) PickAndExtractFiles(contextID string) ([]appstore.ContextUploadedF
 		return nil, fmt.Errorf("opening file dialog: %w", err)
 	}
 	if len(paths) == 0 {
-		return nil, nil
+		return &UploadBatchResult{}, nil
 	}
 
-	var results []appstore.ContextUploadedFile
+	result := &UploadBatchResult{}
 	for _, p := range paths {
 		info, err := os.Stat(p)
 		if err != nil {
@@ -428,7 +460,11 @@ func (a *App) PickAndExtractFiles(contextID string) ([]appstore.ContextUploadedF
 
 		text, fileType, err := extract.FromFile(p)
 		if err != nil {
-			a.logger.Warn("uploaded file: extraction failed", zap.String("path", p), zap.Error(err))
+			if userMsg := userVisibleExtractionError(err, filepath.Base(p)); userMsg != "" {
+				result.Errors = append(result.Errors, userMsg)
+			} else {
+				a.logger.Warn("uploaded file: extraction failed", zap.String("path", p), zap.Error(err))
+			}
 			continue
 		}
 
@@ -444,21 +480,22 @@ func (a *App) PickAndExtractFiles(contextID string) ([]appstore.ContextUploadedF
 			a.logger.Warn("uploaded file: insert failed", zap.String("path", p), zap.Error(err))
 			continue
 		}
-		results = append(results, *f)
+		result.Files = append(result.Files, *f)
 	}
-	return results, nil
+	return result, nil
 }
 
 // PickAndExtractFilesPreview opens a native file picker, extracts text from each
-// selected document, and stores the result in memory keyed by a temporary ID.
+// selected document or image, and stores the result in memory keyed by a temporary ID.
 // No database write happens — call CommitPendingUploads after the context is created.
-func (a *App) PickAndExtractFilesPreview() ([]PendingUploadPreview, error) {
+// Images with no readable text are reported in result.Errors rather than silently dropped.
+func (a *App) PickAndExtractFilesPreview() (*UploadPreviewBatchResult, error) {
 	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select documents to attach",
+		Title: "Select documents or images to attach",
 		Filters: []runtime.FileFilter{
 			{
-				DisplayName: "Supported documents (*.pdf;*.docx;*.rtf;*.odt;*.txt)",
-				Pattern:     "*.pdf;*.docx;*.rtf;*.odt;*.txt",
+				DisplayName: "Documents & images (*.pdf;*.docx;*.rtf;*.odt;*.txt;*.png;*.jpg;*.jpeg;*.webp)",
+				Pattern:     "*.pdf;*.docx;*.rtf;*.odt;*.txt;*.png;*.jpg;*.jpeg;*.webp",
 			},
 		},
 	})
@@ -466,7 +503,7 @@ func (a *App) PickAndExtractFilesPreview() ([]PendingUploadPreview, error) {
 		return nil, fmt.Errorf("opening file dialog: %w", err)
 	}
 	if len(paths) == 0 {
-		return nil, nil
+		return &UploadPreviewBatchResult{}, nil
 	}
 
 	a.pendingMu.Lock()
@@ -475,7 +512,7 @@ func (a *App) PickAndExtractFilesPreview() ([]PendingUploadPreview, error) {
 	}
 	a.pendingMu.Unlock()
 
-	var previews []PendingUploadPreview
+	result := &UploadPreviewBatchResult{}
 	for _, p := range paths {
 		info, err := os.Stat(p)
 		if err != nil {
@@ -485,7 +522,11 @@ func (a *App) PickAndExtractFilesPreview() ([]PendingUploadPreview, error) {
 
 		text, fileType, err := extract.FromFile(p)
 		if err != nil {
-			a.logger.Warn("preview file: extraction failed", zap.String("path", p), zap.Error(err))
+			if userMsg := userVisibleExtractionError(err, filepath.Base(p)); userMsg != "" {
+				result.Errors = append(result.Errors, userMsg)
+			} else {
+				a.logger.Warn("preview file: extraction failed", zap.String("path", p), zap.Error(err))
+			}
 			continue
 		}
 
@@ -495,9 +536,7 @@ func (a *App) PickAndExtractFilesPreview() ([]PendingUploadPreview, error) {
 			continue
 		}
 
-		a.pendingMu.Lock()
-		tempID := fmt.Sprintf("pending-%d-%s", len(a.pendingUploads), filepath.Base(p))
-		a.pendingMu.Unlock()
+		tempID := uuid.New().String()
 
 		a.pendingMu.Lock()
 		a.pendingUploads[tempID] = &PendingUpload{
@@ -509,7 +548,7 @@ func (a *App) PickAndExtractFilesPreview() ([]PendingUploadPreview, error) {
 		}
 		a.pendingMu.Unlock()
 
-		previews = append(previews, PendingUploadPreview{
+		result.Previews = append(result.Previews, PendingUploadPreview{
 			TempID:        tempID,
 			OriginalName:  filepath.Base(p),
 			FileType:      fileType,
@@ -517,7 +556,7 @@ func (a *App) PickAndExtractFilesPreview() ([]PendingUploadPreview, error) {
 			FileSize:      info.Size(),
 		})
 	}
-	return previews, nil
+	return result, nil
 }
 
 // CommitPendingUploads persists previously picked files (from PickAndExtractFilesPreview)
