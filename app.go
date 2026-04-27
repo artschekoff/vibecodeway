@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
 	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/extract"
 	"github.com/artschekoff/context-consolidator/internal/hotkey"
@@ -85,6 +86,7 @@ type App struct {
 	db            *appstore.Store
 	logger        *zap.Logger
 	slackRunner   *slack.Runner
+	cliRunner     *cliclient.Runner
 	cancelRefresh context.CancelFunc
 	cancelMu      sync.Mutex
 
@@ -123,6 +125,7 @@ func (a *App) startup(ctx context.Context) {
 	jiraClient := jira.NewClient(aRunner, logger)
 	slackRunner := slack.NewRunner(logger)
 	a.slackRunner = slackRunner
+	a.cliRunner = cliclient.NewRunner(logger, cliclient.WithPassphraseFunc(slackRunner.Passphrase))
 
 	jiraRepo := jirastore.NewRepo(s.DB())
 	slackRepo := slackstore.NewRepo(s.DB())
@@ -172,7 +175,7 @@ func (a *App) shutdown(_ context.Context) {
 
 // AuthStatus returns the current acli authentication status.
 func (a *App) AuthStatus() string {
-	status, err := a.svc.AuthStatus(a.ctx)
+	status, err := a.cliRunner.AuthStatus(a.ctx)
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
@@ -189,95 +192,78 @@ func (a *App) SetSlackPassphrase(passphrase string) error {
 
 // ListContexts returns active contexts only.
 func (a *App) ListContexts() ([]appstore.Context, error) {
-	return a.svc.ListContexts(a.ctx)
+	return a.cliRunner.ListContexts(a.ctx, false)
 }
 
 // ListAllContexts returns all contexts including archived ones.
 func (a *App) ListAllContexts() ([]appstore.Context, error) {
-	return a.svc.ListAllContexts(a.ctx)
+	return a.cliRunner.ListContexts(a.ctx, true)
 }
 
 // ToggleContextStatus flips a context between "active" and "archived".
 func (a *App) ToggleContextStatus(id string) (*appstore.Context, error) {
-	return a.svc.ToggleContextStatus(a.ctx, id)
+	return a.cliRunner.ToggleContextStatus(a.ctx, id)
 }
 
 // CreateContext creates a new context.
 func (a *App) CreateContext(key string) (*appstore.Context, error) {
-	return a.svc.CreateContext(a.ctx, key)
+	return a.cliRunner.CreateContext(a.ctx, key)
 }
 
 // UpdateContext updates an existing context.
 func (a *App) UpdateContext(id, key, status string) (*appstore.Context, error) {
-	return a.svc.UpdateContext(a.ctx, id, key, status)
+	return a.cliRunner.UpdateContext(a.ctx, id, key, status)
 }
 
 // DeleteContext removes a context and all its data.
 func (a *App) DeleteContext(id string) error {
-	return a.svc.DeleteContext(a.ctx, id)
+	return a.cliRunner.DeleteContext(a.ctx, id)
 }
 
 // GetContextDetail returns a context with provider configs, issues, and Slack threads.
 func (a *App) GetContextDetail(id string) (*jiraservice.ContextDetail, error) {
-	return a.svc.GetContextDetail(a.ctx, id)
+	return a.cliRunner.GetContextDetail(a.ctx, id)
 }
 
 // --- Provider config ---
 
 // SetJiraConfig sets the Jira search query (JQL) for a context.
 func (a *App) SetJiraConfig(contextID, searchQuery string) (*jirastore.JiraProvider, error) {
-	return a.svc.SetJiraConfig(a.ctx, contextID, searchQuery)
+	return a.cliRunner.SetJiraConfig(a.ctx, contextID, searchQuery)
 }
 
 // SetSlackConfig sets the Slack workspace and search query for a context.
 func (a *App) SetSlackConfig(contextID, workspace, searchQuery string) (*slackstore.SlackProvider, error) {
-	return a.svc.SetSlackConfig(a.ctx, contextID, workspace, searchQuery)
+	return a.cliRunner.SetSlackConfig(a.ctx, contextID, workspace, searchQuery)
 }
 
 // --- Jira refresh flow ---
 
 // SearchNewIssues runs the context's saved JQL and returns which issues are new vs existing.
 func (a *App) SearchNewIssues(contextID string) (*jiraservice.SearchDiff, error) {
-	return a.svc.SearchNewIssues(a.ctx, contextID)
+	return a.cliRunner.SearchNewIssues(a.ctx, contextID)
 }
 
 // AddIssuesToContext fetches and saves the given Jira keys into a context.
 // Returns the count of issues successfully added.
 func (a *App) AddIssuesToContext(contextID string, jiraKeys []string) (int, error) {
-	return a.svc.AddIssuesToContext(a.ctx, contextID, jiraKeys)
+	added, _, err := a.cliRunner.AddIssuesToContext(a.ctx, contextID, jiraKeys)
+	return added, err
 }
 
 // SyncAllComments fetches and deduplicates comments for all issues in a context.
 func (a *App) SyncAllComments(contextID string) (int, error) {
-	return a.svc.SyncAllComments(a.ctx, contextID)
+	return a.cliRunner.SyncAllComments(a.ctx, contextID)
 }
 
 // RefreshContext re-fetches field values and comments for every existing issue in the
 // context and reloads all linked Slack threads. It does NOT run the JQL query.
-// Emits "refresh:progress" events to the frontend as each provider is processed.
-// A concurrent call to CancelRefresh will abort the operation early.
+// Note: progress events are not emitted when running via CLI subprocess.
 func (a *App) RefreshContext(contextID string) (*jiraservice.RefreshResult, error) {
-	ctx, cancel := context.WithCancel(a.ctx)
-	a.cancelMu.Lock()
-	a.cancelRefresh = cancel
-	a.cancelMu.Unlock()
-	defer func() {
-		cancel()
-		a.cancelMu.Lock()
-		a.cancelRefresh = nil
-		a.cancelMu.Unlock()
-	}()
-
-	return a.svc.RefreshContext(ctx, contextID, func(current, total int, step string) {
-		runtime.EventsEmit(a.ctx, "refresh:progress", map[string]any{
-			"current": current,
-			"total":   total,
-			"step":    step,
-		})
-	})
+	return a.cliRunner.RefreshContext(a.ctx, contextID)
 }
 
-// CancelRefresh aborts a running RefreshContext call, if any.
+// CancelRefresh is a no-op when the CLI runner is used (no in-process goroutine to cancel).
 func (a *App) CancelRefresh() {
 	a.cancelMu.Lock()
 	fn := a.cancelRefresh
@@ -291,7 +277,7 @@ func (a *App) CancelRefresh() {
 
 // LoadSlackContext loads a Slack thread and stores it in the context.
 func (a *App) LoadSlackContext(contextID, workspace, channelID, threadTS, channelName, permalink, searchQuery string) error {
-	return a.svc.LoadSlackContext(a.ctx, jiraservice.LoadSlackContextArgs{
+	return a.cliRunner.LoadSlackContext(a.ctx, cliclient.LoadSlackContextOpts{
 		ContextID:   contextID,
 		Workspace:   workspace,
 		ChannelID:   channelID,
@@ -304,127 +290,143 @@ func (a *App) LoadSlackContext(contextID, workspace, channelID, threadTS, channe
 
 // ListSlackThreads returns all stored Slack threads for a context.
 func (a *App) ListSlackThreads(contextID string) ([]slackstore.SlackThread, error) {
-	return a.svc.ListSlackThreads(a.ctx, contextID)
+	return a.cliRunner.ListSlackThreads(a.ctx, contextID)
 }
 
 // --- Slack channels ---
 
 // ListSlackWorkspaces returns the workspaces available via slack-cli.
 func (a *App) ListSlackWorkspaces() ([]jiraservice.SlackWorkspaceResult, error) {
-	return a.svc.ListSlackWorkspaces(a.ctx)
+	return a.cliRunner.ListSlackWorkspaces(a.ctx)
 }
 
 // SearchSlackChannels searches Slack channels by name pattern via slack-cli.
 // namePattern supports glob-style wildcards, e.g. "*deploy*".
 func (a *App) SearchSlackChannels(workspace, namePattern string) ([]jiraservice.SlackChannelResult, error) {
-	return a.svc.SearchSlackChannels(a.ctx, workspace, namePattern)
+	return a.cliRunner.SearchSlackChannels(a.ctx, workspace, namePattern)
 }
 
 // AddSlackChannels adds one or more Slack channels to a context.
 func (a *App) AddSlackChannels(contextID, workspace string, channels []slackstore.SlackChannelInput) error {
-	return a.svc.AddSlackChannels(a.ctx, contextID, workspace, channels)
+	ids := make([]string, len(channels))
+	names := make([]string, len(channels))
+	startFrom := ""
+	for i, ch := range channels {
+		ids[i] = ch.ChannelID
+		names[i] = ch.ChannelName
+		if ch.StartFrom != "" {
+			startFrom = ch.StartFrom
+		}
+	}
+	return a.cliRunner.AddSlackChannels(a.ctx, cliclient.AddSlackChannelsOpts{
+		ContextID:    contextID,
+		Workspace:    workspace,
+		ChannelIDs:   ids,
+		ChannelNames: names,
+		StartFrom:    startFrom,
+	})
 }
 
 // ListSlackChannels returns all Slack channels configured for a context.
 func (a *App) ListSlackChannels(contextID string) ([]slackstore.SlackChannel, error) {
-	return a.svc.ListSlackChannels(a.ctx, contextID)
+	return a.cliRunner.ListSlackChannels(a.ctx, contextID)
 }
 
 // RemoveSlackChannel removes a Slack channel from a context by its record ID.
 func (a *App) RemoveSlackChannel(id string) error {
-	return a.svc.RemoveSlackChannel(a.ctx, id)
+	return a.cliRunner.RemoveSlackChannel(a.ctx, id)
 }
 
 // --- Slack DM configs ---
 
 // ListSlackDMConfigs returns all DM load configurations for a context.
 func (a *App) ListSlackDMConfigs(contextID string) ([]slackstore.SlackDMConfig, error) {
-	return a.svc.ListSlackDMConfigs(a.ctx, contextID)
+	return a.cliRunner.ListSlackDMConfigs(a.ctx, contextID)
 }
 
 // UpsertSlackDMConfig creates or updates a DM load configuration and immediately loads DM content.
 // startFrom is a date string in YYYY-MM-DD format; pass an empty string for no date filter.
 func (a *App) UpsertSlackDMConfig(contextID, workspace, startFrom string) (*slackstore.SlackDMConfig, error) {
-	return a.svc.UpsertSlackDMConfig(a.ctx, contextID, workspace, startFrom)
+	return a.cliRunner.UpsertSlackDMConfig(a.ctx, contextID, workspace, startFrom)
 }
 
 // DeleteSlackDMConfig removes a DM load configuration by its record ID.
 func (a *App) DeleteSlackDMConfig(id string) error {
-	return a.svc.DeleteSlackDMConfig(a.ctx, id)
+	return a.cliRunner.DeleteSlackDMConfig(a.ctx, id)
 }
 
 // ToggleSlackDMConfigActive flips the is_active flag for a Slack DM config.
 func (a *App) ToggleSlackDMConfigActive(id string) (*slackstore.SlackDMConfig, error) {
-	return a.svc.ToggleSlackDMConfigActive(a.ctx, id)
+	return a.cliRunner.ToggleSlackDMConfigActive(a.ctx, id)
 }
 
 // RemoveSlackDMEntry removes a single DM conversation entry from a DM config's JSON content.
 func (a *App) RemoveSlackDMEntry(dmConfigID, entryID string) error {
-	return a.svc.RemoveSlackDMEntry(a.ctx, dmConfigID, entryID)
+	return a.cliRunner.RemoveSlackDMEntry(a.ctx, dmConfigID, entryID)
 }
 
 // PreviewSlackDMs calls slack-cli list-dms for the given workspace and optional startFrom date
 // without persisting anything. Returns the formatted text content, or an empty string when
 // no personal messages are found. Use this to preview DMs before adding them to a context.
 func (a *App) PreviewSlackDMs(workspace, startFrom string) (string, error) {
-	return a.svc.PreviewSlackDMs(a.ctx, workspace, startFrom)
+	return a.cliRunner.PreviewSlackDMs(a.ctx, workspace, startFrom)
 }
 
 // --- Context texts ---
 
 // ListContextTexts returns all plain-text entries attached to a context.
 func (a *App) ListContextTexts(contextID string) ([]appstore.ContextText, error) {
-	return a.svc.ListContextTexts(a.ctx, contextID)
+	return a.cliRunner.ListContextTexts(a.ctx, contextID)
 }
 
 // UpsertContextText creates a new text entry (when id is empty) or updates an existing one.
 func (a *App) UpsertContextText(id, contextID, name, content string) (*appstore.ContextText, error) {
-	return a.svc.UpsertContextText(a.ctx, id, contextID, name, content)
+	return a.cliRunner.UpsertContextText(a.ctx, id, contextID, name, content)
 }
 
 // DeleteContextText removes a single text entry by its internal ID.
 func (a *App) DeleteContextText(id string) error {
-	return a.svc.DeleteContextText(a.ctx, id)
+	return a.cliRunner.DeleteContextText(a.ctx, id)
 }
 
 // DeleteJiraIssue removes a single Jira issue and all its comments from a context.
 func (a *App) DeleteJiraIssue(id string) error {
-	return a.svc.DeleteJiraIssue(a.ctx, id)
+	return a.cliRunner.DeleteJiraIssue(a.ctx, id)
 }
 
 // DeleteJiraComment removes a single Jira comment by its internal ID.
 func (a *App) DeleteJiraComment(id string) error {
-	return a.svc.DeleteJiraComment(a.ctx, id)
+	return a.cliRunner.DeleteJiraComment(a.ctx, id)
 }
 
 // DeleteSlackThread removes a single Slack thread by its internal ID.
 func (a *App) DeleteSlackThread(id string) error {
-	return a.svc.DeleteSlackThread(a.ctx, id)
+	return a.cliRunner.DeleteSlackThread(a.ctx, id)
 }
 
 // ToggleIssueActive flips the is_active flag for a Jira issue.
 func (a *App) ToggleIssueActive(id string) (*jirastore.Issue, error) {
-	return a.svc.ToggleIssueActive(a.ctx, id)
+	return a.cliRunner.ToggleIssueActive(a.ctx, id)
 }
 
 // ToggleCommentActive flips the is_active flag for a Jira comment.
 func (a *App) ToggleCommentActive(id string) (*jirastore.Comment, error) {
-	return a.svc.ToggleCommentActive(a.ctx, id)
+	return a.cliRunner.ToggleCommentActive(a.ctx, id)
 }
 
 // ToggleSlackChannelActive flips the is_active flag for a Slack channel.
 func (a *App) ToggleSlackChannelActive(id string) (*slackstore.SlackChannel, error) {
-	return a.svc.ToggleSlackChannelActive(a.ctx, id)
+	return a.cliRunner.ToggleSlackChannelActive(a.ctx, id)
 }
 
 // ToggleSlackThreadActive flips the is_active flag for a Slack thread.
 func (a *App) ToggleSlackThreadActive(id string) (*slackstore.SlackThread, error) {
-	return a.svc.ToggleSlackThreadActive(a.ctx, id)
+	return a.cliRunner.ToggleSlackThreadActive(a.ctx, id)
 }
 
 // ToggleContextTextActive flips the is_active flag for a text entry.
 func (a *App) ToggleContextTextActive(id string) (*appstore.ContextText, error) {
-	return a.svc.ToggleContextTextActive(a.ctx, id)
+	return a.cliRunner.ToggleContextTextActive(a.ctx, id)
 }
 
 // --- Uploaded files (document text extraction) ---
@@ -592,108 +594,92 @@ func (a *App) DiscardPendingUpload(tempID string) {
 
 // ListUploadedFiles returns all uploaded files for a context (active and inactive).
 func (a *App) ListUploadedFiles(contextID string) ([]appstore.ContextUploadedFile, error) {
-	return a.svc.ListUploadedFiles(a.ctx, contextID)
+	return a.cliRunner.ListUploadedFiles(a.ctx, contextID)
 }
 
 // DeleteUploadedFile removes a single uploaded file by its internal ID.
 func (a *App) DeleteUploadedFile(id string) error {
-	return a.svc.DeleteUploadedFile(a.ctx, id)
+	return a.cliRunner.DeleteUploadedFile(a.ctx, id)
 }
 
 // ToggleUploadedFileActive flips the is_active flag for an uploaded file.
 func (a *App) ToggleUploadedFileActive(id string) (*appstore.ContextUploadedFile, error) {
-	return a.svc.ToggleUploadedFileActive(a.ctx, id)
+	return a.cliRunner.ToggleUploadedFileActive(a.ctx, id)
 }
 
 // SearchJQL runs an arbitrary JQL query and returns matching issues for preview / validation.
 // It does not require a saved context — results are returned directly to the caller.
 func (a *App) SearchJQL(jql string) ([]jira.SearchResult, error) {
-	return a.svc.SearchJQL(a.ctx, jql)
+	return a.cliRunner.SearchJQL(a.ctx, jql)
 }
 
 // ReloadAllContexts fetches fresh data from every context's linked Jira query and Slack threads.
 // Returns one result per context; per-context errors are embedded in the result, not returned as
 // a top-level error, so the caller always receives the full picture.
-// Emits "reload:progress" events to the frontend as each context is processed.
+// Note: progress events are not emitted when running via CLI subprocess.
 func (a *App) ReloadAllContexts() ([]jiraservice.ReloadAllResult, error) {
-	return a.svc.ReloadAllContexts(a.ctx, func(current, total int, contextKey string) {
-		runtime.EventsEmit(a.ctx, "reload:progress", map[string]any{
-			"current":    current,
-			"total":      total,
-			"contextKey": contextKey,
-		})
-	})
+	return a.cliRunner.ReloadAllContexts(a.ctx)
 }
 
 // --- Context logs ---
 
 // ListContextLogs returns all change-log entries for a context, newest first.
 func (a *App) ListContextLogs(contextID string) ([]contextlog.ContextLog, error) {
-	return a.contextLog.ListLogs(a.ctx, contextID)
+	return a.cliRunner.ListContextLogs(a.ctx, contextID)
 }
 
 // CreateContextLog adds a manual (user-authored) log entry and refreshes the consolidated log.
 func (a *App) CreateContextLog(contextID, summaryMd string) (*contextlog.ContextLog, error) {
-	return a.contextLog.CreateManualLog(a.ctx, contextID, summaryMd)
+	return a.cliRunner.CreateContextLog(a.ctx, contextID, summaryMd)
 }
 
 // UpdateContextLog edits the summary of an existing log entry and refreshes the consolidated log.
 func (a *App) UpdateContextLog(id, summaryMd string) (*contextlog.ContextLog, error) {
-	return a.contextLog.UpdateLog(a.ctx, id, summaryMd)
+	return a.cliRunner.UpdateContextLog(a.ctx, id, summaryMd)
 }
 
 // DeleteContextLog removes a single log entry and refreshes the consolidated log.
 func (a *App) DeleteContextLog(id string) error {
-	return a.contextLog.DeleteLog(a.ctx, id)
+	return a.cliRunner.DeleteContextLog(a.ctx, id)
 }
 
 // --- Consolidated log ---
 
 // GetConsolidatedContextLog returns the consolidated log for a context (may be nil).
 func (a *App) GetConsolidatedContextLog(contextID string) (*contextlog.ConsolidatedLog, error) {
-	return a.contextLog.GetConsolidated(a.ctx, contextID)
+	return a.cliRunner.GetConsolidatedContextLog(a.ctx, contextID)
 }
 
 // UpdateConsolidatedContextLog overwrites the consolidated log with user-provided markdown.
 func (a *App) UpdateConsolidatedContextLog(contextID, contentMd string) (*contextlog.ConsolidatedLog, error) {
-	return a.contextLog.UpdateConsolidatedManual(a.ctx, contextID, contentMd)
+	return a.cliRunner.UpdateConsolidatedContextLog(a.ctx, contextID, contentMd)
 }
 
 // InitializeConsolidatedLog performs the AI-driven bootstrap of a fresh consolidated log.
-// Uses the current snapshot of all context objects as the source of truth.
 func (a *App) InitializeConsolidatedLog(contextID string) (*contextlog.ConsolidatedLog, error) {
-	snap, err := a.contextLog.Repo().SnapshotFull(a.ctx, contextID)
-	if err != nil {
-		return nil, fmt.Errorf("snapshotting context: %w", err)
-	}
-	return a.contextLog.Initialize(a.ctx, contextID, snap)
+	return a.cliRunner.InitializeConsolidatedLog(a.ctx, contextID)
 }
 
-// AnalyzeContextChanges triggers an on-demand change-log analysis using the current snapshot
-// as "after" and an empty snapshot as "before" (i.e. treats everything as new).
+// AnalyzeContextChanges triggers an on-demand change-log analysis.
 func (a *App) AnalyzeContextChanges(contextID string) (*contextlog.ContextLog, error) {
-	snap, err := a.contextLog.Repo().SnapshotFull(a.ctx, contextID)
-	if err != nil {
-		return nil, fmt.Errorf("snapshotting context: %w", err)
-	}
-	return a.contextLog.AnalyzeNow(a.ctx, contextID, snap)
+	return a.cliRunner.AnalyzeContextChanges(a.ctx, contextID)
 }
 
 // --- Chat ---
 
 // ListContextChat returns the full chat transcript for a context (oldest first).
 func (a *App) ListContextChat(contextID string) ([]contextlog.ChatMessage, error) {
-	return a.contextLog.ListChat(a.ctx, contextID)
+	return a.cliRunner.ListContextChat(a.ctx, contextID)
 }
 
 // ChatWithContext appends a user message and returns the AI assistant reply.
 func (a *App) ChatWithContext(contextID, userMessage string) (*contextlog.ChatMessage, error) {
-	return a.contextLog.ChatSend(a.ctx, contextID, userMessage)
+	return a.cliRunner.ChatWithContext(a.ctx, contextID, userMessage)
 }
 
 // ApplyChatSuggestion applies an assistant-proposed consolidated rewrite to the consolidated log.
 func (a *App) ApplyChatSuggestion(messageID string) (*contextlog.ConsolidatedLog, error) {
-	return a.contextLog.ApplyChatSuggestion(a.ctx, messageID)
+	return a.cliRunner.ApplyChatSuggestion(a.ctx, messageID)
 }
 
 // --- AI settings ---
@@ -709,16 +695,16 @@ type AISettingsResponse struct {
 
 // GetAISettings returns the current AI configuration metadata (without the raw key).
 func (a *App) GetAISettings() (*AISettingsResponse, error) {
-	settings, src, err := a.openAI.DescribeSettings(a.ctx)
+	result, err := a.cliRunner.GetAISettings(a.ctx)
 	if err != nil {
 		return nil, err
 	}
 	return &AISettingsResponse{
-		HasKey:    settings.HasKey,
-		Model:     settings.Model,
-		BaseURL:   settings.BaseURL,
-		Source:    string(src),
-		UpdatedAt: settings.UpdatedAt,
+		HasKey:    result.HasKey,
+		Model:     result.Model,
+		BaseURL:   result.BaseURL,
+		Source:    result.Source,
+		UpdatedAt: result.UpdatedAt,
 	}, nil
 }
 
@@ -730,7 +716,12 @@ func (a *App) SetAISettings(apiKey, model, baseURL string) error {
 	if apiKey != "" && passphrase == "" {
 		return fmt.Errorf("set Slack passphrase first (used to encrypt the API key)")
 	}
-	return a.db.SetAISettings(a.ctx, apiKey, model, baseURL, passphrase)
+	_, err := a.cliRunner.SetAISettings(a.ctx, cliclient.SetAISettingsOpts{
+		APIKey:  apiKey,
+		Model:   model,
+		BaseURL: baseURL,
+	})
+	return err
 }
 
 // --- Quick Text Attach ---

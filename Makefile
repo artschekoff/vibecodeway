@@ -5,7 +5,7 @@ BUNDLE_NAME := ContextConsolidator
 
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: setup dev build build-desktop build-mcp install-mcp install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
+.PHONY: setup dev build build-desktop build-mcp build-cli install-mcp install-cli install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
 
 setup:
 	cd frontend && npm install
@@ -13,7 +13,7 @@ setup:
 dev:
 	wails dev
 
-build: build-desktop build-mcp
+build: build-desktop build-mcp build-cli
 
 build-desktop:
 	wails build
@@ -21,16 +21,23 @@ build-desktop:
 build-mcp:
 	go build -o bin/context-consolidator-mcp ./cmd/mcp
 
+build-cli:
+	go build -o bin/context-consolidator-cli ./cmd/cli
+
 install-mcp: build-mcp
 	sudo install -m 755 $(CURDIR)/bin/$(APP_NAME)-mcp $(INSTALL_DIR)/$(APP_NAME)-mcp
 	@echo "Installed → $(INSTALL_DIR)/$(APP_NAME)-mcp"
+
+install-cli: build-cli
+	sudo install -m 755 $(CURDIR)/bin/$(APP_NAME)-cli $(INSTALL_DIR)/$(APP_NAME)-cli
+	@echo "Installed → $(INSTALL_DIR)/$(APP_NAME)-cli"
 
 install-app: build-desktop
 	sudo rm -rf /Applications/$(BUNDLE_NAME).app
 	sudo cp -r build/bin/$(APP_NAME).app /Applications/$(BUNDLE_NAME).app
 	@echo "Installed → /Applications/$(BUNDLE_NAME).app"
 
-install-all: install-mcp install-app
+install-all: install-mcp install-cli install-app
 
 test:
 	go test ./... -race -count=1
@@ -90,11 +97,16 @@ build-all:
 	@for platform in $(MCP_PLATFORMS); do \
 		os=$$(echo $$platform | cut -d/ -f1); \
 		arch=$$(echo $$platform | cut -d/ -f2); \
-		out="$(DIST_DIR)/$(APP_NAME)-mcp_$${os}_$${arch}"; \
+		out_mcp="$(DIST_DIR)/$(APP_NAME)-mcp_$${os}_$${arch}"; \
+		out_cli="$(DIST_DIR)/$(APP_NAME)-cli_$${os}_$${arch}"; \
 		echo "Building MCP $$os/$$arch..."; \
-		GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags="-s -w" -o $$out ./cmd/mcp; \
-		tar -czf "$${out}.tar.gz" -C $(DIST_DIR) "$(APP_NAME)-mcp_$${os}_$${arch}"; \
-		rm $$out; \
+		GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags="-s -w" -o $$out_mcp ./cmd/mcp; \
+		tar -czf "$${out_mcp}.tar.gz" -C $(DIST_DIR) "$(APP_NAME)-mcp_$${os}_$${arch}"; \
+		rm $$out_mcp; \
+		echo "Building CLI $$os/$$arch..."; \
+		GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags="-s -w" -o $$out_cli ./cmd/cli; \
+		tar -czf "$${out_cli}.tar.gz" -C $(DIST_DIR) "$(APP_NAME)-cli_$${os}_$${arch}"; \
+		rm $$out_cli; \
 	done
 	@$(MAKE) package-desktop
 	@echo "Archives written to $(DIST_DIR)/"

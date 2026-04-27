@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
@@ -16,8 +17,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, logger *zap.Logger) {
-	h := &handlers{svc: svc, logger: logger}
+func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, cliRunner *cliclient.Runner, logger *zap.Logger) {
+	h := &handlers{svc: svc, cli: cliRunner, logger: logger}
 
 	s.AddTool(
 		mcp.NewTool("load_context",
@@ -91,6 +92,45 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, logger 
 	)
 
 	s.AddTool(
+		mcp.NewTool("context_add_text",
+			mcp.WithDescription("Add a plain-text entry to a context. Provide either file_path (reads file from disk, supports .md) or content (inline text). Returns the created record as JSON."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key, e.g. 'sprint-42'. Use either context_id or context_key."),
+			),
+			mcp.WithString("name",
+				mcp.Description("Display name for the text entry. Defaults to the filename when file_path is provided."),
+			),
+			mcp.WithString("file_path",
+				mcp.Description("Absolute path to a file on disk (.md, .txt, etc.). Content is read and stored as plain text."),
+			),
+			mcp.WithString("content",
+				mcp.Description("Inline text content. Use instead of file_path when text is already available."),
+			),
+		),
+		h.handleContextAddText,
+	)
+
+	s.AddTool(
+		mcp.NewTool("context_add_file",
+			mcp.WithDescription("Upload a document file to a context. The file is read from disk, text is extracted, and both the original binary and extracted text are stored. Supports: pdf, docx, rtf, odt, txt, md."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key, e.g. 'sprint-42'. Use either context_id or context_key."),
+			),
+			mcp.WithString("file_path",
+				mcp.Required(),
+				mcp.Description("Absolute path to the file on disk."),
+			),
+		),
+		h.handleContextAddFile,
+	)
+
+	s.AddTool(
 		mcp.NewTool("context_log",
 			mcp.WithDescription("Return the AI-maintained context log. By default returns the rolling consolidated log for the context as Markdown. Pass history='true' to receive a JSON array of every individual change-log entry (newest first) instead."),
 			mcp.WithString("context_id",
@@ -109,6 +149,7 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, logger 
 
 type handlers struct {
 	svc    *jiraservice.ContextService
+	cli    *cliclient.Runner
 	logger *zap.Logger
 }
 
@@ -348,6 +389,66 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 	}
 
 	return mcp.NewToolResultText(buf.String()), nil
+}
+
+func (h *handlers) handleContextAddText(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	filePath := strings.TrimSpace(req.GetString("file_path", ""))
+	content := req.GetString("content", "")
+
+	if filePath == "" && content == "" {
+		return mcp.NewToolResultError("provide either file_path or content"), nil
+	}
+
+	contextID := req.GetString("context_id", "")
+	contextKey := req.GetString("context_key", "")
+	if contextID == "" && contextKey == "" {
+		return mcp.NewToolResultError("provide either context_id or context_key"), nil
+	}
+
+	ct, err := h.cli.AddText(ctx, cliclient.AddTextOpts{
+		ContextID:  contextID,
+		ContextKey: contextKey,
+		Name:       strings.TrimSpace(req.GetString("name", "")),
+		FilePath:   filePath,
+		Content:    content,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("adding text: %v", err)), nil
+	}
+
+	data, err := json.MarshalIndent(ct, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func (h *handlers) handleContextAddFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	filePath := strings.TrimSpace(req.GetString("file_path", ""))
+	if filePath == "" {
+		return mcp.NewToolResultError("file_path is required"), nil
+	}
+
+	contextID := req.GetString("context_id", "")
+	contextKey := req.GetString("context_key", "")
+	if contextID == "" && contextKey == "" {
+		return mcp.NewToolResultError("provide either context_id or context_key"), nil
+	}
+
+	f, err := h.cli.AddFile(ctx, cliclient.AddFileOpts{
+		ContextID:  contextID,
+		ContextKey: contextKey,
+		FilePath:   filePath,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("adding file: %v", err)), nil
+	}
+
+	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
 }
 
 func splitAndTrim(s string) []string {

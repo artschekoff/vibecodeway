@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 
+	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
 	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
@@ -92,7 +93,8 @@ func run() error {
 		server.WithToolCapabilities(true),
 	)
 
-	registerTools(mcpServer, svc, logger)
+	cliRunner := cliclient.NewRunner(logger)
+	registerTools(mcpServer, svc, cliRunner, logger)
 
 	logger.Info("context-consolidator-mcp starting", zap.String("version", serverVersion))
 

@@ -22,6 +22,8 @@ var AllowedExtensions = map[string]bool{
 	".rtf":  true,
 	".odt":  true,
 	".txt":  true,
+	".md":   true,
+	".markdown": true,
 	// Images — text extracted via OCR (macOS Vision framework)
 	".png":  true,
 	".jpg":  true,
@@ -88,7 +90,7 @@ func FromFile(filePath string) (text string, fileType string, err error) {
 	switch ext {
 	case ".pdf":
 		text, err = extractPDF(filePath)
-	case ".txt":
+	case ".txt", ".md", ".markdown":
 		text, err = extractTXT(filePath)
 	case ".png", ".jpg", ".jpeg", ".webp":
 		if err = checkImageMagic(filePath, ext); err != nil {
