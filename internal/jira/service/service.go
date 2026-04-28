@@ -1004,14 +1004,21 @@ func (svc *ContextService) SetJiraBaseURL(ctx context.Context, contextID, baseUR
 }
 
 // RefreshAllContexts refreshes every active context and returns aggregated results.
-func (svc *ContextService) RefreshAllContexts(ctx context.Context) ([]ReloadAllResult, error) {
+// notify is called before each provider step, same signature as ReloadAllContexts.
+func (svc *ContextService) RefreshAllContexts(ctx context.Context, notify ReloadProgressFunc) ([]ReloadAllResult, error) {
 	contexts, err := svc.store.ListContexts(ctx, false)
 	if err != nil {
 		return nil, fmt.Errorf("listing contexts for refresh: %w", err)
 	}
-	results := make([]ReloadAllResult, 0, len(contexts))
-	for _, c := range contexts {
-		res, err := svc.RefreshContext(ctx, c.ID)
+	total := len(contexts)
+	results := make([]ReloadAllResult, 0, total)
+	for i, c := range contexts {
+		idx := i + 1
+		res, err := svc.RefreshContext(ctx, c.ID, func(_, _ int, step string) {
+			if notify != nil {
+				notify(idx, total, c.Key, step)
+			}
+		})
 		if err != nil {
 			results = append(results, ReloadAllResult{ContextID: c.ID, ContextKey: c.Key, Error: err.Error()})
 			continue

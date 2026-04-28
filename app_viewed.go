@@ -3,6 +3,7 @@ package main
 import (
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // MarkIssueViewed marks a Jira issue as viewed by setting viewed_at = now.
@@ -51,6 +52,15 @@ func (a *App) SetJiraBaseURL(contextID, baseURL string) error {
 }
 
 // RefreshAllContexts re-fetches all active contexts from external sources.
+// Progress events ("reload:progress") are emitted via the Wails runtime before each provider step,
+// using the same schema as ReloadAllContexts so the frontend can share one handler.
 func (a *App) RefreshAllContexts() ([]jiraservice.ReloadAllResult, error) {
-	return a.svc.RefreshAllContexts(a.ctx)
+	return a.svc.RefreshAllContexts(a.ctx, func(current, total int, contextKey, step string) {
+		runtime.EventsEmit(a.ctx, "reload:progress", map[string]interface{}{
+			"current":    current,
+			"total":      total,
+			"contextKey": contextKey,
+			"step":       step,
+		})
+	})
 }

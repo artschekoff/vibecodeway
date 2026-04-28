@@ -452,9 +452,16 @@ export default function ContextList() {
   const handleRefreshAll = async () => {
     setRefreshingAll(true);
     progress.begin("Refreshing All Contexts", []);
+    const unsubscribe = EventsOn(
+      "reload:progress",
+      (data: { current: number; total: number; contextKey: string; step: string }) => {
+        const stepLabel = PROVIDER_LABELS[data.step] ?? data.step;
+        progress.set(data.current - 1, data.total, data.contextKey, stepLabel);
+      }
+    );
     try { await RefreshAllContexts(); load(); }
     catch { setError("Refresh failed — check logs for details."); }
-    finally { setRefreshingAll(false); progress.done(); }
+    finally { unsubscribe(); EventsOff("reload:progress"); setRefreshingAll(false); progress.done(); }
   };
 
   const handleToggleStatus = async (_e: React.MouseEvent, c: Context) => {
