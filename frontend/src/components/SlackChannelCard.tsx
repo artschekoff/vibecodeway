@@ -1,5 +1,6 @@
 import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
+import ConfirmModal from "./ConfirmModal";
 
 function CopyIcon() {
   return (
@@ -61,6 +62,7 @@ interface Props {
 
 function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: SlackThread; onDelete?: (id: string) => void; onToggle?: (id: string) => void; onMarkViewed?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isInactive = !thread.isActive;
   const isUnread = !thread.viewedAt;
 
@@ -70,7 +72,7 @@ function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: Slack
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete?.(thread.id);
+    setConfirmDelete(true);
   };
 
   return (
@@ -120,6 +122,14 @@ function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: Slack
           <pre className="slack-thread-content">{thread.content}</pre>
         </div>
       )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          message="Delete this thread?"
+          onConfirm={() => { setConfirmDelete(false); onDelete?.(thread.id); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }
@@ -127,6 +137,7 @@ function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: Slack
 export default function SlackChannelCard({ channel, threads, onDeleteChannel, onDeleteThread, onToggleChannel, onToggleThread, onMarkThreadViewed }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isInactive = !channel.isActive;
   const hasUnreadThreads = threads.some((t) => !t.viewedAt);
   const slackChannelLink = channel.workspace && channel.channelId
@@ -143,7 +154,7 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
 
   const handleDeleteChannel = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDeleteChannel?.(channel.id);
+    setConfirmDelete(true);
   };
 
   return (
@@ -195,6 +206,14 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
             <ThreadRow key={t.id} thread={t} onDelete={onDeleteThread} onToggle={onToggleThread} onMarkViewed={onMarkThreadViewed} />
           ))}
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          message={`Delete channel #${channel.channelName || channel.channelId} and all its threads?`}
+          onConfirm={() => { setConfirmDelete(false); onDeleteChannel?.(channel.id); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
     </div>
   );

@@ -1,6 +1,8 @@
 import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
+import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { Issue, Comment } from "../types";
+import ConfirmModal from "./ConfirmModal";
 
 function CopyIcon() {
   return (
@@ -42,6 +44,8 @@ interface Props {
 export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [confirmIssue, setConfirmIssue] = useState(false);
+  const [confirmComment, setConfirmComment] = useState<string | null>(null);
 
   const copyKey = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,7 +57,7 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
 
   const handleDeleteIssue = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDeleteIssue?.(issue.id);
+    setConfirmIssue(true);
   };
 
   const formatDate = (iso: string) => {
@@ -80,13 +84,20 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
         {onToggleIssue && (
           <ActiveToggle isActive={issue.isActive} onToggle={(e) => { e.stopPropagation(); onToggleIssue(issue.id); }} />
         )}
-        <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
+        {jiraLink ? (
+          <button
+            className={`issue-key issue-key--link${isInactive ? " item--inactive" : ""}`}
+            onClick={(e) => { e.stopPropagation(); BrowserOpenURL(jiraLink); }}
+            title="Open in Jira"
+          >
+            {issue.jiraKey} <ExternalLink size={10} />
+          </button>
+        ) : (
+          <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
+        )}
         <button className="copy-btn" onClick={copyKey} title="Copy ticket number">
           {copied ? <Check size={13} /> : <CopyIcon />}
         </button>
-        {jiraLink && (
-          <a href={jiraLink} target="_blank" rel="noopener noreferrer" className="external-link-btn" onClick={(e) => e.stopPropagation()} title="Open in Jira"><ExternalLink size={12} /></a>
-        )}
         <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{issue.summary}</span>
         <div className="issue-meta">
           {issue.assignee && <span className="issue-assignee">@{issue.assignee}</span>}
@@ -140,7 +151,7 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
                       {onDeleteComment && (
                         <button
                           className="card-delete-btn card-delete-btn--sm"
-                          onClick={() => onDeleteComment(c.id)}
+                          onClick={() => setConfirmComment(c.id)}
                           title="Remove this comment"
                         >
                           <TrashIcon />
@@ -154,6 +165,21 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
             )}
           </div>
         </div>
+      )}
+
+      {confirmIssue && (
+        <ConfirmModal
+          message={`Delete ticket ${issue.jiraKey}?`}
+          onConfirm={() => { setConfirmIssue(false); onDeleteIssue?.(issue.id); }}
+          onCancel={() => setConfirmIssue(false)}
+        />
+      )}
+      {confirmComment && (
+        <ConfirmModal
+          message="Delete this comment?"
+          onConfirm={() => { const id = confirmComment; setConfirmComment(null); onDeleteComment?.(id); }}
+          onCancel={() => setConfirmComment(null)}
+        />
       )}
     </div>
   );

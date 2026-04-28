@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, X, ExternalLink } from "lucide-react";
+import { ArrowLeft, Check, Copy, ExternalLink, RefreshCw, X } from "lucide-react";
 import {
   GetPendingCodeReviews,
   RefreshPendingReviews,
@@ -20,6 +20,8 @@ function repoUrl(repo: VCSRepo): string {
 }
 
 function ReviewCard({ review }: { review: ReviewRequest }) {
+  const [copied, setCopied] = useState(false);
+
   const statusClass =
     review.reviewStatus === "changes_requested" ? " pr-status--changes-requested"
     : review.reviewStatus === "approved" ? " pr-status--approved"
@@ -29,6 +31,14 @@ function ReviewCard({ review }: { review: ReviewRequest }) {
     : review.reviewStatus === "approved" ? "Approved"
     : review.reviewStatus === "review_required" ? "Review Required"
     : null;
+
+  const handleCopy = () => {
+    if (!review.prUrl) return;
+    void navigator.clipboard.writeText(review.prUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
     <div className="review-card">
@@ -41,15 +51,26 @@ function ReviewCard({ review }: { review: ReviewRequest }) {
       </div>
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
-        {review.prUrl && (
-          <button
-            className="review-open-btn"
-            onClick={() => BrowserOpenURL(review.prUrl)}
-            title="Open PR"
-          >
-            Open <ExternalLink size={11} />
-          </button>
-        )}
+        <div className="review-card-btns">
+          {review.prUrl && (
+            <button
+              className="review-open-btn"
+              onClick={handleCopy}
+              title="Copy PR link"
+            >
+              {copied ? <Check size={11} /> : <Copy size={11} />}
+            </button>
+          )}
+          {review.prUrl && (
+            <button
+              className="review-open-btn"
+              onClick={() => BrowserOpenURL(review.prUrl)}
+              title="Open PR"
+            >
+              Open <ExternalLink size={11} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

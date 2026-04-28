@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { ContextText } from "../types";
+import ConfirmModal from "./ConfirmModal";
 
 function TextIcon() {
   return (
@@ -33,6 +34,7 @@ interface Props {
 
 export default function ContextTextCard({ text, onDelete, onToggle }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isInactive = !text.isActive;
 
   const title = text.name.length > 100 ? text.name.slice(0, 100) + "…" : text.name;
@@ -64,7 +66,7 @@ export default function ContextTextCard({ text, onDelete, onToggle }: Props) {
           {onDelete && (
             <button
               className="card-delete-btn"
-              onClick={(e) => { e.stopPropagation(); onDelete(text.id); }}
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
               title="Remove text"
             >
               <TrashIcon />
@@ -77,6 +79,14 @@ export default function ContextTextCard({ text, onDelete, onToggle }: Props) {
         <div className="uploaded-file-body">
           <pre className="uploaded-file-content">{text.content}</pre>
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          message={`Delete text "${text.name.length > 60 ? text.name.slice(0, 60) + "…" : text.name}"?`}
+          onConfirm={() => { setConfirmDelete(false); onDelete?.(text.id); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Mail, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { SlackDMConfig } from "../types";
+import ConfirmModal from "./ConfirmModal";
 
 function TrashIcon() {
   return (
@@ -74,6 +75,8 @@ function entryLabel(entry: DMEntry): string {
 }
 
 function DMConversations({ entries, onDeleteEntry }: { entries: DMEntry[]; onDeleteEntry?: (entryId: string) => void }) {
+  const [confirmEntry, setConfirmEntry] = useState<{ id: string; label: string } | null>(null);
+
   return (
     <div className="dm-conversations">
       {entries.map((entry) => (
@@ -85,7 +88,7 @@ function DMConversations({ entries, onDeleteEntry }: { entries: DMEntry[]; onDel
                 type="button"
                 className="dm-entry-delete-btn"
                 title={`Remove conversation with ${entryLabel(entry)}`}
-                onClick={() => onDeleteEntry(entry.id)}
+                onClick={() => setConfirmEntry({ id: entry.id, label: entryLabel(entry) })}
               ><X size={11} /></button>
             )}
           </div>
@@ -104,6 +107,14 @@ function DMConversations({ entries, onDeleteEntry }: { entries: DMEntry[]; onDel
           )}
         </div>
       ))}
+
+      {confirmEntry && (
+        <ConfirmModal
+          message={`Delete conversation with ${confirmEntry.label}?`}
+          onConfirm={() => { const id = confirmEntry.id; setConfirmEntry(null); onDeleteEntry?.(id); }}
+          onCancel={() => setConfirmEntry(null)}
+        />
+      )}
     </div>
   );
 }
@@ -118,6 +129,7 @@ interface Props {
 
 export default function SlackDMConfigCard({ dm, onDelete, onToggle, onDeleteEntry, onMarkViewed }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isInactive = !dm.isActive;
   const isUnread = !dm.viewedAt;
 
@@ -151,7 +163,7 @@ export default function SlackDMConfigCard({ dm, onDelete, onToggle, onDeleteEntr
           )}
           <button
             className="card-delete-btn"
-            onClick={(e) => { e.stopPropagation(); onDelete(dm.id); }}
+            onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
             title="Remove DM config"
           >
             <TrashIcon />
@@ -170,6 +182,14 @@ export default function SlackDMConfigCard({ dm, onDelete, onToggle, onDeleteEntr
             <pre className="slack-thread-content">{dm.content}</pre>
           )}
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          message={`Delete DM config for ${dm.workspace}?`}
+          onConfirm={() => { setConfirmDelete(false); onDelete(dm.id); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
     </div>
   );

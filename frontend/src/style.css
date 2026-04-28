@@ -377,6 +377,60 @@ select {
   animation: overlay-in 0.15s ease;
 }
 
+/* ── Confirm / delete dialog ─────────────────────────────────────────────── */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: overlay-in 0.12s ease;
+}
+
+.confirm-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  width: 320px;
+  max-width: 90vw;
+  box-shadow: var(--shadow);
+  animation: modal-in 0.15s ease;
+}
+
+.confirm-message {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--danger);
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-danger:hover { opacity: 0.85; }
+
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -680,6 +734,22 @@ select {
   color: var(--accent);
   font-weight: 600;
   flex-shrink: 0;
+}
+
+.issue-key--link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.issue-key--link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
 }
 
 .issue-summary {
@@ -3734,6 +3804,12 @@ select {
   font-size: 11px;
   color: var(--text-muted);
   flex: 1;
+}
+
+.review-card-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .review-open-btn {

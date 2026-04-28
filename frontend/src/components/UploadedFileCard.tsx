@@ -1,6 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { UploadedFile } from "../types";
+import ConfirmModal from "./ConfirmModal";
 
 function FileIcon({ fileType }: { fileType: string }) {
   const t = fileType.toLowerCase();
@@ -85,12 +86,13 @@ interface Props {
 
 export default function UploadedFileCard({ file, onDelete, onToggle }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isInactive = !file.isActive;
   const hasContent = (file.extractedText ?? "").length > 0;
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete?.(file.id);
+    setConfirmDelete(true);
   };
 
   return (
@@ -131,6 +133,14 @@ export default function UploadedFileCard({ file, onDelete, onToggle }: Props) {
             </div>
           )}
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          message={`Delete file "${file.originalName}"?`}
+          onConfirm={() => { setConfirmDelete(false); onDelete?.(file.id); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
     </div>
   );
