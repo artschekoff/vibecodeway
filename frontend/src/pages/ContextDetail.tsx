@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Spinner from "../components/Spinner";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ExternalLink, GitBranch, Pencil, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, Pencil, RefreshCw, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -127,6 +127,16 @@ function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed }: {
   onMarkCommentViewed?: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyUrl = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!pr.url) return;
+    void navigator.clipboard.writeText(pr.url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
   const unresolvedComments = (pr.comments ?? []).filter((c) => !c.isResolved);
   const isUnread = !pr.viewedAt;
   const hasUnreadComments = unresolvedComments.some((c) => !c.viewedAt);
@@ -147,6 +157,14 @@ function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed }: {
           <span className="pr-title">{pr.title}</span>
         </div>
         <div className="pr-card-actions">
+          {pr.url && (
+            <button
+              type="button"
+              className="pr-action-btn"
+              onClick={handleCopyUrl}
+              title="Copy PR link"
+            >{copied ? <Check size={13} /> : <Copy size={13} />}</button>
+          )}
           {pr.url && (
             <button
               type="button"
