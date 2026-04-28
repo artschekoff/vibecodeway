@@ -3771,6 +3771,39 @@ select {
   border-bottom: none;
 }
 
+.review-card--waiting {
+  opacity: 0.75;
+}
+
+.review-waiting-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+.pr-status--waiting {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #a78bfa;
+}
+
+.review-dismiss-btn {
+  opacity: 0.6;
+}
+
+.review-dismiss-btn:hover {
+  opacity: 1;
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+
 .review-card-top {
   display: flex;
   align-items: baseline;

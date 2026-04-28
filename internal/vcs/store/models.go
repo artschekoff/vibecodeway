@@ -79,15 +79,20 @@ type PRComment struct {
 
 // ReviewRequest represents a PR where this user's review has been requested.
 type ReviewRequest struct {
-	ID           string `json:"id"`
-	RepoID       string `json:"repoId"`
-	PRNumber     int    `json:"prNumber"`
-	PRTitle      string `json:"prTitle"`
-	PRAuthor     string `json:"prAuthor"`
-	PRURL        string `json:"prUrl"`
-	ReviewStatus string `json:"reviewStatus"`
-	RequestedAt  string `json:"requestedAt"`
-	FetchedAt    string `json:"fetchedAt"`
+	ID           string  `json:"id"`
+	RepoID       string  `json:"repoId"`
+	PRNumber     int     `json:"prNumber"`
+	PRTitle      string  `json:"prTitle"`
+	PRAuthor     string  `json:"prAuthor"`
+	PRURL        string  `json:"prUrl"`
+	ReviewStatus string  `json:"reviewStatus"`
+	RequestedAt  string  `json:"requestedAt"`
+	FetchedAt    string  `json:"fetchedAt"`
+	// ReviewedAt is set when the item disappears from GitHub's review-requested list
+	// (user submitted a review). NULL = still actively pending.
+	ReviewedAt  *string `json:"reviewedAt,omitempty"`
+	// DismissedAt is set when the user manually dismisses a "waiting for author" item.
+	DismissedAt *string `json:"dismissedAt,omitempty"`
 }
 
 // VCSPlatformInfo describes a platform with its enabled flag.

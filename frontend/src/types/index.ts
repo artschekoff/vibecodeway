@@ -344,4 +344,6 @@ export interface ReviewRequest {
   reviewStatus: string;
   requestedAt: string;
   fetchedAt: string;
+  reviewedAt?: string;
+  dismissedAt?: string;
 }

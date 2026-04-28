@@ -8,6 +8,7 @@ import {
   AddTrackedRepo,
   RemoveTrackedRepo,
   GetSupportedPlatforms,
+  DismissReviewRequest,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo } from "../types";
@@ -19,18 +20,9 @@ function repoUrl(repo: VCSRepo): string {
   return "";
 }
 
-function ReviewCard({ review }: { review: ReviewRequest }) {
+function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: (id: string) => void }) {
   const [copied, setCopied] = useState(false);
-
-  const statusClass =
-    review.reviewStatus === "changes_requested" ? " pr-status--changes-requested"
-    : review.reviewStatus === "approved" ? " pr-status--approved"
-    : "";
-  const statusLabel =
-    review.reviewStatus === "changes_requested" ? "Changes Requested"
-    : review.reviewStatus === "approved" ? "Approved"
-    : review.reviewStatus === "review_required" ? "Review Required"
-    : null;
+  const isWaiting = !!review.reviewedAt;
 
   const handleCopy = () => {
     if (!review.prUrl) return;
@@ -41,33 +33,30 @@ function ReviewCard({ review }: { review: ReviewRequest }) {
   };
 
   return (
-    <div className="review-card">
+    <div className={`review-card${isWaiting ? " review-card--waiting" : ""}`}>
       <div className="review-card-top">
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
-        {statusLabel && (
-          <span className={`pr-status-badge${statusClass}`}>{statusLabel}</span>
+        {isWaiting && (
+          <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
         )}
       </div>
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
         <div className="review-card-btns">
           {review.prUrl && (
-            <button
-              className="review-open-btn"
-              onClick={handleCopy}
-              title="Copy PR link"
-            >
+            <button className="review-open-btn" onClick={handleCopy} title="Copy PR link">
               {copied ? <Check size={11} /> : <Copy size={11} />}
             </button>
           )}
           {review.prUrl && (
-            <button
-              className="review-open-btn"
-              onClick={() => BrowserOpenURL(review.prUrl)}
-              title="Open PR"
-            >
+            <button className="review-open-btn" onClick={() => BrowserOpenURL(review.prUrl)} title="Open PR">
               Open <ExternalLink size={11} />
+            </button>
+          )}
+          {isWaiting && onDismiss && (
+            <button className="review-open-btn review-dismiss-btn" onClick={() => onDismiss(review.id)} title="Dismiss">
+              <X size={11} />
             </button>
           )}
         </div>
@@ -136,6 +125,15 @@ export default function PendingCodeReviews() {
     }
   };
 
+  const handleDismiss = async (id: string) => {
+    try {
+      await DismissReviewRequest(id);
+      await loadData();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const handleAddRepo = async () => {
     const trimmed = addOwnerRepo.trim();
     if (!trimmed || !trimmed.includes("/")) {
@@ -173,7 +171,7 @@ export default function PendingCodeReviews() {
 
   if (loading) return <div className="loading"><Spinner /> Loading…</div>;
 
-  const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.length, 0);
+  const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt).length, 0);
 
   return (
     <div className="page">
@@ -280,6 +278,9 @@ export default function PendingCodeReviews() {
         ) : (
           repoGroups.map(({ repo, reviews }) => {
             const url = repoUrl(repo);
+            const pending = reviews.filter((r) => !r.reviewedAt);
+            const waiting = reviews.filter((r) => !!r.reviewedAt);
+            if (pending.length === 0 && waiting.length === 0) return null;
             return (
               <section key={repo.id} className="detail-section review-repo-section">
                 <div className="review-repo-header">
@@ -294,18 +295,33 @@ export default function PendingCodeReviews() {
                       <ExternalLink size={12} />
                     </button>
                   )}
-                  {reviews.length > 0 && (
-                    <span className="detail-section-count">{reviews.length}</span>
+                  {pending.length > 0 && (
+                    <span className="detail-section-count">{pending.length}</span>
                   )}
                 </div>
-                {reviews.length === 0 ? (
+
+                {pending.length === 0 ? (
                   <div className="detail-section-empty">No pending reviews in this repo.</div>
                 ) : (
                   <div className="pr-list">
-                    {reviews.map((review) => (
+                    {pending.map((review) => (
                       <ReviewCard key={review.id} review={review} />
                     ))}
                   </div>
+                )}
+
+                {waiting.length > 0 && (
+                  <>
+                    <div className="review-waiting-header">
+                      Waiting for author
+                      <span className="detail-section-count" style={{ marginLeft: 6 }}>{waiting.length}</span>
+                    </div>
+                    <div className="pr-list">
+                      {waiting.map((review) => (
+                        <ReviewCard key={review.id} review={review} onDismiss={handleDismiss} />
+                      ))}
+                    </div>
+                  </>
                 )}
               </section>
             );

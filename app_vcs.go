@@ -167,3 +167,8 @@ func (a *App) GetPendingCodeReviews() ([]vcsstore.ReviewRequest, error) {
 func (a *App) RefreshPendingReviews() error {
 	return a.vcsSvc.SyncReviewRequests(a.ctx, vcs.PlatformGitHub)
 }
+
+// DismissReviewRequest hides a "waiting for author" item from the Code Reviews page.
+func (a *App) DismissReviewRequest(id string) error {
+	return a.vcsStore.ReviewRequests.DismissReviewRequest(a.ctx, id)
+}

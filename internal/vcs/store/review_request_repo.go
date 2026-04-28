@@ -19,6 +19,8 @@ type ReviewRequestRepo struct {
 func NewReviewRequestRepo(db *sql.DB) *ReviewRequestRepo { return &ReviewRequestRepo{db: db} }
 
 // UpsertReviewRequest creates or updates a review request identified by (repoID, prNumber).
+// When an existing record is updated (PR re-appears in the review list), reviewed_at and
+// dismissed_at are cleared so it shows as a fresh pending review again.
 func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, requestedAt string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -29,9 +31,11 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 	).Scan(&existing)
 
 	if err == nil {
+		// Record exists — update and clear reviewed_at / dismissed_at (it's active again).
 		_, err = r.db.ExecContext(ctx, `
 			UPDATE vcs_review_requests
-			SET pr_title = ?, pr_author = ?, pr_url = ?, review_status = ?, requested_at = ?, fetched_at = ?
+			SET pr_title = ?, pr_author = ?, pr_url = ?, review_status = ?,
+			    requested_at = ?, fetched_at = ?, reviewed_at = NULL, dismissed_at = NULL
 			WHERE id = ?
 		`, prTitle, prAuthor, prURL, reviewStatus, requestedAt, now, existing)
 		return err
@@ -42,7 +46,8 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 
 	id := uuid.New().String()
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO vcs_review_requests (id, repo_id, pr_number, pr_title, pr_author, pr_url, review_status, requested_at, fetched_at)
+		INSERT INTO vcs_review_requests
+			(id, repo_id, pr_number, pr_title, pr_author, pr_url, review_status, requested_at, fetched_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, requestedAt, now)
 	if err != nil {
@@ -51,17 +56,67 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 	return nil
 }
 
-// ListReviewRequests returns all pending review requests, optionally filtered by repoID.
+// MarkReviewedForRepo marks all review requests for a repo that are NOT in the given
+// set of active PR numbers as "reviewed" (i.e. the user submitted a review and they
+// disappeared from GitHub's review-requested list). Records that are already dismissed
+// or already have reviewed_at are left unchanged.
+func (r *ReviewRequestRepo) MarkReviewedForRepo(ctx context.Context, repoID string, activePRNumbers []int) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Build a NOT IN clause.
+	if len(activePRNumbers) == 0 {
+		// No active PRs — mark everything as reviewed.
+		_, err := r.db.ExecContext(ctx, `
+			UPDATE vcs_review_requests
+			SET reviewed_at = ?
+			WHERE repo_id = ? AND reviewed_at IS NULL AND dismissed_at IS NULL
+		`, now, repoID)
+		return err
+	}
+
+	// Build placeholder list.
+	placeholders := make([]any, 0, len(activePRNumbers)+2)
+	placeholders = append(placeholders, now, repoID)
+	inClause := "("
+	for i, n := range activePRNumbers {
+		if i > 0 {
+			inClause += ","
+		}
+		inClause += "?"
+		placeholders = append(placeholders, n)
+	}
+	inClause += ")"
+
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE vcs_review_requests
+		SET reviewed_at = ?
+		WHERE repo_id = ? AND pr_number NOT IN `+inClause+`
+		  AND reviewed_at IS NULL AND dismissed_at IS NULL
+	`, placeholders...)
+	return err
+}
+
+// DismissReviewRequest marks a review request as dismissed (hides it from "waiting for author").
+func (r *ReviewRequestRepo) DismissReviewRequest(ctx context.Context, id string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_review_requests SET dismissed_at = ? WHERE id = ?`, now, id)
+	return err
+}
+
+// ListReviewRequests returns non-dismissed review requests, optionally filtered by repoID.
 func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID string) ([]ReviewRequest, error) {
 	q := `
-		SELECT id, repo_id, pr_number, pr_title, pr_author, pr_url, review_status, requested_at, fetched_at
-		FROM vcs_review_requests`
+		SELECT id, repo_id, pr_number, pr_title, pr_author, pr_url,
+		       review_status, requested_at, fetched_at, reviewed_at, dismissed_at
+		FROM vcs_review_requests
+		WHERE dismissed_at IS NULL`
 	var args []any
 	if repoID != "" {
-		q += " WHERE repo_id = ?"
+		q += " AND repo_id = ?"
 		args = append(args, repoID)
 	}
-	q += " ORDER BY fetched_at DESC"
+	q += " ORDER BY reviewed_at ASC, fetched_at DESC"
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -75,6 +130,7 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 		if err := rows.Scan(
 			&rr.ID, &rr.RepoID, &rr.PRNumber, &rr.PRTitle, &rr.PRAuthor,
 			&rr.PRURL, &rr.ReviewStatus, &rr.RequestedAt, &rr.FetchedAt,
+			&rr.ReviewedAt, &rr.DismissedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan review request: %w", err)
 		}
@@ -108,6 +164,7 @@ func scanReviewRequest(row *sql.Row) (*ReviewRequest, error) {
 	err := row.Scan(
 		&rr.ID, &rr.RepoID, &rr.PRNumber, &rr.PRTitle, &rr.PRAuthor,
 		&rr.PRURL, &rr.ReviewStatus, &rr.RequestedAt, &rr.FetchedAt,
+		&rr.ReviewedAt, &rr.DismissedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

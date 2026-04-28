@@ -281,12 +281,10 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 			continue
 		}
 
-		// Delete stale rows for this repo before upserting fresh ones.
-		if err := p.store.ReviewRequests.DeleteReviewRequestsForRepo(ctx, repo.ID); err != nil {
-			p.logger.Warn("vcs: delete review requests failed", zap.String("repo", repo.FullName()), zap.Error(err))
-		}
-
+		// Upsert each active PR (clears reviewed_at/dismissed_at if it re-appears).
+		activeNumbers := make([]int, 0, len(prs))
 		for _, pr := range prs {
+			activeNumbers = append(activeNumbers, pr.Number)
 			if err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
 				pr.ReviewStatus, pr.CreatedAt,
@@ -294,6 +292,13 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 				p.logger.Warn("vcs: upsert review request failed",
 					zap.Int("pr", pr.Number), zap.Error(err))
 			}
+		}
+
+		// Mark records that disappeared from GitHub's list as "reviewed"
+		// (user submitted their review; author needs to act). This preserves
+		// them in the UI under a "Waiting for Author" section instead of deleting.
+		if err := p.store.ReviewRequests.MarkReviewedForRepo(ctx, repo.ID, activeNumbers); err != nil {
+			p.logger.Warn("vcs: mark reviewed failed", zap.String("repo", repo.FullName()), zap.Error(err))
 		}
 	}
 	return nil
