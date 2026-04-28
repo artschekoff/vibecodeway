@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { ChevronDown, GitBranch, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
-import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload } from "../../wailsjs/go/main/App";
-import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile } from "../types";
+import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos } from "../../wailsjs/go/main/App";
+import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo } from "../types";
+
+export interface VCSBranchInput {
+  platform: VCSPlatform;
+  ownerRepo: string;
+  branch: string;
+}
 
 interface Props {
   initial?: Context;
@@ -13,6 +20,7 @@ interface Props {
   initialSlackDMConfigs?: SlackDMConfig[];
   initialContextTexts?: ContextText[];
   initialUploadedFiles?: UploadedFile[];
+  initialVCSBranches?: VCSBranch[];
   onSave: (
     key: string,
     searchQuery: string,
@@ -22,7 +30,9 @@ interface Props {
     removedJiraIssueIds?: string[],
     textFilesPayload?: TextFilesPayload,
     removedUploadedFileIds?: string[],
-    pendingUploadTempIds?: string[]
+    pendingUploadTempIds?: string[],
+    newVCSBranches?: VCSBranchInput[],
+    removedVCSBranchIds?: string[]
   ) => Promise<void>;
   onCancel: () => void;
 }
@@ -68,9 +78,9 @@ interface NewFile {
   content: string;
 }
 
-type ActiveTab = "jira" | "slack" | "texts" | "files";
+type ActiveTab = "jira" | "slack" | "texts" | "vcs";
 
-export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, onSave, onCancel }: Props) {
+export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
   const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
   const [status, setStatus] = useState(initial?.status ?? "active");
@@ -124,6 +134,31 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
+  // VCS branches state
+  const [existingVCSBranches, setExistingVCSBranches] = useState<VCSBranch[]>(initialVCSBranches ?? []);
+  const [newVCSBranches, setNewVCSBranches] = useState<VCSBranchInput[]>([]);
+  const [removedVCSBranchIds, setRemovedVCSBranchIds] = useState<string[]>([]);
+  const [vcsPlatforms, setVCSPlatforms] = useState<VCSPlatformInfo[]>([]);
+  const [vcsPlatform, setVCSPlatform] = useState<VCSPlatform>("github");
+  const [vcsOwnerRepo, setVCSOwnerRepo] = useState("");
+  const [vcsBranch, setVCSBranch] = useState("");
+  const [vcsAddError, setVCSAddError] = useState("");
+  // Repo picker
+  const [trackedRepos, setTrackedRepos] = useState<VCSRepo[]>([]);
+  const [repoPickerOpen, setRepoPickerOpen] = useState(false);
+  const [repoFilter, setRepoFilter] = useState("");
+  const repoPickerRef = useRef<HTMLDivElement>(null);
+  const repoFilterRef = useRef<HTMLInputElement>(null);
+  // Branch picker
+  const [repoBranches, setRepoBranches] = useState<string[]>([]);
+  const [branchPickerOpen, setBranchPickerOpen] = useState(false);
+  const [branchPickerLoading, setBranchPickerLoading] = useState(false);
+  const [branchPickerError, setBranchPickerError] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
+  const branchPickerRef = useRef<HTMLDivElement>(null);
+  const branchFilterRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     setWorkspacesLoading(true);
     ListSlackWorkspaces()
@@ -137,6 +172,12 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       })
       .catch((err: unknown) => setWorkspacesError(String(err)))
       .finally(() => setWorkspacesLoading(false));
+
+    GetSupportedPlatforms()
+      .then((platforms) => {
+        setVCSPlatforms((platforms ?? []) as VCSPlatformInfo[]);
+      })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -291,7 +332,14 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
         : undefined;
 
       const pendingTempIds = pendingUploads.length > 0 ? pendingUploads.map((f) => f.tempId) : undefined;
-      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined, textFilesPayload, removedUploadedIds.length > 0 ? removedUploadedIds : undefined, pendingTempIds);
+      const removedBranchIds = [
+        ...removedVCSBranchIds,
+        ...(initialVCSBranches ?? [])
+          .filter((b) => !existingVCSBranches.some((e) => e.id === b.id))
+          .map((b) => b.id)
+          .filter((id) => !removedVCSBranchIds.includes(id)),
+      ];
+      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined, textFilesPayload, removedUploadedIds.length > 0 ? removedUploadedIds : undefined, pendingTempIds, newVCSBranches.length > 0 ? newVCSBranches : undefined, removedBranchIds.length > 0 ? removedBranchIds : undefined);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -439,6 +487,147 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const slackChannelCount = existingChannels.length + selectedChannels.length;
   const slackDMCount = existingDMConfigs.length + newDMConfigs.length + selectedDMPreviews.length;
   const uploadedCount = uploadedFiles.length + pendingUploads.length;
+  const vcsBranchCount = existingVCSBranches.length + newVCSBranches.length;
+
+  // ownerRepo for which branches are currently loaded — guards against stale fetches
+  const loadedForRepo = useRef("");
+
+  const fetchRepoBranches = async (ownerRepo: string) => {
+    const trimmed = ownerRepo.trim();
+    if (!trimmed.includes("/")) return;
+    // Already loaded for this repo — skip
+    if (loadedForRepo.current === trimmed && repoBranches.length > 0) return;
+    loadedForRepo.current = trimmed;
+    setBranchPickerLoading(true);
+    setBranchPickerError("");
+    setRepoBranches([]);
+    try {
+      const branches = await ListRepoBranches(vcsPlatform, trimmed);
+      setRepoBranches(branches ?? []);
+    } catch (e) {
+      setBranchPickerError(String(e));
+      loadedForRepo.current = "";
+    } finally {
+      setBranchPickerLoading(false);
+    }
+  };
+
+  // Called when user selects a repo from the picker — load branches immediately
+  const handleRepoSelect = (fullName: string) => {
+    if (fullName === vcsOwnerRepo) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    loadedForRepo.current = "";
+    setVCSOwnerRepo(fullName);
+    setVCSBranch("");
+    setRepoBranches([]);
+    setBranchPickerOpen(false);
+    setBranchPickerError("");
+    void fetchRepoBranches(fullName);
+  };
+
+  // Called when user types in the repo input manually — debounce 2s
+  const handleOwnerRepoChange = (value: string) => {
+    setVCSOwnerRepo(value);
+    setVCSBranch("");
+    setRepoBranches([]);
+    setBranchPickerOpen(false);
+    setBranchPickerError("");
+    loadedForRepo.current = "";
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const trimmed = value.trim();
+    if (trimmed.includes("/") && trimmed.split("/").every(Boolean)) {
+      debounceRef.current = setTimeout(() => {
+        void fetchRepoBranches(trimmed);
+      }, 2000);
+    }
+  };
+
+  const handleAddVCSBranch = () => {
+    setVCSAddError("");
+    const ownerRepo = vcsOwnerRepo.trim();
+    const branch = vcsBranch.trim();
+    if (!ownerRepo) {
+      setVCSAddError("Enter owner/repo (e.g. acme/my-service).");
+      return;
+    }
+    if (!ownerRepo.includes("/")) {
+      setVCSAddError("Format must be owner/repo, e.g. acme/my-service");
+      return;
+    }
+    const duplicate = newVCSBranches.some(
+      (b) => b.platform === vcsPlatform && b.ownerRepo === ownerRepo && b.branch === branch
+    ) || existingVCSBranches.some(
+      (b) => b.repo?.platform === vcsPlatform && `${b.repo?.owner}/${b.repo?.name}` === ownerRepo && b.branch === branch
+    );
+    if (duplicate) {
+      setVCSAddError("This branch is already linked.");
+      return;
+    }
+    setNewVCSBranches((prev) => [...prev, { platform: vcsPlatform, ownerRepo, branch }]);
+    setVCSOwnerRepo("");
+    setVCSBranch("");
+    setBranchPickerOpen(false);
+    setRepoBranches([]);
+    setBranchFilter("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  };
+
+  // close branch picker when clicking outside
+  useEffect(() => {
+    if (!branchPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (branchPickerRef.current && !branchPickerRef.current.contains(e.target as Node)) {
+        setBranchPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [branchPickerOpen]);
+
+  // clear filter and focus when picker opens (not when loading state changes)
+  useEffect(() => {
+    if (!branchPickerOpen) return;
+    setBranchFilter("");
+    const t = setTimeout(() => branchFilterRef.current?.focus(), 30);
+    return () => clearTimeout(t);
+  }, [branchPickerOpen]);
+
+  // auto-open picker once branches finish loading (background fetch)
+  const prevLoading = useRef(false);
+  useEffect(() => {
+    if (prevLoading.current && !branchPickerLoading && repoBranches.length > 0) {
+      setBranchPickerOpen(true);
+    }
+    prevLoading.current = branchPickerLoading;
+  }, [branchPickerLoading, repoBranches.length]);
+
+  // load tracked repos when VCS tab is opened
+  useEffect(() => {
+    if (activeTab !== "vcs") return;
+    ListTrackedRepos(vcsPlatform)
+      .then((repos) => setTrackedRepos((repos as VCSRepo[]) ?? []))
+      .catch(() => setTrackedRepos([]));
+  }, [activeTab, vcsPlatform]);
+
+  // close repo picker on outside click
+  useEffect(() => {
+    if (!repoPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (repoPickerRef.current && !repoPickerRef.current.contains(e.target as Node)) {
+        setRepoPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [repoPickerOpen]);
+
+  // auto-focus repo filter when picker opens
+  useEffect(() => {
+    if (repoPickerOpen) {
+      setRepoFilter("");
+      setTimeout(() => repoFilterRef.current?.focus(), 50);
+    }
+  }, [repoPickerOpen]);
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -448,9 +637,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
         {error && <div className="error-banner">{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          <div className="modal-scroll-body">
           {/* Always-visible fields */}
-          <div className="form-group">
+          <div className="form-group" style={{ padding: "0 0 0 0" }}>
             <label>Key</label>
             <input
               value={key}
@@ -502,27 +690,28 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
               className={`ctx-tab${activeTab === "texts" ? " ctx-tab--active" : ""}`}
               onClick={() => setActiveTab("texts")}
             >
-              Texts
-              {(existingFiles.length + newFiles.length) > 0 ? (
-                <span className="ctx-tab-badge">{existingFiles.length + newFiles.length}</span>
+              Texts & Files
+              {(existingFiles.length + newFiles.length + uploadedCount) > 0 ? (
+                <span className="ctx-tab-badge">{existingFiles.length + newFiles.length + uploadedCount}</span>
               ) : (
                 <span className="ctx-tab-optional">optional</span>
               )}
             </button>
             <button
               type="button"
-              className={`ctx-tab${activeTab === "files" ? " ctx-tab--active" : ""}`}
-              onClick={() => setActiveTab("files")}
+              className={`ctx-tab${activeTab === "vcs" ? " ctx-tab--active" : ""}`}
+              onClick={() => setActiveTab("vcs")}
             >
-              Files
-              {uploadedCount > 0 ? (
-                <span className="ctx-tab-badge">{uploadedCount}</span>
+              Git / PRs
+              {vcsBranchCount > 0 ? (
+                <span className="ctx-tab-badge">{vcsBranchCount}</span>
               ) : (
                 <span className="ctx-tab-optional">optional</span>
               )}
             </button>
           </div>
 
+          <div className="modal-scroll-body">
           {/* Jira panel */}
           {activeTab === "jira" && (
             <div className="ctx-panel">
@@ -545,7 +734,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           className="channel-remove-btn"
                           title="Remove ticket"
                           onClick={() => removeExistingJiraIssue(issue.id)}
-                        >✕</button>
+                        ><X size={11} /></button>
                       </div>
                     ))}
                   </div>
@@ -565,7 +754,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           className="channel-remove-btn"
                           title="Remove"
                           onClick={() => removeSelectedJiraIssue(issue.key)}
-                        >✕</button>
+                        ><X size={11} /></button>
                       </div>
                     ))}
                   </div>
@@ -701,7 +890,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           className="channel-remove-btn"
                           title="Remove channel"
                           onClick={() => removeExistingChannel(ch.id)}
-                        >✕</button>
+                        ><X size={11} /></button>
                       </div>
                     ))}
                   </div>
@@ -725,7 +914,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           className="channel-remove-btn"
                           title="Remove"
                           onClick={() => removeSelectedChannel(ch.channelId)}
-                        >✕</button>
+                        ><X size={11} /></button>
                       </div>
                     ))}
                   </div>
@@ -838,7 +1027,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           className="channel-remove-btn"
                           title="Remove DM config"
                           onClick={() => removeExistingDMConfig(dm.id)}
-                        >✕</button>
+                        ><X size={11} /></button>
                       </div>
                     ))}
                   </div>
@@ -859,7 +1048,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           className="channel-remove-btn"
                           title="Remove"
                           onClick={() => setNewDMConfigs((prev) => prev.filter((_, idx) => idx !== i))}
-                        >✕</button>
+                        ><X size={11} /></button>
                       </div>
                     ))}
                   </div>
@@ -955,12 +1144,12 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
             </div>
           )}
 
-          {/* Texts panel */}
+          {/* Texts & Files panel */}
           {activeTab === "texts" && (
             <div className="ctx-panel">
               <div className="form-group" style={{ marginBottom: 0 }}>
 
-                {/* Existing files */}
+                {/* Existing text entries */}
                 {existingFiles.map((f) => (
                   <div key={f.id} className="text-file-block">
                     <div className="text-file-header">
@@ -982,7 +1171,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           setExistingFiles((prev) => prev.filter((x) => x.id !== f.id));
                           setRemovedFileIds((prev) => [...prev, f.id]);
                         }}
-                      >✕</button>
+                      ><X size={11} /></button>
                     </div>
                     <textarea
                       className="text-file-content"
@@ -998,7 +1187,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                   </div>
                 ))}
 
-                {/* New files being added */}
+                {/* New text entries being added */}
                 {newFiles.map((f) => (
                   <div key={f.tempId} className="text-file-block text-file-block--new">
                     <div className="text-file-header">
@@ -1017,7 +1206,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         className="channel-remove-btn"
                         title="Remove"
                         onClick={() => setNewFiles((prev) => prev.filter((x) => x.tempId !== f.tempId))}
-                      >✕</button>
+                      ><X size={11} /></button>
                     </div>
                     <textarea
                       className="text-file-content"
@@ -1046,18 +1235,14 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                 >
                   + Add text
                 </button>
-
-                <div className="form-hint" style={{ marginTop: 8 }}>
-                  Plain-text documents attached to this context — included in MCP load_context output
-                </div>
               </div>
-          </div>
-        )}
 
-          {/* Files panel — upload documents (PDF, DOCX, RTF, ODT, TXT) */}
-          {activeTab === "files" && (
-            <div className="ctx-panel">
-              <div className="form-group" style={{ marginBottom: 0 }}>
+              {/* Uploaded documents */}
+              <div className="form-group" style={{ marginBottom: 0, marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Uploaded files
+                  <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)" }}>PDF, DOCX, images, etc.</span>
+                </label>
 
                 {uploadedFiles.map((f) => (
                   <div key={f.id} className="text-file-block">
@@ -1073,7 +1258,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         className="channel-remove-btn"
                         title="Remove uploaded file"
                         onClick={() => void removeUploadedFile(f.id)}
-                      >✕</button>
+                      ><X size={11} /></button>
                     </div>
                     <pre className="text-file-content" style={{ maxHeight: 80, overflow: "hidden", fontSize: 11, opacity: 0.7 }}>
                       {f.extractedText.slice(0, 300)}{f.extractedText.length > 300 ? "…" : ""}
@@ -1095,7 +1280,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         className="channel-remove-btn"
                         title="Remove pending file"
                         onClick={() => removePendingUpload(f.tempId)}
-                      >✕</button>
+                      ><X size={11} /></button>
                     </div>
                     <pre className="text-file-content" style={{ maxHeight: 80, overflow: "hidden", fontSize: 11, opacity: 0.7 }}>
                       {f.extractedText.slice(0, 300)}{f.extractedText.length > 300 ? "…" : ""}
@@ -1126,6 +1311,255 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
                 <div className="form-hint" style={{ marginTop: 8 }}>
                   Supported: PDF, DOCX, RTF, ODT, TXT, PNG, JPG, JPEG, WEBP — text is extracted and stored in the context
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VCS / Git panel */}
+          {activeTab === "vcs" && (
+            <div className="ctx-panel">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+
+                {/* Existing branches */}
+                {existingVCSBranches.length > 0 && (
+                  <div className="channel-saved-list" style={{ marginBottom: 12 }}>
+                    <div className="channel-saved-header">
+                      Linked branches
+                      <span className="channel-saved-count">{existingVCSBranches.length}</span>
+                    </div>
+                    {existingVCSBranches.map((b) => (
+                      <div key={b.id} className="channel-saved-row">
+                        <span className="platform-badge platform-badge--github">
+                          {b.repo?.platform ?? "github"}
+                        </span>
+                        <span className="channel-saved-name" style={{ fontWeight: 500 }}>
+                          {b.repo?.owner}/{b.repo?.name}
+                        </span>
+                        <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{b.branch ? `:${b.branch}` : " · all PRs"}</span>
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove branch"
+                          onClick={() => {
+                            setExistingVCSBranches((prev) => prev.filter((x) => x.id !== b.id));
+                            setRemovedVCSBranchIds((prev) => [...prev, b.id]);
+                          }}
+                        ><X size={11} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Newly added branches */}
+                {newVCSBranches.length > 0 && (
+                  <div className="channel-saved-list channel-saved-list--new" style={{ marginBottom: 12 }}>
+                    <div className="channel-saved-header">To be linked</div>
+                    {newVCSBranches.map((b, i) => (
+                      <div key={`${b.platform}-${b.ownerRepo}-${b.branch}-${i}`} className="channel-saved-row channel-saved-row--new">
+                        <span className="platform-badge platform-badge--github">{b.platform}</span>
+                        <span className="channel-saved-name" style={{ fontWeight: 500 }}>{b.ownerRepo}</span>
+                        <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{b.branch ? `:${b.branch}` : " · all PRs"}</span>
+                        <button
+                          type="button"
+                          className="channel-remove-btn"
+                          title="Remove"
+                          onClick={() => setNewVCSBranches((prev) => prev.filter((_, idx) => idx !== i))}
+                        ><X size={11} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add branch form */}
+                <div className="channel-search-section">
+                  <div className="channel-search-label">Link repository</div>
+
+                  {/* Row 1: platform + repo selector */}
+                  <div className="vcs-add-row">
+                    <select
+                      value={vcsPlatform}
+                      onChange={(e) => { setVCSPlatform(e.target.value as VCSPlatform); setRepoBranches([]); setVCSBranch(""); setVCSOwnerRepo(""); setTrackedRepos([]); }}
+                      className="vcs-platform-select"
+                    >
+                      {vcsPlatforms.map((p) => (
+                        <option key={p.platform} value={p.platform} disabled={!p.enabled}>
+                          {p.label}{!p.enabled ? " (soon)" : ""}
+                        </option>
+                      ))}
+                      {vcsPlatforms.length === 0 && <option value="github">GitHub</option>}
+                    </select>
+
+                    {/* Repo combobox */}
+                    <div ref={repoPickerRef} className="vcs-branch-selector-wrap">
+                      <button
+                        type="button"
+                        className={`vcs-branch-trigger${repoPickerOpen ? " vcs-branch-trigger--open" : ""}`}
+                        onClick={() => setRepoPickerOpen((v) => !v)}
+                      >
+                        <span className="vcs-branch-trigger-label">
+                          {vcsOwnerRepo
+                            ? vcsOwnerRepo
+                            : <span style={{ color: "var(--text-muted)" }}>Select repository…</span>
+                          }
+                        </span>
+                        {vcsOwnerRepo ? (
+                          <span
+                            className="vcs-branch-clear"
+                            onMouseDown={(e) => { e.stopPropagation(); handleOwnerRepoChange(""); setRepoPickerOpen(false); }}
+                            title="Clear"
+                          ><X size={11} /></span>
+                        ) : (
+                          <ChevronDown size={13} className={`vcs-branch-chevron${repoPickerOpen ? " vcs-branch-chevron--open" : ""}`} />
+                        )}
+                      </button>
+
+                      {repoPickerOpen && (
+                        <div className="branch-picker-dropdown">
+                          {trackedRepos.length === 0 ? (
+                            <div className="branch-picker-empty">No tracked repositories. Add repos in the Code Reviews tab first.</div>
+                          ) : (
+                            <>
+                              <div className="branch-picker-search-row">
+                                <input
+                                  ref={repoFilterRef}
+                                  className="branch-picker-filter"
+                                  value={repoFilter}
+                                  onChange={(e) => setRepoFilter(e.target.value)}
+                                  placeholder="Filter repositories…"
+                                  onKeyDown={(e) => { if (e.key === "Escape") setRepoPickerOpen(false); }}
+                                />
+                              </div>
+                              <div className="branch-picker-list">
+                                {trackedRepos
+                                  .filter((r) => !repoFilter || `${r.owner}/${r.name}`.toLowerCase().includes(repoFilter.toLowerCase()))
+                                  .map((r) => {
+                                    const fullName = `${r.owner}/${r.name}`;
+                                    return (
+                                      <button
+                                        key={r.id}
+                                        type="button"
+                                        className={`branch-picker-item${vcsOwnerRepo === fullName ? " branch-picker-item--selected" : ""}`}
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          handleRepoSelect(fullName);
+                                          setRepoPickerOpen(false);
+                                        }}
+                                      >
+                                        {fullName}
+                                      </button>
+                                    );
+                                  })
+                                }
+                                {trackedRepos.filter((r) => !repoFilter || `${r.owner}/${r.name}`.toLowerCase().includes(repoFilter.toLowerCase())).length === 0 && (
+                                  <div className="branch-picker-empty">No repositories match</div>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 2: branch selector + add */}
+                  <div className="vcs-add-row" style={{ marginTop: 6 }}>
+                    <div ref={branchPickerRef} className="vcs-branch-selector-wrap">
+                      {/* Trigger button */}
+                      <button
+                        type="button"
+                        className={`vcs-branch-trigger${branchPickerOpen ? " vcs-branch-trigger--open" : ""}${!vcsOwnerRepo.trim().includes("/") ? " vcs-branch-trigger--disabled" : ""}`}
+                        onClick={() => {
+                          if (!vcsOwnerRepo.trim().includes("/")) return;
+                          if (!branchPickerLoading) {
+                            // fetch only if not yet loaded for this repo
+                            void fetchRepoBranches(vcsOwnerRepo);
+                            setBranchPickerOpen((v) => !v);
+                          }
+                        }}
+                        disabled={!vcsOwnerRepo.trim().includes("/")}
+                      >
+                        <span className="vcs-branch-trigger-label">
+                          {branchPickerLoading
+                            ? <><Spinner size={11} /> Loading branches…</>
+                            : vcsBranch
+                              ? <><GitBranch size={11} /> {vcsBranch}</>
+                              : <span style={{ color: "var(--text-muted)" }}>Select branch (optional)</span>
+                          }
+                        </span>
+                        {vcsBranch ? (
+                          <span
+                            className="vcs-branch-clear"
+                            onMouseDown={(e) => { e.stopPropagation(); setVCSBranch(""); setBranchPickerOpen(false); }}
+                            title="Clear branch"
+                          ><X size={11} /></span>
+                        ) : (
+                          <ChevronDown size={13} className={`vcs-branch-chevron${branchPickerOpen ? " vcs-branch-chevron--open" : ""}`} />
+                        )}
+                      </button>
+
+                      {/* Dropdown */}
+                      {branchPickerOpen && !branchPickerLoading && (
+                        <div className="branch-picker-dropdown">
+                          {branchPickerError ? (
+                            <div className="branch-picker-error">{branchPickerError}</div>
+                          ) : (
+                            <>
+                              <div className="branch-picker-search-row">
+                                <input
+                                  ref={branchFilterRef}
+                                  className="branch-picker-filter"
+                                  value={branchFilter}
+                                  onChange={(e) => setBranchFilter(e.target.value)}
+                                  placeholder="Filter branches…"
+                                  onKeyDown={(e) => { if (e.key === "Escape") setBranchPickerOpen(false); }}
+                                />
+                              </div>
+                              <div className="branch-picker-list">
+                                {repoBranches
+                                  .filter((b) => !branchFilter || b.toLowerCase().includes(branchFilter.toLowerCase()))
+                                  .map((b) => (
+                                    <button
+                                      key={b}
+                                      type="button"
+                                      className={`branch-picker-item${vcsBranch === b ? " branch-picker-item--selected" : ""}`}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setVCSBranch(b);
+                                        setBranchPickerOpen(false);
+                                      }}
+                                    >
+                                      ⎇ {b}
+                                    </button>
+                                  ))
+                                }
+                                {repoBranches.filter((b) => !branchFilter || b.toLowerCase().includes(branchFilter.toLowerCase())).length === 0 && (
+                                  <div className="branch-picker-empty">No branches match</div>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={handleAddVCSBranch}
+                      style={{ flexShrink: 0 }}
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  {vcsAddError && (
+                    <div className="field-error" style={{ marginTop: 4 }}>{vcsAddError}</div>
+                  )}
+
+                  <div className="form-hint" style={{ marginTop: 8 }}>
+                    Branches load automatically after you stop typing. Leave branch empty to track all open PRs.
+                  </div>
                 </div>
               </div>
             </div>

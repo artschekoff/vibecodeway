@@ -10,7 +10,7 @@ INSTALL_DIR := /usr/local/bin
 setup:
 	cd frontend && npm install
 
-dev:
+dev: install-cli
 	wails dev
 
 build: build-desktop build-mcp build-cli

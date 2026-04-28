@@ -1,7 +1,8 @@
+import { Check, ChevronRight, Loader2, Minus } from "lucide-react";
 import { useProgress } from "../contexts/ProgressContext";
 
 export default function ProgressModal() {
-  const { isActive, title, items, currentIndex, current, total, stepText, cancellable, cancel } = useProgress();
+  const { isActive, title, items, currentIndex, current, total, stepText, subStep, cancellable, cancel } = useProgress();
 
   if (!isActive) return null;
 
@@ -25,7 +26,7 @@ export default function ProgressModal() {
                   className={`progress-item${isDone ? " progress-item--done" : ""}${isCurrent ? " progress-item--current" : ""}`}
                 >
                   <span className="progress-item-icon">
-                    {isDone ? "✓" : isCurrent ? "›" : "·"}
+                    {isDone ? <Check size={11} /> : isCurrent ? <ChevronRight size={11} /> : <Minus size={10} />}
                   </span>
                   <span className="progress-item-label">{label}</span>
                 </div>
@@ -34,11 +35,33 @@ export default function ProgressModal() {
           </div>
         )}
 
-        {/* Counter */}
-        {total > 0 && (
-          <div className="progress-counter">
-            {stepText && <span className="progress-step-text">{stepText}</span>}
-            <span className="progress-count-badge">{current} / {total}</span>
+        {/* Detailed progress — shown in event-driven mode (no items list) */}
+        {items.length === 0 && (
+          <div className="progress-detail">
+            {total > 0 && (
+              <div className="progress-detail-header">
+                <span className="progress-pct">{pct}%</span>
+                <span className="progress-count">{current} / {total}</span>
+              </div>
+            )}
+
+            {stepText && (
+              <div className="progress-context-row">
+                <Loader2 size={15} className="progress-context-icon" />
+                <span className="progress-context-name">{stepText}</span>
+              </div>
+            )}
+
+            {subStep && (
+              <div className="progress-substep-row">
+                <span className="progress-substep-dot" />
+                <span className="progress-substep-text">{subStep}…</span>
+              </div>
+            )}
+
+            {!stepText && !subStep && (
+              <p className="reload-progress-hint">Starting…</p>
+            )}
           </div>
         )}
 
@@ -53,11 +76,6 @@ export default function ProgressModal() {
             />
           )}
         </div>
-
-        {/* Step hint — shown only when total is not yet known (event-driven mode, starting) */}
-        {items.length === 0 && total === 0 && (
-          <p className="reload-progress-hint">{stepText}</p>
-        )}
 
         {cancellable && (
           <div className="modal-footer" style={{ marginTop: 16 }}>

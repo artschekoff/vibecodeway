@@ -5,6 +5,7 @@ type JiraProvider struct {
 	ID          string `json:"id"`
 	ContextID   string `json:"contextId"`
 	SearchQuery string `json:"searchQuery"`
+	BaseURL     string `json:"baseUrl"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 }
@@ -22,17 +23,21 @@ type Issue struct {
 	JiraUpdated string    `json:"jiraUpdated"`
 	CreatedAt   string    `json:"createdAt"`
 	IsActive    bool      `json:"isActive"`
-	Comments    []Comment `json:"comments,omitempty"`
+	ViewedAt       *string   `json:"viewedAt"`
+	AiProcessedAt  *string   `json:"aiProcessedAt"`
+	Comments       []Comment `json:"comments,omitempty"`
 }
 
 // Comment represents a Jira comment stored for an issue.
 type Comment struct {
-	ID          string `json:"id"`
-	IssueID     string `json:"issueId"`
-	JiraID      string `json:"jiraId"`
-	Author      string `json:"author"`
-	Body        string `json:"body"`
-	JiraCreated string `json:"jiraCreated"`
-	CreatedAt   string `json:"createdAt"`
-	IsActive    bool   `json:"isActive"`
+	ID             string  `json:"id"`
+	IssueID        string  `json:"issueId"`
+	JiraID         string  `json:"jiraId"`
+	Author         string  `json:"author"`
+	Body           string  `json:"body"`
+	JiraCreated    string  `json:"jiraCreated"`
+	CreatedAt      string  `json:"createdAt"`
+	IsActive       bool    `json:"isActive"`
+	ViewedAt       *string `json:"viewedAt"`
+	AiProcessedAt  *string `json:"aiProcessedAt"`
 }

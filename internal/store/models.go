@@ -11,7 +11,38 @@ type Context struct {
 	IssueCount int    `json:"issueCount,omitempty"`
 	// LastItemAt is the MAX created_at across all linked items (issues, comments, threads).
 	// Empty string when no items exist yet.
-	LastItemAt string `json:"lastItemAt,omitempty"`
+	LastItemAt    string `json:"lastItemAt,omitempty"`
+	UnviewedCount int    `json:"unviewedCount,omitempty"`
+	// Provider presence flags — true when the context has at least one configured source.
+	HasJira  bool `json:"hasJira,omitempty"`
+	HasSlack bool `json:"hasSlack,omitempty"`
+	HasVCS   bool `json:"hasVcs,omitempty"`
+	HasFiles bool `json:"hasFiles,omitempty"`
+}
+
+// UnviewedBreakdown reports how many unread items exist per item type for a context.
+type UnviewedBreakdown struct {
+	Issues        int `json:"issues"`
+	Comments      int `json:"comments"`
+	Threads       int `json:"threads"`
+	DMs           int `json:"dms"`
+	PRs           int `json:"prs"`
+	PRComments    int `json:"prComments"`
+	Notifications int `json:"notifications"`
+	Total         int `json:"total"`
+}
+
+// Notification is a system-generated event for a state change on a tracked entity.
+type Notification struct {
+	ID         string  `json:"id"`
+	ContextID  string  `json:"contextId"`
+	EntityType string  `json:"entityType"`
+	EntityID   string  `json:"entityId"`
+	EventType  string  `json:"eventType"`
+	OldValue   string  `json:"oldValue"`
+	NewValue   string  `json:"newValue"`
+	CreatedAt  string  `json:"createdAt"`
+	ReadAt     *string `json:"readAt,omitempty"`
 }
 
 // ContextText is a plain-text entry associated with a context.

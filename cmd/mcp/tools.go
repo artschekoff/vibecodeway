@@ -12,13 +12,14 @@ import (
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"go.uber.org/zap"
 )
 
-func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, cliRunner *cliclient.Runner, logger *zap.Logger) {
-	h := &handlers{svc: svc, cli: cliRunner, logger: logger}
+func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStore *vcsstore.Store, cliRunner *cliclient.Runner, logger *zap.Logger) {
+	h := &handlers{svc: svc, vcsStore: vcsStore, cli: cliRunner, logger: logger}
 
 	s.AddTool(
 		mcp.NewTool("load_context",
@@ -145,12 +146,52 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, cliRunn
 		),
 		h.handleContextLog,
 	)
+
+	s.AddTool(
+		mcp.NewTool("pr_list",
+			mcp.WithDescription("List pull requests stored for a context. Returns PR status, review status, author, title, and URL."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key, e.g. 'sprint-42'. Use either context_id or context_key."),
+			),
+		),
+		h.handlePRList,
+	)
+
+	s.AddTool(
+		mcp.NewTool("pr_comments",
+			mcp.WithDescription("Get PR comments for a context. By default returns all unresolved comments. Pass include_resolved='true' to get all comments including resolved ones."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key. Use either context_id or context_key."),
+			),
+			mcp.WithString("pr_number",
+				mcp.Description("Optional. If provided, returns comments for that specific PR number only."),
+			),
+			mcp.WithString("include_resolved",
+				mcp.Description("Set to 'true' to include resolved comments. Defaults to 'false' (unresolved only)."),
+			),
+		),
+		h.handlePRComments,
+	)
+
+	s.AddTool(
+		mcp.NewTool("pr_review_requests",
+			mcp.WithDescription("List pull requests where the authenticated GitHub user's review has been requested. Returns PRs across all tracked repositories."),
+		),
+		h.handlePRReviewRequests,
+	)
 }
 
 type handlers struct {
-	svc    *jiraservice.ContextService
-	cli    *cliclient.Runner
-	logger *zap.Logger
+	svc      *jiraservice.ContextService
+	vcsStore *vcsstore.Store
+	cli      *cliclient.Runner
+	logger   *zap.Logger
 }
 
 func (h *handlers) handleContextList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -445,6 +486,192 @@ func (h *handlers) handleContextAddFile(ctx context.Context, req mcp.CallToolReq
 	}
 
 	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func (h *handlers) handlePRList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.vcsStore == nil {
+		return mcp.NewToolResultError("VCS store not configured"), nil
+	}
+	contextID, err := h.resolveContextID(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	prs, err := h.vcsStore.PullRequests.ListPRsForContext(ctx, contextID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("listing PRs: %v", err)), nil
+	}
+
+	// Enrich with repo/branch info by joining through branches.
+	branches, _ := h.vcsStore.Branches.ListBranches(ctx, contextID)
+	branchByID := make(map[string]vcsstore.ContextVCSBranch, len(branches))
+	for _, b := range branches {
+		branchByID[b.ID] = b
+	}
+
+	type prOut struct {
+		PRNumber     int    `json:"pr_number"`
+		Title        string `json:"title"`
+		Author       string `json:"author"`
+		State        string `json:"state"`
+		ReviewStatus string `json:"review_status"`
+		URL          string `json:"url"`
+		Platform     string `json:"platform,omitempty"`
+		Repo         string `json:"repo,omitempty"`
+		Branch       string `json:"branch,omitempty"`
+	}
+	out := make([]prOut, 0, len(prs))
+	for _, pr := range prs {
+		row := prOut{
+			PRNumber:     pr.PRNumber,
+			Title:        pr.Title,
+			Author:       pr.Author,
+			State:        pr.State,
+			ReviewStatus: pr.ReviewStatus,
+			URL:          pr.URL,
+		}
+		if b, ok := branchByID[pr.BranchID]; ok {
+			row.Branch = b.Branch
+			if b.Repo != nil {
+				row.Platform = b.Repo.Platform
+				row.Repo = b.Repo.FullName()
+			}
+		}
+		out = append(out, row)
+	}
+
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func (h *handlers) handlePRComments(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.vcsStore == nil {
+		return mcp.NewToolResultError("VCS store not configured"), nil
+	}
+	contextID, err := h.resolveContextID(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	includeResolved := strings.EqualFold(strings.TrimSpace(req.GetString("include_resolved", "")), "true")
+	prNumberStr := strings.TrimSpace(req.GetString("pr_number", ""))
+
+	prs, err := h.vcsStore.PullRequests.ListPRsForContext(ctx, contextID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("listing PRs: %v", err)), nil
+	}
+
+	var buf strings.Builder
+	for _, pr := range prs {
+		if prNumberStr != "" && fmt.Sprintf("%d", pr.PRNumber) != prNumberStr {
+			continue
+		}
+		comments, err := h.vcsStore.PullRequests.ListCommentsForPRFiltered(ctx, pr.ID, includeResolved)
+		if err != nil {
+			h.logger.Warn("mcp pr_comments: load comments failed", zap.String("prID", pr.ID), zap.Error(err))
+			continue
+		}
+		if len(comments) == 0 {
+			continue
+		}
+		tree := vcsstore.BuildCommentTree(comments)
+		fmt.Fprintf(&buf, "## PR #%d: %s\n", pr.PRNumber, pr.Title)
+		fmt.Fprintf(&buf, "Author: %s | State: %s | Review: %s\n\n", pr.Author, pr.State, pr.ReviewStatus)
+		writeMCPCommentTree(&buf, tree, "")
+		buf.WriteString("\n")
+	}
+
+	if buf.Len() == 0 {
+		return mcp.NewToolResultText("No comments found."), nil
+	}
+	return mcp.NewToolResultText(buf.String()), nil
+}
+
+func writeMCPCommentTree(w *strings.Builder, comments []vcsstore.PRComment, indent string) {
+	for _, c := range comments {
+		author := c.Author
+		if author == "" {
+			author = "Unknown"
+		}
+		resolved := ""
+		if c.IsResolved {
+			resolved = " [resolved]"
+		}
+		location := ""
+		if c.Path != nil && *c.Path != "" {
+			location = fmt.Sprintf(" [%s", *c.Path)
+			if c.Line != nil {
+				location += fmt.Sprintf(":%d", *c.Line)
+			}
+			location += "]"
+		}
+		fmt.Fprintf(w, "%s**%s**%s%s:\n", indent, author, location, resolved)
+		for _, line := range strings.Split(c.Body, "\n") {
+			fmt.Fprintf(w, "%s  %s\n", indent, line)
+		}
+		if len(c.Replies) > 0 {
+			writeMCPCommentTree(w, c.Replies, indent+"  ")
+		}
+		w.WriteString("\n")
+	}
+}
+
+func (h *handlers) handlePRReviewRequests(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.vcsStore == nil {
+		return mcp.NewToolResultError("VCS store not configured"), nil
+	}
+
+	rrs, err := h.vcsStore.ReviewRequests.ListReviewRequests(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("listing review requests: %v", err)), nil
+	}
+
+	// Enrich with repo info.
+	repoCache := make(map[string]*vcsstore.VCSRepo)
+	type rrOut struct {
+		PRNumber     int    `json:"pr_number"`
+		PRTitle      string `json:"pr_title"`
+		PRAuthor     string `json:"pr_author"`
+		PRURL        string `json:"pr_url"`
+		ReviewStatus string `json:"review_status"`
+		Repo         string `json:"repo,omitempty"`
+		Platform     string `json:"platform,omitempty"`
+	}
+	out := make([]rrOut, 0, len(rrs))
+	for _, rr := range rrs {
+		row := rrOut{
+			PRNumber:     rr.PRNumber,
+			PRTitle:      rr.PRTitle,
+			PRAuthor:     rr.PRAuthor,
+			PRURL:        rr.PRURL,
+			ReviewStatus: rr.ReviewStatus,
+		}
+		if repo, ok := repoCache[rr.RepoID]; ok {
+			if repo != nil {
+				row.Repo = repo.FullName()
+				row.Platform = repo.Platform
+			}
+		} else {
+			repo, err := h.vcsStore.Repos.GetRepo(ctx, rr.RepoID)
+			if err == nil {
+				repoCache[rr.RepoID] = repo
+				row.Repo = repo.FullName()
+				row.Platform = repo.Platform
+			} else {
+				repoCache[rr.RepoID] = nil
+			}
+		}
+		out = append(out, row)
+	}
+
+	data, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
 	}

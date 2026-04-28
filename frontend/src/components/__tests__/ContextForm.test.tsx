@@ -63,15 +63,18 @@ describe("ContextForm — Files tab (creation mode)", () => {
     const { PickAndExtractFilesPreview } = await import(
       "../../../wailsjs/go/main/App"
     );
-    vi.mocked(PickAndExtractFilesPreview).mockResolvedValue([
-      {
-        tempId: "tmp-1",
-        originalName: "report.pdf",
-        fileType: "pdf",
-        extractedText: "some text",
-        fileSize: 1024,
-      },
-    ]);
+    vi.mocked(PickAndExtractFilesPreview).mockResolvedValue({
+      previews: [
+        {
+          tempId: "tmp-1",
+          originalName: "report.pdf",
+          fileType: "pdf",
+          extractedText: "some text",
+          fileSize: 1024,
+        },
+      ],
+      errors: [],
+    } as any);
 
     const onSave = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();

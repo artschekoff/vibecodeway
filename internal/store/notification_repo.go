@@ -1,0 +1,81 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// CreateNotification inserts a new notification for a state-change event.
+// If an unread notification of the same event_type already exists for the entity,
+// it is a no-op (prevents duplicate alerts on repeated syncs).
+func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+	var existing string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM notifications WHERE entity_id = ? AND event_type = ? AND read_at IS NULL LIMIT 1`,
+		entityID, eventType,
+	).Scan(&existing)
+	if err == nil {
+		return nil // already an unread notification of this type — skip
+	}
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("check existing notification: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO notifications (id, context_id, entity_type, entity_id, event_type, old_value, new_value, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, uuid.New().String(), contextID, entityType, entityID, eventType, oldValue, newValue,
+		time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("insert notification: %w", err)
+	}
+	return nil
+}
+
+// CountUnreadNotifications returns the number of unread notifications for a context.
+func (s *Store) CountUnreadNotifications(ctx context.Context, contextID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM notifications WHERE context_id = ? AND read_at IS NULL`,
+		contextID,
+	).Scan(&n)
+	return n, err
+}
+
+// MarkNotificationsRead marks all unread notifications for a context as read.
+func (s *Store) MarkNotificationsRead(ctx context.Context, contextID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE notifications SET read_at = datetime('now') WHERE context_id = ? AND read_at IS NULL`,
+		contextID,
+	)
+	return err
+}
+
+// ListUnreadNotifications returns all unread notifications for a context, newest first.
+func (s *Store) ListUnreadNotifications(ctx context.Context, contextID string) ([]Notification, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, context_id, entity_type, entity_id, event_type, old_value, new_value, created_at, read_at
+		FROM notifications
+		WHERE context_id = ? AND read_at IS NULL
+		ORDER BY created_at DESC
+	`, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("list unread notifications: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var result []Notification
+	for rows.Next() {
+		var n Notification
+		if err := rows.Scan(&n.ID, &n.ContextID, &n.EntityType, &n.EntityID, &n.EventType,
+			&n.OldValue, &n.NewValue, &n.CreatedAt, &n.ReadAt); err != nil {
+			return nil, fmt.Errorf("scan notification: %w", err)
+		}
+		result = append(result, n)
+	}
+	return result, rows.Err()
+}

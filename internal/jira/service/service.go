@@ -17,6 +17,7 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/provider"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"go.uber.org/zap"
 )
 
@@ -131,6 +132,9 @@ type ReloadAllResult struct {
 	NewComments      int    `json:"newComments"`
 	ThreadsRefreshed int    `json:"threadsRefreshed"`
 	DMsRefreshed     int    `json:"dmsRefreshed"`
+	PRsRefreshed     int    `json:"prsRefreshed"`
+	NewPRComments    int    `json:"newPRComments"`
+	NewNotifications int    `json:"newNotifications"`
 	Error            string `json:"error,omitempty"`
 }
 
@@ -138,21 +142,25 @@ type ReloadAllResult struct {
 // current is 1-based; total is the number of providers.
 type RefreshProgressFunc func(current, total int, step string)
 
-// ReloadProgressFunc is called after each context is processed during ReloadAllContexts.
+// ReloadProgressFunc is called before each provider step inside ReloadAllContexts.
 // current is 1-based, total is the number of active contexts being reloaded.
-type ReloadProgressFunc func(current, total int, contextKey string)
+// contextKey is the human-readable key for the context, step is the provider name
+// (e.g. "jira", "slack", "vcs") so the caller can display fine-grained progress.
+type ReloadProgressFunc func(current, total int, contextKey, step string)
 
-// ContextDetail is a Context with its provider configs, Jira issues, Slack threads, and texts.
+// ContextDetail is a Context with its provider configs, Jira issues, Slack threads, texts, and VCS branches/PRs.
 type ContextDetail struct {
-	Context             appstore.Context             `json:"context"`
-	Jira                *jirastore.JiraProvider      `json:"jira,omitempty"`
-	Slack               *slackstore.SlackProvider    `json:"slack,omitempty"`
-	Issues              []jirastore.Issue             `json:"issues"`
-	SlackThreads        []slackstore.SlackThread      `json:"slackThreads,omitempty"`
-	SlackChannels       []slackstore.SlackChannel     `json:"slackChannels,omitempty"`
-	SlackDMConfigs      []slackstore.SlackDMConfig    `json:"slackDMConfigs,omitempty"`
-	ContextTexts        []appstore.ContextText        `json:"contextTexts,omitempty"`
-	UploadedFiles       []appstore.ContextUploadedFile `json:"uploadedFiles,omitempty"`
+	Context        appstore.Context               `json:"context"`
+	Jira           *jirastore.JiraProvider        `json:"jira,omitempty"`
+	Slack          *slackstore.SlackProvider      `json:"slack,omitempty"`
+	Issues         []jirastore.Issue              `json:"issues"`
+	SlackThreads   []slackstore.SlackThread       `json:"slackThreads,omitempty"`
+	SlackChannels  []slackstore.SlackChannel      `json:"slackChannels,omitempty"`
+	SlackDMConfigs []slackstore.SlackDMConfig     `json:"slackDMConfigs,omitempty"`
+	ContextTexts   []appstore.ContextText         `json:"contextTexts,omitempty"`
+	UploadedFiles  []appstore.ContextUploadedFile `json:"uploadedFiles,omitempty"`
+	VCSBranches    []vcsstore.ContextVCSBranch    `json:"vcsBranches,omitempty"`
+	PullRequests   []vcsstore.PullRequest         `json:"pullRequests,omitempty"`
 }
 
 // ContextService provides all domain operations for managing contexts.
@@ -160,6 +168,7 @@ type ContextService struct {
 	store      *appstore.Store
 	jiraRepo   *jirastore.Repo
 	slackRepo  *slackstore.Repo
+	vcsStore   *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
 	jira       *jira.Client
 	slack      SlackRunner
 	logger     *zap.Logger
@@ -192,6 +201,12 @@ func NewContextService(s *appstore.Store, j *jira.Client, jiraRepo *jirastore.Re
 		logger:    logger,
 		providers: providers,
 	}
+}
+
+// SetVCSStore attaches a vcsstore.Store so that GetContextDetail includes VCS data.
+// Pass nil to disable VCS data (e.g. when running without VCS support).
+func (svc *ContextService) SetVCSStore(vs *vcsstore.Store) {
+	svc.vcsStore = vs
 }
 
 // AuthStatus returns the current acli authentication status.
@@ -311,6 +326,32 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 		return nil, fmt.Errorf("loading uploaded files: %w", err)
 	}
 	detail.UploadedFiles = uploadedFiles
+
+	// Load VCS branches and PRs when the vcsStore is configured.
+	if svc.vcsStore != nil {
+		branches, err := svc.vcsStore.Branches.ListBranches(ctx, id)
+		if err != nil {
+			svc.logger.Warn("loading vcs branches failed", zap.String("contextID", id), zap.Error(err))
+		} else {
+			detail.VCSBranches = branches
+		}
+
+		prs, err := svc.vcsStore.PullRequests.ListPRsForContext(ctx, id)
+		if err != nil {
+			svc.logger.Warn("loading vcs prs failed", zap.String("contextID", id), zap.Error(err))
+		} else {
+			// Load comments for each PR.
+			for i, pr := range prs {
+				comments, err := svc.vcsStore.PullRequests.ListCommentsForPR(ctx, pr.ID)
+				if err != nil {
+					svc.logger.Warn("loading pr comments failed", zap.String("prID", pr.ID), zap.Error(err))
+					continue
+				}
+				prs[i].Comments = vcsstore.BuildCommentTree(comments)
+			}
+			detail.PullRequests = prs
+		}
+	}
 
 	return detail, nil
 }
@@ -695,17 +736,16 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 
 	results := make([]ReloadAllResult, 0, len(active))
 	for i, c := range active {
-		// Notify before processing so the frontend shows which context is being worked on.
-		if notify != nil {
-			notify(i+1, len(active), c.Key)
-		}
-
 		r := ReloadAllResult{ContextID: c.ID, ContextKey: c.Key}
 
 		before := svc.snapshotBefore(ctx, c.ID)
 
 		var errs []string
 		for _, p := range svc.providers {
+			// Notify before each provider so the frontend shows which step is running.
+			if notify != nil {
+				notify(i+1, len(active), c.Key, p.Name())
+			}
 			stats, err := p.Reload(ctx, c.ID)
 			if err != nil {
 				errs = append(errs, fmt.Sprintf("%s: %v", p.Name(), err))
@@ -721,6 +761,10 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 			case providerSlack:
 				r.ThreadsRefreshed += stats.ItemsRefreshed
 				r.DMsRefreshed += stats.NewItems
+			case "vcs":
+				r.PRsRefreshed += stats.ItemsRefreshed
+				r.NewPRComments += stats.NewItems
+				r.NewNotifications += stats.NewNotifications
 			}
 		}
 		if len(errs) > 0 {
@@ -913,6 +957,64 @@ func (svc *ContextService) ListSlackWorkspaces(ctx context.Context) ([]SlackWork
 			continue
 		}
 		results = append(results, SlackWorkspaceResult{ID: name, Name: name})
+	}
+	return results, nil
+}
+
+// MarkIssueViewed marks a Jira issue as viewed (sets viewed_at = now).
+func (svc *ContextService) MarkIssueViewed(ctx context.Context, id string) error {
+	return svc.jiraRepo.MarkIssueViewed(ctx, id)
+}
+
+// MarkCommentViewed marks a Jira comment as viewed.
+func (svc *ContextService) MarkCommentViewed(ctx context.Context, id string) error {
+	return svc.jiraRepo.MarkCommentViewed(ctx, id)
+}
+
+// MarkSlackThreadViewed marks a Slack thread as viewed.
+func (svc *ContextService) MarkSlackThreadViewed(ctx context.Context, id string) error {
+	return svc.slackRepo.MarkSlackThreadViewed(ctx, id)
+}
+
+// MarkSlackDMConfigViewed marks a Slack DM config as viewed.
+func (svc *ContextService) MarkSlackDMConfigViewed(ctx context.Context, id string) error {
+	return svc.slackRepo.MarkSlackDMConfigViewed(ctx, id)
+}
+
+// MarkContextAllViewed sets viewed_at = now for every unread item in a context.
+func (svc *ContextService) MarkContextAllViewed(ctx context.Context, contextID string) error {
+	return svc.store.MarkContextAllViewed(ctx, contextID)
+}
+
+// GetUnviewedBreakdown returns per-type unread counts for a context.
+func (svc *ContextService) GetUnviewedBreakdown(ctx context.Context, contextID string) (appstore.UnviewedBreakdown, error) {
+	return svc.store.GetUnviewedBreakdown(ctx, contextID)
+}
+
+// SetJiraBaseURL stores the Jira instance base URL for a context.
+func (svc *ContextService) SetJiraBaseURL(ctx context.Context, contextID, baseURL string) error {
+	return svc.jiraRepo.SetJiraBaseURL(ctx, contextID, baseURL)
+}
+
+// RefreshAllContexts refreshes every active context and returns aggregated results.
+func (svc *ContextService) RefreshAllContexts(ctx context.Context) ([]ReloadAllResult, error) {
+	contexts, err := svc.store.ListContexts(ctx, false)
+	if err != nil {
+		return nil, fmt.Errorf("listing contexts for refresh: %w", err)
+	}
+	results := make([]ReloadAllResult, 0, len(contexts))
+	for _, c := range contexts {
+		res, err := svc.RefreshContext(ctx, c.ID)
+		if err != nil {
+			results = append(results, ReloadAllResult{ContextID: c.ID, ContextKey: c.Key, Error: err.Error()})
+			continue
+		}
+		results = append(results, ReloadAllResult{
+			ContextID:        c.ID,
+			ContextKey:       c.Key,
+			ThreadsRefreshed: res.ThreadsRefreshed,
+			DMsRefreshed:     res.DMsRefreshed,
+		})
 	}
 	return results, nil
 }

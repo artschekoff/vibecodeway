@@ -57,7 +57,7 @@ func (r *Repo) UpsertSlackThread(ctx context.Context, contextID string, args Ups
 func (r *Repo) ListSlackThreads(ctx context.Context, contextID string, activeOnly bool) ([]SlackThread, error) {
 	q := `
 		SELECT id, context_id, COALESCE(slack_channel_id, ''), workspace, channel_id, thread_ts,
-		       channel_name, permalink, search_query, content, created_at, is_active
+		       channel_name, permalink, search_query, content, created_at, is_active, viewed_at, ai_processed_at
 		FROM slack_threads
 		WHERE context_id = ?`
 	if activeOnly {
@@ -75,7 +75,7 @@ func (r *Repo) ListSlackThreads(ctx context.Context, contextID string, activeOnl
 		var t SlackThread
 		if err := rows.Scan(
 			&t.ID, &t.ContextID, &t.SlackChannelID, &t.Workspace, &t.ChannelID, &t.ThreadTS,
-			&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive,
+			&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive, &t.ViewedAt, &t.AiProcessedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning slack thread: %w", err)
 		}
@@ -118,11 +118,11 @@ func (r *Repo) getSlackThread(ctx context.Context, id string) (*SlackThread, err
 	var t SlackThread
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, context_id, COALESCE(slack_channel_id, ''), workspace, channel_id, thread_ts,
-		       channel_name, permalink, search_query, content, created_at, is_active
+		       channel_name, permalink, search_query, content, created_at, is_active, viewed_at, ai_processed_at
 		FROM slack_threads WHERE id = ?
 	`, id).Scan(
 		&t.ID, &t.ContextID, &t.SlackChannelID, &t.Workspace, &t.ChannelID, &t.ThreadTS,
-		&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive,
+		&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive, &t.ViewedAt, &t.AiProcessedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -131,6 +131,13 @@ func (r *Repo) getSlackThread(ctx context.Context, id string) (*SlackThread, err
 		return nil, fmt.Errorf("getting slack thread: %w", err)
 	}
 	return &t, nil
+}
+
+// MarkSlackThreadViewed sets viewed_at = datetime('now') for the given thread if not already viewed.
+func (r *Repo) MarkSlackThreadViewed(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE slack_threads SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL", id)
+	return err
 }
 
 // nullableString converts an empty string to nil so SQLite stores NULL

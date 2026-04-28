@@ -15,7 +15,7 @@ import (
 func (r *Repo) GetIssuesByContext(ctx context.Context, contextID string, activeOnly bool) ([]Issue, error) {
 	q := `
 		SELECT id, context_id, jira_key, summary, status, assignee, issue_type,
-		       description, jira_updated, created_at, is_active
+		       description, jira_updated, created_at, is_active, viewed_at, ai_processed_at
 		FROM jira_issues
 		WHERE context_id = ?`
 	if activeOnly {
@@ -33,7 +33,7 @@ func (r *Repo) GetIssuesByContext(ctx context.Context, contextID string, activeO
 		var i Issue
 		if err := rows.Scan(
 			&i.ID, &i.ContextID, &i.JiraKey, &i.Summary, &i.Status,
-			&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive,
+			&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning issue: %w", err)
 		}
@@ -56,11 +56,11 @@ func (r *Repo) ToggleIssueActive(ctx context.Context, id string) (*Issue, error)
 	var i Issue
 	err = r.db.QueryRowContext(ctx, `
 		SELECT id, context_id, jira_key, summary, status, assignee, issue_type,
-		       description, jira_updated, created_at, is_active
+		       description, jira_updated, created_at, is_active, viewed_at, ai_processed_at
 		FROM jira_issues WHERE id = ?
 	`, id).Scan(
 		&i.ID, &i.ContextID, &i.JiraKey, &i.Summary, &i.Status,
-		&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive,
+		&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -69,6 +69,13 @@ func (r *Repo) ToggleIssueActive(ctx context.Context, id string) (*Issue, error)
 		return nil, fmt.Errorf("fetching updated issue: %w", err)
 	}
 	return &i, nil
+}
+
+// MarkIssueViewed sets viewed_at = datetime('now') for the given issue if not already viewed.
+func (r *Repo) MarkIssueViewed(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE jira_issues SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL", id)
+	return err
 }
 
 // GetIssueJiraKeys returns all jira_key values for a context (for dedup checks).

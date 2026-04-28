@@ -25,6 +25,9 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
+	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
+	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
@@ -87,6 +90,8 @@ type App struct {
 	logger        *zap.Logger
 	slackRunner   *slack.Runner
 	cliRunner     *cliclient.Runner
+	vcsStore      *vcsstore.Store
+	vcsSvc        *vcsservice.VCSProvider
 	cancelRefresh context.CancelFunc
 	cancelMu      sync.Mutex
 
@@ -134,7 +139,16 @@ func (a *App) startup(ctx context.Context) {
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
-	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider)
+	ghRunner := githubrunner.NewRunner(logger)
+	a.vcsStore = vcsstore.NewStore(s.DB())
+	a.vcsSvc = vcsservice.NewVCSProvider(a.vcsStore, logger, ghRunner)
+	a.vcsSvc.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+		return s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+	})
+	vcsProvider := a.vcsSvc
+
+	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)
+	a.svc.SetVCSStore(a.vcsStore)
 
 	openAI := openaiclient.NewClient(s, slackRunner.Passphrase, logger)
 	a.openAI = openAI
@@ -198,6 +212,12 @@ func (a *App) ListContexts() ([]appstore.Context, error) {
 // ListAllContexts returns all contexts including archived ones.
 func (a *App) ListAllContexts() ([]appstore.Context, error) {
 	return a.cliRunner.ListContexts(a.ctx, true)
+}
+
+// SearchContextIDs returns IDs of contexts matching the query across key, Jira summaries,
+// Slack channel names, VCS branches, text file names, and uploaded file names.
+func (a *App) SearchContextIDs(query string) ([]string, error) {
+	return a.db.SearchContextIDs(a.ctx, query)
 }
 
 // ToggleContextStatus flips a context between "active" and "archived".
@@ -616,9 +636,16 @@ func (a *App) SearchJQL(jql string) ([]jira.SearchResult, error) {
 // ReloadAllContexts fetches fresh data from every context's linked Jira query and Slack threads.
 // Returns one result per context; per-context errors are embedded in the result, not returned as
 // a top-level error, so the caller always receives the full picture.
-// Note: progress events are not emitted when running via CLI subprocess.
+// Progress events ("reload:progress") are emitted via Wails runtime before each provider step.
 func (a *App) ReloadAllContexts() ([]jiraservice.ReloadAllResult, error) {
-	return a.cliRunner.ReloadAllContexts(a.ctx)
+	return a.svc.ReloadAllContexts(a.ctx, func(current, total int, contextKey, step string) {
+		runtime.EventsEmit(a.ctx, "reload:progress", map[string]interface{}{
+			"current":    current,
+			"total":      total,
+			"contextKey": contextKey,
+			"step":       step,
+		})
+	})
 }
 
 // --- Context logs ---

@@ -53,7 +53,7 @@ func (r *Repo) UpdateSlackDMConfigContent(ctx context.Context, id, content strin
 // When activeOnly is true only rows with is_active = 1 are returned.
 func (r *Repo) ListSlackDMConfigs(ctx context.Context, contextID string, activeOnly bool) ([]SlackDMConfig, error) {
 	q := `
-		SELECT id, context_id, workspace, start_from, content, created_at, updated_at, is_active
+		SELECT id, context_id, workspace, start_from, content, created_at, updated_at, is_active, viewed_at, ai_processed_at
 		FROM slack_dm_configs
 		WHERE context_id = ?`
 	if activeOnly {
@@ -70,7 +70,7 @@ func (r *Repo) ListSlackDMConfigs(ctx context.Context, contextID string, activeO
 	for rows.Next() {
 		var c SlackDMConfig
 		var isActive int
-		if err := rows.Scan(&c.ID, &c.ContextID, &c.Workspace, &c.StartFrom, &c.Content, &c.CreatedAt, &c.UpdatedAt, &isActive); err != nil {
+		if err := rows.Scan(&c.ID, &c.ContextID, &c.Workspace, &c.StartFrom, &c.Content, &c.CreatedAt, &c.UpdatedAt, &isActive, &c.ViewedAt, &c.AiProcessedAt); err != nil {
 			return nil, fmt.Errorf("scanning slack dm config: %w", err)
 		}
 		c.IsActive = isActive == 1
@@ -206,9 +206,9 @@ func (r *Repo) getSlackDMConfigByKey(ctx context.Context, contextID, workspace s
 	var c SlackDMConfig
 	var isActive int
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, context_id, workspace, start_from, content, created_at, updated_at, is_active
+		SELECT id, context_id, workspace, start_from, content, created_at, updated_at, is_active, viewed_at, ai_processed_at
 		FROM slack_dm_configs WHERE context_id = ? AND workspace = ?
-	`, contextID, workspace).Scan(&c.ID, &c.ContextID, &c.Workspace, &c.StartFrom, &c.Content, &c.CreatedAt, &c.UpdatedAt, &isActive)
+	`, contextID, workspace).Scan(&c.ID, &c.ContextID, &c.Workspace, &c.StartFrom, &c.Content, &c.CreatedAt, &c.UpdatedAt, &isActive, &c.ViewedAt, &c.AiProcessedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -223,9 +223,9 @@ func (r *Repo) getSlackDMConfig(ctx context.Context, id string) (*SlackDMConfig,
 	var c SlackDMConfig
 	var isActive int
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, context_id, workspace, start_from, content, created_at, updated_at, is_active
+		SELECT id, context_id, workspace, start_from, content, created_at, updated_at, is_active, viewed_at, ai_processed_at
 		FROM slack_dm_configs WHERE id = ?
-	`, id).Scan(&c.ID, &c.ContextID, &c.Workspace, &c.StartFrom, &c.Content, &c.CreatedAt, &c.UpdatedAt, &isActive)
+	`, id).Scan(&c.ID, &c.ContextID, &c.Workspace, &c.StartFrom, &c.Content, &c.CreatedAt, &c.UpdatedAt, &isActive, &c.ViewedAt, &c.AiProcessedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -234,4 +234,11 @@ func (r *Repo) getSlackDMConfig(ctx context.Context, id string) (*SlackDMConfig,
 	}
 	c.IsActive = isActive == 1
 	return &c, nil
+}
+
+// MarkSlackDMConfigViewed sets viewed_at = datetime('now') for the given DM config if not already viewed.
+func (r *Repo) MarkSlackDMConfigViewed(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE slack_dm_configs SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL", id)
+	return err
 }

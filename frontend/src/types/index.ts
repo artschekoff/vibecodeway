@@ -6,6 +6,22 @@ export interface Context {
   updatedAt: string;
   issueCount?: number;
   lastItemAt?: string;
+  unviewedCount?: number;
+  hasJira?: boolean;
+  hasSlack?: boolean;
+  hasVcs?: boolean;
+  hasFiles?: boolean;
+}
+
+export interface UnviewedBreakdown {
+  issues: number;
+  comments: number;
+  threads: number;
+  dms: number;
+  prs: number;
+  prComments: number;
+  notifications: number;
+  total: number;
 }
 
 export interface Comment {
@@ -17,6 +33,8 @@ export interface Comment {
   jiraCreated: string;
   createdAt: string;
   isActive: boolean;
+  viewedAt?: string;
+  aiProcessedAt?: string;
 }
 
 export interface Issue {
@@ -31,6 +49,8 @@ export interface Issue {
   jiraUpdated: string;
   createdAt: string;
   isActive: boolean;
+  viewedAt?: string;
+  aiProcessedAt?: string;
   comments?: Comment[];
 }
 
@@ -38,6 +58,7 @@ export interface JiraProvider {
   id: string;
   contextId: string;
   searchQuery: string;
+  baseUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -47,6 +68,8 @@ export interface ContextDetail {
   jira?: JiraProvider;
   issues: Issue[];
   slackChannels?: SlackChannel[];
+  vcsBranches?: VCSBranch[];
+  pullRequests?: PullRequest[];
 }
 
 export interface SearchResult {
@@ -84,6 +107,8 @@ export interface SlackDMConfig {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  viewedAt?: string;
+  aiProcessedAt?: string;
 }
 
 export interface SlackDMConfigInput {
@@ -96,6 +121,23 @@ export interface SlackSavePayload {
   removedChannelIds: string[];
   dmConfigs?: SlackDMConfigInput[];
   removedDMConfigIds?: string[];
+}
+
+export interface SlackThread {
+  id: string;
+  contextId: string;
+  slackChannelId?: string;
+  workspace: string;
+  channelId: string;
+  threadTs: string;
+  channelName: string;
+  permalink: string;
+  searchQuery: string;
+  content: string;
+  createdAt: string;
+  isActive: boolean;
+  viewedAt?: string;
+  aiProcessedAt?: string;
 }
 
 export interface SlackChannel {
@@ -205,4 +247,99 @@ export interface AISettings {
   baseUrl: string;
   source: "env" | "db" | "none";
   updatedAt: string;
+}
+
+// --- VCS Types ---
+
+export type VCSPlatform = "github" | "gitlab" | "linear";
+
+export interface DeviceCodeInfo {
+  userCode: string;
+  verificationUri: string;
+  deviceCode: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface VCSPlatformInfo {
+  platform: VCSPlatform;
+  label: string;
+  enabled: boolean;
+}
+
+export interface VCSRepo {
+  id: string;
+  platform: VCSPlatform;
+  owner: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface VCSBranch {
+  id: string;
+  contextId: string;
+  repoId: string;
+  branch: string;
+  createdAt: string;
+  repo?: VCSRepo;
+}
+
+export interface PullRequest {
+  id: string;
+  repoId: string;
+  branchId: string;
+  prNumber: number;
+  title: string;
+  author: string;
+  state: "open" | "closed" | "merged" | string;
+  reviewStatus: "approved" | "changes_requested" | "review_required" | "commented" | string;
+  /** GitHub mergeability: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | "" */
+  mergeable?: string;
+  url: string;
+  headBranch?: string;
+  prCreatedAt: string;
+  prUpdatedAt: string;
+  fetchedAt: string;
+  viewedAt?: string;
+  aiProcessedAt?: string;
+  comments?: PRComment[];
+}
+
+export interface PRComment {
+  id: string;
+  prId: string;
+  externalId: string;
+  parentId?: string;
+  commentType: "conversation" | "review" | "review_comment" | string;
+  author: string;
+  body: string;
+  path?: string;
+  line?: number;
+  isResolved: boolean;
+  inReplyToId?: string;
+  commentCreatedAt: string;
+  commentUpdatedAt: string;
+  viewedAt?: string;
+  aiProcessedAt?: string;
+  replies?: PRComment[];
+}
+
+export interface VCSAuth {
+  id: string;
+  platform: VCSPlatform;
+  username: string;
+  avatarUrl: string;
+  updatedAt: string;
+}
+
+export interface ReviewRequest {
+  id: string;
+  repoId: string;
+  prNumber: number;
+  prTitle: string;
+  prAuthor: string;
+  prUrl: string;
+  reviewStatus: string;
+  requestedAt: string;
+  fetchedAt: string;
 }

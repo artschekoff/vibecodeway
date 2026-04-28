@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Spinner from "../components/Spinner";
 import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ExternalLink, GitBranch, Pencil, RefreshCw, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -27,10 +28,21 @@ import {
   DeleteSlackDMConfig,
   RemoveSlackDMEntry,
   ListSlackDMConfigs,
+  AddVCSBranch,
+  RemoveVCSBranch,
+  GetUnviewedBreakdown,
+  MarkContextAllViewed,
+  MarkIssueViewed,
+  MarkCommentViewed,
+  MarkSlackThreadViewed,
+  MarkSlackDMConfigViewed,
+  MarkPRViewed,
+  MarkPRCommentViewed,
 } from "../../wailsjs/go/main/App";
-import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown } from "../types";
+import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
 import SlackChannelCard from "../components/SlackChannelCard";
 import SlackDMConfigCard from "../components/SlackDMConfigCard";
@@ -40,6 +52,129 @@ import ConsolidatedLogView from "../components/ConsolidatedLogView";
 import UploadedFileCard from "../components/UploadedFileCard";
 import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
+
+function PRStatusBadge({ status, reviewStatus, mergeable }: { status: string; reviewStatus: string; mergeable?: string }) {
+  const reviewLabel = reviewStatus === "changes_requested" ? "Changes Requested"
+    : reviewStatus === "approved" ? "Approved"
+    : reviewStatus === "review_required" ? "Review Required"
+    : reviewStatus || null;
+
+  return (
+    <div className="pr-badges">
+      <span className={`pr-status-badge pr-status-badge--${status}`}>{status}</span>
+      {reviewLabel && (
+        <span className={`pr-status-badge pr-review-badge${reviewStatus === "changes_requested" ? " pr-status--changes-requested" : reviewStatus === "approved" ? " pr-status--approved" : ""}`}>
+          {reviewLabel}
+        </span>
+      )}
+      {mergeable === "CONFLICTING" && (
+        <span className="pr-status-badge pr-status-badge--conflict" title="This PR has merge conflicts">
+          Conflicts
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PRCommentItem({ comment, depth = 0, onMarkViewed }: { comment: import("../types").PRComment; depth?: number; onMarkViewed?: (id: string) => void }) {
+  const isUnread = !comment.viewedAt;
+  return (
+    <div className={`pr-comment${comment.isResolved ? " pr-comment--resolved" : ""}${isUnread ? " item--unread" : ""}`} style={{ marginLeft: depth * 12 }}>
+      <div className="pr-comment-meta">
+        <span className="pr-comment-author">{comment.author || "Unknown"}</span>
+        {comment.path && <span className="pr-comment-path">{comment.path}{comment.line ? `:${comment.line}` : ""}</span>}
+        {comment.isResolved && <span className="pr-comment-resolved-badge">resolved</span>}
+        {isUnread && onMarkViewed && (
+          <button className="mark-viewed-btn" onClick={() => onMarkViewed(comment.id)} title="Mark as viewed"><Check size={13} /></button>
+        )}
+      </div>
+      <div className="pr-comment-body">{comment.body}</div>
+      {(comment.replies ?? []).map((r) => (
+        <PRCommentItem key={r.id} comment={r} depth={depth + 1} onMarkViewed={onMarkViewed} />
+      ))}
+    </div>
+  );
+}
+
+function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed }: {
+  pr: PullRequest;
+  vcsBranches?: VCSBranch[];
+  onMarkPRViewed?: (id: string) => void;
+  onMarkCommentViewed?: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const unresolvedComments = (pr.comments ?? []).filter((c) => !c.isResolved);
+  const isUnread = !pr.viewedAt;
+  const hasUnreadComments = unresolvedComments.some((c) => !c.viewedAt);
+  const linkedBranch = vcsBranches?.find((b) => b.id === pr.branchId);
+  const repoBase = linkedBranch?.repo
+    ? `https://github.com/${linkedBranch.repo.owner}/${linkedBranch.repo.name}`
+    : null;
+  const headBranchLink = repoBase && pr.headBranch
+    ? `${repoBase}/tree/${pr.headBranch}`
+    : null;
+
+  return (
+    <div className={`pr-card${isUnread || hasUnreadComments ? " item--unread-parent" : ""}${isUnread ? " pr-card--unread" : ""}`}>
+      {/* Top row: number + title + action buttons */}
+      <div className="pr-card-top" onClick={() => setExpanded((v) => !v)}>
+        <div className="pr-card-title-row">
+          <span className="pr-number">#{pr.prNumber}</span>
+          <span className="pr-title">{pr.title}</span>
+        </div>
+        <div className="pr-card-actions">
+          {pr.url && (
+            <button
+              type="button"
+              className="pr-action-btn"
+              onClick={(e) => { e.stopPropagation(); BrowserOpenURL(pr.url!); }}
+              title="Open on GitHub"
+            ><ExternalLink size={13} /></button>
+          )}
+          {isUnread && onMarkPRViewed && (
+            <button
+              type="button"
+              className="pr-action-btn pr-action-btn--viewed"
+              onClick={(e) => { e.stopPropagation(); onMarkPRViewed(pr.id); }}
+              title="Mark as viewed"
+            ><Check size={13} /></button>
+          )}
+          <ChevronDown size={15} className={`pr-expand-chevron${expanded ? " pr-expand-chevron--open" : ""}`} />
+        </div>
+      </div>
+
+      {/* Bottom row: author + branch + status badges */}
+      <div className="pr-card-meta">
+        <span className="pr-author">@{pr.author}</span>
+        {pr.headBranch && (
+          headBranchLink ? (
+            <button
+              type="button"
+              className="pr-branch-chip pr-branch-chip--link"
+              onClick={(e) => { e.stopPropagation(); BrowserOpenURL(headBranchLink); }}
+              title={`Open branch ${pr.headBranch} on GitHub`}
+            >
+              <GitBranch size={11} /> {pr.headBranch}
+            </button>
+          ) : (
+            <span className="pr-branch-chip"><GitBranch size={11} /> {pr.headBranch}</span>
+          )
+        )}
+        <PRStatusBadge status={pr.state} reviewStatus={pr.reviewStatus} mergeable={pr.mergeable} />
+      </div>
+
+      {expanded && (
+        <div className="pr-comment-tree">
+          {unresolvedComments.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "8px 0" }}>No unresolved comments.</div>
+          ) : (
+            unresolvedComments.map((c) => <PRCommentItem key={c.id} comment={c} onMarkViewed={onMarkCommentViewed} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ContextDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +196,19 @@ export default function ContextDetailPage() {
   const [editSlackDMConfigs, setEditSlackDMConfigs] = useState<SlackDMConfig[] | undefined>(undefined);
   const [editContextTexts, setEditContextTexts] = useState<ContextText[] | undefined>(undefined);
   const [editUploadedFiles, setEditUploadedFiles] = useState<UploadedFile[] | undefined>(undefined);
+  const [editVCSBranches, setEditVCSBranches] = useState<VCSBranch[] | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<UnviewedBreakdown | null>(null);
+  const [markingAllViewed, setMarkingAllViewed] = useState(false);
+
+  const loadBreakdown = useCallback(async () => {
+    if (!id) return;
+    try {
+      const bd = await GetUnviewedBreakdown(id);
+      setBreakdown(bd);
+    } catch {
+      // best-effort
+    }
+  }, [id]);
 
   const load = useCallback(async (silent = false) => {
     if (!id) return;
@@ -68,12 +216,27 @@ export default function ContextDetailPage() {
     try {
       const d = await GetContextDetail(id);
       setDetail(d);
+      void loadBreakdown();
     } catch {
       // Wails bridge not available or load failed — fail silently
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [id]);
+  }, [id, loadBreakdown]);
+
+  const handleMarkAllViewed = async () => {
+    if (!id) return;
+    setMarkingAllViewed(true);
+    try {
+      await MarkContextAllViewed(id);
+      await loadBreakdown();
+      load(true);
+    } catch {
+      // best-effort
+    } finally {
+      setMarkingAllViewed(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -143,6 +306,7 @@ export default function ContextDetailPage() {
     setEditSlackDMConfigs(dmConfigs);
     setEditContextTexts(contextTexts);
     setEditUploadedFiles((detail?.uploadedFiles ?? []) as UploadedFile[]);
+    setEditVCSBranches((detail?.vcsBranches ?? []) as VCSBranch[]);
     setEditOpen(true);
   };
 
@@ -154,6 +318,7 @@ export default function ContextDetailPage() {
     setEditSlackDMConfigs(undefined);
     setEditContextTexts(undefined);
     setEditUploadedFiles(undefined);
+    setEditVCSBranches(undefined);
   };
 
   const handleUpdate = async (
@@ -164,7 +329,10 @@ export default function ContextDetailPage() {
     selectedJiraKeys?: string[],
     _removedJiraIssueIds?: string[],
     textFilesPayload?: TextFilesPayload,
-    removedUploadedFileIds?: string[]
+    removedUploadedFileIds?: string[],
+    _pendingUploadTempIds?: string[],
+    newVCSBranches?: VCSBranchInput[],
+    removedVCSBranchIds?: string[]
   ) => {
     if (!id || !detail) return;
     const jiraKeys = selectedJiraKeys ?? [];
@@ -224,6 +392,14 @@ export default function ContextDetailPage() {
       // call again as safety net in case the form state diverged.
       for (const fId of (removedUploadedFileIds ?? [])) {
         try { await DeleteUploadedFile(fId); } catch { /* best-effort */ }
+      }
+      // VCS branches
+      for (const branchId of (removedVCSBranchIds ?? [])) {
+        try { await RemoveVCSBranch(branchId); } catch { /* best-effort */ }
+      }
+      for (const b of (newVCSBranches ?? [])) {
+        progress.next(`Linking ${b.ownerRepo}:${b.branch}`);
+        try { await AddVCSBranch(id, b.platform, b.ownerRepo, b.branch); } catch { /* best-effort */ }
       }
     } finally {
       progress.done();
@@ -388,7 +564,7 @@ export default function ContextDetailPage() {
   if (!detail) return (
     <div className="page">
       <div className="topbar">
-        <button className="back-btn" onClick={() => navigate("/")}>← Back</button>
+        <button className="back-btn" onClick={() => navigate("/")}><ArrowLeft size={16} /> Back</button>
       </div>
       <div className="content">
         <div className="error-banner">{refreshError || "Context not found"}</div>
@@ -403,57 +579,44 @@ export default function ContextDetailPage() {
   const slackDMConfigs = detail.slackDMConfigs ?? [];
   const contextTexts = detail.contextTexts ?? [];
   const uploadedFiles = (detail.uploadedFiles ?? []) as UploadedFile[];
-  const isEmpty = issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && slackDMConfigs.length === 0 && contextTexts.length === 0 && uploadedFiles.length === 0;
+  const vcsBranches = (detail.vcsBranches ?? []) as VCSBranch[];
+  const pullRequests = (detail.pullRequests ?? []) as PullRequest[];
+  const isEmpty = issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && slackDMConfigs.length === 0 && contextTexts.length === 0 && uploadedFiles.length === 0 && vcsBranches.length === 0;
 
   return (
     <div className="page">
       <div className="topbar">
-        <button className="back-btn" onClick={() => navigate("/")}>← Back</button>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
-          <div>
-            <h1 style={{ fontSize: 16, margin: 0 }}>{context.key}</h1>
-            <div style={{ display: "flex", gap: 12, marginTop: 2 }}>
-              {issues.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {issues.length} issue{issues.length !== 1 ? "s" : ""}
-                </span>
-              )}
-              {slackChannels.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {slackChannels.length} Slack channel{slackChannels.length !== 1 ? "s" : ""}
-                </span>
-              )}
-              {slackThreads.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {slackThreads.length} thread{slackThreads.length !== 1 ? "s" : ""}
-                </span>
-              )}
-              {slackDMConfigs.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {slackDMConfigs.length} DM config{slackDMConfigs.length !== 1 ? "s" : ""}
-                </span>
-              )}
-              {contextTexts.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {contextTexts.length} text file{contextTexts.length !== 1 ? "s" : ""}
-                </span>
-              )}
-              {uploadedFiles.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {uploadedFiles.length} uploaded file{uploadedFiles.length !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-          </div>
+        <button className="back-btn" onClick={() => navigate("/")}><ArrowLeft size={16} /> Back</button>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <h1 style={{ fontSize: 16, margin: 0, whiteSpace: "nowrap" }}>{context.key}</h1>
           <span className={`badge badge-${context.status}`}>{context.status}</span>
+          <span className="topbar-counts">
+            {[
+              issues.length > 0 && `${issues.length} issue${issues.length !== 1 ? "s" : ""}`,
+              slackChannels.length > 0 && `${slackChannels.length} channel${slackChannels.length !== 1 ? "s" : ""}`,
+              slackThreads.length > 0 && `${slackThreads.length} thread${slackThreads.length !== 1 ? "s" : ""}`,
+              slackDMConfigs.length > 0 && `${slackDMConfigs.length} DM${slackDMConfigs.length !== 1 ? "s" : ""}`,
+              (contextTexts.length + uploadedFiles.length) > 0 && `${contextTexts.length + uploadedFiles.length} file${(contextTexts.length + uploadedFiles.length) !== 1 ? "s" : ""}`,
+            ].filter(Boolean).join(" · ")}
+          </span>
         </div>
         <div className="topbar-actions">
+          {breakdown && breakdown.total > 0 && (
+            <button
+              className="btn-secondary"
+              onClick={() => void handleMarkAllViewed()}
+              disabled={markingAllViewed}
+              title="Mark all items as viewed"
+            >
+              {markingAllViewed ? "Marking…" : <><CheckCheck size={16} /> Mark all viewed ({breakdown.total})</>}
+            </button>
+          )}
           <button
             className="btn-secondary"
             onClick={() => void openEditForm()}
             title="Edit context"
           >
-            ✏ Edit
+            <Pencil size={16} /> Edit
           </button>
           <button
             className="btn-primary"
@@ -466,7 +629,7 @@ export default function ContextDetailPage() {
                 Refreshing…
               </span>
             ) : (
-              <><span style={{ fontSize: 18, lineHeight: 1 }}>⟳</span> Refresh</>
+              <><RefreshCw size={16} /> Refresh</>
             )}
           </button>
         </div>
@@ -489,7 +652,14 @@ export default function ContextDetailPage() {
             {issues.length > 0 && (
               <section className="detail-section">
                 <div className="detail-section-header">
-                  <span className="detail-section-title">Jira</span>
+                  <span className="detail-section-title">
+                    Jira
+                    {breakdown && (breakdown.issues + breakdown.comments) > 0 && (
+                      <span className="unread-badge" style={{ marginLeft: 6 }}>
+                        {breakdown.issues + breakdown.comments} new
+                      </span>
+                    )}
+                  </span>
                   <span className="detail-section-count">{issues.length}</span>
                 </div>
                 <div className="issue-list">
@@ -501,6 +671,9 @@ export default function ContextDetailPage() {
                       onDeleteComment={handleDeleteComment}
                       onToggleIssue={(id) => void handleToggleIssue(id)}
                       onToggleComment={(id) => void handleToggleComment(id)}
+                      onMarkIssueViewed={async (iid) => { await MarkIssueViewed(iid); load(true); void loadBreakdown(); }}
+                      onMarkCommentViewed={async (cid) => { await MarkCommentViewed(cid); load(true); void loadBreakdown(); }}
+                      jiraBaseUrl={detail?.jira?.baseUrl}
                     />
                   ))}
                 </div>
@@ -511,7 +684,14 @@ export default function ContextDetailPage() {
             {(slackChannels.length > 0 || slackThreads.length > 0 || slackDMConfigs.length > 0) && (
               <section className="detail-section">
                 <div className="detail-section-header">
-                  <span className="detail-section-title">Slack</span>
+                  <span className="detail-section-title">
+                    Slack
+                    {breakdown && (breakdown.threads + breakdown.dms) > 0 && (
+                      <span className="unread-badge" style={{ marginLeft: 6 }}>
+                        {breakdown.threads + breakdown.dms} new
+                      </span>
+                    )}
+                  </span>
                   <span className="detail-section-count">
                     {slackChannels.length + slackThreads.length + slackDMConfigs.length}
                   </span>
@@ -528,6 +708,7 @@ export default function ContextDetailPage() {
                       onDeleteThread={handleDeleteThread}
                       onToggleChannel={(id) => void handleToggleChannel(id)}
                       onToggleThread={(id) => void handleToggleThread(id)}
+                      onMarkThreadViewed={async (tid) => { await MarkSlackThreadViewed(tid); load(true); void loadBreakdown(); }}
                     />
                   ))}
 
@@ -541,6 +722,7 @@ export default function ContextDetailPage() {
                         threads={[t]}
                         onDeleteThread={handleDeleteThread}
                         onToggleThread={(id) => void handleToggleThread(id)}
+                        onMarkThreadViewed={async (tid) => { await MarkSlackThreadViewed(tid); load(true); void loadBreakdown(); }}
                       />
                     ))}
 
@@ -552,17 +734,18 @@ export default function ContextDetailPage() {
                       onDelete={(id) => void handleDeleteDMConfig(id)}
                       onToggle={(id) => void handleToggleDMConfig(id)}
                       onDeleteEntry={(dmConfigId, entryId) => void handleDeleteDMEntry(dmConfigId, entryId)}
+                      onMarkViewed={async (did) => { await MarkSlackDMConfigViewed(did); load(true); void loadBreakdown(); }}
                     />
                   ))}
                 </div>
               </section>
             )}
-            {/* Text files section */}
-            {contextTexts.length > 0 && (
+            {/* Texts & Files section */}
+            {(contextTexts.length > 0 || uploadedFiles.length > 0) && (
               <section className="detail-section">
                 <div className="detail-section-header">
-                  <span className="detail-section-title">Texts</span>
-                  <span className="detail-section-count">{contextTexts.length}</span>
+                  <span className="detail-section-title">Texts & Files</span>
+                  <span className="detail-section-count">{contextTexts.length + uploadedFiles.length}</span>
                 </div>
                 <div className="issue-list">
                   {contextTexts.map((f) => (
@@ -580,31 +763,83 @@ export default function ContextDetailPage() {
                         <button
                           type="button"
                           className="btn-ghost"
-                          style={{ color: "var(--danger)", fontSize: 12 }}
+                          style={{ color: "var(--danger)" }}
                           title="Remove text file"
                           onClick={() => void handleDeleteContextText(f.id)}
-                        >✕</button>
+                        ><X size={13} /></button>
                       </div>
                       <pre className="text-file-card-content">{f.content}</pre>
                     </div>
                   ))}
-                </div>
-              </section>
-            )}
-            {/* Uploaded files section */}
-            {uploadedFiles.length > 0 && (
-              <section className="detail-section">
-                <div className="detail-section-header">
-                  <span className="detail-section-title">Files</span>
-                  <span className="detail-section-count">{uploadedFiles.length}</span>
-                </div>
-                <div className="issue-list">
                   {uploadedFiles.map((f) => (
                     <UploadedFileCard
                       key={f.id}
                       file={f}
                       onDelete={(id) => void handleDeleteUploadedFile(id)}
                       onToggle={(id) => void handleToggleUploadedFile(id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Pull Requests section */}
+            {(vcsBranches.length > 0 || pullRequests.length > 0) && (
+              <section className="detail-section">
+                <div className="detail-section-header">
+                  <span className="detail-section-title">
+                    Pull Requests
+                    {breakdown && (breakdown.prs + breakdown.prComments + breakdown.notifications) > 0 && (
+                      <span className="unread-badge" style={{ marginLeft: 6 }}>
+                        {breakdown.prs + breakdown.prComments + breakdown.notifications} new
+                      </span>
+                    )}
+                  </span>
+                  <span className="detail-section-count">{pullRequests.length}</span>
+                </div>
+                <div className="issue-list">
+                  {vcsBranches.length > 0 && (
+                    <div className="vcs-branch-chips">
+                      {vcsBranches.map((b) => {
+                        const repoUrl = b.repo
+                          ? `https://github.com/${b.repo.owner}/${b.repo.name}`
+                          : null;
+                        const branchUrl = repoUrl && b.branch
+                          ? `${repoUrl}/tree/${b.branch}`
+                          : repoUrl;
+                        const label = b.repo
+                          ? `${b.repo.owner}/${b.repo.name}${b.branch ? `:${b.branch}` : ""}`
+                          : b.id;
+                        return branchUrl ? (
+                          <button
+                            key={b.id}
+                            type="button"
+                            className="vcs-branch-chip vcs-branch-chip--link"
+                            onClick={() => BrowserOpenURL(branchUrl)}
+                            title={`Open ${label} on GitHub`}
+                          >
+                            <GitBranch size={11} /> {label}
+                          </button>
+                        ) : (
+                          <span key={b.id} className="vcs-branch-chip"><GitBranch size={11} /> {label}</span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {vcsBranches.length > 0 && pullRequests.length === 0 && (
+                    <div className="empty-state" style={{ padding: "8px 0 16px" }}>
+                      <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                        Click <strong>Refresh</strong> to fetch PRs
+                      </div>
+                    </div>
+                  )}
+                  {pullRequests.map((pr) => (
+                    <PRCard
+                      key={pr.id}
+                      pr={pr}
+                      vcsBranches={vcsBranches}
+                      onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
+                      onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
                     />
                   ))}
                 </div>
@@ -666,6 +901,7 @@ export default function ContextDetailPage() {
           initialSlackDMConfigs={editSlackDMConfigs}
           initialContextTexts={editContextTexts}
           initialUploadedFiles={editUploadedFiles}
+          initialVCSBranches={editVCSBranches}
           onSave={handleUpdate}
           onCancel={closeEditForm}
         />

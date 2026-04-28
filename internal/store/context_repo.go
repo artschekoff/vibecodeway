@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,7 +44,29 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		               SELECT MAX(st.created_at)
 		                   FROM slack_threads st WHERE st.context_id = c.id
 		           )
-		       ), '') AS last_item_at
+		       ), '') AS last_item_at,
+		       (SELECT COUNT(*) FROM jira_issues WHERE context_id = c.id AND viewed_at IS NULL)
+		     + (SELECT COUNT(*) FROM jira_comments jc2
+		            JOIN jira_issues ji2 ON jc2.issue_id = ji2.id
+		            WHERE ji2.context_id = c.id AND jc2.viewed_at IS NULL)
+		     + (SELECT COUNT(*) FROM slack_threads WHERE context_id = c.id AND viewed_at IS NULL)
+		     + (SELECT COUNT(*) FROM slack_dm_configs WHERE context_id = c.id AND viewed_at IS NULL)
+		     + (SELECT COUNT(*) FROM vcs_pull_requests vpr
+		            JOIN context_vcs_branches b ON vpr.branch_id = b.id
+		            WHERE b.context_id = c.id AND vpr.viewed_at IS NULL)
+		     + (SELECT COUNT(*) FROM vcs_pr_comments vpc
+		            JOIN vcs_pull_requests vpr2 ON vpc.pr_id = vpr2.id
+		            JOIN context_vcs_branches b2 ON vpr2.branch_id = b2.id
+		            WHERE b2.context_id = c.id AND vpc.viewed_at IS NULL)
+		     + (SELECT COUNT(*) FROM notifications n
+		            WHERE n.context_id = c.id AND n.read_at IS NULL)
+		       AS unviewed_count,
+		       EXISTS(SELECT 1 FROM jira_provider WHERE context_id = c.id) AS has_jira,
+		       (EXISTS(SELECT 1 FROM slack_channels WHERE context_id = c.id)
+		        OR EXISTS(SELECT 1 FROM slack_dm_configs WHERE context_id = c.id)) AS has_slack,
+		       EXISTS(SELECT 1 FROM context_vcs_branches WHERE context_id = c.id) AS has_vcs,
+		       (EXISTS(SELECT 1 FROM context_texts WHERE context_id = c.id)
+		        OR EXISTS(SELECT 1 FROM context_uploaded_files WHERE context_id = c.id)) AS has_files
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		WHERE (? OR c.status = 'active')
@@ -58,7 +81,7 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 	var contexts []Context
 	for rows.Next() {
 		var c Context
-		if err := rows.Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt, &c.IssueCount, &c.LastItemAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt, &c.IssueCount, &c.LastItemAt, &c.UnviewedCount, &c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles); err != nil {
 			return nil, fmt.Errorf("scanning context: %w", err)
 		}
 		contexts = append(contexts, c)
@@ -139,7 +162,12 @@ func (s *Store) UpdateContext(ctx context.Context, id, key, status string) (*Con
 }
 
 // DeleteContext removes a context and cascades to all child rows.
+// The FTS virtual table does not support FK cascades, so its entries are
+// cleaned up explicitly before the context row is deleted.
 func (s *Store) DeleteContext(ctx context.Context, id string) error {
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM context_search_fts WHERE context_id = ?", id); err != nil {
+		return fmt.Errorf("deleting context fts entries: %w", err)
+	}
 	res, err := s.db.ExecContext(ctx, "DELETE FROM contexts WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("deleting context: %w", err)
@@ -170,6 +198,146 @@ func (s *Store) ToggleContextStatus(ctx context.Context, id string) (*Context, e
 		return nil, ErrNotFound
 	}
 	return s.GetContext(ctx, id)
+}
+
+// GetUnviewedBreakdown returns a per-type count of unread items for a context.
+func (s *Store) GetUnviewedBreakdown(ctx context.Context, contextID string) (UnviewedBreakdown, error) {
+	var b UnviewedBreakdown
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+		    (SELECT COUNT(*) FROM jira_issues WHERE context_id = ? AND viewed_at IS NULL),
+		    (SELECT COUNT(*) FROM jira_comments jc
+		         JOIN jira_issues ji ON jc.issue_id = ji.id
+		         WHERE ji.context_id = ? AND jc.viewed_at IS NULL),
+		    (SELECT COUNT(*) FROM slack_threads WHERE context_id = ? AND viewed_at IS NULL),
+		    (SELECT COUNT(*) FROM slack_dm_configs WHERE context_id = ? AND viewed_at IS NULL),
+		    (SELECT COUNT(*) FROM vcs_pull_requests vpr
+		         JOIN context_vcs_branches b ON vpr.branch_id = b.id
+		         WHERE b.context_id = ? AND vpr.viewed_at IS NULL),
+		    (SELECT COUNT(*) FROM vcs_pr_comments vpc
+		         JOIN vcs_pull_requests vpr2 ON vpc.pr_id = vpr2.id
+		         JOIN context_vcs_branches b2 ON vpr2.branch_id = b2.id
+		         WHERE b2.context_id = ? AND vpc.viewed_at IS NULL),
+		    (SELECT COUNT(*) FROM notifications n WHERE n.context_id = ? AND n.read_at IS NULL)
+	`, contextID, contextID, contextID, contextID, contextID, contextID, contextID).Scan(
+		&b.Issues, &b.Comments, &b.Threads, &b.DMs, &b.PRs, &b.PRComments, &b.Notifications,
+	)
+	if err != nil {
+		return b, fmt.Errorf("getting unviewed breakdown: %w", err)
+	}
+	b.Total = b.Issues + b.Comments + b.Threads + b.DMs + b.PRs + b.PRComments + b.Notifications
+	return b, nil
+}
+
+// MarkContextAllViewed sets viewed_at = datetime('now') for every unread item in a context,
+// and marks all unread notifications as read.
+func (s *Store) MarkContextAllViewed(ctx context.Context, contextID string) error {
+	stmts := []string{
+		`UPDATE jira_issues SET viewed_at = datetime('now') WHERE context_id = ? AND viewed_at IS NULL`,
+		`UPDATE jira_comments SET viewed_at = datetime('now')
+		     WHERE issue_id IN (SELECT id FROM jira_issues WHERE context_id = ?) AND viewed_at IS NULL`,
+		`UPDATE slack_threads SET viewed_at = datetime('now') WHERE context_id = ? AND viewed_at IS NULL`,
+		`UPDATE slack_dm_configs SET viewed_at = datetime('now') WHERE context_id = ? AND viewed_at IS NULL`,
+		`UPDATE vcs_pull_requests SET viewed_at = datetime('now')
+		     WHERE branch_id IN (SELECT id FROM context_vcs_branches WHERE context_id = ?) AND viewed_at IS NULL`,
+		`UPDATE vcs_pr_comments SET viewed_at = datetime('now')
+		     WHERE pr_id IN (
+		         SELECT vpr.id FROM vcs_pull_requests vpr
+		         JOIN context_vcs_branches b ON vpr.branch_id = b.id
+		         WHERE b.context_id = ?
+		     ) AND viewed_at IS NULL`,
+		`UPDATE notifications SET read_at = datetime('now') WHERE context_id = ? AND read_at IS NULL`,
+	}
+	for _, q := range stmts {
+		if _, err := s.db.ExecContext(ctx, q, contextID); err != nil {
+			return fmt.Errorf("marking context all viewed: %w", err)
+		}
+	}
+	return nil
+}
+
+// RebuildSearchIndex rebuilds the FTS5 full-text search index from all searchable sources.
+func (s *Store) RebuildSearchIndex(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM context_search_fts`); err != nil {
+		return fmt.Errorf("clear search index: %w", err)
+	}
+	stmts := []string{
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT id, 'key', key FROM contexts`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'jira', summary FROM jira_issues WHERE summary != ''`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'slack', channel_name FROM slack_channels WHERE channel_name != ''`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'branch', branch FROM context_vcs_branches WHERE branch != ''`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'text', name FROM context_texts WHERE name != ''`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'file', original_name FROM context_uploaded_files WHERE original_name != ''`,
+	}
+	for _, q := range stmts {
+		if _, err := s.db.ExecContext(ctx, q); err != nil {
+			return fmt.Errorf("populate search index: %w", err)
+		}
+	}
+	return nil
+}
+
+// SearchContextIDs returns IDs of contexts matching the query using FTS5 with BM25 ranking.
+// Searches across context keys, Jira issue summaries, Slack channel names,
+// VCS branch names, context text names, and uploaded file names.
+// Returns all context IDs when query is empty.
+func (s *Store) SearchContextIDs(ctx context.Context, query string) ([]string, error) {
+	if query == "" {
+		rows, err := s.db.QueryContext(ctx, `SELECT id FROM contexts ORDER BY updated_at DESC`)
+		if err != nil {
+			return nil, fmt.Errorf("search contexts: %w", err)
+		}
+		defer func() { _ = rows.Close() }()
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return nil, err
+			}
+			ids = append(ids, id)
+		}
+		return ids, rows.Err()
+	}
+
+	if err := s.RebuildSearchIndex(ctx); err != nil {
+		return nil, err
+	}
+
+	// FTS5 query: quote each token and append * for prefix matching.
+	ftsQuery := fts5PrefixQuery(query)
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT context_id
+		FROM context_search_fts
+		WHERE context_search_fts MATCH ?
+		ORDER BY bm25(context_search_fts)
+	`, ftsQuery)
+	if err != nil {
+		return nil, fmt.Errorf("fts search: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// fts5PrefixQuery converts a user query like "batch met" into FTS5 syntax "batch" * AND "met" *.
+// Each whitespace-separated token becomes a prefix term.
+func fts5PrefixQuery(input string) string {
+	words := strings.Fields(input)
+	parts := make([]string, 0, len(words))
+	for _, w := range words {
+		escaped := strings.ReplaceAll(w, `"`, `""`)
+		parts = append(parts, `"`+escaped+`"*`)
+	}
+	return strings.Join(parts, " AND ")
 }
 
 // TouchContext updates the updated_at timestamp of a context.

@@ -10,7 +10,10 @@ export interface ProgressState {
   /** 1-based count of completed steps. */
   current: number;
   total: number;
+  /** Primary step text — usually the context/object name. */
   stepText: string;
+  /** Secondary sub-step — e.g. the provider or action within the step. */
+  subStep: string;
   /** Whether a cancel handler is registered for the current operation. */
   cancellable: boolean;
 }
@@ -22,8 +25,8 @@ interface ProgressContextValue extends ProgressState {
   next(stepText?: string): void;
   /** Mark the operation done and hide the modal. */
   done(): void;
-  /** Directly set current index + step text (used for event-driven progress). */
-  set(currentIndex: number, total: number, stepText: string): void;
+  /** Directly set current index + step text + optional sub-step (used for event-driven progress). */
+  set(currentIndex: number, total: number, stepText: string, subStep?: string): void;
   /** Invoke the cancel handler registered via begin(), if any. */
   cancel(): void;
 }
@@ -36,6 +39,7 @@ const defaultState: ProgressState = {
   current: 0,
   total: 0,
   stepText: "",
+  subStep: "",
   cancellable: false,
 };
 
@@ -62,6 +66,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       current: 0,
       total: items.length,
       stepText: "Starting…",
+      subStep: "",
       cancellable: !!onCancel,
     });
   }, []);
@@ -74,11 +79,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         currentIndex: nextIndex,
         current: nextIndex + 1,
         stepText: stepText ?? prev.items[nextIndex] ?? "",
+        subStep: "",
       };
     });
   }, []);
 
-  const set = useCallback((currentIndex: number, total: number, stepText: string) => {
+  const set = useCallback((currentIndex: number, total: number, stepText: string, subStep = "") => {
     setState((prev) => ({
       ...prev,
       isActive: true,
@@ -86,6 +92,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       current: currentIndex + 1,
       total,
       stepText,
+      subStep,
     }));
   }, []);
 

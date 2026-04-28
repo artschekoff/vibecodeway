@@ -53,9 +53,9 @@ func (r *Repo) UpsertJiraProvider(ctx context.Context, contextID, searchQuery st
 func (r *Repo) GetJiraProvider(ctx context.Context, contextID string) (*JiraProvider, error) {
 	var p JiraProvider
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, context_id, search_query, created_at, updated_at
+		SELECT id, context_id, search_query, base_url, created_at, updated_at
 		FROM jira_provider WHERE context_id = ?
-	`, contextID).Scan(&p.ID, &p.ContextID, &p.SearchQuery, &p.CreatedAt, &p.UpdatedAt)
+	`, contextID).Scan(&p.ID, &p.ContextID, &p.SearchQuery, &p.BaseURL, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -65,12 +65,21 @@ func (r *Repo) GetJiraProvider(ctx context.Context, contextID string) (*JiraProv
 	return &p, nil
 }
 
+// SetJiraBaseURL stores the Jira instance base URL for a context.
+func (r *Repo) SetJiraBaseURL(ctx context.Context, contextID, baseURL string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE jira_provider SET base_url = ?, updated_at = ? WHERE context_id = ?",
+		baseURL, now, contextID)
+	return err
+}
+
 func (r *Repo) getJiraProvider(ctx context.Context, id string) (*JiraProvider, error) {
 	var p JiraProvider
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, context_id, search_query, created_at, updated_at
+		SELECT id, context_id, search_query, base_url, created_at, updated_at
 		FROM jira_provider WHERE id = ?
-	`, id).Scan(&p.ID, &p.ContextID, &p.SearchQuery, &p.CreatedAt, &p.UpdatedAt)
+	`, id).Scan(&p.ID, &p.ContextID, &p.SearchQuery, &p.BaseURL, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("getting jira provider by id: %w", err)
 	}

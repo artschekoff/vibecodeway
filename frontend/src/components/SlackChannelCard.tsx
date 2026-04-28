@@ -1,3 +1,4 @@
+import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
 
 function CopyIcon() {
@@ -45,6 +46,7 @@ interface SlackThread {
   content: string;
   createdAt: string;
   isActive: boolean;
+  viewedAt?: string;
 }
 
 interface Props {
@@ -54,11 +56,13 @@ interface Props {
   onDeleteThread?: (id: string) => void;
   onToggleChannel?: (id: string) => void;
   onToggleThread?: (id: string) => void;
+  onMarkThreadViewed?: (id: string) => void;
 }
 
-function ThreadRow({ thread, onDelete, onToggle }: { thread: SlackThread; onDelete?: (id: string) => void; onToggle?: (id: string) => void }) {
+function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: SlackThread; onDelete?: (id: string) => void; onToggle?: (id: string) => void; onMarkViewed?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const isInactive = !thread.isActive;
+  const isUnread = !thread.viewedAt;
 
   const preview = thread.content
     ? thread.content.slice(0, 120).replace(/\n+/g, " ").trim() + (thread.content.length > 120 ? "…" : "")
@@ -70,7 +74,7 @@ function ThreadRow({ thread, onDelete, onToggle }: { thread: SlackThread; onDele
   };
 
   return (
-    <div className={`slack-thread-row${isInactive ? " slack-thread-row--inactive" : ""}`}>
+    <div className={`slack-thread-row${isInactive ? " slack-thread-row--inactive" : ""}${isUnread ? " item--unread" : ""}`}>
       <div
         className={`slack-thread-row-header${expanded ? " slack-thread-row-header--open" : ""}`}
         onClick={() => setExpanded(!expanded)}
@@ -86,14 +90,18 @@ function ThreadRow({ thread, onDelete, onToggle }: { thread: SlackThread; onDele
               href={thread.permalink}
               target="_blank"
               rel="noreferrer"
-              className="slack-thread-link"
+              className="slack-thread-link external-link-btn"
               onClick={(e) => e.stopPropagation()}
+              title="Open thread in Slack"
             >
               ↗
             </a>
           )}
+          {isUnread && onMarkViewed && (
+            <button className="mark-viewed-btn" onClick={(e) => { e.stopPropagation(); onMarkViewed(thread.id); }} title="Mark as viewed"><Check size={13} /></button>
+          )}
           {thread.content && (
-            <span className={`expand-icon ${expanded ? "expanded" : ""}`}>▼</span>
+            <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
           )}
           {onDelete && (
             <button
@@ -116,10 +124,14 @@ function ThreadRow({ thread, onDelete, onToggle }: { thread: SlackThread; onDele
   );
 }
 
-export default function SlackChannelCard({ channel, threads, onDeleteChannel, onDeleteThread, onToggleChannel, onToggleThread }: Props) {
+export default function SlackChannelCard({ channel, threads, onDeleteChannel, onDeleteThread, onToggleChannel, onToggleThread, onMarkThreadViewed }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const isInactive = !channel.isActive;
+  const hasUnreadThreads = threads.some((t) => !t.viewedAt);
+  const slackChannelLink = channel.workspace && channel.channelId
+    ? `https://app.slack.com/client/${channel.workspace}/${channel.channelId}`
+    : null;
 
   const copyName = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -135,7 +147,7 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
   };
 
   return (
-    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}`}>
+    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}${hasUnreadThreads ? " item--unread-parent" : ""}`}>
       <div
         className="issue-card-header"
         onClick={() => setExpanded(!expanded)}
@@ -146,8 +158,11 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
         <span className="slack-thread-hash">#</span>
         <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{channel.channelName || channel.channelId}</span>
         <button className="copy-btn" onClick={copyName} title="Copy channel name">
-          {copied ? "✓" : <CopyIcon />}
+          {copied ? <Check size={13} /> : <CopyIcon />}
         </button>
+        {slackChannelLink && (
+          <a href={slackChannelLink} target="_blank" rel="noopener noreferrer" className="external-link-btn" onClick={(e) => e.stopPropagation()} title="Open channel in Slack"><ExternalLink size={12} /></a>
+        )}
         <div className="issue-meta">
           <span className="channel-result-workspace">{channel.workspace}</span>
           {threads.length > 0 ? (
@@ -160,7 +175,7 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
             </span>
           )}
           {threads.length > 0 && (
-            <span className={`expand-icon ${expanded ? "expanded" : ""}`}>▼</span>
+            <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
           )}
           {onDeleteChannel && (
             <button
@@ -177,7 +192,7 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
       {expanded && threads.length > 0 && (
         <div className="issue-body slack-channel-threads">
           {threads.map((t) => (
-            <ThreadRow key={t.id} thread={t} onDelete={onDeleteThread} onToggle={onToggleThread} />
+            <ThreadRow key={t.id} thread={t} onDelete={onDeleteThread} onToggle={onToggleThread} onMarkViewed={onMarkThreadViewed} />
           ))}
         </div>
       )}

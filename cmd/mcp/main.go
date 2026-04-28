@@ -28,6 +28,7 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -81,6 +82,9 @@ func run() error {
 
 	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider)
 
+	vcsStore := vcsstore.NewStore(s.DB())
+	svc.SetVCSStore(vcsStore)
+
 	// MCP only reads context logs, so no AI client is required; pass nil to disable
 	// AI-dependent paths while keeping CRUD/list endpoints functional.
 	contextLogRepo := contextlog.NewRepo(s.DB())
@@ -94,7 +98,7 @@ func run() error {
 	)
 
 	cliRunner := cliclient.NewRunner(logger)
-	registerTools(mcpServer, svc, cliRunner, logger)
+	registerTools(mcpServer, svc, vcsStore, cliRunner, logger)
 
 	logger.Info("context-consolidator-mcp starting", zap.String("version", serverVersion))
 

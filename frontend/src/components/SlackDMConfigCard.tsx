@@ -1,3 +1,4 @@
+import { Check, ChevronDown, Mail, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { SlackDMConfig } from "../types";
 
@@ -85,7 +86,7 @@ function DMConversations({ entries, onDeleteEntry }: { entries: DMEntry[]; onDel
                 className="dm-entry-delete-btn"
                 title={`Remove conversation with ${entryLabel(entry)}`}
                 onClick={() => onDeleteEntry(entry.id)}
-              >✕</button>
+              ><X size={11} /></button>
             )}
           </div>
           {entry.messages && entry.messages.length > 0 ? (
@@ -112,20 +113,22 @@ interface Props {
   onDelete: (id: string) => void;
   onToggle: (id: string) => void;
   onDeleteEntry?: (dmConfigId: string, entryId: string) => void;
+  onMarkViewed?: (id: string) => void;
 }
 
-export default function SlackDMConfigCard({ dm, onDelete, onToggle, onDeleteEntry }: Props) {
+export default function SlackDMConfigCard({ dm, onDelete, onToggle, onDeleteEntry, onMarkViewed }: Props) {
   const [expanded, setExpanded] = useState(false);
   const isInactive = !dm.isActive;
+  const isUnread = !dm.viewedAt;
 
   const label = dm.startFrom ? `DMs · ${dm.workspace} since ${dm.startFrom}` : `DMs · ${dm.workspace}`;
 
   const dmEntries = useMemo(() => dm.content ? parseDMEntries(dm.content) : null, [dm.content]);
 
   return (
-    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}`}>
+    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}${isUnread ? " item--unread-parent" : ""}`}>
       <div
-        className="issue-card-header"
+        className={`issue-card-header${isUnread ? " item--unread" : ""}`}
         onClick={() => dm.content && setExpanded(!expanded)}
         style={{ cursor: dm.content ? "pointer" : "default" }}
       >
@@ -137,11 +140,14 @@ export default function SlackDMConfigCard({ dm, onDelete, onToggle, onDeleteEntr
           <input type="checkbox" checked={dm.isActive} onChange={() => {}} />
           <span className={`item-active-indicator${dm.isActive ? " item-active-indicator--on" : ""}`} />
         </label>
-        <span style={{ fontSize: 13, marginRight: 4, color: "var(--text-muted)" }}>✉</span>
+        <Mail size={13} style={{ marginRight: 4, color: "var(--text-muted)", flexShrink: 0 }} />
         <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{label}</span>
         <div className="issue-meta">
+          {isUnread && onMarkViewed && (
+            <button className="mark-viewed-btn" onClick={(e) => { e.stopPropagation(); onMarkViewed(dm.id); }} title="Mark as viewed"><Check size={13} /></button>
+          )}
           {dm.content && (
-            <span className={`expand-icon ${expanded ? "expanded" : ""}`}>▼</span>
+            <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
           )}
           <button
             className="card-delete-btn"

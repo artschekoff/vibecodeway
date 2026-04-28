@@ -14,7 +14,7 @@ import (
 // When activeOnly is true only rows with is_active = 1 are returned.
 func (r *Repo) GetCommentsByIssue(ctx context.Context, issueID string, activeOnly bool) ([]Comment, error) {
 	q := `
-		SELECT id, issue_id, jira_id, author, body, jira_created, created_at, is_active
+		SELECT id, issue_id, jira_id, author, body, jira_created, created_at, is_active, viewed_at, ai_processed_at
 		FROM jira_comments
 		WHERE issue_id = ?`
 	if activeOnly {
@@ -30,7 +30,7 @@ func (r *Repo) GetCommentsByIssue(ctx context.Context, issueID string, activeOnl
 	var comments []Comment
 	for rows.Next() {
 		var c Comment
-		if err := rows.Scan(&c.ID, &c.IssueID, &c.JiraID, &c.Author, &c.Body, &c.JiraCreated, &c.CreatedAt, &c.IsActive); err != nil {
+		if err := rows.Scan(&c.ID, &c.IssueID, &c.JiraID, &c.Author, &c.Body, &c.JiraCreated, &c.CreatedAt, &c.IsActive, &c.ViewedAt, &c.AiProcessedAt); err != nil {
 			return nil, fmt.Errorf("scanning comment: %w", err)
 		}
 		comments = append(comments, c)
@@ -51,9 +51,9 @@ func (r *Repo) ToggleCommentActive(ctx context.Context, id string) (*Comment, er
 
 	var c Comment
 	err = r.db.QueryRowContext(ctx, `
-		SELECT id, issue_id, jira_id, author, body, jira_created, created_at, is_active
+		SELECT id, issue_id, jira_id, author, body, jira_created, created_at, is_active, viewed_at, ai_processed_at
 		FROM jira_comments WHERE id = ?
-	`, id).Scan(&c.ID, &c.IssueID, &c.JiraID, &c.Author, &c.Body, &c.JiraCreated, &c.CreatedAt, &c.IsActive)
+	`, id).Scan(&c.ID, &c.IssueID, &c.JiraID, &c.Author, &c.Body, &c.JiraCreated, &c.CreatedAt, &c.IsActive, &c.ViewedAt, &c.AiProcessedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -61,6 +61,13 @@ func (r *Repo) ToggleCommentActive(ctx context.Context, id string) (*Comment, er
 		return nil, fmt.Errorf("fetching updated comment: %w", err)
 	}
 	return &c, nil
+}
+
+// MarkCommentViewed sets viewed_at = datetime('now') for the given comment if not already viewed.
+func (r *Repo) MarkCommentViewed(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE jira_comments SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL", id)
+	return err
 }
 
 // DeleteComment removes a single Jira comment by its internal ID.

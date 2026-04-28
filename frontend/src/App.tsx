@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route } from "react-router-dom";
 import ContextList from "./pages/ContextList";
 import ContextDetail from "./pages/ContextDetail";
 import Settings from "./pages/Settings";
+import HamburgerMenu from "./components/HamburgerMenu";
 import { SetSlackPassphrase } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
@@ -147,6 +148,7 @@ function App() {
     <ProgressProvider>
       <ProgressModal />
       <HashRouter>
+        <HamburgerMenu />
         <Routes>
           <Route path="/" element={<ContextList />} />
           <Route path="/context/:id" element={<ContextDetail />} />

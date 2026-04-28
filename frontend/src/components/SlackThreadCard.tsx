@@ -1,3 +1,4 @@
+import { ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
 
 interface SlackThread {
@@ -35,10 +36,10 @@ export default function SlackThreadCard({ thread }: Props) {
               className="slack-thread-link"
               onClick={(e) => e.stopPropagation()}
             >
-              ↗
+              <ExternalLink size={12} />
             </a>
           )}
-          <span className={`expand-icon ${expanded ? "expanded" : ""}`}>▼</span>
+          <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
         </div>
       </div>
 

@@ -18,6 +18,9 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
+	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
+	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -67,7 +70,12 @@ func openServiceEnv() (*serviceEnv, error) {
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
-	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider)
+	vcsStore := vcsstore.NewStore(s.DB())
+	ghRunner := githubrunner.NewRunner(logger)
+	vcsProvider := vcsservice.NewVCSProvider(vcsStore, logger, ghRunner)
+
+	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)
+	svc.SetVCSStore(vcsStore)
 
 	openAI := openaiclient.NewClient(s, slackRunner.Passphrase, logger)
 	contextLogRepo := contextlog.NewRepo(s.DB())

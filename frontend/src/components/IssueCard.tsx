@@ -1,3 +1,4 @@
+import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { Issue, Comment } from "../types";
 
@@ -33,9 +34,12 @@ interface Props {
   onDeleteComment?: (id: string) => void;
   onToggleIssue?: (id: string) => void;
   onToggleComment?: (id: string) => void;
+  onMarkIssueViewed?: (id: string) => void;
+  onMarkCommentViewed?: (id: string) => void;
+  jiraBaseUrl?: string;
 }
 
-export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment }: Props) {
+export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -66,17 +70,23 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
 
   const comments = issue.comments ?? [];
   const isInactive = !issue.isActive;
+  const isUnread = !issue.viewedAt;
+  const hasUnreadComments = comments.some((c) => !c.viewedAt);
+  const jiraLink = jiraBaseUrl && issue.jiraKey ? `${jiraBaseUrl}/browse/${issue.jiraKey}` : null;
 
   return (
-    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}`}>
-      <div className="issue-card-header" onClick={() => setExpanded(!expanded)}>
+    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}${isUnread || hasUnreadComments ? " item--unread-parent" : ""}`}>
+      <div className={`issue-card-header${isUnread ? " item--unread" : ""}`} onClick={() => setExpanded(!expanded)}>
         {onToggleIssue && (
           <ActiveToggle isActive={issue.isActive} onToggle={(e) => { e.stopPropagation(); onToggleIssue(issue.id); }} />
         )}
         <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
         <button className="copy-btn" onClick={copyKey} title="Copy ticket number">
-          {copied ? "✓" : <CopyIcon />}
+          {copied ? <Check size={13} /> : <CopyIcon />}
         </button>
+        {jiraLink && (
+          <a href={jiraLink} target="_blank" rel="noopener noreferrer" className="external-link-btn" onClick={(e) => e.stopPropagation()} title="Open in Jira"><ExternalLink size={12} /></a>
+        )}
         <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{issue.summary}</span>
         <div className="issue-meta">
           {issue.assignee && <span className="issue-assignee">@{issue.assignee}</span>}
@@ -84,7 +94,12 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
           <span className="status-badge" style={{ borderColor: "transparent", background: "transparent" }}>
             {comments.length} comment{comments.length !== 1 ? "s" : ""}
           </span>
-          <span className={`expand-icon ${expanded ? "expanded" : ""}`}>▼</span>
+          <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
+        </div>
+        <div className="card-actions">
+          {isUnread && onMarkIssueViewed && (
+            <button className="mark-viewed-btn" onClick={(e) => { e.stopPropagation(); onMarkIssueViewed(issue.id); }} title="Mark as viewed"><Check size={13} /></button>
+          )}
           {onDeleteIssue && (
             <button
               className="card-delete-btn"
@@ -109,22 +124,29 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
               <div className="no-comments">No comments yet</div>
             ) : (
               comments.map((c: Comment) => (
-                <div key={c.id} className={`comment${!c.isActive ? " comment--inactive" : ""}`}>
+                <div key={c.id} className={`comment${!c.isActive ? " comment--inactive" : ""}${!c.viewedAt ? " item--unread" : ""}`}>
                   <div className="comment-header">
-                    {onToggleComment && (
-                      <ActiveToggle isActive={c.isActive} onToggle={() => onToggleComment(c.id)} />
-                    )}
-                    <span className={`comment-author${!c.isActive ? " item--inactive" : ""}`}>{c.author || "Unknown"}</span>
-                    <span className="comment-date">{formatDate(c.jiraCreated)}</span>
-                    {onDeleteComment && (
-                      <button
-                        className="card-delete-btn card-delete-btn--sm"
-                        onClick={() => onDeleteComment(c.id)}
-                        title="Remove this comment"
-                      >
-                        <TrashIcon />
-                      </button>
-                    )}
+                    <div className="comment-header-left">
+                      {onToggleComment && (
+                        <ActiveToggle isActive={c.isActive} onToggle={() => onToggleComment(c.id)} />
+                      )}
+                      <span className={`comment-author${!c.isActive ? " item--inactive" : ""}`}>{c.author || "Unknown"}</span>
+                      <span className="comment-date">{formatDate(c.jiraCreated)}</span>
+                    </div>
+                    <div className="card-actions">
+                      {!c.viewedAt && onMarkCommentViewed && (
+                        <button className="mark-viewed-btn" onClick={() => onMarkCommentViewed(c.id)} title="Mark as viewed"><Check size={13} /></button>
+                      )}
+                      {onDeleteComment && (
+                        <button
+                          className="card-delete-btn card-delete-btn--sm"
+                          onClick={() => onDeleteComment(c.id)}
+                          title="Remove this comment"
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className={`comment-body${!c.isActive ? " item--inactive" : ""}`}>{c.body}</div>
                 </div>
