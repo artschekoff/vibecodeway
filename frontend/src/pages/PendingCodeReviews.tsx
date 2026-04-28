@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Copy, ExternalLink, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, ExternalLink, Folder, FolderOpen, RefreshCw, X } from "lucide-react";
 import {
   GetPendingCodeReviews,
   RefreshPendingReviews,
@@ -9,6 +9,8 @@ import {
   RemoveTrackedRepo,
   GetSupportedPlatforms,
   DismissReviewRequest,
+  PickRepoDirectory,
+  SetTrackedRepoPath,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo } from "../types";
@@ -169,6 +171,15 @@ export default function PendingCodeReviews() {
     }
   };
 
+  const handleSetRepoPath = async (repoId: string) => {
+    try {
+      const path = await PickRepoDirectory();
+      if (!path) return;
+      await SetTrackedRepoPath(repoId, path);
+      await loadData();
+    } catch (e) { setError(String(e)); }
+  };
+
   if (loading) return <div className="loading"><Spinner /> Loading…</div>;
 
   const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt).length, 0);
@@ -207,6 +218,13 @@ export default function PendingCodeReviews() {
                 <div key={repo.id} className="tracked-repo-chip">
                   <span className="platform-badge">{repo.platform}</span>
                   <span className="tracked-repo-name">{repo.owner}/{repo.name}</span>
+                  <button
+                    className={`tracked-repo-link${repo.localPath ? " tracked-repo-link--active" : ""}`}
+                    onClick={() => void handleSetRepoPath(repo.id)}
+                    title={repo.localPath ? `Local path: ${repo.localPath}` : "Set local path"}
+                  >
+                    {repo.localPath ? <FolderOpen size={11} /> : <Folder size={11} />}
+                  </button>
                   {url && (
                     <button
                       className="tracked-repo-link"

@@ -274,16 +274,36 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 	}
 
 	for _, repo := range repos {
-		prs, err := runner.ListReviewRequests(ctx, repo.Owner, repo.Name)
+		requested, err := runner.ListReviewRequests(ctx, repo.Owner, repo.Name)
 		if err != nil {
 			p.logger.Warn("vcs: list review requests failed",
 				zap.String("repo", repo.FullName()), zap.Error(err))
 			continue
 		}
 
+		changesRequested, err := runner.ListChangesRequestedByUser(ctx, repo.Owner, repo.Name)
+		if err != nil {
+			// Non-fatal: log and proceed with whatever we have from the first query.
+			p.logger.Warn("vcs: list changes-requested PRs failed",
+				zap.String("repo", repo.FullName()), zap.Error(err))
+		}
+
+		// Merge both result sets, deduplicating by PR number. PRs appearing in both
+		// lists (e.g. still in review-requested AND already reviewed as changes_requested)
+		// are kept once; the first-seen review_status wins.
+		merged := make(map[int]vcs.PRData, len(requested)+len(changesRequested))
+		for _, pr := range requested {
+			merged[pr.Number] = pr
+		}
+		for _, pr := range changesRequested {
+			if _, exists := merged[pr.Number]; !exists {
+				merged[pr.Number] = pr
+			}
+		}
+
 		// Upsert each active PR (clears reviewed_at/dismissed_at if it re-appears).
-		activeNumbers := make([]int, 0, len(prs))
-		for _, pr := range prs {
+		activeNumbers := make([]int, 0, len(merged))
+		for _, pr := range merged {
 			activeNumbers = append(activeNumbers, pr.Number)
 			if err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
@@ -294,9 +314,9 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 			}
 		}
 
-		// Mark records that disappeared from GitHub's list as "reviewed"
-		// (user submitted their review; author needs to act). This preserves
-		// them in the UI under a "Waiting for Author" section instead of deleting.
+		// Mark records that disappeared from both GitHub lists as "reviewed"
+		// (author needs to act). This preserves them in the UI under a
+		// "Waiting for Author" section instead of deleting.
 		if err := p.store.ReviewRequests.MarkReviewedForRepo(ctx, repo.ID, activeNumbers); err != nil {
 			p.logger.Warn("vcs: mark reviewed failed", zap.String("repo", repo.FullName()), zap.Error(err))
 		}

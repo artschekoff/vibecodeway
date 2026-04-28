@@ -1446,7 +1446,10 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                                           setRepoPickerOpen(false);
                                         }}
                                       >
-                                        {fullName}
+                                        <span>{fullName}</span>
+                                        {r.localPath && (
+                                          <span className="branch-picker-item__path">{r.localPath}</span>
+                                        )}
                                       </button>
                                     );
                                   })

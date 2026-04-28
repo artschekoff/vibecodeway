@@ -818,7 +818,7 @@ export default function ContextDetailPage() {
               </section>
             )}
 
-            {/* Pull Requests section */}
+            {/* Pull Requests section — grouped by repo/branch */}
             {(vcsBranches.length > 0 || pullRequests.length > 0) && (
               <section className="detail-section">
                 <div className="detail-section-header">
@@ -833,50 +833,83 @@ export default function ContextDetailPage() {
                   <span className="detail-section-count">{pullRequests.length}</span>
                 </div>
                 <div className="issue-list">
-                  {vcsBranches.length > 0 && (
-                    <div className="vcs-branch-chips">
-                      {vcsBranches.map((b) => {
-                        const repoUrl = b.repo
-                          ? `https://github.com/${b.repo.owner}/${b.repo.name}`
-                          : null;
-                        const branchUrl = repoUrl && b.branch
-                          ? `${repoUrl}/tree/${b.branch}`
-                          : repoUrl;
-                        const label = b.repo
-                          ? `${b.repo.owner}/${b.repo.name}${b.branch ? `:${b.branch}` : ""}`
-                          : b.id;
-                        return branchUrl ? (
-                          <button
-                            key={b.id}
-                            type="button"
-                            className="vcs-branch-chip vcs-branch-chip--link"
-                            onClick={() => BrowserOpenURL(branchUrl)}
-                            title={`Open ${label} on GitHub`}
-                          >
-                            <GitBranch size={11} /> {label}
-                          </button>
+                  {vcsBranches.map((b) => {
+                    const repoUrl = b.repo
+                      ? `https://github.com/${b.repo.owner}/${b.repo.name}`
+                      : null;
+                    const branchUrl = repoUrl && b.branch
+                      ? `${repoUrl}/tree/${b.branch}`
+                      : repoUrl;
+                    const repoLabel = b.repo
+                      ? `${b.repo.owner}/${b.repo.name}`
+                      : b.id;
+                    const branchPRs = pullRequests.filter((pr) => pr.branchId === b.id);
+
+                    return (
+                      <div key={b.id} className="pr-repo-group">
+                        {/* Repo / branch sub-header */}
+                        <div className="pr-repo-group-header">
+                          <span className="pr-repo-group-name">
+                            {repoUrl ? (
+                              <button
+                                type="button"
+                                className="pr-repo-link"
+                                onClick={() => BrowserOpenURL(repoUrl)}
+                                title={`Open ${repoLabel} on GitHub`}
+                              >
+                                {repoLabel}
+                              </button>
+                            ) : repoLabel}
+                          </span>
+                          {b.branch && branchUrl && (
+                            <button
+                              type="button"
+                              className="vcs-branch-chip vcs-branch-chip--link"
+                              onClick={() => BrowserOpenURL(branchUrl)}
+                              title={`Open branch ${b.branch} on GitHub`}
+                            >
+                              <GitBranch size={11} /> {b.branch}
+                            </button>
+                          )}
+                          {branchPRs.length > 0 && (
+                            <span className="detail-section-count" style={{ marginLeft: "auto" }}>
+                              {branchPRs.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* PRs for this branch */}
+                        {branchPRs.length === 0 ? (
+                          <div className="detail-section-empty" style={{ padding: "8px 14px 12px" }}>
+                            Click <strong>Refresh</strong> to fetch PRs
+                          </div>
                         ) : (
-                          <span key={b.id} className="vcs-branch-chip"><GitBranch size={11} /> {label}</span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {vcsBranches.length > 0 && pullRequests.length === 0 && (
-                    <div className="empty-state" style={{ padding: "8px 0 16px" }}>
-                      <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                        Click <strong>Refresh</strong> to fetch PRs
+                          branchPRs.map((pr) => (
+                            <PRCard
+                              key={pr.id}
+                              pr={pr}
+                              vcsBranches={vcsBranches}
+                              onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
+                              onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
+                            />
+                          ))
+                        )}
                       </div>
-                    </div>
-                  )}
-                  {pullRequests.map((pr) => (
-                    <PRCard
-                      key={pr.id}
-                      pr={pr}
-                      vcsBranches={vcsBranches}
-                      onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
-                      onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
-                    />
-                  ))}
+                    );
+                  })}
+
+                  {/* PRs that don't match any tracked branch (edge case) */}
+                  {pullRequests
+                    .filter((pr) => !vcsBranches.some((b) => b.id === pr.branchId))
+                    .map((pr) => (
+                      <PRCard
+                        key={pr.id}
+                        pr={pr}
+                        vcsBranches={vcsBranches}
+                        onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
+                        onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
+                      />
+                    ))}
                 </div>
               </section>
             )}

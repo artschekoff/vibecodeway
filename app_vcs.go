@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/artschekoff/context-consolidator/internal/vcs"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // --- VCS Auth ---
@@ -171,4 +173,29 @@ func (a *App) RefreshPendingReviews() error {
 // DismissReviewRequest hides a "waiting for author" item from the Code Reviews page.
 func (a *App) DismissReviewRequest(id string) error {
 	return a.vcsStore.ReviewRequests.DismissReviewRequest(a.ctx, id)
+}
+
+// --- Repo Local Path ---
+
+// PickRepoDirectory opens a native directory picker and returns the selected path.
+// Returns an empty string if the user cancels.
+func (a *App) PickRepoDirectory() (string, error) {
+	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select repository directory",
+	})
+	if err != nil {
+		return "", fmt.Errorf("open directory dialog: %w", err)
+	}
+	return path, nil
+}
+
+// SetTrackedRepoPath associates a local filesystem directory with a tracked repo.
+// Pass an empty string to clear the path.
+func (a *App) SetTrackedRepoPath(repoID, localPath string) error {
+	if localPath != "" {
+		if _, err := os.Stat(localPath); err != nil {
+			return fmt.Errorf("path does not exist: %w", err)
+		}
+	}
+	return a.vcsStore.Repos.UpdateLocalPath(a.ctx, repoID, localPath)
 }

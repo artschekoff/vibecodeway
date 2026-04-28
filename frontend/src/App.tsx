@@ -124,12 +124,14 @@ function App() {
   }, [showToast]);
 
   const handleAttach = useCallback(
-    (contextKey: string) => {
+    (contextKey: string, contextId: string) => {
       setPicker({ visible: false, text: "" });
-      showToast(`Text attached to "${contextKey}"`);
+      showToast(`Attached to "${contextKey}"`);
+      // Navigate to the context so the user can see the attached content.
+      window.location.hash = `/context/${contextId}`;
       SendNotification({
         id: `quick-attach-${Date.now()}`,
-        title: "Text attached",
+        title: "Attached",
         body: `Added to context: ${contextKey}`,
       }).catch(() => {});
     },

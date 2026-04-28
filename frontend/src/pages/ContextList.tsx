@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical } from "lucide-react";
+import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -48,6 +48,9 @@ import {
   RemoveTrackedRepo,
   GetSupportedPlatforms,
   SetContextsOrder,
+  PickRepoDirectory,
+  SetTrackedRepoPath,
+  DismissReviewRequest,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type {
@@ -69,7 +72,18 @@ function repoUrl(repo: VCSRepo): string {
   return "";
 }
 
-function ReviewCard({ review }: { review: ReviewRequest }) {
+function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: (id: string) => void }) {
+  const [copied, setCopied] = useState(false);
+  const isWaiting = !!review.reviewedAt;
+
+  const handleCopy = () => {
+    if (!review.prUrl) return;
+    void navigator.clipboard.writeText(review.prUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
   const statusClass =
     review.reviewStatus === "changes_requested" ? " pr-status--changes-requested"
     : review.reviewStatus === "approved" ? " pr-status--approved"
@@ -81,25 +95,34 @@ function ReviewCard({ review }: { review: ReviewRequest }) {
     : null;
 
   return (
-    <div className="review-card">
+    <div className={`review-card${isWaiting ? " review-card--waiting" : ""}`}>
       <div className="review-card-top">
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
-        {statusLabel && (
-          <span className={`pr-status-badge${statusClass}`}>{statusLabel}</span>
-        )}
+        {isWaiting
+          ? <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
+          : statusLabel && <span className={`pr-status-badge${statusClass}`}>{statusLabel}</span>
+        }
       </div>
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
-        {review.prUrl && (
-          <button
-            className="review-open-btn"
-            onClick={() => BrowserOpenURL(review.prUrl)}
-            title="Open PR"
-          >
-            Open <ExternalLink size={11} />
-          </button>
-        )}
+        <div className="review-card-btns">
+          {review.prUrl && (
+            <button className="review-open-btn" onClick={handleCopy} title="Copy PR link">
+              {copied ? <Check size={11} /> : <Copy size={11} />}
+            </button>
+          )}
+          {review.prUrl && (
+            <button className="review-open-btn" onClick={() => BrowserOpenURL(review.prUrl)} title="Open PR">
+              Open <ExternalLink size={11} />
+            </button>
+          )}
+          {isWaiting && onDismiss && (
+            <button className="review-open-btn review-dismiss-btn" onClick={() => onDismiss(review.id)} title="Dismiss">
+              <X size={11} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -254,7 +277,7 @@ export default function ContextList() {
         repo,
         reviews: safeReviews.filter((r) => r.repoId === repo.id),
       })));
-      setTotalReviews(safeReviews.length);
+      setTotalReviews(safeReviews.filter((r) => !r.reviewedAt).length);
     } catch {
       // best-effort
     }
@@ -277,6 +300,18 @@ export default function ContextList() {
     void checkAuth();
     void loadReviews();
   }, [load, checkAuth, loadReviews]);
+
+  // ── Background refresh event listeners ──
+  useEffect(() => {
+    const offContexts = EventsOn("bg-refresh:contexts", () => { void load(); });
+    const offReviews = EventsOn("bg-refresh:reviews", () => { void loadReviews(); });
+    return () => {
+      offContexts();
+      offReviews();
+      EventsOff("bg-refresh:contexts");
+      EventsOff("bg-refresh:reviews");
+    };
+  }, [load, loadReviews]);
 
   // ── Search ──
   const handleSearchChange = useCallback((value: string) => {
@@ -479,6 +514,11 @@ export default function ContextList() {
     finally { setRefreshingReviews(false); }
   };
 
+  const handleDismissReview = async (id: string) => {
+    try { await DismissReviewRequest(id); await loadReviews(); }
+    catch (e) { setError(String(e)); }
+  };
+
   const handleAddRepo = async () => {
     const trimmed = addOwnerRepo.trim();
     if (!trimmed || !trimmed.includes("/")) { setAddRepoError("Enter owner/repo (e.g. octocat/hello-world)"); return; }
@@ -499,6 +539,15 @@ export default function ContextList() {
   const handleRemoveRepo = async (repoId: string) => {
     try { await RemoveTrackedRepo(repoId); await loadReviews(); }
     catch (e) { setError(String(e)); }
+  };
+
+  const handleSetRepoPath = async (repoId: string) => {
+    try {
+      const path = await PickRepoDirectory();
+      if (!path) return;
+      await SetTrackedRepoPath(repoId, path);
+      await loadReviews();
+    } catch (e) { setError(String(e)); }
   };
 
   // ── Formatters ──
@@ -743,6 +792,13 @@ export default function ContextList() {
                     <div key={repo.id} className="tracked-repo-chip">
                       <span className="platform-badge">{repo.platform}</span>
                       <span className="tracked-repo-name">{repo.owner}/{repo.name}</span>
+                      <button
+                        className={`tracked-repo-link${repo.localPath ? " tracked-repo-link--active" : ""}`}
+                        onClick={() => void handleSetRepoPath(repo.id)}
+                        title={repo.localPath ? `Local path: ${repo.localPath}` : "Set local path"}
+                      >
+                        {repo.localPath ? <FolderOpen size={11} /> : <Folder size={11} />}
+                      </button>
                       {url && (
                         <button className="tracked-repo-link" onClick={() => BrowserOpenURL(url)} title={`Open ${repo.owner}/${repo.name}`}>
                           <ExternalLink size={11} />
@@ -802,6 +858,9 @@ export default function ContextList() {
             ) : (
               repoGroups.map(({ repo, reviews }) => {
                 const url = repoUrl(repo);
+                const pending = reviews.filter((r) => !r.reviewedAt);
+                const waiting = reviews.filter((r) => !!r.reviewedAt);
+                if (pending.length === 0 && waiting.length === 0) return null;
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
                     <div className="review-repo-header">
@@ -812,14 +871,27 @@ export default function ContextList() {
                           <ExternalLink size={12} />
                         </button>
                       )}
-                      {reviews.length > 0 && <span className="detail-section-count">{reviews.length}</span>}
+                      {pending.length > 0 && <span className="detail-section-count">{pending.length}</span>}
                     </div>
-                    {reviews.length === 0 ? (
+                    {pending.length === 0 ? (
                       <div className="detail-section-empty">No pending reviews in this repo.</div>
                     ) : (
                       <div className="pr-list">
-                        {reviews.map((review) => <ReviewCard key={review.id} review={review} />)}
+                        {pending.map((review) => <ReviewCard key={review.id} review={review} />)}
                       </div>
+                    )}
+                    {waiting.length > 0 && (
+                      <>
+                        <div className="review-waiting-header">
+                          Waiting for author
+                          <span className="detail-section-count" style={{ marginLeft: 6 }}>{waiting.length}</span>
+                        </div>
+                        <div className="pr-list">
+                          {waiting.map((review) => (
+                            <ReviewCard key={review.id} review={review} onDismiss={handleDismissReview} />
+                          ))}
+                        </div>
+                      </>
                     )}
                   </section>
                 );

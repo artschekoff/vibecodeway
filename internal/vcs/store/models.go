@@ -16,6 +16,7 @@ type VCSRepo struct {
 	Platform  string `json:"platform"`
 	Owner     string `json:"owner"`
 	Name      string `json:"name"`
+	LocalPath string `json:"localPath"`
 	CreatedAt string `json:"createdAt"`
 }
 

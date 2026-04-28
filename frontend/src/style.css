@@ -3040,6 +3040,56 @@ select {
   font-style: italic;
 }
 
+/* URL-detected preview (Jira / VCS branch) */
+.quick-attach-preview--url {
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.quick-attach-url-host {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* "+ New Context" inline form */
+.quick-attach-new-ctx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0 2px;
+}
+
+.quick-attach-new-ctx-input {
+  flex: 1;
+  min-width: 120px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.quick-attach-new-ctx-btn {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.quick-attach-new-ctx-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 
 /* ── VCS / PR styles ─────────────────────────────────────── */
 
@@ -3324,6 +3374,48 @@ select {
   background: rgba(88, 166, 255, 0.08);
 }
 
+/* PR repo group (grouped by tracked branch) */
+.pr-repo-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.pr-repo-group:last-child {
+  border-bottom: none;
+}
+
+.pr-repo-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.pr-repo-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+}
+
+.pr-repo-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.pr-repo-link:hover {
+  color: var(--accent, #58a6ff);
+  text-decoration: underline;
+}
+
 /* VCS add-repo form rows */
 .vcs-add-row {
   display: flex;
@@ -3478,7 +3570,6 @@ select {
   gap: 6px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .branch-picker-item:hover {
@@ -3490,6 +3581,16 @@ select {
   color: var(--accent, #58a6ff);
   font-weight: 600;
   background: rgba(88, 166, 255, 0.07);
+}
+
+.branch-picker-item__path {
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: auto;
+  max-width: 180px;
 }
 
 .branch-picker-loading,
@@ -3694,6 +3795,10 @@ select {
 }
 
 .tracked-repo-link:hover {
+  color: var(--accent);
+}
+
+.tracked-repo-link--active {
   color: var(--accent);
 }
 
@@ -4072,4 +4177,49 @@ select {
 .external-link-btn:hover {
   opacity: 1;
   color: var(--accent, #58a6ff);
+}
+
+/* ── Hotkeys section ──────────────────────────────────────────────────────── */
+
+.hotkey-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.hotkey-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 80px;
+  padding-top: 2px;
+}
+
+.hotkey-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+  color: var(--text, #e6edf3);
+  user-select: none;
+}
+
+.hotkey-desc {
+  flex: 1;
+}
+
+/* sub-item style in hamburger menu */
+.app-menu-item--sub {
+  padding-left: 24px;
+  font-size: 12px;
+  color: var(--text-muted, #8b949e);
 }

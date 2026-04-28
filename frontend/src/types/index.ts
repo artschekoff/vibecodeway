@@ -249,6 +249,14 @@ export interface AISettings {
   updatedAt: string;
 }
 
+export interface AppSettings {
+  contextRefetchEnabled: boolean;
+  contextRefetchIntervalMin: number;
+  reviewsRefetchEnabled: boolean;
+  reviewsRefetchIntervalMin: number;
+  updatedAt: string;
+}
+
 // --- VCS Types ---
 
 export type VCSPlatform = "github" | "gitlab" | "linear";
@@ -272,6 +280,7 @@ export interface VCSRepo {
   platform: VCSPlatform;
   owner: string;
   name: string;
+  localPath: string;
   createdAt: string;
 }
 

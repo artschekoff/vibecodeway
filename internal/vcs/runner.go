@@ -101,6 +101,10 @@ type VCSRunner interface {
 	// ListReviewRequests fetches PRs where the authenticated user's review is requested.
 	ListReviewRequests(ctx context.Context, owner, repo string) ([]PRData, error)
 
+	// ListChangesRequestedByUser fetches open PRs where the authenticated user submitted
+	// a "changes requested" review. These remain actionable until the author addresses them.
+	ListChangesRequestedByUser(ctx context.Context, owner, repo string) ([]PRData, error)
+
 	// ListRepoBranches returns branch names for the given repository (up to 100).
 	ListRepoBranches(ctx context.Context, owner, repo string) ([]string, error)
 

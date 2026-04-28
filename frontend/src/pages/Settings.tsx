@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
-import type { AISettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
+import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
 
 export default function SettingsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const hotkeysRef = useRef<HTMLElement>(null);
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
@@ -23,18 +25,43 @@ export default function SettingsPage() {
   const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
   const [codeCopied, setCodeCopied] = useState(false);
 
+  // Background refresh settings
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [contextRefetchEnabled, setContextRefetchEnabled] = useState(false);
+  const [contextRefetchInterval, setContextRefetchInterval] = useState(30);
+  const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
+  const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
+  const [savingRefetch, setSavingRefetch] = useState(false);
+  const [refetchMessage, setRefetchMessage] = useState("");
+
+  useEffect(() => {
+    if (location.hash === "#hotkeys" && hotkeysRef.current) {
+      hotkeysRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [location.hash]);
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       GetAISettings(),
       GetSupportedPlatforms().catch(() => []),
+      GetAppSettings().catch(() => null),
     ])
-      .then(([s, plats]) => {
+      .then(([s, plats, appS]) => {
         if (cancelled) return;
         const typed = s as unknown as AISettings;
         setSettings(typed);
         setModel(typed.model);
         setBaseUrl(typed.baseUrl);
+
+        if (appS) {
+          const typedAppS = appS as unknown as AppSettings;
+          setAppSettings(typedAppS);
+          setContextRefetchEnabled(typedAppS.contextRefetchEnabled);
+          setContextRefetchInterval(typedAppS.contextRefetchIntervalMin);
+          setReviewsRefetchEnabled(typedAppS.reviewsRefetchEnabled);
+          setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
+        }
 
         const typedPlats = (plats ?? []) as VCSPlatformInfo[];
         setPlatforms(typedPlats);
@@ -88,6 +115,26 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveRefetch = async () => {
+    setSavingRefetch(true);
+    setRefetchMessage("");
+    try {
+      await SetAppSettings(
+        contextRefetchEnabled,
+        Math.max(1, contextRefetchInterval),
+        reviewsRefetchEnabled,
+        Math.max(1, reviewsRefetchInterval),
+      );
+      const updated = await GetAppSettings() as unknown as AppSettings;
+      setAppSettings(updated);
+      setRefetchMessage("Saved.");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingRefetch(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError("");
@@ -128,6 +175,40 @@ export default function SettingsPage() {
       <div className="content" style={{ maxWidth: 620 }}>
         {error && <div className="error-banner">{error}</div>}
         {message && <div className="toast toast--success">{message}</div>}
+
+        <section className="detail-section" id="hotkeys" ref={hotkeysRef}>
+          <div className="detail-section-header">
+            <span className="detail-section-title">Keyboard Shortcuts</span>
+          </div>
+          <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="hotkey-row">
+              <div className="hotkey-keys">
+                <kbd className="hotkey-kbd">⌘</kbd>
+                <kbd className="hotkey-kbd">⇧</kbd>
+                <kbd className="hotkey-kbd">C</kbd>
+              </div>
+              <div className="hotkey-desc">
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Quick Attach</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                  Выдели текст в любом приложении и нажми это сочетание — откроется выбор контекста,
+                  к которому прикрепить текст. Работает глобально, даже когда приложение свёрнуто.
+                </div>
+              </div>
+            </div>
+            <div className="hotkey-row">
+              <div className="hotkey-keys">
+                <kbd className="hotkey-kbd">⌘</kbd>
+                <kbd className="hotkey-kbd">↵</kbd>
+              </div>
+              <div className="hotkey-desc">
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Отправить сообщение в чате</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                  В окне чата контекста — отправляет сообщение без перехода на новую строку.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {platforms.length > 0 && (
           <section className="detail-section">
@@ -194,6 +275,84 @@ export default function SettingsPage() {
             </div>
           </section>
         )}
+
+        <section className="detail-section">
+          <div className="detail-section-header">
+            <span className="detail-section-title">Background Refresh</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "12px 14px" }}>
+            {refetchMessage && <div className="toast toast--success" style={{ position: "static", margin: 0 }}>{refetchMessage}</div>}
+
+            {/* Contexts */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={contextRefetchEnabled}
+                  onChange={(e) => setContextRefetchEnabled(e.target.checked)}
+                />
+                Enable background refetch for Contexts
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <label style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  Interval (minutes)
+                </label>
+                <input
+                  type="number"
+                  className="passphrase-input"
+                  min={1}
+                  max={1440}
+                  value={contextRefetchInterval}
+                  disabled={!contextRefetchEnabled}
+                  onChange={(e) => setContextRefetchInterval(Math.max(1, Number(e.target.value)))}
+                  style={{ width: 80 }}
+                />
+              </div>
+            </div>
+
+            {/* Code Reviews */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={reviewsRefetchEnabled}
+                  onChange={(e) => setReviewsRefetchEnabled(e.target.checked)}
+                />
+                Enable background refetch for Code Reviews
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <label style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  Interval (minutes)
+                </label>
+                <input
+                  type="number"
+                  className="passphrase-input"
+                  min={1}
+                  max={1440}
+                  value={reviewsRefetchInterval}
+                  disabled={!reviewsRefetchEnabled}
+                  onChange={(e) => setReviewsRefetchInterval(Math.max(1, Number(e.target.value)))}
+                  style={{ width: 80 }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <button
+                className="btn-primary"
+                onClick={() => void handleSaveRefetch()}
+                disabled={savingRefetch}
+              >
+                {savingRefetch ? "Saving…" : "Save"}
+              </button>
+            </div>
+
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              When enabled, the app will silently refresh data in the background at the specified interval.
+              Changes take effect immediately without restarting the app.
+            </div>
+          </div>
+        </section>
 
         <section className="detail-section">
           <div className="detail-section-header">

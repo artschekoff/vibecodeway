@@ -22,8 +22,8 @@ func NewRepoRepo(db *sql.DB) *RepoRepo { return &RepoRepo{db: db} }
 func (r *RepoRepo) GetRepo(ctx context.Context, id string) (*VCSRepo, error) {
 	var repo VCSRepo
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, platform, owner, name, created_at FROM vcs_repos WHERE id = ?`, id,
-	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.CreatedAt)
+		`SELECT id, platform, owner, name, local_path, created_at FROM vcs_repos WHERE id = ?`, id,
+	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -37,9 +37,9 @@ func (r *RepoRepo) GetRepo(ctx context.Context, id string) (*VCSRepo, error) {
 func (r *RepoRepo) EnsureRepo(ctx context.Context, platform, owner, name string) (*VCSRepo, error) {
 	var repo VCSRepo
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, platform, owner, name, created_at FROM vcs_repos WHERE platform = ? AND owner = ? AND name = ?`,
+		`SELECT id, platform, owner, name, local_path, created_at FROM vcs_repos WHERE platform = ? AND owner = ? AND name = ?`,
 		platform, owner, name,
-	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.CreatedAt)
+	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.CreatedAt)
 	if err == nil {
 		return &repo, nil
 	}
@@ -50,18 +50,18 @@ func (r *RepoRepo) EnsureRepo(ctx context.Context, platform, owner, name string)
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err = r.db.ExecContext(ctx,
-		`INSERT INTO vcs_repos (id, platform, owner, name, created_at) VALUES (?, ?, ?, ?, ?)`,
-		id, platform, owner, name, now,
+		`INSERT INTO vcs_repos (id, platform, owner, name, local_path, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, platform, owner, name, "", now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert vcs repo: %w", err)
 	}
-	return &VCSRepo{ID: id, Platform: platform, Owner: owner, Name: name, CreatedAt: now}, nil
+	return &VCSRepo{ID: id, Platform: platform, Owner: owner, Name: name, LocalPath: "", CreatedAt: now}, nil
 }
 
 // ListRepos returns all tracked repos, optionally filtered by platform.
 func (r *RepoRepo) ListRepos(ctx context.Context, platform string) ([]VCSRepo, error) {
-	q := `SELECT id, platform, owner, name, created_at FROM vcs_repos`
+	q := `SELECT id, platform, owner, name, local_path, created_at FROM vcs_repos`
 	var args []any
 	if platform != "" {
 		q += " WHERE platform = ?"
@@ -78,12 +78,24 @@ func (r *RepoRepo) ListRepos(ctx context.Context, platform string) ([]VCSRepo, e
 	var result []VCSRepo
 	for rows.Next() {
 		var repo VCSRepo
-		if err := rows.Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.CreatedAt); err != nil {
+		if err := rows.Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan vcs repo: %w", err)
 		}
 		result = append(result, repo)
 	}
 	return result, rows.Err()
+}
+
+// UpdateLocalPath sets the local filesystem path for a tracked repo.
+func (r *RepoRepo) UpdateLocalPath(ctx context.Context, id, localPath string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE vcs_repos SET local_path = ? WHERE id = ?`, localPath, id)
+	if err != nil {
+		return fmt.Errorf("update vcs repo local_path: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // DeleteRepo removes a repo by ID. Branches and PRs cascade-delete.

@@ -49,6 +49,9 @@ export default function HamburgerMenu() {
           <button className="app-menu-item" onClick={() => go("/settings")}>
             Settings
           </button>
+          <button className="app-menu-item app-menu-item--sub" onClick={() => go("/settings#hotkeys")}>
+            Hotkeys
+          </button>
         </div>
       )}
     </div>

@@ -103,6 +103,8 @@ type App struct {
 	pendingText    string
 	hotkeyInFlight atomic.Bool
 	a11yPolling    atomic.Bool
+
+	bg bgRefreshState
 }
 
 // NewApp creates a new App with uninitialized service (configured in startup).
@@ -163,6 +165,8 @@ func (a *App) startup(ctx context.Context) {
 		logger.Info("global hotkey Cmd+Shift+C registered")
 	}
 
+	a.startBackgroundRefresh()
+
 	logger.Info("context-consolidator desktop started")
 }
 
@@ -172,6 +176,7 @@ func (a *App) domReady(_ context.Context) {}
 
 // shutdown is called by Wails when the app is closing.
 func (a *App) shutdown(_ context.Context) {
+	a.stopBackgroundRefresh()
 	if a.hotkeyService != nil {
 		a.hotkeyService.Stop()
 	}

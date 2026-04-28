@@ -362,40 +362,29 @@ func (r *Runner) GetPRComments(ctx context.Context, owner, repo string, prNumber
 	return allComments, nil
 }
 
-// ListReviewRequests fetches PRs where the authenticated user's review is requested.
-func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]vcs.PRData, error) {
-	out, err := r.run(ctx, []string{
-		"pr", "list",
-		"--repo", owner + "/" + repo,
-		"--search", "review-requested:@me",
-		"--state", "open",
-		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
-		"--limit", "100",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("gh pr list review-requested: %w", err)
-	}
+// ghPR is the JSON shape returned by `gh pr list --json ...` for PR list queries.
+type ghPR struct {
+	Number         int            `json:"number"`
+	Title          string         `json:"title"`
+	Author         struct{ Login string } `json:"author"`
+	State          string         `json:"state"`
+	ReviewDecision string         `json:"reviewDecision"`
+	URL            string         `json:"url"`
+	HeadRefName    string         `json:"headRefName"`
+	Mergeable      string         `json:"mergeable"`
+	StatusCheckRollup []struct {
+		State string `json:"state"`
+	} `json:"statusCheckRollup"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
 
-	type ghPR struct {
-		Number         int    `json:"number"`
-		Title          string `json:"title"`
-		Author         struct{ Login string } `json:"author"`
-		State          string `json:"state"`
-		ReviewDecision string `json:"reviewDecision"`
-		URL            string `json:"url"`
-		HeadRefName    string `json:"headRefName"`
-		Mergeable      string `json:"mergeable"`
-		StatusCheckRollup []struct {
-			State string `json:"state"`
-		} `json:"statusCheckRollup"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
-	}
+// parseGHPRList unmarshals the JSON output of `gh pr list --json ...` into []vcs.PRData.
+func parseGHPRList(data []byte, errLabel string) ([]vcs.PRData, error) {
 	var ghPRs []ghPR
-	if err := json.Unmarshal(out, &ghPRs); err != nil {
-		return nil, fmt.Errorf("parsing review requests: %w", err)
+	if err := json.Unmarshal(data, &ghPRs); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", errLabel, err)
 	}
-
 	result := make([]vcs.PRData, 0, len(ghPRs))
 	for _, p := range ghPRs {
 		states := make([]string, len(p.StatusCheckRollup))
@@ -417,6 +406,39 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 		})
 	}
 	return result, nil
+}
+
+// ListReviewRequests fetches PRs where the authenticated user's review is requested.
+func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]vcs.PRData, error) {
+	out, err := r.run(ctx, []string{
+		"pr", "list",
+		"--repo", owner + "/" + repo,
+		"--search", "review-requested:@me",
+		"--state", "open",
+		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--limit", "100",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gh pr list review-requested: %w", err)
+	}
+	return parseGHPRList(out, "review requests")
+}
+
+// ListChangesRequestedByUser fetches open PRs where the authenticated user submitted
+// a "changes requested" review. These remain actionable until the author addresses them.
+func (r *Runner) ListChangesRequestedByUser(ctx context.Context, owner, repo string) ([]vcs.PRData, error) {
+	out, err := r.run(ctx, []string{
+		"pr", "list",
+		"--repo", owner + "/" + repo,
+		"--search", "reviewed-by:@me review:changes_requested",
+		"--state", "open",
+		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--limit", "100",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gh pr list changes-requested-by-me: %w", err)
+	}
+	return parseGHPRList(out, "changes requested PRs")
 }
 
 // ListRepoBranches returns up to 100 branch names for the given repository.

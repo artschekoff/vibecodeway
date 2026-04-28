@@ -83,3 +83,12 @@ type AISettings struct {
 	BaseURL   string `json:"baseUrl"`
 	UpdatedAt string `json:"updatedAt"`
 }
+
+// AppSettings holds application-level preferences stored in the local database.
+type AppSettings struct {
+	ContextRefetchEnabled     bool   `json:"contextRefetchEnabled"`
+	ContextRefetchIntervalMin int    `json:"contextRefetchIntervalMin"`
+	ReviewsRefetchEnabled     bool   `json:"reviewsRefetchEnabled"`
+	ReviewsRefetchIntervalMin int    `json:"reviewsRefetchIntervalMin"`
+	UpdatedAt                 string `json:"updatedAt"`
+}
