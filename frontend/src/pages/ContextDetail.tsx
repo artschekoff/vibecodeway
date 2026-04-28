@@ -281,6 +281,15 @@ export default function ContextDetailPage() {
   };
 
   useEffect(() => {
+    const onUpdated = (e: Event) => {
+      const ev = e as CustomEvent<{ id: string }>;
+      if (ev.detail?.id === id) load(true);
+    };
+    window.addEventListener("context:updated", onUpdated);
+    return () => window.removeEventListener("context:updated", onUpdated);
+  }, [id, load]);
+
+  useEffect(() => {
     load();
   }, [load]);
 

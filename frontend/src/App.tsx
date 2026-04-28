@@ -127,7 +127,9 @@ function App() {
     (contextKey: string, contextId: string) => {
       setPicker({ visible: false, text: "" });
       showToast(`Attached to "${contextKey}"`);
-      // Navigate to the context so the user can see the attached content.
+      // Signal any mounted ContextDetail to silently reload.
+      window.dispatchEvent(new CustomEvent("context:updated", { detail: { id: contextId } }));
+      // Navigate to the context so the user sees what was attached.
       window.location.hash = `/context/${contextId}`;
       SendNotification({
         id: `quick-attach-${Date.now()}`,
