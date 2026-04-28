@@ -282,14 +282,31 @@ func (a *App) SyncAllComments(contextID string) (int, error) {
 	return a.cliRunner.SyncAllComments(a.ctx, contextID)
 }
 
-// RefreshContext re-fetches field values and comments for every existing issue in the
-// context and reloads all linked Slack threads. It does NOT run the JQL query.
-// Note: progress events are not emitted when running via CLI subprocess.
+// RefreshContext re-fetches field values and comments for every existing item in the
+// context (issues, Slack threads, pull requests). It does NOT run JQL or add new items.
+// Progress events ("refresh:progress") are emitted via the Wails runtime before each provider.
 func (a *App) RefreshContext(contextID string) (*jiraservice.RefreshResult, error) {
-	return a.cliRunner.RefreshContext(a.ctx, contextID)
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.cancelMu.Lock()
+	a.cancelRefresh = cancel
+	a.cancelMu.Unlock()
+	defer func() {
+		cancel()
+		a.cancelMu.Lock()
+		a.cancelRefresh = nil
+		a.cancelMu.Unlock()
+	}()
+
+	return a.svc.RefreshContext(ctx, contextID, func(current, total int, step string) {
+		runtime.EventsEmit(a.ctx, "refresh:progress", map[string]interface{}{
+			"current": current,
+			"total":   total,
+			"step":    step,
+		})
+	})
 }
 
-// CancelRefresh is a no-op when the CLI runner is used (no in-process goroutine to cancel).
+// CancelRefresh cancels the currently running RefreshContext call, if any.
 func (a *App) CancelRefresh() {
 	a.cancelMu.Lock()
 	fn := a.cancelRefresh

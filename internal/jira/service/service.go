@@ -122,6 +122,9 @@ type RefreshResult struct {
 	NewComments      int `json:"newComments"`
 	ThreadsRefreshed int `json:"threadsRefreshed"`
 	DMsRefreshed     int `json:"dmsRefreshed"`
+	PRsRefreshed     int `json:"prsRefreshed"`
+	NewPRComments    int `json:"newPRComments"`
+	NewNotifications int `json:"newNotifications"`
 }
 
 // ReloadAllResult summarises what was fetched for one context during a ReloadAllContexts run.
@@ -657,6 +660,10 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		case providerSlack:
 			result.ThreadsRefreshed += stats.ItemsRefreshed
 			result.DMsRefreshed += stats.NewItems
+		case "vcs":
+			result.PRsRefreshed += stats.ItemsRefreshed
+			result.NewPRComments += stats.NewItems
+			result.NewNotifications += stats.NewNotifications
 		}
 	}
 

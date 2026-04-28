@@ -111,6 +111,16 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 			stats.ItemsRefreshed++
 
 			if p.notify != nil && !res.IsNew {
+				// PR was merged or closed.
+				if res.StateChanged && (pr.State == "merged" || pr.State == "closed") {
+					eventType := "pr_" + pr.State // pr_merged | pr_closed
+					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+						eventType, res.OldState, pr.State); notifyErr != nil {
+						p.logger.Warn("vcs sync: create state notification failed", zap.Error(notifyErr))
+					} else {
+						stats.NewNotifications++
+					}
+				}
 				// PR newly became un-mergeable.
 				if res.MergeableChanged && pr.Mergeable == "CONFLICTING" {
 					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,

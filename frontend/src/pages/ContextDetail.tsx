@@ -54,12 +54,18 @@ import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
 
 function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string }) {
-  const reviewLabel = reviewStatus === "changes_requested" ? "Changes Requested"
-    : reviewStatus === "approved" ? "Approved"
-    : reviewStatus === "review_required" ? "Review Required"
-    : reviewStatus || null;
+  const isMerged = status === "merged";
+  const isClosed = status === "closed";
 
-  const isReadyToMerge = ciStatus === "SUCCESS" && reviewStatus === "approved" && mergeable === "MERGEABLE";
+  const reviewLabel = !isMerged && !isClosed
+    ? (reviewStatus === "changes_requested" ? "Changes Requested"
+      : reviewStatus === "approved" ? "Approved"
+      : reviewStatus === "review_required" ? "Review Required"
+      : reviewStatus || null)
+    : null;
+
+  const isReadyToMerge = !isMerged && !isClosed
+    && ciStatus === "SUCCESS" && reviewStatus === "approved" && mergeable === "MERGEABLE";
 
   return (
     <div className="pr-badges">
@@ -69,17 +75,17 @@ function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: 
           {reviewLabel}
         </span>
       )}
-      {mergeable === "CONFLICTING" && (
+      {!isMerged && !isClosed && mergeable === "CONFLICTING" && (
         <span className="pr-status-badge pr-status-badge--conflict" title="This PR has merge conflicts">
           Conflicts
         </span>
       )}
-      {ciStatus === "PENDING" && (
+      {!isMerged && !isClosed && ciStatus === "PENDING" && (
         <span className="pr-status-badge pr-status-badge--ci-pending" title="CI checks running">
           CI running
         </span>
       )}
-      {ciStatus === "FAILURE" && (
+      {!isMerged && !isClosed && ciStatus === "FAILURE" && (
         <span className="pr-status-badge pr-status-badge--ci-failure" title="CI checks failed">
           CI failed
         </span>
@@ -267,12 +273,17 @@ export default function ContextDetailPage() {
 
     progress.begin("Refreshing Context", [], () => { void CancelRefresh(); });
 
+    const REFRESH_LABELS: Record<string, string> = {
+      jira: "Syncing Jira issues & comments",
+      slack: "Refreshing Slack threads & DMs",
+      vcs: "Fetching pull requests",
+      text: "Syncing texts & files",
+    };
+
     const unsubscribe = EventsOn(
       "refresh:progress",
       (data: { current: number; total: number; step: string }) => {
-        const label = data.step === "jira" ? "Syncing Jira issues & comments"
-          : data.step === "slack" ? "Refreshing Slack threads & DMs"
-          : `Syncing ${data.step}`;
+        const label = REFRESH_LABELS[data.step] ?? `Syncing ${data.step}`;
         progress.set(data.current - 1, data.total, label);
       }
     );
@@ -284,6 +295,9 @@ export default function ContextDetailPage() {
       if (result.newComments > 0) parts.push(`${result.newComments} new comment${result.newComments !== 1 ? "s" : ""}`);
       if (result.threadsRefreshed > 0) parts.push(`${result.threadsRefreshed} Slack thread${result.threadsRefreshed !== 1 ? "s" : ""} refreshed`);
       if (result.dmsRefreshed > 0) parts.push(`${result.dmsRefreshed} DM${result.dmsRefreshed !== 1 ? "s" : ""} refreshed`);
+      if (result.prsRefreshed > 0) parts.push(`${result.prsRefreshed} PR${result.prsRefreshed !== 1 ? "s" : ""} synced`);
+      if (result.newPRComments > 0) parts.push(`${result.newPRComments} PR comment${result.newPRComments !== 1 ? "s" : ""}`);
+      if (result.newNotifications > 0) parts.push(`${result.newNotifications} notification${result.newNotifications !== 1 ? "s" : ""}`);
       const msg = parts.length > 0 ? parts.join(" · ") : "Everything is up to date.";
       showToast(msg);
       load(true);

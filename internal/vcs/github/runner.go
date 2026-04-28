@@ -273,9 +273,9 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 	args := []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
-		"--state", "open",
+		"--state", "all",
 		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
-		"--limit", "100",
+		"--limit", "50",
 	}
 	if branch != "" {
 		args = append(args, "--head", branch)

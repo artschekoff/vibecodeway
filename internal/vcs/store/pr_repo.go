@@ -22,6 +22,8 @@ func NewPRRepo(db *sql.DB) *PRRepo { return &PRRepo{db: db} }
 type PRUpsertResult struct {
 	ID                  string
 	IsNew               bool
+	StateChanged        bool
+	OldState            string
 	MergeableChanged    bool
 	OldMergeable        string
 	ReviewStatusChanged bool
@@ -35,11 +37,11 @@ type PRUpsertResult struct {
 func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber int, title, author, state, reviewStatus, url, headBranch, mergeable, ciStatus, prCreatedAt, prUpdatedAt string) (PRUpsertResult, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	var existing, oldMergeable, oldReviewStatus, oldCIStatus string
+	var existing, oldState, oldMergeable, oldReviewStatus, oldCIStatus string
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, mergeable, review_status, ci_status FROM vcs_pull_requests WHERE repo_id = ? AND pr_number = ?`,
+		`SELECT id, state, mergeable, review_status, ci_status FROM vcs_pull_requests WHERE repo_id = ? AND pr_number = ?`,
 		repoID, prNumber,
-	).Scan(&existing, &oldMergeable, &oldReviewStatus, &oldCIStatus)
+	).Scan(&existing, &oldState, &oldMergeable, &oldReviewStatus, &oldCIStatus)
 
 	if err == nil {
 		_, err = r.db.ExecContext(ctx, `
@@ -55,6 +57,8 @@ func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber
 		}
 		return PRUpsertResult{
 			ID:                  existing,
+			StateChanged:        state != oldState,
+			OldState:            oldState,
 			MergeableChanged:    mergeable != oldMergeable,
 			OldMergeable:        oldMergeable,
 			ReviewStatusChanged: reviewStatus != oldReviewStatus,
