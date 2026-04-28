@@ -50,6 +50,7 @@ import ContextChatPanel from "../components/ContextChatPanel";
 import ContextLogList from "../components/ContextLogList";
 import ConsolidatedLogView from "../components/ConsolidatedLogView";
 import UploadedFileCard from "../components/UploadedFileCard";
+import ContextTextCard from "../components/ContextTextCard";
 import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
 
@@ -780,27 +781,12 @@ export default function ContextDetailPage() {
                 </div>
                 <div className="issue-list">
                   {contextTexts.map((f) => (
-                    <div key={f.id} className={`text-file-card${!f.isActive ? " text-file-card--inactive" : ""}`}>
-                      <div className="text-file-card-header">
-                        <label
-                          className="item-active-toggle"
-                          title={f.isActive ? "Active — click to deactivate" : "Inactive — click to activate"}
-                          onClick={(e) => { e.stopPropagation(); void handleToggleContextText(f.id); }}
-                        >
-                          <input type="checkbox" checked={f.isActive} onChange={() => {}} />
-                          <span className={`item-active-indicator${f.isActive ? " item-active-indicator--on" : ""}`} />
-                        </label>
-                        <span className={`text-file-card-name${!f.isActive ? " item--inactive" : ""}`}>{f.name || "Untitled"}</span>
-                        <button
-                          type="button"
-                          className="btn-ghost"
-                          style={{ color: "var(--danger)" }}
-                          title="Remove text file"
-                          onClick={() => void handleDeleteContextText(f.id)}
-                        ><X size={13} /></button>
-                      </div>
-                      <pre className="text-file-card-content">{f.content}</pre>
-                    </div>
+                    <ContextTextCard
+                      key={f.id}
+                      text={f}
+                      onDelete={(id) => void handleDeleteContextText(id)}
+                      onToggle={(id) => void handleToggleContextText(id)}
+                    />
                   ))}
                   {uploadedFiles.map((f) => (
                     <UploadedFileCard

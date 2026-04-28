@@ -2207,43 +2207,6 @@ select {
   box-sizing: border-box;
 }
 
-/* ── Text file cards (ContextDetail) ─────────────────────────────────────── */
-
-.text-file-card {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface2);
-  margin-bottom: 10px;
-  overflow: hidden;
-}
-
-.text-file-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.text-file-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.text-file-card-content {
-  margin: 0;
-  padding: 12px 14px;
-  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text-muted);
-  max-height: 300px;
-  overflow-y: auto;
-}
 
 /* ── Item-level active toggle (smaller, inline) ──────────────────────────── */
 .item-active-toggle {
@@ -2320,14 +2283,6 @@ select {
   opacity: 0.6;
 }
 
-.text-file-card--inactive {
-  opacity: 0.65;
-}
-
-.text-file-card--inactive .text-file-card-name {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
 
 /* ── Uploaded File Card (expandable, Jira/Slack-style) ─────────────────── */
 .uploaded-file-card {
