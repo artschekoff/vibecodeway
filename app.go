@@ -225,6 +225,12 @@ func (a *App) ToggleContextStatus(id string) (*appstore.Context, error) {
 	return a.cliRunner.ToggleContextStatus(a.ctx, id)
 }
 
+// SetContextsOrder persists the display order of contexts.
+// ids must contain the full ordered list of context IDs from top to bottom.
+func (a *App) SetContextsOrder(ids []string) error {
+	return a.db.SetContextsOrder(a.ctx, ids)
+}
+
 // CreateContext creates a new context.
 func (a *App) CreateContext(key string) (*appstore.Context, error) {
 	return a.cliRunner.CreateContext(a.ctx, key)

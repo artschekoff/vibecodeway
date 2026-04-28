@@ -274,7 +274,7 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 		"pr", "list",
 		"--repo", owner + "/" + repo,
 		"--state", "open",
-		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,createdAt,updatedAt",
+		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "100",
 	}
 	if branch != "" {
@@ -298,8 +298,11 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 		URL            string `json:"url"`
 		HeadRefName    string `json:"headRefName"`
 		Mergeable      string `json:"mergeable"`
-		CreatedAt      string `json:"createdAt"`
-		UpdatedAt      string `json:"updatedAt"`
+		StatusCheckRollup []struct {
+			State string `json:"state"`
+		} `json:"statusCheckRollup"`
+		CreatedAt string `json:"createdAt"`
+		UpdatedAt string `json:"updatedAt"`
 	}
 	var ghPRs []ghPR
 	if err := json.Unmarshal(out, &ghPRs); err != nil {
@@ -308,6 +311,10 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 
 	result := make([]vcs.PRData, 0, len(ghPRs))
 	for _, p := range ghPRs {
+		states := make([]string, len(p.StatusCheckRollup))
+		for i, c := range p.StatusCheckRollup {
+			states[i] = c.State
+		}
 		result = append(result, vcs.PRData{
 			Number:       p.Number,
 			Title:        p.Title,
@@ -317,6 +324,7 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 			URL:          p.URL,
 			HeadBranch:   p.HeadRefName,
 			Mergeable:    p.Mergeable,
+			CIStatus:     aggregateCIStatus(states),
 			CreatedAt:    p.CreatedAt,
 			UpdatedAt:    p.UpdatedAt,
 		})
@@ -361,7 +369,7 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 		"--repo", owner + "/" + repo,
 		"--search", "review-requested:@me",
 		"--state", "open",
-		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,createdAt,updatedAt",
+		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "100",
 	})
 	if err != nil {
@@ -377,8 +385,11 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 		URL            string `json:"url"`
 		HeadRefName    string `json:"headRefName"`
 		Mergeable      string `json:"mergeable"`
-		CreatedAt      string `json:"createdAt"`
-		UpdatedAt      string `json:"updatedAt"`
+		StatusCheckRollup []struct {
+			State string `json:"state"`
+		} `json:"statusCheckRollup"`
+		CreatedAt string `json:"createdAt"`
+		UpdatedAt string `json:"updatedAt"`
 	}
 	var ghPRs []ghPR
 	if err := json.Unmarshal(out, &ghPRs); err != nil {
@@ -387,6 +398,10 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 
 	result := make([]vcs.PRData, 0, len(ghPRs))
 	for _, p := range ghPRs {
+		states := make([]string, len(p.StatusCheckRollup))
+		for i, c := range p.StatusCheckRollup {
+			states[i] = c.State
+		}
 		result = append(result, vcs.PRData{
 			Number:       p.Number,
 			Title:        p.Title,
@@ -396,6 +411,7 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 			URL:          p.URL,
 			HeadBranch:   p.HeadRefName,
 			Mergeable:    p.Mergeable,
+			CIStatus:     aggregateCIStatus(states),
 			CreatedAt:    p.CreatedAt,
 			UpdatedAt:    p.UpdatedAt,
 		})
@@ -595,6 +611,31 @@ func resolveBinPath(name string, extraDirs []string) string {
 		}
 	}
 	return name
+}
+
+// aggregateCIStatus computes a single CI status from GitHub's statusCheckRollup state values.
+// Returns "FAILURE" if any check failed, "PENDING" if any are still running,
+// "SUCCESS" if all passed, or "" when no checks are configured.
+func aggregateCIStatus(states []string) string {
+	if len(states) == 0 {
+		return ""
+	}
+	hasFailure, hasPending := false, false
+	for _, s := range states {
+		switch s {
+		case "FAILURE", "ERROR", "STARTUP_FAILURE", "ACTION_REQUIRED":
+			hasFailure = true
+		case "PENDING", "IN_PROGRESS", "QUEUED", "WAITING", "REQUESTED":
+			hasPending = true
+		}
+	}
+	if hasFailure {
+		return "FAILURE"
+	}
+	if hasPending {
+		return "PENDING"
+	}
+	return "SUCCESS"
 }
 
 // mapReviewDecision converts a GitHub reviewDecision enum to our internal review_status.

@@ -53,11 +53,13 @@ import UploadedFileCard from "../components/UploadedFileCard";
 import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
 
-function PRStatusBadge({ status, reviewStatus, mergeable }: { status: string; reviewStatus: string; mergeable?: string }) {
+function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string }) {
   const reviewLabel = reviewStatus === "changes_requested" ? "Changes Requested"
     : reviewStatus === "approved" ? "Approved"
     : reviewStatus === "review_required" ? "Review Required"
     : reviewStatus || null;
+
+  const isReadyToMerge = ciStatus === "SUCCESS" && reviewStatus === "approved" && mergeable === "MERGEABLE";
 
   return (
     <div className="pr-badges">
@@ -70,6 +72,21 @@ function PRStatusBadge({ status, reviewStatus, mergeable }: { status: string; re
       {mergeable === "CONFLICTING" && (
         <span className="pr-status-badge pr-status-badge--conflict" title="This PR has merge conflicts">
           Conflicts
+        </span>
+      )}
+      {ciStatus === "PENDING" && (
+        <span className="pr-status-badge pr-status-badge--ci-pending" title="CI checks running">
+          CI running
+        </span>
+      )}
+      {ciStatus === "FAILURE" && (
+        <span className="pr-status-badge pr-status-badge--ci-failure" title="CI checks failed">
+          CI failed
+        </span>
+      )}
+      {isReadyToMerge && (
+        <span className="pr-status-badge pr-status-badge--ready" title="All checks passed and approved — ready to merge">
+          Ready to merge
         </span>
       )}
     </div>
@@ -160,7 +177,7 @@ function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed }: {
             <span className="pr-branch-chip"><GitBranch size={11} /> {pr.headBranch}</span>
           )
         )}
-        <PRStatusBadge status={pr.state} reviewStatus={pr.reviewStatus} mergeable={pr.mergeable} />
+        <PRStatusBadge status={pr.state} reviewStatus={pr.reviewStatus} mergeable={pr.mergeable} ciStatus={pr.ciStatus} />
       </div>
 
       {expanded && (

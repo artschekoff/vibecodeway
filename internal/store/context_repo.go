@@ -71,7 +71,7 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		WHERE (? OR c.status = 'active')
 		GROUP BY c.id
-		ORDER BY c.updated_at DESC
+		ORDER BY c.sort_order ASC, c.updated_at DESC
 	`, includeArchivedParam)
 	if err != nil {
 		return nil, fmt.Errorf("listing contexts: %w", err)
@@ -122,6 +122,8 @@ func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, erro
 }
 
 // CreateContext inserts a new context and returns it.
+// The new context is placed at the top of the list (sort_order = -1 so it sorts before existing rows).
+// A subsequent SetContextsOrder call will normalise all values.
 func (s *Store) CreateContext(ctx context.Context, key string) (*Context, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	c := &Context{
@@ -131,14 +133,39 @@ func (s *Store) CreateContext(ctx context.Context, key string) (*Context, error)
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	_, err := s.db.ExecContext(ctx,
-		"INSERT INTO contexts (id, key, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		c.ID, c.Key, c.Status, c.CreatedAt, c.UpdatedAt,
-	)
+	// Place the new context first by giving it sort_order = MIN(existing) - 1.
+	// Defaults to 0 if there are no existing contexts.
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO contexts (id, key, status, created_at, updated_at, sort_order)
+		VALUES (?, ?, ?, ?, ?, COALESCE((SELECT MIN(sort_order) - 1 FROM contexts), 0))
+	`, c.ID, c.Key, c.Status, c.CreatedAt, c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating context: %w", err)
 	}
 	return c, nil
+}
+
+// SetContextsOrder persists the display order of contexts.
+// ids is the full ordered list of context IDs from top to bottom.
+func (s *Store) SetContextsOrder(ctx context.Context, ids []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin set order tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.PrepareContext(ctx, "UPDATE contexts SET sort_order = ? WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("prepare set order: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	for i, id := range ids {
+		if _, err := stmt.ExecContext(ctx, i, id); err != nil {
+			return fmt.Errorf("set sort_order for %s: %w", id, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // UpdateContext updates mutable fields of an existing context.

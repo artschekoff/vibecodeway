@@ -1,7 +1,24 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
-import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText } from "lucide-react";
+import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   ListAllContexts,
   CreateContext,
@@ -30,6 +47,7 @@ import {
   AddTrackedRepo,
   RemoveTrackedRepo,
   GetSupportedPlatforms,
+  SetContextsOrder,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type {
@@ -84,6 +102,36 @@ function ReviewCard({ review }: { review: ReviewRequest }) {
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Sortable row ─────────────────────────────────────────────────────────────
+
+interface SortableRowProps {
+  id: string;
+  disabled: boolean;
+  className: string;
+  onClick: () => void;
+  children: (dragHandleProps: React.HTMLAttributes<HTMLElement>) => React.ReactNode;
+}
+
+function SortableContextRow({ id, disabled, className, onClick, children }: SortableRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
+  return (
+    <tr
+      ref={setNodeRef}
+      className={className}
+      onClick={onClick}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.45 : 1,
+        position: isDragging ? "relative" : undefined,
+        zIndex: isDragging ? 10 : undefined,
+      }}
+    >
+      {children({ ...listeners, ...attributes })}
+    </tr>
   );
 }
 
@@ -147,6 +195,25 @@ export default function ContextList() {
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
   const [addRepoError, setAddRepoError] = useState("");
   const [addingRepo, setAddingRepo] = useState(false);
+
+  // ── DnD ──
+  const isDraggingEnabled = !matchedIDs; // disable while searching
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setContexts((prev) => {
+      const oldIdx = prev.findIndex((c) => c.id === active.id);
+      const newIdx = prev.findIndex((c) => c.id === over.id);
+      const reordered = arrayMove(prev, oldIdx, newIdx);
+      void SetContextsOrder(reordered.map((c) => c.id));
+      return reordered;
+    });
+  }
 
   // ── Computed ──
   const totalUnviewed = useMemo(
@@ -553,88 +620,106 @@ export default function ContextList() {
               <div>No contexts match &ldquo;{searchQuery}&rdquo;</div>
             </div>
           ) : (
-            <table className="context-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}>Active</th>
-                  <th>Key</th>
-                  <th style={{ width: 88 }}></th>
-                  <th>Issues</th>
-                  <th>Unread</th>
-                  <th>Updated</th>
-                  <th>Latest item</th>
-                  <th style={{ width: 72 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredContexts.map((c) => {
-                  const isActive = c.status === "active";
-                  return (
-                    <tr
-                      key={c.id}
-                      className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
-                      onClick={() => navigate(`/context/${c.id}`)}
-                    >
-                      <td className="active-cell" onClick={(e) => e.stopPropagation()}>
-                        <label className="active-toggle" title={isActive ? "Archive this context" : "Reactivate this context"}>
-                          <input
-                            type="checkbox"
-                            checked={isActive}
-                            onChange={() => void handleToggleStatus({ stopPropagation: () => {} } as React.MouseEvent, c)}
-                          />
-                          <span className={`active-indicator${isActive ? " active-indicator--on" : ""}`} />
-                        </label>
-                      </td>
-                      <td><span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span></td>
-                      <td>
-                        <div className="ctx-src-icons">
-                          {c.hasJira && (
-                            <span className="ctx-src-icon ctx-src-icon--jira" title="Jira">J</span>
-                          )}
-                          {c.hasSlack && (
-                            <span className="ctx-src-icon ctx-src-icon--slack" title="Slack">
-                              <Hash size={9} strokeWidth={2.5} />
-                            </span>
-                          )}
-                          {c.hasVcs && (
-                            <span className="ctx-src-icon ctx-src-icon--vcs" title="GitHub">
-                              <GitBranch size={10} strokeWidth={1.8} />
-                            </span>
-                          )}
-                          {c.hasFiles && (
-                            <span className="ctx-src-icon ctx-src-icon--files" title="Files">
-                              <FileText size={10} strokeWidth={1.8} />
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td><span className="context-meta">{c.issueCount ?? 0}</span></td>
-                      <td>
-                        {(c.unviewedCount ?? 0) > 0
-                          ? <span className="unread-badge">{c.unviewedCount}</span>
-                          : <span className="context-meta" style={{ opacity: 0.3 }}>—</span>}
-                      </td>
-                      <td><span className="context-meta">{formatDate(c.updatedAt)}</span></td>
-                      <td>
-                        {c.lastItemAt
-                          ? <span className="context-meta context-last-item">{formatDateTime(c.lastItemAt)}</span>
-                          : <span className="context-meta" style={{ opacity: 0.35 }}>—</span>}
-                      </td>
-                      <td>
-                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                          <button className="btn-ghost" title="Edit" onClick={(e) => { e.stopPropagation(); void openEditForm(c); }}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className="btn-ghost" title="Delete" style={{ color: "var(--danger)" }} onClick={(e) => { e.stopPropagation(); setDeleteTarget(c); }}>
-                            <X size={14} />
-                          </button>
-                        </div>
-                      </td>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={filteredContexts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                <table className="context-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 20 }}></th>
+                      <th style={{ width: 40 }}>Active</th>
+                      <th>Key</th>
+                      <th style={{ width: 88 }}></th>
+                      <th>Issues</th>
+                      <th>Unread</th>
+                      <th>Updated</th>
+                      <th>Latest item</th>
+                      <th style={{ width: 72 }}></th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {filteredContexts.map((c) => {
+                      const isActive = c.status === "active";
+                      return (
+                        <SortableContextRow
+                          key={c.id}
+                          id={c.id}
+                          disabled={!isDraggingEnabled}
+                          className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
+                          onClick={() => navigate(`/context/${c.id}`)}
+                        >
+                          {(dragHandleProps) => (
+                            <>
+                              <td
+                                className="drag-handle-cell"
+                                onClick={(e) => e.stopPropagation()}
+                                {...(isDraggingEnabled ? dragHandleProps : {})}
+                              >
+                                {isDraggingEnabled && <GripVertical size={13} />}
+                              </td>
+                              <td className="active-cell" onClick={(e) => e.stopPropagation()}>
+                                <label className="active-toggle" title={isActive ? "Archive this context" : "Reactivate this context"}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isActive}
+                                    onChange={() => void handleToggleStatus({ stopPropagation: () => {} } as React.MouseEvent, c)}
+                                  />
+                                  <span className={`active-indicator${isActive ? " active-indicator--on" : ""}`} />
+                                </label>
+                              </td>
+                              <td><span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span></td>
+                              <td>
+                                <div className="ctx-src-icons">
+                                  {c.hasJira && (
+                                    <span className="ctx-src-icon ctx-src-icon--jira" title="Jira">J</span>
+                                  )}
+                                  {c.hasSlack && (
+                                    <span className="ctx-src-icon ctx-src-icon--slack" title="Slack">
+                                      <Hash size={9} strokeWidth={2.5} />
+                                    </span>
+                                  )}
+                                  {c.hasVcs && (
+                                    <span className="ctx-src-icon ctx-src-icon--vcs" title="GitHub">
+                                      <GitBranch size={10} strokeWidth={1.8} />
+                                    </span>
+                                  )}
+                                  {c.hasFiles && (
+                                    <span className="ctx-src-icon ctx-src-icon--files" title="Files">
+                                      <FileText size={10} strokeWidth={1.8} />
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td><span className="context-meta">{c.issueCount ?? 0}</span></td>
+                              <td>
+                                {(c.unviewedCount ?? 0) > 0
+                                  ? <span className="unread-badge">{c.unviewedCount}</span>
+                                  : <span className="context-meta" style={{ opacity: 0.3 }}>—</span>}
+                              </td>
+                              <td><span className="context-meta">{formatDate(c.updatedAt)}</span></td>
+                              <td>
+                                {c.lastItemAt
+                                  ? <span className="context-meta context-last-item">{formatDateTime(c.lastItemAt)}</span>
+                                  : <span className="context-meta" style={{ opacity: 0.35 }}>—</span>}
+                              </td>
+                              <td>
+                                <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                                  <button className="btn-ghost" title="Edit" onClick={(e) => { e.stopPropagation(); void openEditForm(c); }}>
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button className="btn-ghost" title="Delete" style={{ color: "var(--danger)" }} onClick={(e) => { e.stopPropagation(); setDeleteTarget(c); }}>
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </SortableContextRow>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </SortableContext>
+            </DndContext>
           )
         )}
 

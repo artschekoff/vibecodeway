@@ -45,8 +45,10 @@ type PullRequest struct {
 	URL           string      `json:"url"`
 	HeadBranch    string      `json:"headBranch"`
 	// Mergeable is the GitHub mergeability status: "MERGEABLE", "CONFLICTING", or "UNKNOWN".
-	Mergeable     string      `json:"mergeable"`
-	PRCreatedAt   string      `json:"prCreatedAt"`
+	Mergeable string `json:"mergeable"`
+	// CIStatus is the aggregated status-check rollup: "PENDING", "SUCCESS", "FAILURE", or "".
+	CIStatus    string      `json:"ciStatus"`
+	PRCreatedAt string      `json:"prCreatedAt"`
 	PRUpdatedAt   string      `json:"prUpdatedAt"`
 	FetchedAt     string      `json:"fetchedAt"`
 	ViewedAt      *string     `json:"viewedAt"`

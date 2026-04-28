@@ -99,7 +99,8 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 		for _, pr := range prs {
 			res, err := p.store.PullRequests.UpsertPR(ctx,
 				branch.RepoID, branch.ID, pr.Number,
-				pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch, pr.Mergeable,
+				pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
+				pr.Mergeable, pr.CIStatus,
 				pr.CreatedAt, pr.UpdatedAt,
 			)
 			if err != nil {
@@ -110,20 +111,43 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 			stats.ItemsRefreshed++
 
 			if p.notify != nil && !res.IsNew {
-				// Fire when the PR newly became un-mergeable.
+				// PR newly became un-mergeable.
 				if res.MergeableChanged && pr.Mergeable == "CONFLICTING" {
-					if err := p.notify(ctx, contextID, "pull_request", res.ID,
-						"pr_conflict", res.OldMergeable, pr.Mergeable); err != nil {
-						p.logger.Warn("vcs sync: create conflict notification failed", zap.Error(err))
+					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+						"pr_conflict", res.OldMergeable, pr.Mergeable); notifyErr != nil {
+						p.logger.Warn("vcs sync: create conflict notification failed", zap.Error(notifyErr))
 					} else {
 						stats.NewNotifications++
 					}
 				}
-				// Fire when review status changed (e.g. approved, changes_requested).
+				// Review status changed (approved, changes_requested, …).
 				if res.ReviewStatusChanged && pr.ReviewStatus != "" {
-					if err := p.notify(ctx, contextID, "pull_request", res.ID,
-						"pr_review_changed", res.OldReviewStatus, pr.ReviewStatus); err != nil {
-						p.logger.Warn("vcs sync: create review notification failed", zap.Error(err))
+					// If everything is now green, use ready_to_merge instead.
+					eventType := "pr_review_changed"
+					if pr.ReviewStatus == "approved" &&
+						pr.Mergeable == "MERGEABLE" &&
+						(pr.CIStatus == "SUCCESS" || pr.CIStatus == "") {
+						eventType = "ready_to_merge"
+					}
+					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+						eventType, res.OldReviewStatus, pr.ReviewStatus); notifyErr != nil {
+						p.logger.Warn("vcs sync: create review notification failed", zap.Error(notifyErr))
+					} else {
+						stats.NewNotifications++
+					}
+				}
+				// CI status changed.
+				if res.CIStatusChanged && pr.CIStatus != "" {
+					eventType := "ci_" + strings.ToLower(pr.CIStatus) // ci_success, ci_failure, ci_pending
+					// Upgrade to ready_to_merge if all conditions are now met.
+					if pr.CIStatus == "SUCCESS" &&
+						pr.ReviewStatus == "approved" &&
+						pr.Mergeable == "MERGEABLE" {
+						eventType = "ready_to_merge"
+					}
+					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+						eventType, res.OldCIStatus, pr.CIStatus); notifyErr != nil {
+						p.logger.Warn("vcs sync: create CI notification failed", zap.Error(notifyErr))
 					} else {
 						stats.NewNotifications++
 					}

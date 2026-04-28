@@ -41,17 +41,19 @@ func PlatformLabel(p Platform) string {
 
 // PRData contains the fields returned by ListPRsForBranch and ListReviewRequests.
 type PRData struct {
-	Number     int
-	Title      string
-	Author     string
-	State      string
+	Number       int
+	Title        string
+	Author       string
+	State        string
 	ReviewStatus string
-	URL        string
-	HeadBranch string
+	URL          string
+	HeadBranch   string
 	// Mergeable is the GitHub mergeability status: "MERGEABLE", "CONFLICTING", or "UNKNOWN".
-	Mergeable  string
-	CreatedAt  string
-	UpdatedAt  string
+	Mergeable string
+	// CIStatus is the aggregated status-check rollup: "PENDING", "SUCCESS", "FAILURE", or "".
+	CIStatus  string
+	CreatedAt string
+	UpdatedAt string
 }
 
 // CommentData contains a single comment fetched from a PR.
