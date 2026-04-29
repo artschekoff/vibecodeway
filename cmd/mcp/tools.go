@@ -401,8 +401,8 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 	}
 
 	filter := strings.ToLower(strings.TrimSpace(req.GetString("filter", "")))
-	if filter != "" && filter != "jira" && filter != "slack" {
-		return mcp.NewToolResultError("filter must be 'jira', 'slack', or omitted"), nil
+	if filter != "" && filter != "jira" && filter != "slack" && filter != "text" {
+		return mcp.NewToolResultError("filter must be 'jira', 'slack', 'text', or omitted"), nil
 	}
 
 	skipRepos := strings.ToLower(strings.TrimSpace(req.GetString("skip_repos", ""))) == "true"
