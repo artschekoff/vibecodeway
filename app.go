@@ -283,6 +283,10 @@ func (a *App) AddIssuesToContext(contextID string, jiraKeys []string) (int, erro
 	if err != nil {
 		return added, err
 	}
+	// Sync comments (best-effort — mirrors the MCP path)
+	if _, syncErr := a.svc.SyncAllComments(a.ctx, contextID); syncErr != nil {
+		a.logger.Sugar().Warnf("sync comments after issue add: %v", syncErr)
+	}
 	// Auto-add GitHub repos detected in issue descriptions (best-effort)
 	repos := a.svc.ExtractGitHubReposFromIssues(a.ctx, contextID, jiraKeys)
 	for _, ownerRepo := range repos {
