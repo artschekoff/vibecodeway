@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -362,6 +363,24 @@ func (r *Runner) GetPRComments(ctx context.Context, owner, repo string, prNumber
 	return allComments, nil
 }
 
+// GetPRByNumber fetches a single PR by its number using `gh pr view`.
+func (r *Runner) GetPRByNumber(ctx context.Context, owner, repo string, prNumber int) (*vcs.PRData, error) {
+	r.logger.Info("gh pr view", zap.String("repo", owner+"/"+repo), zap.Int("pr", prNumber))
+	out, err := r.run(ctx, []string{
+		"pr", "view", strconv.Itoa(prNumber),
+		"--repo", owner + "/" + repo,
+		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gh pr view %d: %w", prNumber, err)
+	}
+	pd, err := parseGHPRSingle(out)
+	if err != nil {
+		return nil, err
+	}
+	return &pd, nil
+}
+
 // ghPR is the JSON shape returned by `gh pr list --json ...` for PR list queries.
 type ghPR struct {
 	Number         int            `json:"number"`
@@ -406,6 +425,32 @@ func parseGHPRList(data []byte, errLabel string) ([]vcs.PRData, error) {
 		})
 	}
 	return result, nil
+}
+
+// parseGHPRSingle unmarshals the JSON output of `gh pr view <number> --json ...` into vcs.PRData.
+// Unlike parseGHPRList, this parses a single JSON object (not an array).
+func parseGHPRSingle(data []byte) (vcs.PRData, error) {
+	var p ghPR
+	if err := json.Unmarshal(data, &p); err != nil {
+		return vcs.PRData{}, fmt.Errorf("parsing pr view: %w", err)
+	}
+	states := make([]string, len(p.StatusCheckRollup))
+	for i, c := range p.StatusCheckRollup {
+		states[i] = c.State
+	}
+	return vcs.PRData{
+		Number:       p.Number,
+		Title:        p.Title,
+		Author:       p.Author.Login,
+		State:        strings.ToLower(p.State),
+		ReviewStatus: mapReviewDecision(p.ReviewDecision),
+		URL:          p.URL,
+		HeadBranch:   p.HeadRefName,
+		Mergeable:    p.Mergeable,
+		CIStatus:     aggregateCIStatus(states),
+		CreatedAt:    p.CreatedAt,
+		UpdatedAt:    p.UpdatedAt,
+	}, nil
 }
 
 // ListReviewRequests fetches PRs where the authenticated user's review is requested.

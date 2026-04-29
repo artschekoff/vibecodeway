@@ -117,4 +117,9 @@ type VCSRunner interface {
 
 	// GetAuthUser returns the currently authenticated username, or an error if not authenticated.
 	GetAuthUser(ctx context.Context) (string, error)
+
+	// GetPRByNumber fetches a single PR by its number from the VCS platform.
+	// Returns the PR metadata including the head branch name.
+	// Used when the user attaches a PR URL directly to a context.
+	GetPRByNumber(ctx context.Context, owner, repo string, prNumber int) (*PRData, error)
 }

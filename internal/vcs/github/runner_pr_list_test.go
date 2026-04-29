@@ -108,3 +108,35 @@ func TestParseGHPRList_NoChecks_EmptyCIStatus(t *testing.T) {
 	assert.Equal(t, "approved", got[0].ReviewStatus)
 	assert.Equal(t, "", got[0].CIStatus)
 }
+
+func TestParseGHPRSingle_HappyPath(t *testing.T) {
+	input := []byte(`{
+		"number": 123,
+		"title": "Add login feature",
+		"author": {"login": "alice"},
+		"state": "OPEN",
+		"reviewDecision": "REVIEW_REQUIRED",
+		"url": "https://github.com/org/repo/pull/123",
+		"headRefName": "feature/login",
+		"mergeable": "MERGEABLE",
+		"statusCheckRollup": [{"state": "SUCCESS"}, {"state": "SUCCESS"}],
+		"createdAt": "2026-04-20T09:00:00Z",
+		"updatedAt": "2026-04-21T10:00:00Z"
+	}`)
+
+	got, err := parseGHPRSingle(input)
+	require.NoError(t, err)
+	assert.Equal(t, 123, got.Number)
+	assert.Equal(t, "Add login feature", got.Title)
+	assert.Equal(t, "alice", got.Author)
+	assert.Equal(t, "open", got.State)
+	assert.Equal(t, "review_required", got.ReviewStatus)
+	assert.Equal(t, "feature/login", got.HeadBranch)
+	assert.Equal(t, "MERGEABLE", got.Mergeable)
+	assert.Equal(t, "SUCCESS", got.CIStatus)
+}
+
+func TestParseGHPRSingle_MalformedJSON(t *testing.T) {
+	_, err := parseGHPRSingle([]byte(`not json`))
+	assert.Error(t, err)
+}
