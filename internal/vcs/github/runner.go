@@ -289,48 +289,7 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 	if err != nil {
 		return nil, fmt.Errorf("gh pr list: %w", err)
 	}
-
-	type ghPR struct {
-		Number         int    `json:"number"`
-		Title          string `json:"title"`
-		Author         struct{ Login string } `json:"author"`
-		State          string `json:"state"`
-		ReviewDecision string `json:"reviewDecision"`
-		URL            string `json:"url"`
-		HeadRefName    string `json:"headRefName"`
-		Mergeable      string `json:"mergeable"`
-		StatusCheckRollup []struct {
-			State string `json:"state"`
-		} `json:"statusCheckRollup"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
-	}
-	var ghPRs []ghPR
-	if err := json.Unmarshal(out, &ghPRs); err != nil {
-		return nil, fmt.Errorf("parsing pr list: %w", err)
-	}
-
-	result := make([]vcs.PRData, 0, len(ghPRs))
-	for _, p := range ghPRs {
-		states := make([]string, len(p.StatusCheckRollup))
-		for i, c := range p.StatusCheckRollup {
-			states[i] = c.State
-		}
-		result = append(result, vcs.PRData{
-			Number:       p.Number,
-			Title:        p.Title,
-			Author:       p.Author.Login,
-			State:        strings.ToLower(p.State),
-			ReviewStatus: mapReviewDecision(p.ReviewDecision),
-			URL:          p.URL,
-			HeadBranch:   p.HeadRefName,
-			Mergeable:    p.Mergeable,
-			CIStatus:     aggregateCIStatus(states),
-			CreatedAt:    p.CreatedAt,
-			UpdatedAt:    p.UpdatedAt,
-		})
-	}
-	return result, nil
+	return parseGHPRList(out, "pr list")
 }
 
 // GetPRComments fetches all comments for a PR: inline review comments, review bodies,
