@@ -29,6 +29,7 @@ type ContextVCSBranch struct {
 	ContextID string   `json:"contextId"`
 	RepoID    string   `json:"repoId"`
 	Branch    string   `json:"branch"`
+	Label     string   `json:"label"`
 	CreatedAt string   `json:"createdAt"`
 	Repo      *VCSRepo `json:"repo,omitempty"`
 }

@@ -80,7 +80,7 @@ func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch string) (*vcss
 		return nil, fmt.Errorf("ensuring repo: %w", err)
 	}
 
-	b, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, branch)
+	b, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, branch, "")
 	if err != nil {
 		return nil, fmt.Errorf("adding branch: %w", err)
 	}
