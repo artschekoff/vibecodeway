@@ -17,13 +17,21 @@ type SearchResult struct {
 
 // IssueDetail represents a full issue returned by jira workitem view.
 type IssueDetail struct {
-	Key         string `json:"key"`
-	Summary     string `json:"summary"`
-	Status      string `json:"status"`
-	Assignee    string `json:"assignee"`
-	IssueType   string `json:"issuetype"`
-	Description string `json:"description"`
-	Updated     string `json:"updated"`
+	Key         string       `json:"key"`
+	Summary     string       `json:"summary"`
+	Status      string       `json:"status"`
+	Assignee    string       `json:"assignee"`
+	IssueType   string       `json:"issuetype"`
+	Description string       `json:"description"`
+	Updated     string       `json:"updated"`
+	Subtasks    []SubtaskRef `json:"subtasks,omitempty"`
+}
+
+// SubtaskRef is a simplified child-issue reference returned in the parent's subtasks field.
+type SubtaskRef struct {
+	Key     string `json:"key"`
+	Summary string `json:"summary"`
+	Status  string `json:"status"`
 }
 
 // Comment represents a comment returned by jira workitem comment list.

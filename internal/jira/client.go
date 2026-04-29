@@ -42,7 +42,7 @@ func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error)
 // ViewIssue fetches full details for a single issue key.
 func (c *Client) ViewIssue(ctx context.Context, key string) (*IssueDetail, error) {
 	flags := []string{
-		"--fields", "key,issuetype,summary,status,assignee,description,updated",
+		"--fields", "key,issuetype,summary,status,assignee,description,updated,subtasks",
 		"--json",
 	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "view"}, []string{key}, flags)
@@ -100,7 +100,7 @@ func parseIssueDetail(raw string) (*IssueDetail, error) {
 	if err := json.Unmarshal([]byte(raw), &item); err != nil {
 		return nil, fmt.Errorf("parsing issue detail: %w", err)
 	}
-	return &IssueDetail{
+	detail := &IssueDetail{
 		Key:         item.key(),
 		Summary:     item.field("summary"),
 		Status:      item.field("status"),
@@ -108,7 +108,26 @@ func parseIssueDetail(raw string) (*IssueDetail, error) {
 		IssueType:   item.field("issuetype"),
 		Description: extractADFText(item.Fields["description"]),
 		Updated:     item.field("updated"),
-	}, nil
+	}
+	if rawSubs := item.Fields["subtasks"]; rawSubs != nil {
+		var subs []rawSubtask
+		if json.Unmarshal(rawSubs, &subs) == nil {
+			for _, s := range subs {
+				detail.Subtasks = append(detail.Subtasks, SubtaskRef{
+					Key:     s.Key,
+					Summary: parseString(s.Fields["summary"]),
+					Status:  parseString(s.Fields["status"]),
+				})
+			}
+		}
+	}
+	return detail, nil
+}
+
+// rawSubtask mirrors the simplified issue reference in the Jira subtasks array.
+type rawSubtask struct {
+	Key    string                     `json:"key"`
+	Fields map[string]json.RawMessage `json:"fields"`
 }
 
 // acliCommentList mirrors the paginated comment list response from acli --json.
