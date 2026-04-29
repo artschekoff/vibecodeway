@@ -87,13 +87,33 @@ describe("parseAttachableContent", () => {
   });
 
   // ── GitHub PR ────────────────────────────────────────────────────────────
-  it("parses a GitHub PR URL with empty branch", () => {
+  it("parses a GitHub PR URL as vcs_pr", () => {
     const result = parseAttachableContent("https://github.com/org/repo/pull/203");
     expect(result).toEqual({
-      type: "vcs_branch",
+      type: "vcs_pr",
       platform: "github",
       ownerRepo: "org/repo",
-      branch: "",
+      prNumber: 203,
+    });
+  });
+
+  it("parses a GitHub PR URL with trailing slash as vcs_pr", () => {
+    const result = parseAttachableContent("https://github.com/org/repo/pull/5/");
+    expect(result).toEqual({
+      type: "vcs_pr",
+      platform: "github",
+      ownerRepo: "org/repo",
+      prNumber: 5,
+    });
+  });
+
+  it("parses a GitHub PR URL with a subpath (e.g. /files) as vcs_pr", () => {
+    const result = parseAttachableContent("https://github.com/org/repo/pull/7/files");
+    expect(result).toEqual({
+      type: "vcs_pr",
+      platform: "github",
+      ownerRepo: "org/repo",
+      prNumber: 7,
     });
   });
 
@@ -108,13 +128,13 @@ describe("parseAttachableContent", () => {
     });
   });
 
-  it("parses a GitLab merge request URL with empty branch", () => {
+  it("parses a GitLab merge request URL as vcs_pr", () => {
     const result = parseAttachableContent("https://gitlab.com/group/project/-/merge_requests/55");
     expect(result).toEqual({
-      type: "vcs_branch",
+      type: "vcs_pr",
       platform: "gitlab",
       ownerRepo: "group/project",
-      branch: "",
+      prNumber: 55,
     });
   });
 

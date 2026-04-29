@@ -11,7 +11,8 @@
 export type AttachKind =
   | { type: "text" }
   | { type: "jira"; key: string; baseUrl: string }
-  | { type: "vcs_branch"; platform: "github" | "gitlab"; ownerRepo: string; branch: string };
+  | { type: "vcs_branch"; platform: "github" | "gitlab"; ownerRepo: string; branch: string }
+  | { type: "vcs_pr"; platform: "github" | "gitlab"; ownerRepo: string; prNumber: number };
 
 // Jira issue key: one or more uppercase letters (project prefix), dash, digits.
 const JIRA_KEY_RE = /^[A-Z][A-Z0-9]+-\d+$/;
@@ -73,12 +74,12 @@ export function parseAttachableContent(text: string): AttachKind {
       return { type: "vcs_branch", platform: "github", ownerRepo, branch };
     }
 
-    // /owner/repo/pull/123  — we can link the repo but not know the head branch.
-    // Return ownerRepo with empty branch (tracks all PRs for the repo).
-    const prMatch = /^\/([^/]+)\/([^/]+)\/pull\/\d+$/.exec(pathname);
+    // /owner/repo/pull/123  — fetch this specific PR and resolve its head branch.
+    const prMatch = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)/.exec(pathname);
     if (prMatch) {
       const ownerRepo = `${prMatch[1]}/${prMatch[2]}`;
-      return { type: "vcs_branch", platform: "github", ownerRepo, branch: "" };
+      const prNumber = parseInt(prMatch[3], 10);
+      return { type: "vcs_pr", platform: "github", ownerRepo, prNumber };
     }
   }
 
@@ -92,11 +93,12 @@ export function parseAttachableContent(text: string): AttachKind {
       return { type: "vcs_branch", platform: "gitlab", ownerRepo, branch };
     }
 
-    // /owner/repo/-/merge_requests/123  — same fallback as GitHub PRs.
-    const mrMatch = /^\/([^/]+)\/([^/]+)\/-\/merge_requests\/\d+$/.exec(pathname);
+    // /owner/repo/-/merge_requests/55  — fetch this specific MR.
+    const mrMatch = /^\/([^/]+)\/([^/]+)\/-\/merge_requests\/(\d+)/.exec(pathname);
     if (mrMatch) {
       const ownerRepo = `${mrMatch[1]}/${mrMatch[2]}`;
-      return { type: "vcs_branch", platform: "gitlab", ownerRepo, branch: "" };
+      const prNumber = parseInt(mrMatch[3], 10);
+      return { type: "vcs_pr", platform: "gitlab", ownerRepo, prNumber };
     }
   }
 

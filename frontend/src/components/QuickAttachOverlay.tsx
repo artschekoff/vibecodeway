@@ -8,6 +8,7 @@ import {
   SetJiraConfig,
   SetJiraBaseURL,
   AddVCSBranch,
+  AddSpecificPR,
 } from "../../wailsjs/go/main/App";
 import type { Context } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
@@ -105,6 +106,9 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
         case "vcs_branch":
           await AddVCSBranch(contextID, kind.platform, kind.ownerRepo, kind.branch, "");
           break;
+        case "vcs_pr":
+          await AddSpecificPR(contextID, kind.platform, kind.ownerRepo, kind.prNumber);
+          break;
         default:
           await QuickAttachText(contextID, text);
       }
@@ -179,6 +183,13 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
             <span className="quick-attach-url-host">{kind.platform}</span>
           </div>
         );
+      case "vcs_pr":
+        return (
+          <div className="quick-attach-preview quick-attach-preview--url">
+            Add PR <strong>#{kind.prNumber}</strong> from <strong>{kind.ownerRepo}</strong>
+            <span className="quick-attach-url-host">{kind.platform}</span>
+          </div>
+        );
       default: {
         const chars = [...text];
         const preview = chars.length > 240 ? chars.slice(0, 240).join("") + "…" : text;
@@ -190,6 +201,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
   const attachLabel =
     kind.type === "jira" ? "Add Issue" :
     kind.type === "vcs_branch" ? (kind.branch ? "Link Branch" : "Link Repo") :
+    kind.type === "vcs_pr" ? "Add PR" :
     "Attach";
 
   return (
@@ -203,6 +215,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
         <h2>
           {kind.type === "jira" ? "Add Jira issue to context" :
            kind.type === "vcs_branch" ? "Link repository to context" :
+           kind.type === "vcs_pr" ? "Add pull request to context" :
            "Attach text to context"}
         </h2>
 
