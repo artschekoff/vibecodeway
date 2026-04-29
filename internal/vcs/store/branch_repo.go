@@ -56,8 +56,8 @@ func (r *BranchRepo) AddBranch(ctx context.Context, contextID, repoID, branch, l
 func (r *BranchRepo) GetBranch(ctx context.Context, id string) (*ContextVCSBranch, error) {
 	var b ContextVCSBranch
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, context_id, repo_id, branch, created_at FROM context_vcs_branches WHERE id = ?`, id,
-	).Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.CreatedAt)
+		`SELECT id, context_id, repo_id, branch, label, created_at FROM context_vcs_branches WHERE id = ?`, id,
+	).Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -102,7 +102,7 @@ func (r *BranchRepo) ListBranches(ctx context.Context, contextID string) ([]Cont
 // ListAllBranchesForRepo returns all context branches for a repo.
 func (r *BranchRepo) ListAllBranchesForRepo(ctx context.Context, repoID string) ([]ContextVCSBranch, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, context_id, repo_id, branch, created_at FROM context_vcs_branches
+		`SELECT id, context_id, repo_id, branch, label, created_at FROM context_vcs_branches
 		 WHERE repo_id = ? ORDER BY created_at ASC`,
 		repoID,
 	)
@@ -114,7 +114,7 @@ func (r *BranchRepo) ListAllBranchesForRepo(ctx context.Context, repoID string) 
 	var result []ContextVCSBranch
 	for rows.Next() {
 		var b ContextVCSBranch
-		if err := rows.Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan vcs branch: %w", err)
 		}
 		result = append(result, b)
