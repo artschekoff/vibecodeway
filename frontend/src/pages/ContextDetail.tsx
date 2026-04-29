@@ -458,7 +458,7 @@ export default function ContextDetailPage() {
       }
       for (const b of (newVCSBranches ?? [])) {
         progress.next(`Linking ${b.ownerRepo}:${b.branch}`);
-        try { await AddVCSBranch(id, b.platform, b.ownerRepo, b.branch); } catch { /* best-effort */ }
+        try { await AddVCSBranch(id, b.platform, b.ownerRepo, b.branch, b.label ?? ""); } catch { /* best-effort */ }
       }
     } finally {
       progress.done();

@@ -63,7 +63,8 @@ func (a *App) GetSupportedPlatforms() []vcsstore.VCSPlatformInfo {
 
 // AddVCSBranch links a repository (and optionally a branch) to a context.
 // ownerRepo must be in "owner/repo" format. branch may be empty to track all PRs for the repo.
-func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch string) (*vcsstore.ContextVCSBranch, error) {
+// label is an optional human-readable tag (e.g. "api", "data") stored on the branch link.
+func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch, label string) (*vcsstore.ContextVCSBranch, error) {
 	p := vcs.Platform(platform)
 	if !vcs.IsPlatformEnabled(p) {
 		return nil, fmt.Errorf("platform %q is not supported yet", platform)
@@ -80,7 +81,7 @@ func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch string) (*vcss
 		return nil, fmt.Errorf("ensuring repo: %w", err)
 	}
 
-	b, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, branch, "")
+	b, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, branch, label)
 	if err != nil {
 		return nil, fmt.Errorf("adding branch: %w", err)
 	}
@@ -91,6 +92,11 @@ func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch string) (*vcss
 // RemoveVCSBranch removes a branch link (and cascades to its PRs/comments).
 func (a *App) RemoveVCSBranch(branchID string) error {
 	return a.vcsStore.Branches.DeleteBranch(a.ctx, branchID)
+}
+
+// UpdateVCSBranchLabel sets or clears the label for an existing branch link.
+func (a *App) UpdateVCSBranchLabel(branchID, label string) error {
+	return a.vcsStore.Branches.UpdateBranchLabel(a.ctx, branchID, label)
 }
 
 // ListVCSBranches returns all branches for a context with repo info joined.

@@ -289,6 +289,7 @@ export interface VCSBranch {
   contextId: string;
   repoId: string;
   branch: string;
+  label: string;
   createdAt: string;
   repo?: VCSRepo;
 }

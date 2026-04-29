@@ -103,7 +103,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
           await AddIssuesToContext(contextID, [kind.key]);
           break;
         case "vcs_branch":
-          await AddVCSBranch(contextID, kind.platform, kind.ownerRepo, kind.branch);
+          await AddVCSBranch(contextID, kind.platform, kind.ownerRepo, kind.branch, "");
           break;
         default:
           await QuickAttachText(contextID, text);

@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
-import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos } from "../../wailsjs/go/main/App";
+import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, UpdateVCSBranchLabel } from "../../wailsjs/go/main/App";
 import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo } from "../types";
 
 export interface VCSBranchInput {
   platform: VCSPlatform;
   ownerRepo: string;
   branch: string;
+  label?: string;
 }
 
 interface Props {
@@ -142,6 +143,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [vcsPlatform, setVCSPlatform] = useState<VCSPlatform>("github");
   const [vcsOwnerRepo, setVCSOwnerRepo] = useState("");
   const [vcsBranch, setVCSBranch] = useState("");
+  const [vcsLabel, setVCSLabel] = useState("");
   const [vcsAddError, setVCSAddError] = useState("");
   // Repo picker
   const [trackedRepos, setTrackedRepos] = useState<VCSRepo[]>([]);
@@ -563,9 +565,10 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       setVCSAddError("This branch is already linked.");
       return;
     }
-    setNewVCSBranches((prev) => [...prev, { platform: vcsPlatform, ownerRepo, branch }]);
+    setNewVCSBranches((prev) => [...prev, { platform: vcsPlatform, ownerRepo, branch, label: vcsLabel.trim() }]);
     setVCSOwnerRepo("");
     setVCSBranch("");
+    setVCSLabel("");
     setBranchPickerOpen(false);
     setRepoBranches([]);
     setBranchFilter("");
@@ -1337,6 +1340,9 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                           {b.repo?.owner}/{b.repo?.name}
                         </span>
                         <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{b.branch ? `:${b.branch}` : " · all PRs"}</span>
+                        {b.label && (
+                          <span className="vcs-label-badge">{b.label}</span>
+                        )}
                         <button
                           type="button"
                           className="channel-remove-btn"
@@ -1360,6 +1366,9 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         <span className="platform-badge platform-badge--github">{b.platform}</span>
                         <span className="channel-saved-name" style={{ fontWeight: 500 }}>{b.ownerRepo}</span>
                         <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{b.branch ? `:${b.branch}` : " · all PRs"}</span>
+                        {b.label && (
+                          <span className="vcs-label-badge">{b.label}</span>
+                        )}
                         <button
                           type="button"
                           className="channel-remove-btn"
@@ -1554,6 +1563,17 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                     >
                       Add
                     </button>
+                  </div>
+
+                  {/* Row: label */}
+                  <div className="vcs-add-row" style={{ marginTop: 6 }}>
+                    <input
+                      value={vcsLabel}
+                      onChange={(e) => setVCSLabel(e.target.value)}
+                      placeholder="Label (optional — e.g. api, data, workflow)"
+                      className="vcs-label-input"
+                      style={{ flex: 1 }}
+                    />
                   </div>
 
                   {vcsAddError && (
