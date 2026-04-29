@@ -99,6 +99,68 @@ func (a *App) UpdateVCSBranchLabel(branchID, label string) error {
 	return a.vcsStore.Branches.UpdateBranchLabel(a.ctx, branchID, label)
 }
 
+// AddSpecificPR fetches a single PR from the VCS platform by number, resolves its head
+// branch, creates a branch link for that branch, and stores the PR with its comments.
+// Used when the user attaches a PR URL via the quick-attach hotkey.
+func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int) error {
+	p := vcs.Platform(platform)
+	if !vcs.IsPlatformEnabled(p) {
+		return fmt.Errorf("platform %q is not supported yet", platform)
+	}
+
+	runner, err := a.vcsSvc.RunnerFor(p)
+	if err != nil {
+		return fmt.Errorf("getting runner for %q: %w", platform, err)
+	}
+
+	parts := strings.SplitN(ownerRepo, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("ownerRepo must be in 'owner/repo' format, got %q", ownerRepo)
+	}
+	owner, name := parts[0], parts[1]
+
+	pr, err := runner.GetPRByNumber(a.ctx, owner, name, prNumber)
+	if err != nil {
+		return fmt.Errorf("fetching PR #%d from %s/%s: %w", prNumber, owner, name, err)
+	}
+
+	repo, err := a.vcsStore.Repos.EnsureRepo(a.ctx, platform, owner, name)
+	if err != nil {
+		return fmt.Errorf("ensuring repo: %w", err)
+	}
+
+	branch, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, pr.HeadBranch, "")
+	if err != nil {
+		return fmt.Errorf("adding branch link for PR #%d: %w", prNumber, err)
+	}
+
+	res, err := a.vcsStore.PullRequests.UpsertPR(a.ctx,
+		repo.ID, branch.ID, pr.Number,
+		pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
+		pr.Mergeable, pr.CIStatus, pr.CreatedAt, pr.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("storing PR #%d: %w", prNumber, err)
+	}
+
+	// Fetch and store comments (best-effort — don't fail if comments can't be fetched).
+	comments, err := runner.GetPRComments(a.ctx, owner, name, prNumber)
+	if err != nil {
+		a.logger.Sugar().Warnf("fetching comments for PR #%d in %s/%s: %v", prNumber, owner, name, err)
+		return nil
+	}
+	for _, c := range comments {
+		if err := a.vcsStore.PullRequests.UpsertComment(a.ctx,
+			res.ID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
+			c.Path, c.Line, c.IsResolved, c.InReplyToID,
+			c.CreatedAt, c.UpdatedAt,
+		); err != nil {
+			a.logger.Sugar().Warnf("storing comment for PR #%d: %v", prNumber, err)
+		}
+	}
+	return nil
+}
+
 // ListVCSBranches returns all branches for a context with repo info joined.
 func (a *App) ListVCSBranches(contextID string) ([]vcsstore.ContextVCSBranch, error) {
 	return a.vcsStore.Branches.ListBranches(a.ctx, contextID)
