@@ -397,26 +397,51 @@ func (svc *ContextService) SearchNewIssues(ctx context.Context, contextID string
 }
 
 // AddIssuesToContext fetches full details for the given Jira keys and upserts them into the context.
-// Returns the count of issues successfully added or updated.
+// Automatically adds one level of subtasks for each issue. Returns the count of issues added.
 func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID string, jiraKeys []string) (int, error) {
 	if len(jiraKeys) == 0 {
 		return 0, nil
 	}
 	added := 0
+	var subtaskKeys []string
+	seen := make(map[string]bool, len(jiraKeys))
 	for _, key := range jiraKeys {
+		seen[key] = true
+	}
+
+	upsertIssue := func(key string) bool {
 		detail, err := svc.jira.ViewIssue(ctx, key)
 		if err != nil {
 			svc.logger.Warn("failed to view issue", zap.String("key", key), zap.Error(err))
-			continue
+			return false
 		}
-		_, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
+		if _, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
 			detail.IssueType, detail.Description, detail.Updated,
-		)
-		if err != nil {
-			return added, fmt.Errorf("upserting issue %s: %w", key, err)
+		); err != nil {
+			svc.logger.Warn("failed to upsert issue", zap.String("key", key), zap.Error(err))
+			return false
 		}
-		added++
+		// Collect subtask keys not already in the original batch
+		for _, sub := range detail.Subtasks {
+			if !seen[sub.Key] {
+				seen[sub.Key] = true
+				subtaskKeys = append(subtaskKeys, sub.Key)
+			}
+		}
+		return true
+	}
+
+	for _, key := range jiraKeys {
+		if upsertIssue(key) {
+			added++
+		}
+	}
+	// Add one level of subtasks (no further recursion)
+	for _, key := range subtaskKeys {
+		if upsertIssue(key) {
+			added++
+		}
 	}
 	return added, svc.store.TouchContext(ctx, contextID)
 }
