@@ -23,7 +23,7 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 
 	s.AddTool(
 		mcp.NewTool("load_context",
-			mcp.WithDescription("Load all saved content for a context formatted as readable text: Jira issues (with comments), Slack channels/threads/DMs, plain-text entries, and uploaded file contents. Use the filter parameter to request only one source type. Use start_at to limit Jira/Slack items by date (text files are always included regardless of start_at)."),
+			mcp.WithDescription("Load all saved content for a context formatted as readable text: Jira issues (with comments), Slack channels/threads/DMs, plain-text entries, uploaded file contents, and linked repositories with PRs. Use the filter parameter to request only one source type. Use start_at to limit Jira/Slack items by date. Use skip_repos=true to omit the repositories section."),
 			mcp.WithString("name",
 				mcp.Required(),
 				mcp.Description("Context key (human-readable name), e.g. 'sprint-42'."),
@@ -33,6 +33,9 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 			),
 			mcp.WithString("start_at",
 				mcp.Description("ISO 8601 date (e.g. '2024-01-15' or '2024-01-15T09:00:00Z'). Only items updated or created on or after this date are included."),
+			),
+			mcp.WithString("skip_repos",
+				mcp.Description("Set to 'true' to omit the repositories and pull-requests section from the output. Default: false (repos are included)."),
 			),
 		),
 		h.handleLoadContext,
@@ -402,6 +405,8 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError("filter must be 'jira', 'slack', or omitted"), nil
 	}
 
+	skipRepos := strings.ToLower(strings.TrimSpace(req.GetString("skip_repos", ""))) == "true"
+
 	var startAt time.Time
 	if raw := strings.TrimSpace(req.GetString("start_at", "")); raw != "" {
 		startAt = jiraservice.ParseTime(raw)
@@ -427,6 +432,31 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 
 	if err := h.svc.FormatContext(ctx, &buf, detail.Context.ID, filter, startAt); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Repos section — omitted when skip_repos=true or a specific filter is active
+	if !skipRepos && filter == "" && h.vcsStore != nil {
+		branches, err := h.vcsStore.Branches.ListBranches(ctx, detail.Context.ID)
+		if err == nil && len(branches) > 0 {
+			fmt.Fprintf(&buf, "\n--- REPOSITORIES (%d) ---\n\n", len(branches))
+			for _, b := range branches {
+				if b.Repo == nil {
+					continue
+				}
+				platform := b.Repo.Platform
+				repoFull := fmt.Sprintf("%s/%s", b.Repo.Owner, b.Repo.Name)
+				labelPart := ""
+				if b.Label != "" {
+					labelPart = fmt.Sprintf(" [label: %s]", b.Label)
+				}
+				branchPart := " (tracking: all branches)"
+				if b.Branch != "" {
+					branchPart = fmt.Sprintf(" (branch: %s)", b.Branch)
+				}
+				fmt.Fprintf(&buf, "- %s:%s%s%s\n", platform, repoFull, labelPart, branchPart)
+			}
+			buf.WriteString("\n")
+		}
 	}
 
 	return mcp.NewToolResultText(buf.String()), nil
