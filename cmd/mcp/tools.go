@@ -259,10 +259,33 @@ func (h *handlers) handleContextAdd(ctx context.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(fmt.Sprintf("syncing comments: %v", err)), nil
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf(
-		"Added %d issues to context. Synced %d new comments.",
-		added, newComments,
-	)), nil
+	// Auto-add GitHub repos detected in issue descriptions
+	reposAdded := 0
+	if h.vcsStore != nil {
+		repos := h.svc.ExtractGitHubReposFromIssues(ctx, contextID, keys)
+		for _, ownerRepo := range repos {
+			parts := strings.SplitN(ownerRepo, "/", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			repo, err := h.vcsStore.Repos.EnsureRepo(ctx, "github", parts[0], parts[1])
+			if err != nil {
+				h.logger.Warn("auto-add repo: ensure repo failed", zap.String("repo", ownerRepo), zap.Error(err))
+				continue
+			}
+			if _, err := h.vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "", ""); err != nil {
+				h.logger.Warn("auto-add repo: add branch failed", zap.String("repo", ownerRepo), zap.Error(err))
+				continue
+			}
+			reposAdded++
+		}
+	}
+
+	msg := fmt.Sprintf("Added %d issues to context. Synced %d new comments.", added, newComments)
+	if reposAdded > 0 {
+		msg += fmt.Sprintf(" Auto-linked %d GitHub repositories from issue descriptions.", reposAdded)
+	}
+	return mcp.NewToolResultText(msg), nil
 }
 
 func (h *handlers) handleContextGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -276,10 +276,21 @@ func (a *App) SearchNewIssues(contextID string) (*jiraservice.SearchDiff, error)
 }
 
 // AddIssuesToContext fetches and saves the given Jira keys into a context.
+// Also adds subtask children and auto-links any GitHub repositories found in issue descriptions.
 // Returns the count of issues successfully added.
 func (a *App) AddIssuesToContext(contextID string, jiraKeys []string) (int, error) {
-	added, _, err := a.cliRunner.AddIssuesToContext(a.ctx, contextID, jiraKeys)
-	return added, err
+	added, err := a.svc.AddIssuesToContext(a.ctx, contextID, jiraKeys)
+	if err != nil {
+		return added, err
+	}
+	// Auto-add GitHub repos detected in issue descriptions (best-effort)
+	repos := a.svc.ExtractGitHubReposFromIssues(a.ctx, contextID, jiraKeys)
+	for _, ownerRepo := range repos {
+		if _, addErr := a.AddVCSBranch(contextID, "github", ownerRepo, "", ""); addErr != nil {
+			a.logger.Sugar().Warnf("auto-add repo %q from Jira issue: %v", ownerRepo, addErr)
+		}
+	}
+	return added, nil
 }
 
 // SyncAllComments fetches and deduplicates comments for all issues in a context.
