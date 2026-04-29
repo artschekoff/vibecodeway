@@ -870,6 +870,9 @@ export default function ContextDetailPage() {
                               </button>
                             ) : repoLabel}
                           </span>
+                          {b.label && (
+                            <span className="vcs-label-badge" title="Repo label">{b.label}</span>
+                          )}
                           {b.branch && branchUrl && (
                             <button
                               type="button"
