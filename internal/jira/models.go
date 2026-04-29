@@ -3,6 +3,7 @@ package jira
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 )
 
@@ -135,4 +136,23 @@ func writeADFNode(sb *strings.Builder, node adfNode) {
 	case "listItem":
 		sb.WriteString("\n")
 	}
+}
+
+// githubRepoRE matches GitHub repository URLs and captures owner and repo name.
+var githubRepoRE = regexp.MustCompile(`https://github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)`)
+
+// ExtractGitHubRepos parses text for GitHub repository URLs and returns unique "owner/repo" strings.
+// Strips trailing ".git" suffixes and path segments beyond the repo name.
+func ExtractGitHubRepos(text string) []string {
+	seen := make(map[string]bool)
+	var repos []string
+	for _, m := range githubRepoRE.FindAllStringSubmatch(text, -1) {
+		name := strings.TrimSuffix(m[2], ".git")
+		ownerRepo := m[1] + "/" + name
+		if !seen[ownerRepo] {
+			seen[ownerRepo] = true
+			repos = append(repos, ownerRepo)
+		}
+	}
+	return repos
 }

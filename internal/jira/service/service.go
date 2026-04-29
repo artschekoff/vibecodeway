@@ -421,6 +421,35 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 	return added, svc.store.TouchContext(ctx, contextID)
 }
 
+// ExtractGitHubReposFromIssues reads stored issue descriptions for the given Jira keys
+// and returns unique "owner/repo" pairs found in GitHub URLs within those descriptions.
+// This is a best-effort operation: it reads what's already in the DB after add.
+func (svc *ContextService) ExtractGitHubReposFromIssues(ctx context.Context, contextID string, keys []string) []string {
+	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, contextID, false)
+	if err != nil {
+		svc.logger.Warn("extractGitHubRepos: failed to load issues", zap.Error(err))
+		return nil
+	}
+	keySet := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		keySet[k] = true
+	}
+	seen := make(map[string]bool)
+	var repos []string
+	for _, issue := range issues {
+		if !keySet[issue.JiraKey] {
+			continue
+		}
+		for _, ownerRepo := range jira.ExtractGitHubRepos(issue.Description) {
+			if !seen[ownerRepo] {
+				seen[ownerRepo] = true
+				repos = append(repos, ownerRepo)
+			}
+		}
+	}
+	return repos
+}
+
 // SyncAllComments fetches and deduplicates comments for every issue in a context.
 // Returns the total number of new comments inserted.
 func (svc *ContextService) SyncAllComments(ctx context.Context, contextID string) (int, error) {
