@@ -821,9 +821,9 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		}
 	}
 
-	svc.recordContextChange(ctx, contextID, contextlog.TriggerRefresh, before)
-
 	isFirst, _ := svc.store.IsFirstRefresh(ctx, contextID)
+
+	svc.recordContextChange(ctx, contextID, contextlog.TriggerRefresh, before)
 	svc.runPostRefreshWorkflow(ctx, contextID, isFirst)
 
 	if err := svc.store.TouchContext(ctx, contextID); err != nil {
@@ -1230,7 +1230,7 @@ func (svc *ContextService) runPostRefreshWorkflow(ctx context.Context, contextID
 			}
 		} else {
 			if err := svc.openQuestions.ReevaluateOpenQuestions(ctx, contextID, contentMD); err != nil {
-				svc.logger.Warn("open questions re-evaluation failed", zap.Error(err))
+				svc.logger.Warn("open questions re-evaluation failed", zap.Error(err), zap.String("contextID", contextID))
 			}
 		}
 	}
