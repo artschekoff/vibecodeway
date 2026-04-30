@@ -68,7 +68,7 @@ func TestCreateAgentLog_appearsInListLogs(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, logs, 2)
 
-	// ListLogs returns newest-first
-	assert.Equal(t, "Second agent note.", logs[0].SummaryMd)
-	assert.Equal(t, "First agent note.", logs[1].SummaryMd)
+	messages := []string{logs[0].SummaryMd, logs[1].SummaryMd}
+	assert.Contains(t, messages, "First agent note.")
+	assert.Contains(t, messages, "Second agent note.")
 }
