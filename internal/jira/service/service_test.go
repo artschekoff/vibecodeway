@@ -814,3 +814,28 @@ func TestEditContext_UpdatesJiraAndSlack(t *testing.T) {
 	assert.Contains(t, channelNames, "new-channel")
 	assert.NotContains(t, channelNames, "to-be-removed")
 }
+
+func TestJiraLinkToRelationType(t *testing.T) {
+	cases := []struct {
+		typeName  string
+		direction string
+		want      string
+	}{
+		{"Blocks", "outward", "blocks"},
+		{"Blocks", "inward", "is-blocked-by"},
+		{"is blocked by", "outward", "blocks"},
+		{"is blocked by", "inward", "is-blocked-by"},
+		{"Duplicates", "outward", "duplicates"},
+		{"Duplicates", "inward", "is-duplicated-by"},
+		{"duplicate issue", "outward", "duplicates"},
+		{"Relates", "outward", "relates-to"},
+		{"Relates", "inward", "relates-to"},
+		{"cloners", "outward", "relates-to"},
+		{"Problem/Incident", "inward", "relates-to"},
+		{"", "outward", "relates-to"},
+	}
+	for _, tc := range cases {
+		got := jiraLinkToRelationType(tc.typeName, tc.direction)
+		assert.Equal(t, tc.want, got, "typeName=%q direction=%q", tc.typeName, tc.direction)
+	}
+}
