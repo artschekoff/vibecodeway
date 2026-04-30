@@ -84,16 +84,11 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
         {onToggleIssue && (
           <ActiveToggle isActive={issue.isActive} onToggle={(e) => { e.stopPropagation(); onToggleIssue(issue.id); }} />
         )}
-        {jiraLink ? (
-          <button
-            className={`issue-key issue-key--link${isInactive ? " item--inactive" : ""}`}
-            onClick={(e) => { e.stopPropagation(); BrowserOpenURL(jiraLink); }}
-            title="Open in Jira"
-          >
-            {issue.jiraKey} <ExternalLink size={10} />
+        <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
+        {jiraLink && (
+          <button className="copy-btn" onClick={(e) => { e.stopPropagation(); BrowserOpenURL(jiraLink); }} title="Open in Jira">
+            <ExternalLink size={13} />
           </button>
-        ) : (
-          <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
         )}
         <button className="copy-btn" onClick={copyKey} title="Copy ticket number">
           {copied ? <Check size={13} /> : <CopyIcon />}

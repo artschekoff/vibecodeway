@@ -1,5 +1,6 @@
 import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
+import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import ConfirmModal from "./ConfirmModal";
 
 function CopyIcon() {
@@ -88,16 +89,13 @@ function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: Slack
         <span className={`slack-thread-row-preview${isInactive ? " item--inactive" : ""}`}>{preview}</span>
         <div className="slack-thread-row-meta">
           {thread.permalink && (
-            <a
-              href={thread.permalink}
-              target="_blank"
-              rel="noreferrer"
-              className="slack-thread-link external-link-btn"
-              onClick={(e) => e.stopPropagation()}
+            <button
+              className="copy-btn"
+              onClick={(e) => { e.stopPropagation(); BrowserOpenURL(thread.permalink); }}
               title="Open thread in Slack"
             >
-              ↗
-            </a>
+              <ExternalLink size={12} />
+            </button>
           )}
           {isUnread && onMarkViewed && (
             <button className="mark-viewed-btn" onClick={(e) => { e.stopPropagation(); onMarkViewed(thread.id); }} title="Mark as viewed"><Check size={13} /></button>
@@ -172,7 +170,7 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
           {copied ? <Check size={13} /> : <CopyIcon />}
         </button>
         {slackChannelLink && (
-          <a href={slackChannelLink} target="_blank" rel="noopener noreferrer" className="external-link-btn" onClick={(e) => e.stopPropagation()} title="Open channel in Slack"><ExternalLink size={12} /></a>
+          <button className="copy-btn" onClick={(e) => { e.stopPropagation(); BrowserOpenURL(slackChannelLink); }} title="Open channel in Slack"><ExternalLink size={12} /></button>
         )}
         <div className="issue-meta">
           <span className="channel-result-workspace">{channel.workspace}</span>

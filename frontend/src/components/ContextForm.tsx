@@ -1492,8 +1492,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                       <div className="repo-meta-section-header">Repository info (for AI context)</div>
                       {uniqueRepos.map((repo) => {
                         const draft = repoMeta.get(repo.id) ?? { label: "", description: "" };
-                        const saving = savingRepoMeta.has(repo.id);
-                        const saved = savedRepoMeta.has(repo.id);
+                        const isSaving = savingRepoMeta.has(repo.id);
+                        const isSaved = savedRepoMeta.has(repo.id);
                         return (
                           <div key={repo.id} className="repo-meta-item">
                             <span className="repo-meta-name">{repo.owner}/{repo.name}</span>
@@ -1522,9 +1522,9 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                               className="btn-secondary"
                               style={{ flexShrink: 0, fontSize: 11, padding: "2px 10px" }}
                               onClick={() => void handleSaveRepoMeta(repo.id)}
-                              disabled={saving}
+                              disabled={isSaving}
                             >
-                              {saved ? "Saved" : saving ? "Saving…" : "Save"}
+                              {isSaved ? "Saved" : isSaving ? "Saving…" : "Save"}
                             </button>
                           </div>
                         );
