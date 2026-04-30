@@ -51,13 +51,19 @@ import {
   PickRepoDirectory,
   SetTrackedRepoPath,
   DismissReviewRequest,
+  // @ts-ignore
+  AddContextRelation,
+  // @ts-ignore
+  RemoveContextRelation,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type {
   ContextText, Context, Issue, SlackChannel, SlackDMConfig,
   SlackSavePayload, TextFilesPayload, UploadedFile,
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
+  ContextRelation, RelationsPayload,
 } from "../types";
+import type { VCSBranchInput } from "../components/ContextForm";
 import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
 import { useProgress } from "../contexts/ProgressContext";
@@ -198,6 +204,7 @@ export default function ContextList() {
   const [editSlackDMConfigs, setEditSlackDMConfigs] = useState<SlackDMConfig[] | undefined>(undefined);
   const [editContextTexts, setEditContextTexts] = useState<ContextText[] | undefined>(undefined);
   const [editUploadedFiles, setEditUploadedFiles] = useState<UploadedFile[] | undefined>(undefined);
+  const [editRelations, setEditRelations] = useState<ContextRelation[] | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Context | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [reloadingAll, setReloadingAll] = useState(false);
@@ -333,7 +340,9 @@ export default function ContextList() {
     key: string, searchQuery: string, _status: string | undefined,
     slackPayload?: SlackSavePayload, selectedJiraKeys?: string[],
     _removedJiraIssueIds?: string[], textFilesPayload?: TextFilesPayload,
-    _removedUploadedFileIds?: string[], pendingUploadTempIds?: string[]
+    _removedUploadedFileIds?: string[], pendingUploadTempIds?: string[],
+    _newVCSBranches?: VCSBranchInput[], _removedVCSBranchIds?: string[],
+    relationsPayload?: RelationsPayload
   ) => {
     const jiraKeys = selectedJiraKeys ?? [];
     const slackGroups = (slackPayload?.groups ?? []).filter((g) => g.channels.length > 0);
@@ -371,6 +380,9 @@ export default function ContextList() {
         progress.next("Saving uploaded files");
         try { await CommitPendingUploads(ctx.id, pendingIds); } catch { /* best-effort */ }
       }
+      for (const rel of (relationsPayload?.newRelations ?? [])) {
+        try { await AddContextRelation(ctx.id, rel.targetId, rel.relationType); } catch { /* best-effort */ }
+      }
     } finally { progress.done(); }
     setShowForm(false);
     load();
@@ -379,7 +391,7 @@ export default function ContextList() {
   const openEditForm = async (c: Context) => {
     let jql = "", issues: Issue[] = [], channels: SlackChannel[] = [],
       dmConfigs: SlackDMConfig[] = [], contextTexts: ContextText[] = [],
-      uploadedFiles: UploadedFile[] = [];
+      uploadedFiles: UploadedFile[] = [], relations: ContextRelation[] = [];
     try {
       const [detail, dms] = await Promise.all([GetContextDetail(c.id), ListSlackDMConfigs(c.id)]);
       jql = detail.jira?.searchQuery ?? "";
@@ -387,6 +399,7 @@ export default function ContextList() {
       channels = detail.slackChannels ?? [];
       contextTexts = detail.contextTexts ?? [];
       uploadedFiles = (detail.uploadedFiles ?? []) as UploadedFile[];
+      relations = (detail.relations ?? []) as ContextRelation[];
       dmConfigs = dms ?? [];
     } catch { /* best-effort */ }
     setEditJqlQuery(jql);
@@ -395,6 +408,7 @@ export default function ContextList() {
     setEditSlackDMConfigs(dmConfigs);
     setEditContextTexts(contextTexts);
     setEditUploadedFiles(uploadedFiles);
+    setEditRelations(relations);
     setEditTarget(c);
   };
 
@@ -406,13 +420,18 @@ export default function ContextList() {
     setEditSlackDMConfigs(undefined);
     setEditContextTexts(undefined);
     setEditUploadedFiles(undefined);
+    setEditRelations(undefined);
   };
 
   const handleUpdate = async (
     key: string, searchQuery: string, status: string | undefined,
     slackPayload?: SlackSavePayload, selectedJiraKeys?: string[],
     _removedJiraIssueIds?: string[], textFilesPayload?: TextFilesPayload,
-    removedUploadedFileIds?: string[]
+    removedUploadedFileIds?: string[],
+    _pendingUploadTempIds?: string[],
+    _newVCSBranches?: VCSBranchInput[],
+    _removedVCSBranchIds?: string[],
+    relationsPayload?: RelationsPayload
   ) => {
     if (!editTarget) return;
     const jiraKeys = selectedJiraKeys ?? [];
@@ -454,6 +473,12 @@ export default function ContextList() {
         try { await UpsertContextText("", editTarget.id, f.name, f.content); } catch { /* best-effort */ }
       }
       for (const fId of (removedUploadedFileIds ?? [])) { try { await DeleteUploadedFile(fId); } catch { /* best-effort */ } }
+      for (const relId of (relationsPayload?.removedRelationIds ?? [])) {
+        try { await RemoveContextRelation(relId); } catch { /* best-effort */ }
+      }
+      for (const rel of (relationsPayload?.newRelations ?? [])) {
+        try { await AddContextRelation(editTarget.id, rel.targetId, rel.relationType); } catch { /* best-effort */ }
+      }
     } finally { progress.done(); }
     closeEditForm();
     load();
@@ -913,6 +938,7 @@ export default function ContextList() {
           initialSlackDMConfigs={editSlackDMConfigs}
           initialContextTexts={editContextTexts}
           initialUploadedFiles={editUploadedFiles}
+          initialRelations={editRelations}
           onSave={handleUpdate}
           onCancel={closeEditForm}
         />
