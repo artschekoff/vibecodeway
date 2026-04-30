@@ -171,6 +171,32 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 	)
 
 	s.AddTool(
+		mcp.NewTool("context_set_status",
+			mcp.WithDescription("Set the AI-proposed workflow status of a context. Use this to explicitly signal where a context stands in the workflow. Optionally include a comment explaining the situation, a recommended next step, and a log message that will be appended to the context log."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key, e.g. 'sprint-42'. Use either context_id or context_key."),
+			),
+			mcp.WithString("status",
+				mcp.Required(),
+				mcp.Description("Workflow status to set. Must be one of: not_started, in_progress, scoping, needs_attention, ready."),
+			),
+			mcp.WithString("comment",
+				mcp.Description("Short explanation of the current situation (optional)."),
+			),
+			mcp.WithString("next_step",
+				mcp.Description("Recommended next action, ideally under 20 words (optional)."),
+			),
+			mcp.WithString("message",
+				mcp.Description("Log message to append to the context log alongside the status change (optional). Markdown supported."),
+			),
+		),
+		h.handleContextSetStatus,
+	)
+
+	s.AddTool(
 		mcp.NewTool("pr_list",
 			mcp.WithDescription("List pull requests stored for a context. Returns PR status, review status, author, title, and URL."),
 			mcp.WithString("context_id",
@@ -459,6 +485,47 @@ func (h *handlers) handleContextLogAdd(ctx context.Context, req mcp.CallToolRequ
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Log entry created (id=%s).", stored.ID)), nil
+}
+
+func (h *handlers) handleContextSetStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id, err := h.resolveContextID(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	status := strings.TrimSpace(req.GetString("status", ""))
+	if status == "" {
+		return mcp.NewToolResultError("status is required"), nil
+	}
+	if !isValidWorkflowStatus(status) {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid status %q — must be one of: %s", status, strings.Join(validWorkflowStatuses, ", "))), nil
+	}
+
+	comment := strings.TrimSpace(req.GetString("comment", ""))
+	nextStep := strings.TrimSpace(req.GetString("next_step", ""))
+
+	if _, err := h.svc.SetAgentProposal(ctx, id, status, comment, nextStep); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("setting status: %v", err)), nil
+	}
+
+	message := strings.TrimSpace(req.GetString("message", ""))
+	logAppended := false
+	if message != "" {
+		cl := h.svc.ContextLog()
+		if cl != nil {
+			if _, err := cl.CreateAgentLog(ctx, id, message); err != nil {
+				h.logger.Warn("context_set_status: failed to create agent log", zap.String("contextID", id), zap.Error(err))
+			} else {
+				logAppended = true
+			}
+		}
+	}
+
+	result := fmt.Sprintf("Status set to %q.", status)
+	if logAppended {
+		result += " Log entry appended."
+	}
+	return mcp.NewToolResultText(result), nil
 }
 
 func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
