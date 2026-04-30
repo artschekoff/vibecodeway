@@ -11,6 +11,29 @@ export interface Context {
   hasSlack?: boolean;
   hasVcs?: boolean;
   hasFiles?: boolean;
+  // AI proposal
+  aiProposedStatus: string;
+  aiProposedComment?: string;
+  aiProposedNextStep?: string;
+  aiProposedAt?: string;
+  // User overrides (undefined/null = use AI proposal)
+  userStatusOverride?: string;
+  userCommentOverride?: string;
+  userNextStepOverride?: string;
+  userOverrideUpdatedAt?: string;
+}
+
+// Derived helpers — mirrors the Go EffectiveStatus / EffectiveComment / EffectiveNextStep methods.
+export function effectiveStatus(c: Context): string {
+  if (c.aiProposedStatus === "needs_attention") return "needs_attention";
+  if (c.userStatusOverride) return c.userStatusOverride;
+  return c.aiProposedStatus || "not_started";
+}
+export function effectiveComment(c: Context): string {
+  return (c.userCommentOverride && c.userCommentOverride !== "") ? c.userCommentOverride : (c.aiProposedComment ?? "");
+}
+export function effectiveNextStep(c: Context): string {
+  return (c.userNextStepOverride && c.userNextStepOverride !== "") ? c.userNextStepOverride : (c.aiProposedNextStep ?? "");
 }
 
 export interface UnviewedBreakdown {
@@ -278,10 +301,12 @@ export interface VCSPlatformInfo {
 
 export interface VCSRepo {
   id: string;
-  platform: VCSPlatform;
+  platform: string;
   owner: string;
   name: string;
   localPath: string;
+  label: string;
+  description: string;
   createdAt: string;
 }
 
@@ -394,3 +419,51 @@ export interface RelationsPayload {
   newRelations: RelationInput[];
   removedRelationIds: string[];
 }
+
+export interface WorkflowSummary {
+  aiProposedStatus: string;
+  aiProposedComment?: string;
+  aiProposedNextStep?: string;
+  aiProposedAt?: string;
+  userStatusOverride?: string;
+  userCommentOverride?: string;
+  userNextStepOverride?: string;
+  userOverrideUpdatedAt?: string;
+  effectiveStatus: string;
+  effectiveComment: string;
+  effectiveNextStep: string;
+}
+
+export interface WorkflowProposal {
+  id: string;
+  contextId: string;
+  proposedStatus: string;
+  proposedComment?: string;
+  proposedNextStep?: string;
+  userStatusOverride?: string;
+  userCommentOverride?: string;
+  userNextStepOverride?: string;
+  prevUserNextStep?: string;
+  resolvedAt?: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface OpenQuestion {
+  id: string;
+  contextId: string;
+  question: string;
+  status: 'open' | 'answered' | 'dismissed';
+  answer?: string;
+  source: 'ai' | 'user';
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string;
+}
+
+export type WorkflowStatusValue =
+  | 'not_started'
+  | 'scoping'
+  | 'in_progress'
+  | 'needs_attention'
+  | 'ready';
