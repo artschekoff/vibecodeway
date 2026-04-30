@@ -4410,3 +4410,51 @@ select {
 }
 
 .btn-sm { padding: 3px 8px; font-size: 12px; }
+
+/* ── Needs-Attention Panel ── */
+.needs-attention-panel {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.needs-attention-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: #991b1b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.needs-attention-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.needs-attention-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: white;
+  border-radius: 6px;
+  border-left: 3px solid #f87171;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.needs-attention-item:hover { background: #fff5f5; }
+.needs-attention-key {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+.needs-attention-comment {
+  font-size: 12px;
+  color: #6b7280;
+}
+.needs-attention-nextstep {
+  font-size: 12px;
+  color: #dc2626;
+  font-style: italic;
+}

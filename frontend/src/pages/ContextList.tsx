@@ -63,9 +63,11 @@ import type {
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
   ContextRelation, RelationsPayload,
 } from "../types";
+import { effectiveStatus, effectiveComment, effectiveNextStep } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
+import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import { useProgress } from "../contexts/ProgressContext";
 
 // ─── Reviews helpers ──────────────────────────────────────────────────────────
@@ -254,6 +256,11 @@ export default function ContextList() {
   const filteredContexts = useMemo(
     () => matchedIDs ? contexts.filter((c) => matchedIDs.has(c.id)) : contexts,
     [contexts, matchedIDs],
+  );
+
+  const needsAttentionContexts = useMemo(
+    () => filteredContexts.filter((c) => effectiveStatus(c) === "needs_attention"),
+    [filteredContexts],
   );
 
   // ── Load contexts ──
@@ -701,6 +708,21 @@ export default function ContextList() {
               <div>No contexts match &ldquo;{searchQuery}&rdquo;</div>
             </div>
           ) : (
+            <>
+              {needsAttentionContexts.length > 0 && (
+                <div className="needs-attention-panel">
+                  <div className="needs-attention-header">Needs Attention</div>
+                  <div className="needs-attention-list">
+                    {needsAttentionContexts.map((c) => (
+                      <div key={c.id} className="needs-attention-item" onClick={() => navigate(`/context/${c.id}`)}>
+                        <span className="needs-attention-key">{c.key}</span>
+                        {effectiveComment(c) && <span className="needs-attention-comment">{effectiveComment(c)}</span>}
+                        {effectiveNextStep(c) && <span className="needs-attention-nextstep">Next: {effectiveNextStep(c)}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={filteredContexts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                 <table className="context-table">
@@ -747,7 +769,10 @@ export default function ContextList() {
                                   <span className={`active-indicator${isActive ? " active-indicator--on" : ""}`} />
                                 </label>
                               </td>
-                              <td><span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span></td>
+                              <td>
+                                <span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span>
+                                <WorkflowStatusBadge status={effectiveStatus(c)} isAI={!c.userStatusOverride} />
+                              </td>
                               <td>
                                 <div className="ctx-src-icons">
                                   {c.hasJira && (
@@ -801,6 +826,7 @@ export default function ContextList() {
                 </table>
               </SortableContext>
             </DndContext>
+            </>
           )
         )}
 
