@@ -259,8 +259,8 @@ export default function ContextList() {
   );
 
   const needsAttentionContexts = useMemo(
-    () => filteredContexts.filter((c) => effectiveStatus(c) === "needs_attention"),
-    [filteredContexts],
+    () => contexts.filter((c) => effectiveStatus(c) === "needs_attention"),
+    [contexts],
   );
 
   // ── Load contexts ──
@@ -693,141 +693,155 @@ export default function ContextList() {
 
         {/* ── CONTEXTS TAB ── */}
         {activeTab === "contexts" && (
-          loading ? (
-            <div className="loading">Loading…</div>
-          ) : contexts.length === 0 ? (
-            <div className="empty-state">
-              <div style={{ fontSize: 32 }}>📋</div>
-              <div className="empty-state-title">No contexts yet</div>
-              <div>Create a context to start saving Jira issues</div>
-              <button className="btn-primary" style={{ marginTop: 8 }} onClick={() => setShowForm(true)}>Create first context</button>
-            </div>
-          ) : filteredContexts.length === 0 && searchQuery ? (
-            <div className="empty-state">
-              <div className="empty-state-title">No matches</div>
-              <div>No contexts match &ldquo;{searchQuery}&rdquo;</div>
-            </div>
-          ) : (
-            <>
-              {needsAttentionContexts.length > 0 && (
-                <div className="needs-attention-panel">
-                  <div className="needs-attention-header">Needs Attention</div>
-                  <div className="needs-attention-list">
-                    {needsAttentionContexts.map((c) => (
-                      <div key={c.id} className="needs-attention-item" onClick={() => navigate(`/context/${c.id}`)}>
+          <>
+            {/* Needs-attention panel — always shown when loading is done, regardless of search */}
+            {!loading && needsAttentionContexts.length > 0 && (
+              <div className="needs-attention-panel">
+                <div className="needs-attention-header">Needs Attention</div>
+                <div className="needs-attention-list">
+                  {needsAttentionContexts.map((c) => {
+                    const comment = effectiveComment(c);
+                    const nextStep = effectiveNextStep(c);
+                    return (
+                      <div
+                        key={c.id}
+                        className="needs-attention-item"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(`/context/${c.id}`)}
+                        onKeyDown={(e) => e.key === "Enter" && navigate(`/context/${c.id}`)}
+                      >
                         <span className="needs-attention-key">{c.key}</span>
-                        {effectiveComment(c) && <span className="needs-attention-comment">{effectiveComment(c)}</span>}
-                        {effectiveNextStep(c) && <span className="needs-attention-nextstep">Next: {effectiveNextStep(c)}</span>}
+                        {comment && <span className="needs-attention-comment">{comment}</span>}
+                        {nextStep && <span className="needs-attention-nextstep">Next: {nextStep}</span>}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={filteredContexts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                <table className="context-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 20 }}></th>
-                      <th style={{ width: 40 }}>Active</th>
-                      <th>Key</th>
-                      <th style={{ width: 88 }}></th>
-                      <th>Issues</th>
-                      <th>Unread</th>
-                      <th>Updated</th>
-                      <th>Latest item</th>
-                      <th style={{ width: 72 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredContexts.map((c) => {
-                      const isActive = c.status === "active";
-                      return (
-                        <SortableContextRow
-                          key={c.id}
-                          id={c.id}
-                          disabled={!isDraggingEnabled}
-                          className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
-                          onClick={() => navigate(`/context/${c.id}`)}
-                        >
-                          {(dragHandleProps) => (
-                            <>
-                              <td
-                                className="drag-handle-cell"
-                                onClick={(e) => e.stopPropagation()}
-                                {...(isDraggingEnabled ? dragHandleProps : {})}
-                              >
-                                {isDraggingEnabled && <GripVertical size={13} />}
-                              </td>
-                              <td className="active-cell" onClick={(e) => e.stopPropagation()}>
-                                <label className="active-toggle" title={isActive ? "Archive this context" : "Reactivate this context"}>
-                                  <input
-                                    type="checkbox"
-                                    checked={isActive}
-                                    onChange={() => void handleToggleStatus({ stopPropagation: () => {} } as React.MouseEvent, c)}
-                                  />
-                                  <span className={`active-indicator${isActive ? " active-indicator--on" : ""}`} />
-                                </label>
-                              </td>
-                              <td>
-                                <span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span>
-                                <WorkflowStatusBadge status={effectiveStatus(c)} isAI={!c.userStatusOverride} />
-                              </td>
-                              <td>
-                                <div className="ctx-src-icons">
-                                  {c.hasJira && (
-                                    <span className="ctx-src-icon ctx-src-icon--jira" title="Jira">J</span>
-                                  )}
-                                  {c.hasSlack && (
-                                    <span className="ctx-src-icon ctx-src-icon--slack" title="Slack">
-                                      <Hash size={9} strokeWidth={2.5} />
-                                    </span>
-                                  )}
-                                  {c.hasVcs && (
-                                    <span className="ctx-src-icon ctx-src-icon--vcs" title="GitHub">
-                                      <GitBranch size={10} strokeWidth={1.8} />
-                                    </span>
-                                  )}
-                                  {c.hasFiles && (
-                                    <span className="ctx-src-icon ctx-src-icon--files" title="Files">
-                                      <FileText size={10} strokeWidth={1.8} />
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td><span className="context-meta">{c.issueCount ?? 0}</span></td>
-                              <td>
-                                {(c.unviewedCount ?? 0) > 0
-                                  ? <span className="unread-badge">{c.unviewedCount}</span>
-                                  : <span className="context-meta" style={{ opacity: 0.3 }}>—</span>}
-                              </td>
-                              <td><span className="context-meta">{formatDate(c.updatedAt)}</span></td>
-                              <td>
-                                {c.lastItemAt
-                                  ? <span className="context-meta context-last-item">{formatDateTime(c.lastItemAt)}</span>
-                                  : <span className="context-meta" style={{ opacity: 0.35 }}>—</span>}
-                              </td>
-                              <td>
-                                <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                                  <button className="btn-ghost" title="Edit" onClick={(e) => { e.stopPropagation(); void openEditForm(c); }}>
-                                    <Pencil size={14} />
-                                  </button>
-                                  <button className="btn-ghost" title="Delete" style={{ color: "var(--danger)" }} onClick={(e) => { e.stopPropagation(); setDeleteTarget(c); }}>
-                                    <X size={14} />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          )}
-                        </SortableContextRow>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </SortableContext>
-            </DndContext>
-            </>
-          )
+              </div>
+            )}
+
+            {/* Table area */}
+            {loading ? (
+              <div className="loading">Loading…</div>
+            ) : contexts.length === 0 ? (
+              <div className="empty-state">
+                <div style={{ fontSize: 32 }}>📋</div>
+                <div className="empty-state-title">No contexts yet</div>
+                <div>Create a context to start saving Jira issues</div>
+                <button className="btn-primary" style={{ marginTop: 8 }} onClick={() => setShowForm(true)}>Create first context</button>
+              </div>
+            ) : filteredContexts.length === 0 && searchQuery ? (
+              <div className="empty-state">
+                <div className="empty-state-title">No matches</div>
+                <div>No contexts match &ldquo;{searchQuery}&rdquo;</div>
+              </div>
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={filteredContexts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  <table className="context-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 20 }}></th>
+                        <th style={{ width: 40 }}>Active</th>
+                        <th>Key</th>
+                        <th style={{ width: 88 }}></th>
+                        <th>Issues</th>
+                        <th>Unread</th>
+                        <th>Updated</th>
+                        <th>Latest item</th>
+                        <th style={{ width: 72 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredContexts.map((c) => {
+                        const isActive = c.status === "active";
+                        return (
+                          <SortableContextRow
+                            key={c.id}
+                            id={c.id}
+                            disabled={!isDraggingEnabled}
+                            className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
+                            onClick={() => navigate(`/context/${c.id}`)}
+                          >
+                            {(dragHandleProps) => (
+                              <>
+                                <td
+                                  className="drag-handle-cell"
+                                  onClick={(e) => e.stopPropagation()}
+                                  {...(isDraggingEnabled ? dragHandleProps : {})}
+                                >
+                                  {isDraggingEnabled && <GripVertical size={13} />}
+                                </td>
+                                <td className="active-cell" onClick={(e) => e.stopPropagation()}>
+                                  <label className="active-toggle" title={isActive ? "Archive this context" : "Reactivate this context"}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isActive}
+                                      onChange={() => void handleToggleStatus({ stopPropagation: () => {} } as React.MouseEvent, c)}
+                                    />
+                                    <span className={`active-indicator${isActive ? " active-indicator--on" : ""}`} />
+                                  </label>
+                                </td>
+                                <td>
+                                  <span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span>
+                                  <WorkflowStatusBadge status={effectiveStatus(c)} isAI={!c.userStatusOverride || c.aiProposedStatus === "needs_attention"} />
+                                </td>
+                                <td>
+                                  <div className="ctx-src-icons">
+                                    {c.hasJira && (
+                                      <span className="ctx-src-icon ctx-src-icon--jira" title="Jira">J</span>
+                                    )}
+                                    {c.hasSlack && (
+                                      <span className="ctx-src-icon ctx-src-icon--slack" title="Slack">
+                                        <Hash size={9} strokeWidth={2.5} />
+                                      </span>
+                                    )}
+                                    {c.hasVcs && (
+                                      <span className="ctx-src-icon ctx-src-icon--vcs" title="GitHub">
+                                        <GitBranch size={10} strokeWidth={1.8} />
+                                      </span>
+                                    )}
+                                    {c.hasFiles && (
+                                      <span className="ctx-src-icon ctx-src-icon--files" title="Files">
+                                        <FileText size={10} strokeWidth={1.8} />
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td><span className="context-meta">{c.issueCount ?? 0}</span></td>
+                                <td>
+                                  {(c.unviewedCount ?? 0) > 0
+                                    ? <span className="unread-badge">{c.unviewedCount}</span>
+                                    : <span className="context-meta" style={{ opacity: 0.3 }}>—</span>}
+                                </td>
+                                <td><span className="context-meta">{formatDate(c.updatedAt)}</span></td>
+                                <td>
+                                  {c.lastItemAt
+                                    ? <span className="context-meta context-last-item">{formatDateTime(c.lastItemAt)}</span>
+                                    : <span className="context-meta" style={{ opacity: 0.35 }}>—</span>}
+                                </td>
+                                <td>
+                                  <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                                    <button className="btn-ghost" title="Edit" onClick={(e) => { e.stopPropagation(); void openEditForm(c); }}>
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button className="btn-ghost" title="Delete" style={{ color: "var(--danger)" }} onClick={(e) => { e.stopPropagation(); setDeleteTarget(c); }}>
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </>
+                            )}
+                          </SortableContextRow>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </SortableContext>
+              </DndContext>
+            )}
+          </>
         )}
 
         {/* ── REVIEWS TAB ── */}
