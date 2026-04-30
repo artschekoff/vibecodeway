@@ -4458,3 +4458,41 @@ select {
   color: #dc2626;
   font-style: italic;
 }
+
+/* ── Workflow Proposal History ── */
+.workflow-history {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.workflow-history-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: var(--card-bg-alt, #f9fafb);
+  border: none;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+  cursor: pointer;
+  text-align: left;
+}
+.workflow-history-toggle:hover { background: var(--hover-bg, #f3f4f6); }
+.workflow-history-list {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.workflow-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.workflow-history-date { color: var(--text-muted, #6b7280); min-width: 90px; }
+.workflow-history-comment { color: var(--text, #374151); flex: 1; min-width: 0; }

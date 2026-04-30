@@ -42,10 +42,13 @@ import {
   MarkSlackDMConfigViewed,
   MarkPRViewed,
   MarkPRCommentViewed,
+  GetWorkflowSummary,
+  GetOpenQuestions,
+  GetWorkflowProposals,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -57,6 +60,8 @@ import ConsolidatedLogView from "../components/ConsolidatedLogView";
 import UploadedFileCard from "../components/UploadedFileCard";
 import ContextTextCard from "../components/ContextTextCard";
 import ContextForm from "../components/ContextForm";
+import WorkflowProposalCard from "../components/WorkflowProposalCard";
+import OpenQuestionsPanel from "../components/OpenQuestionsPanel";
 import { useProgress } from "../contexts/ProgressContext";
 
 function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string }) {
@@ -247,12 +252,32 @@ export default function ContextDetailPage() {
   const [editRelations, setEditRelations] = useState<ContextRelation[] | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<UnviewedBreakdown | null>(null);
   const [markingAllViewed, setMarkingAllViewed] = useState(false);
+  const [workflowSummary, setWorkflowSummary] = useState<WorkflowSummary | null>(null);
+  const [openQuestions, setOpenQuestions] = useState<OpenQuestion[]>([]);
+  const [proposals, setProposals] = useState<WorkflowProposal[]>([]);
+  const [showProposalHistory, setShowProposalHistory] = useState(false);
 
   const loadBreakdown = useCallback(async () => {
     if (!id) return;
     try {
       const bd = await GetUnviewedBreakdown(id);
       setBreakdown(bd);
+    } catch {
+      // best-effort
+    }
+  }, [id]);
+
+  const loadWorkflow = useCallback(async () => {
+    if (!id) return;
+    try {
+      const [summary, questions, props] = await Promise.all([
+        GetWorkflowSummary(id) as Promise<WorkflowSummary>,
+        GetOpenQuestions(id) as Promise<OpenQuestion[]>,
+        GetWorkflowProposals(id) as Promise<WorkflowProposal[]>,
+      ]);
+      setWorkflowSummary(summary);
+      setOpenQuestions(questions ?? []);
+      setProposals(props ?? []);
     } catch {
       // best-effort
     }
@@ -297,7 +322,8 @@ export default function ContextDetailPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    void loadWorkflow();
+  }, [load, loadWorkflow]);
 
   const handleRefresh = async () => {
     if (!id) return;
@@ -335,6 +361,7 @@ export default function ContextDetailPage() {
       const msg = parts.length > 0 ? parts.join(" · ") : "Everything is up to date.";
       showToast(msg);
       load(true);
+      void loadWorkflow();
     } catch (e) {
       setRefreshError(String(e));
     } finally {
@@ -715,6 +742,41 @@ export default function ContextDetailPage() {
         {toastMsg && <div className={`toast toast--${toastType}`}>{toastMsg}</div>}
 
         <div className="detail-primary">
+        {/* Workflow status + open questions */}
+        {workflowSummary && (
+          <WorkflowProposalCard
+            contextId={id!}
+            summary={workflowSummary}
+            onUpdated={(updated) => setWorkflowSummary(updated)}
+          />
+        )}
+        <OpenQuestionsPanel questions={openQuestions} onUpdated={() => void loadWorkflow()} />
+
+        {/* Proposal history */}
+        {proposals.length > 0 && (
+          <div className="workflow-history">
+            <button
+              className="workflow-history-toggle"
+              onClick={() => setShowProposalHistory((v) => !v)}
+            >
+              {showProposalHistory ? "▾" : "▸"} Proposal History ({proposals.length})
+            </button>
+            {showProposalHistory && (
+              <div className="workflow-history-list">
+                {proposals.slice(0, 5).map((p) => (
+                  <div key={p.id} className="workflow-history-item">
+                    <span className="workflow-history-date">
+                      {new Date(p.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <span className={`workflow-badge workflow-badge--${p.proposedStatus}`}>{p.proposedStatus.replace(/_/g, " ")}</span>
+                    {p.proposedComment && <span className="workflow-history-comment">{p.proposedComment}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {isEmpty ? (
           <div className="empty-state">
             <div style={{ fontSize: 32 }}>🎫</div>
