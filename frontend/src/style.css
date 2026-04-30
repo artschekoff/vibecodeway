@@ -4496,3 +4496,45 @@ select {
 }
 .workflow-history-date { color: var(--text-muted, #6b7280); min-width: 90px; }
 .workflow-history-comment { color: var(--text, #374151); flex: 1; min-width: 0; }
+
+/* ── Repo Metadata Section ── */
+.repo-meta-section {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--card-bg-alt, #f9fafb);
+}
+.repo-meta-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.repo-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.repo-meta-item:last-child { margin-bottom: 0; }
+.repo-meta-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text, #111827);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+.repo-meta-input {
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 4px;
+  width: 110px;
+  background: white;
+  color: var(--text, #111827);
+}
+.repo-meta-input--desc { width: 220px; }
