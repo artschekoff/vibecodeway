@@ -1017,7 +1017,7 @@ export default function ContextDetailPage() {
                   {(detail.relations ?? []).map((rel) => (
                     <div key={rel.id} className="relation-item">
                       <span className="relation-type-badge">
-                        {RELATION_TYPE_LABELS[rel.relationType]}
+                        {RELATION_TYPE_LABELS[rel.relationType as import("../types").ContextRelationType] ?? rel.relationType}
                       </span>
                       <button
                         type="button"
