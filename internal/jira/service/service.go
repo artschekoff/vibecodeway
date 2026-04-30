@@ -227,6 +227,14 @@ func (svc *ContextService) SetOpenQuestionsService(oqs OpenQuestionsRunner) { sv
 // Passing nil falls back to template-based generation.
 func (svc *ContextService) SetNextStepAI(ai workflow.NextStepAIClient) { svc.nextStepAI = ai }
 
+// SetAgentProposal persists an AI-agent-provided workflow proposal for contextID.
+// status should be one of the valid workflow statuses (validated by the caller).
+// comment and nextStep are optional; pass empty string to omit.
+// This is the service-layer entry point for MCP context_set_status calls.
+func (svc *ContextService) SetAgentProposal(ctx context.Context, contextID, status, comment, nextStep string) (*appstore.WorkflowProposal, error) {
+	return svc.store.SetAIProposal(ctx, contextID, status, comment, nextStep, "")
+}
+
 // NewContextService creates a new ContextService.
 // Pass provider implementations as variadic arguments to enable cross-cutting operations
 // (Refresh, Reload, FormatContext). Each provider must have a unique Name().
@@ -869,12 +877,12 @@ func (svc *ContextService) recordContextChange(ctx context.Context, contextID, t
 // FormatContext writes a human-readable summary of all provider data for contextID to w.
 // filter limits output to a specific provider name (e.g. "jira", "slack"); empty = all providers.
 // Only items on or after startAt are included; pass a zero time for no filter.
-func (svc *ContextService) FormatContext(ctx context.Context, w io.Writer, contextID string, filter string, startAt time.Time) error {
+func (svc *ContextService) FormatContext(ctx context.Context, w io.Writer, contextID string, filter string, startAt time.Time, activeOnly bool) error {
 	for _, p := range svc.providers {
 		if filter != "" && filter != p.Name() {
 			continue
 		}
-		if err := p.WriteContext(ctx, w, contextID, startAt); err != nil {
+		if err := p.WriteContext(ctx, w, contextID, startAt, activeOnly); err != nil {
 			svc.logger.Warn("format context: provider failed",
 				zap.String("provider", p.Name()), zap.String("contextID", contextID), zap.Error(err))
 		}
