@@ -164,6 +164,7 @@ type ContextDetail struct {
 	UploadedFiles  []appstore.ContextUploadedFile `json:"uploadedFiles,omitempty"`
 	VCSBranches    []vcsstore.ContextVCSBranch    `json:"vcsBranches,omitempty"`
 	PullRequests   []vcsstore.PullRequest         `json:"pullRequests,omitempty"`
+	Relations      []appstore.ContextRelation     `json:"relations,omitempty"`
 }
 
 // ContextService provides all domain operations for managing contexts.
@@ -355,6 +356,12 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 			detail.PullRequests = prs
 		}
 	}
+
+	relations, err := svc.store.ListContextRelations(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading relations: %w", err)
+	}
+	detail.Relations = relations
 
 	return detail, nil
 }
