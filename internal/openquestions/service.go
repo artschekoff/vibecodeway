@@ -100,8 +100,11 @@ func (s *Service) ReevaluateOpenQuestions(ctx context.Context, contextID, conten
 		return nil
 	}
 	open, err := s.store.ListOpenOpenQuestions(ctx, contextID)
-	if err != nil || len(open) == 0 {
-		return err
+	if err != nil {
+		return fmt.Errorf("list open questions for reeval: %w", err)
+	}
+	if len(open) == 0 {
+		return nil
 	}
 
 	var questionList strings.Builder
