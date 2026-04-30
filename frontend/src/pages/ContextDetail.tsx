@@ -256,6 +256,7 @@ export default function ContextDetailPage() {
   const [openQuestions, setOpenQuestions] = useState<OpenQuestion[]>([]);
   const [proposals, setProposals] = useState<WorkflowProposal[]>([]);
   const [showProposalHistory, setShowProposalHistory] = useState(false);
+  const [workflowError, setWorkflowError] = useState("");
 
   const loadBreakdown = useCallback(async () => {
     if (!id) return;
@@ -269,6 +270,7 @@ export default function ContextDetailPage() {
 
   const loadWorkflow = useCallback(async () => {
     if (!id) return;
+    setWorkflowError("");
     try {
       const [summary, questions, props] = await Promise.all([
         GetWorkflowSummary(id) as Promise<WorkflowSummary>,
@@ -279,7 +281,7 @@ export default function ContextDetailPage() {
       setOpenQuestions(questions ?? []);
       setProposals(props ?? []);
     } catch {
-      // best-effort
+      setWorkflowError("Failed to load workflow data");
     }
   }, [id]);
 
@@ -743,6 +745,7 @@ export default function ContextDetailPage() {
 
         <div className="detail-primary">
         {/* Workflow status + open questions */}
+        {workflowError && <div className="error-banner" style={{ marginBottom: 8 }}>{workflowError}</div>}
         {workflowSummary && (
           <WorkflowProposalCard
             contextId={id!}
@@ -759,14 +762,14 @@ export default function ContextDetailPage() {
               className="workflow-history-toggle"
               onClick={() => setShowProposalHistory((v) => !v)}
             >
-              {showProposalHistory ? "▾" : "▸"} Proposal History ({proposals.length})
+              {showProposalHistory ? "▾" : "▸"} Proposal History{proposals.length > 5 ? ` (last 5 of ${proposals.length})` : ` (${proposals.length})`}
             </button>
             {showProposalHistory && (
               <div className="workflow-history-list">
                 {proposals.slice(0, 5).map((p) => (
                   <div key={p.id} className="workflow-history-item">
                     <span className="workflow-history-date">
-                      {new Date(p.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {(() => { try { return new Date(p.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return p.createdAt; } })()}
                     </span>
                     <span className={`workflow-badge workflow-badge--${p.proposedStatus}`}>{p.proposedStatus.replace(/_/g, " ")}</span>
                     {p.proposedComment && <span className="workflow-history-comment">{p.proposedComment}</span>}
