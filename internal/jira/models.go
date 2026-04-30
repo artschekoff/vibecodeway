@@ -26,6 +26,7 @@ type IssueDetail struct {
 	Description string       `json:"description"`
 	Updated     string       `json:"updated"`
 	Subtasks    []SubtaskRef `json:"subtasks,omitempty"`
+	Links       []IssueLink  `json:"links,omitempty"`
 }
 
 // SubtaskRef is a simplified child-issue reference returned in the parent's subtasks field.
@@ -33,6 +34,14 @@ type SubtaskRef struct {
 	Key     string `json:"key"`
 	Summary string `json:"summary"`
 	Status  string `json:"status"`
+}
+
+// IssueLink represents a single Jira issue link on an issue.
+// Direction is "outward" when this issue is the source, "inward" when this issue is the target.
+type IssueLink struct {
+	TypeName  string `json:"typeName"`
+	Direction string `json:"direction"` // "outward" | "inward"
+	LinkedKey string `json:"linkedKey"`
 }
 
 // Comment represents a comment returned by jira workitem comment list.

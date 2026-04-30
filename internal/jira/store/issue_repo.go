@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -153,4 +154,34 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 		return "", fmt.Errorf("inserting issue: %w", err)
 	}
 	return id, nil
+}
+
+// FindContextsByJiraKeys returns a map of jira_key → context_id for the given keys
+// that exist in the DB across any context. Missing keys are absent from the result.
+func (r *Repo) FindContextsByJiraKeys(ctx context.Context, keys []string) (map[string]string, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.Repeat(",?", len(keys))[1:]
+	args := make([]any, len(keys))
+	for i, k := range keys {
+		args[i] = k
+	}
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT jira_key, context_id FROM jira_issues WHERE jira_key IN ("+placeholders+")",
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("finding contexts by jira keys: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	result := make(map[string]string)
+	for rows.Next() {
+		var jiraKey, contextID string
+		if err := rows.Scan(&jiraKey, &contextID); err != nil {
+			return nil, fmt.Errorf("scanning jira key/context: %w", err)
+		}
+		result[jiraKey] = contextID
+	}
+	return result, rows.Err()
 }

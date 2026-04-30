@@ -27,6 +27,25 @@ const (
 	providerSlack = "slack"
 )
 
+// jiraLinkToRelationType maps a Jira issue link type name and direction to a context relation type.
+func jiraLinkToRelationType(typeName, direction string) string {
+	name := strings.ToLower(typeName)
+	switch {
+	case strings.Contains(name, "block"):
+		if direction == "outward" {
+			return "blocks"
+		}
+		return "is-blocked-by"
+	case strings.Contains(name, "duplic"):
+		if direction == "outward" {
+			return "duplicates"
+		}
+		return "is-duplicated-by"
+	default:
+		return "relates-to"
+	}
+}
+
 // slackMessage is one entry in the messages array returned by slack-cli search-channels
 // and list-dms --with-messages.
 // search-channels uses "user" (display name); list-dms uses "userId" (Slack user ID).
@@ -404,7 +423,9 @@ func (svc *ContextService) SearchNewIssues(ctx context.Context, contextID string
 }
 
 // AddIssuesToContext fetches full details for the given Jira keys and upserts them into the context.
-// Automatically adds one level of subtasks for each issue. Returns the count of issues added.
+// Automatically adds one level of subtasks for each issue.
+// After upserting, it inspects Jira issue links: if a linked Jira key belongs to a different context,
+// a context relation is auto-created with the corresponding type. Returns the count of issues added.
 func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID string, jiraKeys []string) (int, error) {
 	if len(jiraKeys) == 0 {
 		return 0, nil
@@ -415,6 +436,13 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 	for _, key := range jiraKeys {
 		seen[key] = true
 	}
+
+	type pendingLink struct {
+		typeName  string
+		direction string
+		linkedKey string
+	}
+	var collectedLinks []pendingLink
 
 	upsertIssue := func(key string) bool {
 		detail, err := svc.jira.ViewIssue(ctx, key)
@@ -429,12 +457,18 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 			svc.logger.Warn("failed to upsert issue", zap.String("key", key), zap.Error(err))
 			return false
 		}
-		// Collect subtask keys not already in the original batch
 		for _, sub := range detail.Subtasks {
 			if !seen[sub.Key] {
 				seen[sub.Key] = true
 				subtaskKeys = append(subtaskKeys, sub.Key)
 			}
+		}
+		for _, link := range detail.Links {
+			collectedLinks = append(collectedLinks, pendingLink{
+				typeName:  link.TypeName,
+				direction: link.Direction,
+				linkedKey: link.LinkedKey,
+			})
 		}
 		return true
 	}
@@ -444,12 +478,43 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 			added++
 		}
 	}
-	// Add one level of subtasks (no further recursion)
 	for _, key := range subtaskKeys {
 		if upsertIssue(key) {
 			added++
 		}
 	}
+
+	// Auto-link related contexts via Jira issue links.
+	if len(collectedLinks) > 0 {
+		linkedKeys := make([]string, 0, len(collectedLinks))
+		for _, l := range collectedLinks {
+			linkedKeys = append(linkedKeys, l.linkedKey)
+		}
+		keyToCtx, err := svc.jiraRepo.FindContextsByJiraKeys(ctx, linkedKeys)
+		if err != nil {
+			svc.logger.Warn("auto-link: finding contexts by jira keys failed", zap.Error(err))
+		} else {
+			deduped := make(map[string]bool)
+			for _, l := range collectedLinks {
+				targetCtxID, ok := keyToCtx[l.linkedKey]
+				if !ok || targetCtxID == contextID {
+					continue
+				}
+				relType := jiraLinkToRelationType(l.typeName, l.direction)
+				dedupeKey := targetCtxID + "|" + relType
+				if deduped[dedupeKey] {
+					continue
+				}
+				deduped[dedupeKey] = true
+				if _, err := svc.store.AddContextRelation(ctx, contextID, targetCtxID, relType); err != nil {
+					svc.logger.Debug("auto-link: skipped or failed",
+						zap.String("from", contextID), zap.String("to", targetCtxID),
+						zap.String("type", relType), zap.Error(err))
+				}
+			}
+		}
+	}
+
 	return added, svc.store.TouchContext(ctx, contextID)
 }
 

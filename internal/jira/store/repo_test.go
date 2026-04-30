@@ -231,3 +231,41 @@ func TestToggleCommentActive_NotFound(t *testing.T) {
 	_, err := repo.ToggleCommentActive(context.Background(), "nonexistent")
 	assert.ErrorIs(t, err, jirastore.ErrNotFound)
 }
+
+func TestFindContextsByJiraKeys(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	// Create two contexts and insert issues in each.
+	c1, err := s.CreateContext(ctx, "ctx-one")
+	require.NoError(t, err)
+	c2, err := s.CreateContext(ctx, "ctx-two")
+	require.NoError(t, err)
+
+	_, err = repo.UpsertIssue(ctx, c1.ID, "ALPHA-1", "Alpha one", "Open", "", "Bug", "", "")
+	require.NoError(t, err)
+	_, err = repo.UpsertIssue(ctx, c1.ID, "ALPHA-2", "Alpha two", "Open", "", "Bug", "", "")
+	require.NoError(t, err)
+	_, err = repo.UpsertIssue(ctx, c2.ID, "BETA-1", "Beta one", "Open", "", "Story", "", "")
+	require.NoError(t, err)
+
+	t.Run("finds keys across contexts", func(t *testing.T) {
+		got, err := repo.FindContextsByJiraKeys(ctx, []string{"ALPHA-1", "BETA-1", "MISSING-9"})
+		require.NoError(t, err)
+		assert.Equal(t, c1.ID, got["ALPHA-1"])
+		assert.Equal(t, c2.ID, got["BETA-1"])
+		assert.NotContains(t, got, "MISSING-9", "absent keys must not appear")
+	})
+
+	t.Run("empty input returns nil", func(t *testing.T) {
+		got, err := repo.FindContextsByJiraKeys(ctx, nil)
+		require.NoError(t, err)
+		assert.Nil(t, got)
+	})
+
+	t.Run("all missing returns empty map", func(t *testing.T) {
+		got, err := repo.FindContextsByJiraKeys(ctx, []string{"NO-1", "NO-2"})
+		require.NoError(t, err)
+		assert.Empty(t, got)
+	})
+}

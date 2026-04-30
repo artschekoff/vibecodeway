@@ -42,7 +42,7 @@ func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error)
 // ViewIssue fetches full details for a single issue key.
 func (c *Client) ViewIssue(ctx context.Context, key string) (*IssueDetail, error) {
 	flags := []string{
-		"--fields", "key,issuetype,summary,status,assignee,description,updated,subtasks",
+		"--fields", "key,issuetype,summary,status,assignee,description,updated,subtasks,issuelinks",
 		"--json",
 	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "view"}, []string{key}, flags)
@@ -121,6 +121,28 @@ func parseIssueDetail(raw string) (*IssueDetail, error) {
 			}
 		}
 	}
+	if rawLinks := item.Fields["issuelinks"]; rawLinks != nil {
+		var links []rawIssueLink
+		if json.Unmarshal(rawLinks, &links) == nil {
+			for _, l := range links {
+				typeName := parseString(l.Type["name"])
+				if l.OutwardIssue != nil && l.OutwardIssue.Key != "" {
+					detail.Links = append(detail.Links, IssueLink{
+						TypeName:  typeName,
+						Direction: "outward",
+						LinkedKey: l.OutwardIssue.Key,
+					})
+				}
+				if l.InwardIssue != nil && l.InwardIssue.Key != "" {
+					detail.Links = append(detail.Links, IssueLink{
+						TypeName:  typeName,
+						Direction: "inward",
+						LinkedKey: l.InwardIssue.Key,
+					})
+				}
+			}
+		}
+	}
 	return detail, nil
 }
 
@@ -128,6 +150,17 @@ func parseIssueDetail(raw string) (*IssueDetail, error) {
 type rawSubtask struct {
 	Key    string                     `json:"key"`
 	Fields map[string]json.RawMessage `json:"fields"`
+}
+
+// rawIssueLink mirrors the Jira REST API issuelinks array element.
+type rawIssueLink struct {
+	Type         map[string]json.RawMessage `json:"type"`
+	InwardIssue  *rawIssueLinkRef           `json:"inwardIssue"`
+	OutwardIssue *rawIssueLinkRef           `json:"outwardIssue"`
+}
+
+type rawIssueLinkRef struct {
+	Key string `json:"key"`
 }
 
 // acliCommentList mirrors the paginated comment list response from acli --json.
