@@ -10,6 +10,8 @@ import (
 
 // SetAIProposal writes the latest AI-computed workflow values to the contexts row
 // and creates a new entry in context_workflow_proposals for the audit log.
+// Both writes are wrapped in a transaction — if the proposal INSERT fails, the
+// contexts row update is rolled back so the two tables stay in sync.
 func (s *Store) SetAIProposal(ctx context.Context, contextID, status, comment, nextStep, prevUserNextStep string) (*WorkflowProposal, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -24,7 +26,13 @@ func (s *Store) SetAIProposal(ctx context.Context, contextID, status, comment, n
 		prevPtr = &prevUserNextStep
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("set ai proposal begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, `
 		UPDATE contexts
 		SET ai_proposed_status    = ?,
 		    ai_proposed_comment   = ?,
@@ -34,6 +42,9 @@ func (s *Store) SetAIProposal(ctx context.Context, contextID, status, comment, n
 	`, status, commentPtr, nextStepPtr, now, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("set ai proposal on context: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, ErrNotFound
 	}
 
 	p := &WorkflowProposal{
@@ -46,13 +57,17 @@ func (s *Store) SetAIProposal(ctx context.Context, contextID, status, comment, n
 		UpdatedAt:        now,
 		CreatedAt:        now,
 	}
-	_, err = s.db.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO context_workflow_proposals
 		    (id, context_id, proposed_status, proposed_comment, proposed_next_step, prev_user_next_step, updated_at, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, p.ID, p.ContextID, p.ProposedStatus, p.ProposedComment, p.ProposedNextStep, p.PrevUserNextStep, p.UpdatedAt, p.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert workflow proposal: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("set ai proposal commit: %w", err)
 	}
 	return p, nil
 }
@@ -84,7 +99,8 @@ func (s *Store) SetUserOverride(ctx context.Context, contextID, status, comment,
 	// Mark the latest unresolved proposal as resolved with the user's choices.
 	// NOTE: SQLite does not support ORDER BY / LIMIT in UPDATE directly,
 	// so use a subquery to identify the target row.
-	_, _ = s.db.ExecContext(ctx, `
+	// Zero rows affected is acceptable — it means no unresolved proposal exists.
+	if _, err := s.db.ExecContext(ctx, `
 		UPDATE context_workflow_proposals
 		SET user_status_override    = ?,
 		    user_comment_override   = ?,
@@ -97,7 +113,9 @@ func (s *Store) SetUserOverride(ctx context.Context, contextID, status, comment,
 		    ORDER BY created_at DESC
 		    LIMIT 1
 		)
-	`, toPtr(status), toPtr(comment), toPtr(nextStep), now, now, contextID)
+	`, toPtr(status), toPtr(comment), toPtr(nextStep), now, now, contextID); err != nil {
+		return fmt.Errorf("mark proposal resolved: %w", err)
+	}
 
 	return nil
 }
