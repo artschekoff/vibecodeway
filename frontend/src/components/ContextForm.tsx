@@ -1502,7 +1502,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                               value={draft.label}
                               onChange={(e) => setRepoMeta((prev) => {
                                 const n = new Map(prev);
-                                n.set(repo.id, { ...draft, label: e.target.value });
+                                const cur = prev.get(repo.id) ?? { label: "", description: "" };
+                                n.set(repo.id, { ...cur, label: e.target.value });
                                 return n;
                               })}
                               placeholder="Label (e.g. api, frontend)"
@@ -1512,7 +1513,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                               value={draft.description}
                               onChange={(e) => setRepoMeta((prev) => {
                                 const n = new Map(prev);
-                                n.set(repo.id, { ...draft, description: e.target.value });
+                                const cur = prev.get(repo.id) ?? { label: "", description: "" };
+                                n.set(repo.id, { ...cur, description: e.target.value });
                                 return n;
                               })}
                               placeholder="Description for AI agent (e.g. Backend service for billing)"
