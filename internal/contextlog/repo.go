@@ -30,7 +30,7 @@ func (r *Repo) InsertLog(ctx context.Context, log ContextLog) (*ContextLog, erro
 		log.ID = uuid.NewString()
 	}
 	if log.CreatedAt == "" {
-		log.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+		log.CreatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 
 	_, err := r.db.ExecContext(ctx, `

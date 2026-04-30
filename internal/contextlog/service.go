@@ -217,6 +217,27 @@ func (s *Service) CreateManualLog(ctx context.Context, contextID, summaryMd stri
 	return stored, nil
 }
 
+// CreateAgentLog appends an agent-authored log entry and refreshes the consolidated log.
+// Use this when an AI agent (e.g. via MCP) wants to record a note about work performed.
+func (s *Service) CreateAgentLog(ctx context.Context, contextID, message string) (*ContextLog, error) {
+	if strings.TrimSpace(message) == "" {
+		return nil, fmt.Errorf("message is required")
+	}
+	log := ContextLog{
+		ContextID: contextID,
+		Trigger:   TriggerAgent,
+		Source:    "mcp",
+		SummaryMd: message,
+		IsManual:  false,
+	}
+	stored, err := s.repo.InsertLog(ctx, log)
+	if err != nil {
+		return nil, err
+	}
+	s.consolidateBestEffort(ctx, contextID)
+	return stored, nil
+}
+
 // UpdateLog edits summary_md of an existing log entry and refreshes the consolidated log.
 func (s *Service) UpdateLog(ctx context.Context, id, summaryMd string) (*ContextLog, error) {
 	if strings.TrimSpace(summaryMd) == "" {
