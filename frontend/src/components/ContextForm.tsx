@@ -775,13 +775,13 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
               )}
             </button>
             <button
-              className={`tab-btn${activeTab === "relations" ? " tab-btn--active" : ""}`}
+              className={`ctx-tab${activeTab === "relations" ? " ctx-tab--active" : ""}`}
               onClick={() => setActiveTab("relations")}
               type="button"
             >
               Relations
               {(existingRelations.length + pendingRelations.length) > 0 && (
-                <span className="tab-badge">{existingRelations.length + pendingRelations.length}</span>
+                <span className="ctx-tab-badge">{existingRelations.length + pendingRelations.length}</span>
               )}
             </button>
           </div>
