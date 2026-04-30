@@ -70,6 +70,7 @@ export interface ContextDetail {
   slackChannels?: SlackChannel[];
   vcsBranches?: VCSBranch[];
   pullRequests?: PullRequest[];
+  relations?: ContextRelation[];
 }
 
 export interface SearchResult {
@@ -356,4 +357,40 @@ export interface ReviewRequest {
   fetchedAt: string;
   reviewedAt?: string;
   dismissedAt?: string;
+}
+
+// --- Context Relations ---
+
+export type ContextRelationType =
+  | "blocks"
+  | "is-blocked-by"
+  | "relates-to"
+  | "duplicates"
+  | "is-duplicated-by";
+
+export const RELATION_TYPE_LABELS: Record<ContextRelationType, string> = {
+  "blocks": "Blocks",
+  "is-blocked-by": "Is Blocked By",
+  "relates-to": "Relates To",
+  "duplicates": "Duplicates",
+  "is-duplicated-by": "Is Duplicated By",
+};
+
+export interface ContextRelation {
+  id: string;
+  contextId: string;
+  targetId: string;
+  targetKey: string;
+  relationType: ContextRelationType;
+  createdAt: string;
+}
+
+export interface RelationInput {
+  targetId: string;
+  relationType: ContextRelationType;
+}
+
+export interface RelationsPayload {
+  newRelations: RelationInput[];
+  removedRelationIds: string[];
 }
