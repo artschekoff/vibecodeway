@@ -9,6 +9,7 @@ const (
 	TriggerManual  = "manual"  // user-authored entry
 	TriggerChat    = "chat"    // generated from a chat apply action (reserved)
 	TriggerInit    = "init"    // consolidated-log bootstrap
+	TriggerAgent   = "agent"   // agent-authored entry via MCP
 )
 
 // Chat roles stored in context_log_chat_messages.role.
@@ -22,6 +23,11 @@ const (
 const (
 	UpdatedByAI   = "ai"
 	UpdatedByUser = "user"
+)
+
+// Source values stored in context_logs.source.
+const (
+	SourceMCP = "mcp" // entry written by an AI agent via the MCP tool
 )
 
 // Default values.

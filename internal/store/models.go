@@ -18,6 +18,55 @@ type Context struct {
 	HasSlack bool `json:"hasSlack,omitempty"`
 	HasVCS   bool `json:"hasVcs,omitempty"`
 	HasFiles bool `json:"hasFiles,omitempty"`
+
+	// AI-proposed workflow state — updated on every refresh.
+	AIProposedStatus   string  `json:"aiProposedStatus"`
+	AIProposedComment  *string `json:"aiProposedComment,omitempty"`
+	AIProposedNextStep *string `json:"aiProposedNextStep,omitempty"`
+	AIProposedAt       *string `json:"aiProposedAt,omitempty"`
+
+	// User overrides — NULL means "use AI proposal".
+	UserStatusOverride    *string `json:"userStatusOverride,omitempty"`
+	UserCommentOverride   *string `json:"userCommentOverride,omitempty"`
+	UserNextStepOverride  *string `json:"userNextStepOverride,omitempty"`
+	UserOverrideUpdatedAt *string `json:"userOverrideUpdatedAt,omitempty"`
+}
+
+// EffectiveStatus returns the status the UI should display.
+// needs_attention from AI always wins; otherwise user override takes precedence.
+func (c *Context) EffectiveStatus() string {
+	if c.AIProposedStatus == "needs_attention" {
+		return "needs_attention"
+	}
+	if c.UserStatusOverride != nil && *c.UserStatusOverride != "" {
+		return *c.UserStatusOverride
+	}
+	if c.AIProposedStatus != "" {
+		return c.AIProposedStatus
+	}
+	return "not_started"
+}
+
+// EffectiveComment returns the comment the UI should display.
+func (c *Context) EffectiveComment() string {
+	if c.UserCommentOverride != nil && *c.UserCommentOverride != "" {
+		return *c.UserCommentOverride
+	}
+	if c.AIProposedComment != nil {
+		return *c.AIProposedComment
+	}
+	return ""
+}
+
+// EffectiveNextStep returns the next-step suggestion the UI should display.
+func (c *Context) EffectiveNextStep() string {
+	if c.UserNextStepOverride != nil && *c.UserNextStepOverride != "" {
+		return *c.UserNextStepOverride
+	}
+	if c.AIProposedNextStep != nil {
+		return *c.AIProposedNextStep
+	}
+	return ""
 }
 
 // UnviewedBreakdown reports how many unread items exist per item type for a context.
@@ -102,4 +151,33 @@ type AppSettings struct {
 	ReviewsRefetchEnabled     bool   `json:"reviewsRefetchEnabled"`
 	ReviewsRefetchIntervalMin int    `json:"reviewsRefetchIntervalMin"`
 	UpdatedAt                 string `json:"updatedAt"`
+}
+
+// OpenQuestion is an unanswered question extracted from context content by the AI agent.
+type OpenQuestion struct {
+	ID        string  `json:"id"`
+	ContextID string  `json:"contextId"`
+	Question  string  `json:"question"`
+	Status    string  `json:"status"` // "open" | "answered" | "dismissed"
+	Answer    *string `json:"answer,omitempty"`
+	Source    string  `json:"source"` // "ai" | "user"
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
+	ClosedAt  *string `json:"closedAt,omitempty"`
+}
+
+// WorkflowProposal is one AI-generated workflow status proposal stored for history.
+type WorkflowProposal struct {
+	ID                   string  `json:"id"`
+	ContextID            string  `json:"contextId"`
+	ProposedStatus       string  `json:"proposedStatus"`
+	ProposedComment      *string `json:"proposedComment,omitempty"`
+	ProposedNextStep     *string `json:"proposedNextStep,omitempty"`
+	UserStatusOverride   *string `json:"userStatusOverride,omitempty"`
+	UserCommentOverride  *string `json:"userCommentOverride,omitempty"`
+	UserNextStepOverride *string `json:"userNextStepOverride,omitempty"`
+	PrevUserNextStep     *string `json:"prevUserNextStep,omitempty"`
+	ResolvedAt           *string `json:"resolvedAt,omitempty"`
+	UpdatedAt            string  `json:"updatedAt"`
+	CreatedAt            string  `json:"createdAt"`
 }

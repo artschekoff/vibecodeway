@@ -151,6 +151,23 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 	)
 
 	s.AddTool(
+		mcp.NewTool("context_log_add",
+			mcp.WithDescription("Append an agent-authored message to the context log. Use this to record notes, summaries, or status updates about work performed by an AI agent. The message is stored as a new log entry and merged into the consolidated context log."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key (e.g. 'sprint-42'). Use either context_id or context_key."),
+			),
+			mcp.WithString("message",
+				mcp.Required(),
+				mcp.Description("The log message to append. Markdown is supported."),
+			),
+		),
+		h.handleContextLogAdd,
+	)
+
+	s.AddTool(
 		mcp.NewTool("pr_list",
 			mcp.WithDescription("List pull requests stored for a context. Returns PR status, review status, author, title, and URL."),
 			mcp.WithString("context_id",
@@ -415,6 +432,30 @@ func (h *handlers) handleContextLog(ctx context.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultText("_(consolidated context log is empty — run InitializeConsolidatedLog in the app)_"), nil
 	}
 	return mcp.NewToolResultText(consolidated.ContentMd), nil
+}
+
+func (h *handlers) handleContextLogAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id, err := h.resolveContextID(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	cl := h.svc.ContextLog()
+	if cl == nil {
+		return mcp.NewToolResultError("context log service is not configured"), nil
+	}
+
+	message := strings.TrimSpace(req.GetString("message", ""))
+	if message == "" {
+		return mcp.NewToolResultError("message is required"), nil
+	}
+
+	stored, err := cl.CreateAgentLog(ctx, id, message)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("creating agent log: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Log entry created (id=%s).", stored.ID)), nil
 }
 
 func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

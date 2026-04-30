@@ -14,10 +14,12 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	"github.com/artschekoff/context-consolidator/internal/openquestions"
 	"github.com/artschekoff/context-consolidator/internal/provider"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/context-consolidator/internal/workflow"
 	"go.uber.org/zap"
 )
 
@@ -188,15 +190,17 @@ type ContextDetail struct {
 
 // ContextService provides all domain operations for managing contexts.
 type ContextService struct {
-	store      *appstore.Store
-	jiraRepo   *jirastore.Repo
-	slackRepo  *slackstore.Repo
-	vcsStore   *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
-	jira       *jira.Client
-	slack      SlackRunner
-	logger     *zap.Logger
-	providers  []provider.Provider
-	contextLog *contextlog.Service
+	store         *appstore.Store
+	jiraRepo      *jirastore.Repo
+	slackRepo     *slackstore.Repo
+	vcsStore      *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
+	jira          *jira.Client
+	slack         SlackRunner
+	logger        *zap.Logger
+	providers     []provider.Provider
+	contextLog    *contextlog.Service
+	openQuestions OpenQuestionsRunner
+	nextStepAI    workflow.NextStepAIClient // may be nil
 }
 
 // SetContextLog attaches a contextlog.Service for refresh/reload change recording.
@@ -209,6 +213,19 @@ func (svc *ContextService) SetContextLog(cl *contextlog.Service) {
 func (svc *ContextService) ContextLog() *contextlog.Service {
 	return svc.contextLog
 }
+
+// OpenQuestionsRunner is the interface used by ContextService to run the open-questions agent.
+type OpenQuestionsRunner interface {
+	AnalyzeContext(ctx context.Context, contextID, contentMD string, repos []openquestions.RepoInfo) error
+	ReevaluateOpenQuestions(ctx context.Context, contextID, contentMD string) error
+}
+
+// SetOpenQuestionsService attaches the open-questions agent. Passing nil disables it.
+func (svc *ContextService) SetOpenQuestionsService(oqs OpenQuestionsRunner) { svc.openQuestions = oqs }
+
+// SetNextStepAI attaches the AI client used for next-step generation.
+// Passing nil falls back to template-based generation.
+func (svc *ContextService) SetNextStepAI(ai workflow.NextStepAIClient) { svc.nextStepAI = ai }
 
 // NewContextService creates a new ContextService.
 // Pass provider implementations as variadic arguments to enable cross-cutting operations
@@ -804,7 +821,10 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		}
 	}
 
+	isFirst, _ := svc.store.IsFirstRefresh(ctx, contextID)
+
 	svc.recordContextChange(ctx, contextID, contextlog.TriggerRefresh, before)
+	svc.runPostRefreshWorkflow(ctx, contextID, isFirst)
 
 	if err := svc.store.TouchContext(ctx, contextID); err != nil {
 		svc.logger.Warn("refresh: touch context failed", zap.String("contextID", contextID), zap.Error(err))
@@ -1168,4 +1188,94 @@ func (svc *ContextService) RefreshAllContexts(ctx context.Context, notify Reload
 		})
 	}
 	return results, nil
+}
+
+// runPostRefreshWorkflow runs after every refresh: recomputes AI proposal and
+// optionally runs the open-questions agent (first refresh only) or re-evaluates
+// existing open questions (subsequent refreshes).
+func (svc *ContextService) runPostRefreshWorkflow(ctx context.Context, contextID string, isFirstRefresh bool) {
+	if svc.vcsStore == nil {
+		return
+	}
+
+	// 1. Compute new status.
+	status, comment, err := workflow.Compute(ctx, contextID, svc.store, svc.vcsStore)
+	if err != nil {
+		svc.logger.Warn("workflow compute failed", zap.Error(err), zap.String("contextID", contextID))
+		return
+	}
+
+	// 2. Load the current user's next-step override to pass to the AI.
+	c, err := svc.store.GetContext(ctx, contextID)
+	prevUserNextStep := ""
+	if err == nil && c.UserNextStepOverride != nil {
+		prevUserNextStep = *c.UserNextStepOverride
+	}
+
+	// 3. Generate next step (uses AI if configured, templates otherwise).
+	nextStep := workflow.GenerateNextStep(ctx, svc.nextStepAI, status, comment, prevUserNextStep)
+
+	// 4. Persist the AI proposal (also appends to proposals history).
+	if _, err := svc.store.SetAIProposal(ctx, contextID, status, comment, nextStep, prevUserNextStep); err != nil {
+		svc.logger.Warn("set ai proposal failed", zap.Error(err), zap.String("contextID", contextID))
+	}
+
+	// 5. Run open-questions agent.
+	if svc.openQuestions != nil {
+		contentMD := svc.buildContextMD(ctx, contextID)
+		if isFirstRefresh {
+			repos := svc.repoInfoForContext(ctx, contextID)
+			if err := svc.openQuestions.AnalyzeContext(ctx, contextID, contentMD, repos); err != nil {
+				svc.logger.Warn("open questions analysis failed", zap.Error(err), zap.String("contextID", contextID))
+			}
+		} else {
+			if err := svc.openQuestions.ReevaluateOpenQuestions(ctx, contextID, contentMD); err != nil {
+				svc.logger.Warn("open questions re-evaluation failed", zap.Error(err), zap.String("contextID", contextID))
+			}
+		}
+	}
+}
+
+// buildContextMD assembles a Markdown representation of all active text content
+// and uploaded files for the given context.
+func (svc *ContextService) buildContextMD(ctx context.Context, contextID string) string {
+	var sb strings.Builder
+	texts, _ := svc.store.ListContextTexts(ctx, contextID, true)
+	for _, t := range texts {
+		fmt.Fprintf(&sb, "## %s\n%s\n\n", t.Name, t.Content)
+	}
+	files, _ := svc.store.ListUploadedFiles(ctx, contextID, true)
+	for _, f := range files {
+		fmt.Fprintf(&sb, "## %s\n%s\n\n", f.OriginalName, f.ExtractedText)
+	}
+	return sb.String()
+}
+
+// repoInfoForContext returns slim repo info for all repos associated with branches
+// linked to the given context.
+func (svc *ContextService) repoInfoForContext(ctx context.Context, contextID string) []openquestions.RepoInfo {
+	if svc.vcsStore == nil {
+		return nil
+	}
+	branches, err := svc.vcsStore.Branches.ListBranches(ctx, contextID)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var result []openquestions.RepoInfo
+	for _, b := range branches {
+		if b.RepoID == "" || seen[b.RepoID] {
+			continue
+		}
+		seen[b.RepoID] = true
+		if b.Repo == nil {
+			continue
+		}
+		result = append(result, openquestions.RepoInfo{
+			FullName:    b.Repo.Owner + "/" + b.Repo.Name,
+			Label:       b.Repo.Label,
+			Description: b.Repo.Description,
+		})
+	}
+	return result
 }

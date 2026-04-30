@@ -66,7 +66,15 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		        OR EXISTS(SELECT 1 FROM slack_dm_configs WHERE context_id = c.id)) AS has_slack,
 		       EXISTS(SELECT 1 FROM context_vcs_branches WHERE context_id = c.id) AS has_vcs,
 		       (EXISTS(SELECT 1 FROM context_texts WHERE context_id = c.id)
-		        OR EXISTS(SELECT 1 FROM context_uploaded_files WHERE context_id = c.id)) AS has_files
+		        OR EXISTS(SELECT 1 FROM context_uploaded_files WHERE context_id = c.id)) AS has_files,
+		       c.ai_proposed_status,
+		       c.ai_proposed_comment,
+		       c.ai_proposed_next_step,
+		       c.ai_proposed_at,
+		       c.user_status_override,
+		       c.user_comment_override,
+		       c.user_next_step_override,
+		       c.user_override_updated_at
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		WHERE (? OR c.status = 'active')
@@ -81,7 +89,9 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 	var contexts []Context
 	for rows.Next() {
 		var c Context
-		if err := rows.Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt, &c.IssueCount, &c.LastItemAt, &c.UnviewedCount, &c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles); err != nil {
+		if err := rows.Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt, &c.IssueCount, &c.LastItemAt, &c.UnviewedCount, &c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles,
+			&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
+			&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning context: %w", err)
 		}
 		contexts = append(contexts, c)
@@ -93,9 +103,14 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 	var c Context
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, key, status, created_at, updated_at FROM contexts WHERE id = ?",
+		`SELECT id, key, status, created_at, updated_at,
+		       ai_proposed_status, ai_proposed_comment, ai_proposed_next_step, ai_proposed_at,
+		       user_status_override, user_comment_override, user_next_step_override, user_override_updated_at
+		FROM contexts WHERE id = ?`,
 		id,
-	).Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt)
+	).Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+		&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
+		&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -109,9 +124,14 @@ func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, error) {
 	var c Context
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, key, status, created_at, updated_at FROM contexts WHERE key = ?",
+		`SELECT id, key, status, created_at, updated_at,
+		       ai_proposed_status, ai_proposed_comment, ai_proposed_next_step, ai_proposed_at,
+		       user_status_override, user_comment_override, user_next_step_override, user_override_updated_at
+		FROM contexts WHERE key = ?`,
 		key,
-	).Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt)
+	).Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+		&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
+		&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -127,11 +147,12 @@ func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, erro
 func (s *Store) CreateContext(ctx context.Context, key string) (*Context, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	c := &Context{
-		ID:        uuid.New().String(),
-		Key:       key,
-		Status:    contextStatusActive,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:               uuid.New().String(),
+		Key:              key,
+		Status:           contextStatusActive,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+		AIProposedStatus: "not_started",
 	}
 	// Place the new context first by giving it sort_order = MIN(existing) - 1.
 	// Defaults to 0 if there are no existing contexts.

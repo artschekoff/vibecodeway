@@ -1,5 +1,6 @@
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
+import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 
 interface SlackThread {
   id: string;
@@ -29,15 +30,13 @@ export default function SlackThreadCard({ thread }: Props) {
         <div className="issue-meta">
           <span className="channel-result-workspace">{thread.workspace}</span>
           {thread.permalink && (
-            <a
-              href={thread.permalink}
-              target="_blank"
-              rel="noreferrer"
-              className="slack-thread-link"
-              onClick={(e) => e.stopPropagation()}
+            <button
+              className="copy-btn"
+              onClick={(e) => { e.stopPropagation(); BrowserOpenURL(thread.permalink); }}
+              title="Open thread in Slack"
             >
               <ExternalLink size={12} />
-            </a>
+            </button>
           )}
           <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
         </div>

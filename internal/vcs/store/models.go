@@ -12,12 +12,14 @@ type VCSAuth struct {
 
 // VCSRepo is a tracked repository. It is global (not per-context) and shared across contexts.
 type VCSRepo struct {
-	ID        string `json:"id"`
-	Platform  string `json:"platform"`
-	Owner     string `json:"owner"`
-	Name      string `json:"name"`
-	LocalPath string `json:"localPath"`
-	CreatedAt string `json:"createdAt"`
+	ID          string `json:"id"`
+	Platform    string `json:"platform"`
+	Owner       string `json:"owner"`
+	Name        string `json:"name"`
+	LocalPath   string `json:"localPath"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 // FullName returns "owner/name".

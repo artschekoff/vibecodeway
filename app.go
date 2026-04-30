@@ -22,6 +22,7 @@ import (
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	openaiclient "github.com/artschekoff/context-consolidator/internal/openai"
+	"github.com/artschekoff/context-consolidator/internal/openquestions"
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
@@ -157,6 +158,10 @@ func (a *App) startup(ctx context.Context) {
 	contextLogRepo := contextlog.NewRepo(s.DB())
 	a.contextLog = contextlog.NewService(contextLogRepo, openAI.AsContextLogClient(), logger)
 	a.svc.SetContextLog(a.contextLog)
+
+	oqSvc := openquestions.NewService(s, openAI.AsOpenQuestionsClient(), logger)
+	a.svc.SetOpenQuestionsService(oqSvc)
+	a.svc.SetNextStepAI(openAI.AsNextStepClient())
 
 	a.hotkeyService = hotkey.New(a.onHotkey)
 	if err := a.hotkeyService.Start(); err != nil {
