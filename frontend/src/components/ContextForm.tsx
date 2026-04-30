@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
-import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos } from "../../wailsjs/go/main/App";
-import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo } from "../types";
+import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts } from "../../wailsjs/go/main/App";
+import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo, ContextRelation, RelationInput, RelationsPayload, ContextRelationType } from "../types";
+import { RELATION_TYPE_LABELS } from "../types";
 
 export interface VCSBranchInput {
   platform: VCSPlatform;
@@ -22,6 +23,7 @@ interface Props {
   initialContextTexts?: ContextText[];
   initialUploadedFiles?: UploadedFile[];
   initialVCSBranches?: VCSBranch[];
+  initialRelations?: ContextRelation[];
   onSave: (
     key: string,
     searchQuery: string,
@@ -33,7 +35,8 @@ interface Props {
     removedUploadedFileIds?: string[],
     pendingUploadTempIds?: string[],
     newVCSBranches?: VCSBranchInput[],
-    removedVCSBranchIds?: string[]
+    removedVCSBranchIds?: string[],
+    relationsPayload?: RelationsPayload
   ) => Promise<void>;
   onCancel: () => void;
 }
@@ -79,9 +82,9 @@ interface NewFile {
   content: string;
 }
 
-type ActiveTab = "jira" | "slack" | "texts" | "vcs";
+type ActiveTab = "jira" | "slack" | "texts" | "vcs" | "relations";
 
-export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, onSave, onCancel }: Props) {
+export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, initialRelations, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
   const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
   const [status, setStatus] = useState(initial?.status ?? "active");
@@ -160,6 +163,16 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const branchPickerRef = useRef<HTMLDivElement>(null);
   const branchFilterRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Relations tab state
+  const [existingRelations, setExistingRelations] = useState<ContextRelation[]>(initialRelations ?? []);
+  const [pendingRelations, setPendingRelations] = useState<RelationInput[]>([]);
+  const [removedRelationIds, setRemovedRelationIds] = useState<string[]>([]);
+  const [relationType, setRelationType] = useState<ContextRelationType>("relates-to");
+  const [relationSearch, setRelationSearch] = useState("");
+  const [allContexts, setAllContexts] = useState<Context[]>([]);
+  const [contextsLoading, setContextsLoading] = useState(false);
+  const [showRelationDropdown, setShowRelationDropdown] = useState(false);
 
   useEffect(() => {
     setWorkspacesLoading(true);
@@ -273,6 +286,31 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     }
   };
 
+  const relationSearchResults = allContexts.filter((c) => {
+    if (!relationSearch.trim()) return false;
+    const q = relationSearch.toLowerCase();
+    return c.key.toLowerCase().includes(q) && c.id !== initial?.id;
+  });
+
+  const addPendingRelation = (targetCtx: Context) => {
+    const alreadyExists =
+      existingRelations.some((r) => r.targetId === targetCtx.id && r.relationType === relationType) ||
+      pendingRelations.some((r) => r.targetId === targetCtx.id && r.relationType === relationType);
+    if (alreadyExists) return;
+    setPendingRelations((prev) => [...prev, { targetId: targetCtx.id, relationType }]);
+    setRelationSearch("");
+    setShowRelationDropdown(false);
+  };
+
+  const removeExistingRelation = (id: string) => {
+    setExistingRelations((prev) => prev.filter((r) => r.id !== id));
+    setRemovedRelationIds((prev) => [...prev, id]);
+  };
+
+  const removePendingRelation = (targetId: string, type: ContextRelationType) => {
+    setPendingRelations((prev) => prev.filter((r) => !(r.targetId === targetId && r.relationType === type)));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!key.trim()) {
@@ -341,7 +379,21 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
           .map((b) => b.id)
           .filter((id) => !removedVCSBranchIds.includes(id)),
       ];
-      await onSave(key.trim(), searchQuery.trim(), status, slackPayload, jiraKeys, removedJiraIds.length > 0 ? removedJiraIds : undefined, textFilesPayload, removedUploadedIds.length > 0 ? removedUploadedIds : undefined, pendingTempIds, newVCSBranches.length > 0 ? newVCSBranches : undefined, removedBranchIds.length > 0 ? removedBranchIds : undefined);
+      const relationsPayload: RelationsPayload | undefined =
+        (pendingRelations.length > 0 || removedRelationIds.length > 0)
+          ? { newRelations: pendingRelations, removedRelationIds }
+          : undefined;
+      await onSave(
+        key.trim(), searchQuery.trim(), status,
+        slackPayload, jiraKeys,
+        removedJiraIds.length > 0 ? removedJiraIds : undefined,
+        textFilesPayload,
+        removedUploadedIds.length > 0 ? removedUploadedIds : undefined,
+        pendingTempIds,
+        newVCSBranches.length > 0 ? newVCSBranches : undefined,
+        removedBranchIds.length > 0 ? removedBranchIds : undefined,
+        relationsPayload
+      );
     } catch (err) {
       setError(String(err));
     } finally {
@@ -632,6 +684,16 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     }
   }, [repoPickerOpen]);
 
+  // load all contexts when Relations tab is opened (lazy, only once)
+  useEffect(() => {
+    if (activeTab !== "relations" || allContexts.length > 0) return;
+    setContextsLoading(true);
+    ListContexts()
+      .then((ctxs) => setAllContexts(ctxs ?? []))
+      .catch(() => {})
+      .finally(() => setContextsLoading(false));
+  }, [activeTab]);
+
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal modal--wide" onClick={(e) => e.stopPropagation()}>
@@ -710,6 +772,16 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                 <span className="ctx-tab-badge">{vcsBranchCount}</span>
               ) : (
                 <span className="ctx-tab-optional">optional</span>
+              )}
+            </button>
+            <button
+              className={`tab-btn${activeTab === "relations" ? " tab-btn--active" : ""}`}
+              onClick={() => setActiveTab("relations")}
+              type="button"
+            >
+              Relations
+              {(existingRelations.length + pendingRelations.length) > 0 && (
+                <span className="tab-badge">{existingRelations.length + pendingRelations.length}</span>
               )}
             </button>
           </div>
@@ -1585,6 +1657,96 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Relations panel */}
+          {activeTab === "relations" && (
+            <div className="tab-panel">
+              <div className="relations-form">
+                <div className="form-row">
+                  <label className="field-label">Relation Type</label>
+                  <select
+                    className="select-input"
+                    value={relationType}
+                    onChange={(e) => setRelationType(e.target.value as ContextRelationType)}
+                  >
+                    {(Object.entries(RELATION_TYPE_LABELS) as [ContextRelationType, string][]).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-row" style={{ position: "relative" }}>
+                  <label className="field-label">Context</label>
+                  <input
+                    className="text-input"
+                    type="text"
+                    placeholder="Type a context key to search…"
+                    value={relationSearch}
+                    onChange={(e) => { setRelationSearch(e.target.value); setShowRelationDropdown(true); }}
+                    onFocus={() => setShowRelationDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowRelationDropdown(false), 150)}
+                    autoComplete="off"
+                  />
+                  {showRelationDropdown && relationSearch.trim() && (
+                    <ul className="combobox-dropdown">
+                      {contextsLoading && (
+                        <li className="combobox-item combobox-item--loading">Loading…</li>
+                      )}
+                      {!contextsLoading && relationSearchResults.length === 0 && (
+                        <li className="combobox-item combobox-item--empty">No matching contexts</li>
+                      )}
+                      {relationSearchResults.map((c) => (
+                        <li
+                          key={c.id}
+                          className="combobox-item"
+                          onMouseDown={() => addPendingRelation(c)}
+                        >
+                          {c.key}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {(existingRelations.length > 0 || pendingRelations.length > 0) && (
+                <div className="relations-list">
+                  {existingRelations.map((rel) => (
+                    <div key={rel.id} className="relation-item">
+                      <span className="relation-type-badge">{RELATION_TYPE_LABELS[rel.relationType]}</span>
+                      <span className="relation-target">{rel.targetKey}</span>
+                      <button
+                        type="button"
+                        className="btn-ghost btn-icon"
+                        onClick={() => removeExistingRelation(rel.id)}
+                        title="Remove relation"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {pendingRelations.map((rel) => {
+                    const targetCtx = allContexts.find((c) => c.id === rel.targetId);
+                    return (
+                      <div key={`${rel.targetId}-${rel.relationType}`} className="relation-item relation-item--pending">
+                        <span className="relation-type-badge">{RELATION_TYPE_LABELS[rel.relationType]}</span>
+                        <span className="relation-target">{targetCtx?.key ?? rel.targetId}</span>
+                        <span className="relation-pending-badge">new</span>
+                        <button
+                          type="button"
+                          className="btn-ghost btn-icon"
+                          onClick={() => removePendingRelation(rel.targetId, rel.relationType)}
+                          title="Remove"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
