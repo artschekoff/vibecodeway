@@ -9,6 +9,7 @@ const (
 	TriggerManual  = "manual"  // user-authored entry
 	TriggerChat    = "chat"    // generated from a chat apply action (reserved)
 	TriggerInit    = "init"    // consolidated-log bootstrap
+	TriggerAgent   = "agent"   // agent-authored entry via MCP
 )
 
 // Chat roles stored in context_log_chat_messages.role.
