@@ -252,9 +252,21 @@ func TestFindContextsByJiraKeys(t *testing.T) {
 	t.Run("finds keys across contexts", func(t *testing.T) {
 		got, err := repo.FindContextsByJiraKeys(ctx, []string{"ALPHA-1", "BETA-1", "MISSING-9"})
 		require.NoError(t, err)
-		assert.Equal(t, c1.ID, got["ALPHA-1"])
-		assert.Equal(t, c2.ID, got["BETA-1"])
+		assert.Equal(t, []string{c1.ID}, got["ALPHA-1"])
+		assert.Equal(t, []string{c2.ID}, got["BETA-1"])
 		assert.NotContains(t, got, "MISSING-9", "absent keys must not appear")
+	})
+
+	t.Run("same key in multiple contexts returns all context IDs", func(t *testing.T) {
+		// SHARED-1 exists in both c1 and c2.
+		_, err := repo.UpsertIssue(ctx, c1.ID, "SHARED-1", "Shared issue", "Open", "", "Bug", "", "")
+		require.NoError(t, err)
+		_, err = repo.UpsertIssue(ctx, c2.ID, "SHARED-1", "Shared issue", "Open", "", "Bug", "", "")
+		require.NoError(t, err)
+
+		got, err := repo.FindContextsByJiraKeys(ctx, []string{"SHARED-1"})
+		require.NoError(t, err)
+		assert.ElementsMatch(t, []string{c1.ID, c2.ID}, got["SHARED-1"])
 	})
 
 	t.Run("empty input returns nil", func(t *testing.T) {

@@ -486,30 +486,41 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 
 	// Auto-link related contexts via Jira issue links.
 	if len(collectedLinks) > 0 {
+		// Deduplicate linked keys before querying to avoid redundant DB lookups.
+		seenLinkedKeys := make(map[string]bool)
 		linkedKeys := make([]string, 0, len(collectedLinks))
 		for _, l := range collectedLinks {
-			linkedKeys = append(linkedKeys, l.linkedKey)
+			if !seenLinkedKeys[l.linkedKey] {
+				seenLinkedKeys[l.linkedKey] = true
+				linkedKeys = append(linkedKeys, l.linkedKey)
+			}
 		}
-		keyToCtx, err := svc.jiraRepo.FindContextsByJiraKeys(ctx, linkedKeys)
+		keyToCtxIDs, err := svc.jiraRepo.FindContextsByJiraKeys(ctx, linkedKeys)
 		if err != nil {
 			svc.logger.Warn("auto-link: finding contexts by jira keys failed", zap.Error(err))
 		} else {
 			deduped := make(map[string]bool)
 			for _, l := range collectedLinks {
-				targetCtxID, ok := keyToCtx[l.linkedKey]
-				if !ok || targetCtxID == contextID {
-					continue
-				}
-				relType := jiraLinkToRelationType(l.typeName, l.direction)
-				dedupeKey := targetCtxID + "|" + relType
-				if deduped[dedupeKey] {
-					continue
-				}
-				deduped[dedupeKey] = true
-				if _, err := svc.store.AddContextRelation(ctx, contextID, targetCtxID, relType); err != nil {
-					svc.logger.Debug("auto-link: skipped or failed",
-						zap.String("from", contextID), zap.String("to", targetCtxID),
-						zap.String("type", relType), zap.Error(err))
+				targetCtxIDs := keyToCtxIDs[l.linkedKey]
+				for _, targetCtxID := range targetCtxIDs {
+					if targetCtxID == contextID {
+						continue
+					}
+					relType := jiraLinkToRelationType(l.typeName, l.direction)
+					dedupeKey := targetCtxID + "|" + relType
+					if deduped[dedupeKey] {
+						continue
+					}
+					deduped[dedupeKey] = true
+					if _, err := svc.store.AddContextRelation(ctx, contextID, targetCtxID, relType); err != nil {
+						if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+							// Relation already exists — not an error.
+							continue
+						}
+						svc.logger.Warn("auto-link: failed to create relation",
+							zap.String("from", contextID), zap.String("to", targetCtxID),
+							zap.String("type", relType), zap.Error(err))
+					}
 				}
 			}
 		}
