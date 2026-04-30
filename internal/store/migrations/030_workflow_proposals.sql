@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS context_workflow_proposals (
     user_next_step_override TEXT,
     prev_user_next_step     TEXT,
     resolved_at             TEXT,
+    updated_at              TEXT NOT NULL DEFAULT '',
     created_at              TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_workflow_proposals_context ON context_workflow_proposals(context_id);
