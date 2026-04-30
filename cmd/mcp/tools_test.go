@@ -87,3 +87,38 @@ func TestFilterActiveItems_EmptyDMConfigs_NoError(t *testing.T) {
 	filtered := filterActiveItems(detail)
 	assert.Empty(t, filtered.SlackDMConfigs)
 }
+
+func TestFilterActiveItems_FiltersInactiveComments(t *testing.T) {
+	detail := &jiraservice.ContextDetail{
+		Issues: []jirastore.Issue{
+			{
+				ID:       "i1",
+				IsActive: true,
+				Comments: []jirastore.Comment{
+					{ID: "c1", IsActive: true},
+					{ID: "c2", IsActive: false},
+				},
+			},
+		},
+	}
+	filtered := filterActiveItems(detail)
+	require.Len(t, filtered.Issues, 1)
+	require.Len(t, filtered.Issues[0].Comments, 1, "inactive comment should be excluded")
+	assert.Equal(t, "c1", filtered.Issues[0].Comments[0].ID)
+}
+
+func TestFilterActiveItems_InactiveIssueDropsItsComments(t *testing.T) {
+	detail := &jiraservice.ContextDetail{
+		Issues: []jirastore.Issue{
+			{
+				ID:       "i1",
+				IsActive: false,
+				Comments: []jirastore.Comment{
+					{ID: "c1", IsActive: true},
+				},
+			},
+		},
+	}
+	filtered := filterActiveItems(detail)
+	assert.Empty(t, filtered.Issues, "inactive issue and all its comments should be excluded")
+}
