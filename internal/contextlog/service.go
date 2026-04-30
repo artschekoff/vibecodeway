@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 )
@@ -226,7 +225,7 @@ func (s *Service) CreateAgentLog(ctx context.Context, contextID, message string)
 	log := ContextLog{
 		ContextID: contextID,
 		Trigger:   TriggerAgent,
-		Source:    "mcp",
+		Source:    SourceMCP,
 		SummaryMd: message,
 		IsManual:  false,
 	}
@@ -490,6 +489,3 @@ func groupByCategory(snap Snapshot) map[string][]snapshotEntry {
 	}
 	return out
 }
-
-// keep time import usable if needed in future manual insertions.
-var _ = time.Time{}

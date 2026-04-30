@@ -25,6 +25,11 @@ const (
 	UpdatedByUser = "user"
 )
 
+// Source values stored in context_logs.source.
+const (
+	SourceMCP = "mcp" // entry written by an AI agent via the MCP tool
+)
+
 // Default values.
 const (
 	DefaultModel = "gpt-4o-mini"
