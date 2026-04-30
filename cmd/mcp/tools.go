@@ -512,7 +512,9 @@ func (h *handlers) handleContextSetStatus(ctx context.Context, req mcp.CallToolR
 	logAppended := false
 	if message != "" {
 		cl := h.svc.ContextLog()
-		if cl != nil {
+		if cl == nil {
+			h.logger.Warn("context_set_status: context log service not configured, message dropped", zap.String("contextID", id))
+		} else {
 			if _, err := cl.CreateAgentLog(ctx, id, message); err != nil {
 				h.logger.Warn("context_set_status: failed to create agent log", zap.String("contextID", id), zap.Error(err))
 			} else {
