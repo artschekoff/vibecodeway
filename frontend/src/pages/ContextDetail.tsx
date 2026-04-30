@@ -30,6 +30,10 @@ import {
   ListSlackDMConfigs,
   AddVCSBranch,
   RemoveVCSBranch,
+  // @ts-ignore
+  AddContextRelation,
+  // @ts-ignore
+  RemoveContextRelation,
   GetUnviewedBreakdown,
   MarkContextAllViewed,
   MarkIssueViewed,
@@ -41,7 +45,8 @@ import {
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload } from "../types";
+import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
 import SlackChannelCard from "../components/SlackChannelCard";
@@ -239,6 +244,7 @@ export default function ContextDetailPage() {
   const [editContextTexts, setEditContextTexts] = useState<ContextText[] | undefined>(undefined);
   const [editUploadedFiles, setEditUploadedFiles] = useState<UploadedFile[] | undefined>(undefined);
   const [editVCSBranches, setEditVCSBranches] = useState<VCSBranch[] | undefined>(undefined);
+  const [editRelations, setEditRelations] = useState<ContextRelation[] | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<UnviewedBreakdown | null>(null);
   const [markingAllViewed, setMarkingAllViewed] = useState(false);
 
@@ -366,6 +372,7 @@ export default function ContextDetailPage() {
     setEditContextTexts(contextTexts);
     setEditUploadedFiles((detail?.uploadedFiles ?? []) as UploadedFile[]);
     setEditVCSBranches((detail?.vcsBranches ?? []) as VCSBranch[]);
+    setEditRelations((detail?.relations ?? []) as ContextRelation[]);
     setEditOpen(true);
   };
 
@@ -378,6 +385,7 @@ export default function ContextDetailPage() {
     setEditContextTexts(undefined);
     setEditUploadedFiles(undefined);
     setEditVCSBranches(undefined);
+    setEditRelations(undefined);
   };
 
   const handleUpdate = async (
@@ -391,7 +399,8 @@ export default function ContextDetailPage() {
     removedUploadedFileIds?: string[],
     _pendingUploadTempIds?: string[],
     newVCSBranches?: VCSBranchInput[],
-    removedVCSBranchIds?: string[]
+    removedVCSBranchIds?: string[],
+    relationsPayload?: RelationsPayload
   ) => {
     if (!id || !detail) return;
     const jiraKeys = selectedJiraKeys ?? [];
@@ -459,6 +468,13 @@ export default function ContextDetailPage() {
       for (const b of (newVCSBranches ?? [])) {
         progress.next(`Linking ${b.ownerRepo}:${b.branch}`);
         try { await AddVCSBranch(id, b.platform, b.ownerRepo, b.branch, b.label ?? ""); } catch { /* best-effort */ }
+      }
+      // Relations
+      for (const relId of (relationsPayload?.removedRelationIds ?? [])) {
+        try { await RemoveContextRelation(relId); } catch { /* best-effort */ }
+      }
+      for (const rel of (relationsPayload?.newRelations ?? [])) {
+        try { await AddContextRelation(id, rel.targetId, rel.relationType); } catch { /* best-effort */ }
       }
     } finally {
       progress.done();
@@ -925,6 +941,28 @@ export default function ContextDetailPage() {
                 </div>
               </section>
             )}
+            {/* Relations section */}
+            {(detail?.relations ?? []).length > 0 && (
+              <div className="relations-section">
+                <h3 className="section-header">Relations</h3>
+                <div className="relations-list">
+                  {detail!.relations!.map((rel) => (
+                    <div key={rel.id} className="relation-item">
+                      <span className="relation-type-badge">
+                        {RELATION_TYPE_LABELS[rel.relationType]}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn-ghost relation-link"
+                        onClick={() => navigate(`/context/${rel.targetId}`)}
+                      >
+                        {rel.targetKey}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         </div>
@@ -982,6 +1020,7 @@ export default function ContextDetailPage() {
           initialContextTexts={editContextTexts}
           initialUploadedFiles={editUploadedFiles}
           initialVCSBranches={editVCSBranches}
+          initialRelations={editRelations}
           onSave={handleUpdate}
           onCancel={closeEditForm}
         />
