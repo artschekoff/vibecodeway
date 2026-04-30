@@ -37,6 +37,11 @@ func TestSlackTablesExist(t *testing.T) {
 	assertTableExists(t, s, "slack_threads")
 }
 
+func TestContextRelationsTableExists(t *testing.T) {
+	s := openTestStore(t)
+	assertTableExists(t, s, "context_relations")
+}
+
 func TestOldUnprefixedTablesAbsent(t *testing.T) {
 	s := openTestStore(t)
 	assertTableAbsent(t, s, "issues")
