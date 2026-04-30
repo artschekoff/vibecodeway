@@ -4250,3 +4250,32 @@ select {
   outline: none;
   border-color: var(--accent);
 }
+
+/* ===== WorkflowStatusBadge ===== */
+.workflow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.workflow-badge--not-started     { background: #e5e7eb; color: #6b7280; }
+.workflow-badge--scoping         { background: #fef3c7; color: #92400e; }
+.workflow-badge--in-progress     { background: #dbeafe; color: #1e40af; }
+.workflow-badge--needs-attention { background: #fee2e2; color: #991b1b; }
+.workflow-badge--ready           { background: #dcfce7; color: #166534; }
+.workflow-badge--unknown         { background: #f3f4f6; color: #374151; }
+
+.workflow-badge--ai { border: 1px dashed currentColor; opacity: 0.85; }
+
+.workflow-badge-ai-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
