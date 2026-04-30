@@ -23,9 +23,9 @@ func Compute(ctx context.Context, contextID string, s *appstore.Store, vs *vcsst
 	}
 
 	// needs_attention check first — always authoritative.
-	attnStatus, attnComment, err := checkAttentionConditions(ctx, contextID, vs)
+	attnStatus, attnComment, err := checkAttentionConditions(ctx, branches, vs)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("workflow.Compute attention check: %w", err)
 	}
 	if attnStatus != "" {
 		return attnStatus, attnComment, nil
@@ -42,16 +42,12 @@ func Compute(ctx context.Context, contextID string, s *appstore.Store, vs *vcsst
 	return "in_progress", "", nil
 }
 
-func checkAttentionConditions(ctx context.Context, contextID string, vs *vcsstore.Store) (string, string, error) {
-	branches, err := vs.Branches.ListBranches(ctx, contextID)
-	if err != nil {
-		return "", "", fmt.Errorf("list branches for attention check: %w", err)
-	}
+func checkAttentionConditions(ctx context.Context, branches []vcsstore.ContextVCSBranch, vs *vcsstore.Store) (string, string, error) {
 	var issues []string
 	for _, b := range branches {
 		prs, err := vs.PullRequests.ListPRsForBranch(ctx, b.ID)
 		if err != nil {
-			return "", "", fmt.Errorf("list prs: %w", err)
+			return "", "", fmt.Errorf("checkAttentionConditions list prs for branch %s: %w", b.ID, err)
 		}
 		for _, pr := range prs {
 			switch {
