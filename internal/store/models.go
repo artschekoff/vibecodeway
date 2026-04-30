@@ -49,7 +49,7 @@ func (c *Context) EffectiveStatus() string {
 
 // EffectiveComment returns the comment the UI should display.
 func (c *Context) EffectiveComment() string {
-	if c.UserCommentOverride != nil {
+	if c.UserCommentOverride != nil && *c.UserCommentOverride != "" {
 		return *c.UserCommentOverride
 	}
 	if c.AIProposedComment != nil {
@@ -60,7 +60,7 @@ func (c *Context) EffectiveComment() string {
 
 // EffectiveNextStep returns the next-step suggestion the UI should display.
 func (c *Context) EffectiveNextStep() string {
-	if c.UserNextStepOverride != nil {
+	if c.UserNextStepOverride != nil && *c.UserNextStepOverride != "" {
 		return *c.UserNextStepOverride
 	}
 	if c.AIProposedNextStep != nil {
