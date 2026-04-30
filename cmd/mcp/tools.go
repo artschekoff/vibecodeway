@@ -482,7 +482,7 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 		}
 	}
 
-	if len(detail.Relations) > 0 {
+	if filter == "" && len(detail.Relations) > 0 {
 		fmt.Fprintf(&buf, "\n--- RELATED CONTEXTS (%d) ---\n\n", len(detail.Relations))
 		for _, r := range detail.Relations {
 			fmt.Fprintf(&buf, "- %s → %s\n", r.RelationType, r.TargetKey)

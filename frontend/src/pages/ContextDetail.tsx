@@ -943,10 +943,13 @@ export default function ContextDetailPage() {
             )}
             {/* Relations section */}
             {(detail?.relations ?? []).length > 0 && (
-              <div className="relations-section">
-                <h3 className="section-header">Relations</h3>
+              <section className="detail-section">
+                <div className="detail-section-header">
+                  <span className="detail-section-title">Relations</span>
+                  <span className="detail-section-count">{detail!.relations!.length}</span>
+                </div>
                 <div className="relations-list">
-                  {detail!.relations!.map((rel) => (
+                  {(detail.relations ?? []).map((rel) => (
                     <div key={rel.id} className="relation-item">
                       <span className="relation-type-badge">
                         {RELATION_TYPE_LABELS[rel.relationType]}
@@ -961,7 +964,7 @@ export default function ContextDetailPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
           </div>
         )}
