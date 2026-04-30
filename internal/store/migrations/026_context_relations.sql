@@ -9,5 +9,8 @@ CREATE TABLE IF NOT EXISTS context_relations (
     UNIQUE(context_id, target_id, relation_type)
 );
 
+CREATE INDEX IF NOT EXISTS idx_context_relations_context_id ON context_relations(context_id);
+CREATE INDEX IF NOT EXISTS idx_context_relations_target_id  ON context_relations(target_id);
+
 -- +goose Down
 DROP TABLE IF EXISTS context_relations;
