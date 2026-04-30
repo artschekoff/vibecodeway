@@ -23,7 +23,7 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 
 	s.AddTool(
 		mcp.NewTool("load_context",
-			mcp.WithDescription("Load all saved content for a context formatted as readable text: Jira issues (with comments), Slack channels/threads/DMs, plain-text entries, uploaded file contents, and linked repositories with PRs. Use the filter parameter to request only one source type. Use start_at to limit Jira/Slack items by date. Use skip_repos=true to omit the repositories section."),
+			mcp.WithDescription("Load all saved content for a context formatted as readable text: Jira issues (with comments), Slack channels/threads/DMs, plain-text entries, uploaded file contents, and linked repositories with PRs. Use the filter parameter to request only one source type. Use start_at to limit Jira/Slack items by date. Use skip_repos=true to omit the repositories section. By default only active (non-deactivated) items are returned."),
 			mcp.WithString("name",
 				mcp.Required(),
 				mcp.Description("Context key (human-readable name), e.g. 'sprint-42'."),
@@ -36,6 +36,9 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 			),
 			mcp.WithString("skip_repos",
 				mcp.Description("Set to 'true' to omit the repositories and pull-requests section from the output. Default: false (repos are included)."),
+			),
+			mcp.WithString("include_deactivated",
+				mcp.Description("Set to 'true' to include items that have been switched off (deactivated) by the user. Default: false (deactivated items are excluded)."),
 			),
 		),
 		h.handleLoadContext,
@@ -470,6 +473,8 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 	}
 
 	skipRepos := strings.ToLower(strings.TrimSpace(req.GetString("skip_repos", ""))) == "true"
+	includeDeactivated := strings.EqualFold(strings.TrimSpace(req.GetString("include_deactivated", "")), "true")
+	activeOnly := !includeDeactivated
 
 	var startAt time.Time
 	if raw := strings.TrimSpace(req.GetString("start_at", "")); raw != "" {
@@ -494,7 +499,7 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 	}
 	buf.WriteString("\n")
 
-	if err := h.svc.FormatContext(ctx, &buf, detail.Context.ID, filter, startAt); err != nil {
+	if err := h.svc.FormatContext(ctx, &buf, detail.Context.ID, filter, startAt, activeOnly); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -790,4 +795,16 @@ func splitAndTrim(s string) []string {
 		}
 	}
 	return out
+}
+
+// validWorkflowStatuses is the closed set of accepted status values for context_set_status.
+var validWorkflowStatuses = []string{"not_started", "in_progress", "scoping", "needs_attention", "ready"}
+
+func isValidWorkflowStatus(s string) bool {
+	for _, v := range validWorkflowStatuses {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
