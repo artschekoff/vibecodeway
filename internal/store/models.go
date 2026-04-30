@@ -75,6 +75,17 @@ type ContextUploadedFile struct {
 	IsActive      bool   `json:"isActive"`
 }
 
+// ContextRelation is a typed directional link from one context to another.
+// TargetKey is denormalized from the target context row for display.
+type ContextRelation struct {
+	ID           string `json:"id"`
+	ContextID    string `json:"contextId"`
+	TargetID     string `json:"targetId"`
+	TargetKey    string `json:"targetKey"`
+	RelationType string `json:"relationType"`
+	CreatedAt    string `json:"createdAt"`
+}
+
 // AISettings holds OpenAI configuration stored in the local database.
 // The raw API key is never persisted or serialised — only the flag HasKey is exposed.
 type AISettings struct {
