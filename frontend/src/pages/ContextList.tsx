@@ -185,7 +185,7 @@ interface ContextListProps {
 }
 
 export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) {
-  const { openContextTab, openSettingsTab } = useTabContext();
+  const { openContextTab, openNewContextTab, openSettingsTab } = useTabContext();
   const progress = useProgress();
 
   // ── Tab state (persisted) ──
@@ -1047,21 +1047,28 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 {reloadResults.map((r) => {
                   const hasNew = r.newIssues > 0 || r.newComments > 0 || r.threadsRefreshed > 0 || r.dmsRefreshed > 0 || r.prsRefreshed > 0 || r.newPRComments > 0 || r.newNotifications > 0;
                   return (
-                    <div key={r.contextId} className={`reload-result-item${hasNew ? " reload-result-item--new" : ""}`}>
+                    <div
+                      key={r.contextId}
+                      className={`reload-result-item reload-result-item--clickable${hasNew ? " reload-result-item--new" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); } }}
+                    >
                       <span className="reload-result-key">{r.contextKey}</span>
                       <span className="reload-result-summary">
                         {r.error ? (
                           <span className="reload-result-error">{r.error}</span>
                         ) : hasNew ? (
-                          [
-                            r.newIssues > 0 && `${r.newIssues} new issue${r.newIssues !== 1 ? "s" : ""}`,
-                            r.newComments > 0 && `${r.newComments} new comment${r.newComments !== 1 ? "s" : ""}`,
-                            r.threadsRefreshed > 0 && `${r.threadsRefreshed} thread${r.threadsRefreshed !== 1 ? "s" : ""} refreshed`,
-                            r.dmsRefreshed > 0 && `${r.dmsRefreshed} DM${r.dmsRefreshed !== 1 ? "s" : ""} refreshed`,
-                            r.prsRefreshed > 0 && `${r.prsRefreshed} PR${r.prsRefreshed !== 1 ? "s" : ""} synced`,
-                            r.newPRComments > 0 && `${r.newPRComments} PR comment${r.newPRComments !== 1 ? "s" : ""}`,
-                            r.newNotifications > 0 && `${r.newNotifications} notification${r.newNotifications !== 1 ? "s" : ""}`,
-                          ].filter(Boolean).join(" · ")
+                          <>
+                            {r.newIssues > 0 && <span className="reload-result-badge">{r.newIssues} new issue{r.newIssues !== 1 ? "s" : ""}</span>}
+                            {r.newComments > 0 && <span className="reload-result-badge">{r.newComments} new comment{r.newComments !== 1 ? "s" : ""}</span>}
+                            {r.threadsRefreshed > 0 && <span className="reload-result-badge">{r.threadsRefreshed} thread{r.threadsRefreshed !== 1 ? "s" : ""} refreshed</span>}
+                            {r.dmsRefreshed > 0 && <span className="reload-result-badge">{r.dmsRefreshed} DM{r.dmsRefreshed !== 1 ? "s" : ""} refreshed</span>}
+                            {r.prsRefreshed > 0 && <span className="reload-result-badge">{r.prsRefreshed} PR{r.prsRefreshed !== 1 ? "s" : ""} synced</span>}
+                            {r.newPRComments > 0 && <span className="reload-result-badge">{r.newPRComments} PR comment{r.newPRComments !== 1 ? "s" : ""}</span>}
+                            {r.newNotifications > 0 && <span className="reload-result-badge">{r.newNotifications} notification{r.newNotifications !== 1 ? "s" : ""}</span>}
+                          </>
                         ) : (
                           <span className="reload-result-none">No new items</span>
                         )}
