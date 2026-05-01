@@ -2058,7 +2058,7 @@ select {
 .dm-conversation-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
@@ -2067,6 +2067,24 @@ select {
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
+}
+
+.dm-conversation-header-name {
+  flex: 1;
+}
+
+.dm-entry-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.dm-conversation--disabled {
+  opacity: 0.4;
 }
 
 .dm-entry-delete-btn {
@@ -2334,11 +2352,10 @@ select {
 .item--inactive {
   text-decoration: line-through;
   color: var(--text-muted);
-  opacity: 0.6;
 }
 
 .issue-card--inactive {
-  opacity: 0.65;
+  opacity: 0.75;
 }
 
 .issue-card--inactive .issue-card-header {
@@ -2346,11 +2363,11 @@ select {
 }
 
 .comment--inactive {
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .slack-thread-row--inactive {
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 
@@ -2557,6 +2574,7 @@ select {
   width: 14px;
   height: 14px;
   line-height: 14px;
+  border-radius: 50%;
 }
 
 /* === ContextDetail side panel (Chat / Logs / Consolidated) === */
@@ -4264,12 +4282,12 @@ select {
   white-space: nowrap;
 }
 
-.workflow-badge--not-started     { background: #e5e7eb; color: #6b7280; }
-.workflow-badge--scoping         { background: #fef3c7; color: #92400e; }
-.workflow-badge--in-progress     { background: #dbeafe; color: #1e40af; }
-.workflow-badge--needs-attention { background: #fee2e2; color: #991b1b; }
-.workflow-badge--ready           { background: #dcfce7; color: #166534; }
-.workflow-badge--unknown         { background: #f3f4f6; color: #374151; }
+.workflow-badge--not-started     { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+.workflow-badge--scoping         { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+.workflow-badge--in-progress     { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+.workflow-badge--needs-attention { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.workflow-badge--ready           { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.workflow-badge--unknown         { background: var(--surface2); color: var(--text-muted); }
 
 .workflow-badge--ai { border: 1px dashed currentColor; opacity: 0.85; }
 
@@ -4301,10 +4319,10 @@ select {
 
 /* ===== WorkflowProposalCard ===== */
 .workflow-proposal-card {
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 16px;
-  background: var(--card-bg, #fff);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4314,7 +4332,7 @@ select {
 .workflow-proposal-title {
   font-size: 12px;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -4328,7 +4346,7 @@ select {
 .workflow-proposal-label {
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -4350,33 +4368,33 @@ select {
   align-items: center;
   gap: 6px;
   padding: 2px 6px;
-  background: #f0fdf4;
+  background: rgba(74, 222, 128, 0.08);
   border-radius: 6px;
-  border: 1px solid #86efac;
+  border: 1px solid rgba(74, 222, 128, 0.25);
 }
 
 .workflow-proposal-source {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .workflow-text-value {
   font-size: 13px;
-  color: #374151;
+  color: var(--text);
   max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.workflow-text-value--override { color: #15803d; font-weight: 500; }
+.workflow-text-value--override { color: #4ade80; font-weight: 500; }
 
 .workflow-action-btn {
   background: none;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -4384,13 +4402,13 @@ select {
   padding: 2px 4px;
   border-radius: 4px;
 }
-.workflow-action-btn:hover { background: #f3f4f6; }
+.workflow-action-btn:hover { background: var(--surface2); }
 
-.workflow-accept-btn { color: #6366f1; }
+.workflow-accept-btn { color: #818cf8; }
 
 .workflow-status-locked-note {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -4405,7 +4423,9 @@ select {
   font-size: 13px;
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
   flex: 1;
 }
 
@@ -4536,5 +4556,165 @@ select {
   width: 110px;
   background: white;
   color: var(--text, #111827);
+}
+
+/* ─── Tab Bar ─────────────────────────────────────────────────────────────── */
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  min-height: 36px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 0 12px;
+  height: 28px;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-bottom: none;
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+}
+
+.tab-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text);
+}
+
+.tab-item--active {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.tab-item__title {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-item__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s, background 0.1s;
+  flex-shrink: 0;
+}
+
+.tab-item:hover .tab-item__action,
+.tab-item--active .tab-item__action {
+  opacity: 1;
+}
+
+.tab-item__action:hover {
+  background: var(--bg-tertiary);
+  color: var(--text);
+}
+
+/* ─── Org menu section in HamburgerMenu ───────────────────────────────────── */
+
+.app-menu-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.app-menu-section-header button {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+}
+
+.app-menu-section-header button:hover {
+  color: var(--text);
+  background: var(--bg-tertiary);
+}
+
+.app-menu-org-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+  gap: 8px;
+}
+
+.app-menu-org-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.app-menu-org-item__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── App Shell Layout ────────────────────────────────────────────────────── */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-topbar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.app-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .repo-meta-input--desc { width: 220px; }
