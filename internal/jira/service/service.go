@@ -324,102 +324,170 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 	if err != nil {
 		return nil, fmt.Errorf("loading context: %w", err)
 	}
-
 	detail := &ContextDetail{Context: *c}
 
-	jp, err := svc.jiraRepo.GetJiraProvider(ctx, id)
-	if err != nil && !errors.Is(err, jirastore.ErrNotFound) {
-		return nil, fmt.Errorf("loading jira provider: %w", err)
-	}
-	detail.Jira = jp
+	// Phase 1: fire all independent queries concurrently.
+	var (
+		mu          sync.Mutex
+		phase1Errs  []error
 
-	sp, err := svc.slackRepo.GetSlackProvider(ctx, id)
-	if err != nil && !errors.Is(err, slackstore.ErrNotFound) {
-		return nil, fmt.Errorf("loading slack provider: %w", err)
-	}
-	detail.Slack = sp
+		jp        *jirastore.JiraProvider
+		sp        *slackstore.SlackProvider
+		issues    []jirastore.Issue
+		threads   []slackstore.SlackThread
+		channels  []slackstore.SlackChannel
+		dmConfigs []slackstore.SlackDMConfig
+		ctxTexts  []appstore.ContextText
+		uploaded  []appstore.ContextUploadedFile
+		branches  []vcsstore.ContextVCSBranch
+		prs       []vcsstore.PullRequest
+		relations []appstore.ContextRelation
+	)
 
-	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, id, false)
-	if err != nil {
-		return nil, fmt.Errorf("loading issues: %w", err)
+	addErr := func(e error) {
+		mu.Lock()
+		phase1Errs = append(phase1Errs, e)
+		mu.Unlock()
 	}
-	issueIDs := make([]string, len(issues))
-	for i, iss := range issues {
-		issueIDs[i] = iss.ID
+
+	var wg sync.WaitGroup
+	run := func(fn func()) {
+		wg.Add(1)
+		go func() { defer wg.Done(); fn() }()
 	}
-	commentsByIssue, err := svc.jiraRepo.GetCommentsByIssues(ctx, issueIDs, false)
-	if err != nil {
-		return nil, fmt.Errorf("loading comments: %w", err)
+
+	run(func() {
+		v, err := svc.jiraRepo.GetJiraProvider(ctx, id)
+		if err != nil && !errors.Is(err, jirastore.ErrNotFound) {
+			addErr(fmt.Errorf("loading jira provider: %w", err))
+			return
+		}
+		mu.Lock(); jp = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.slackRepo.GetSlackProvider(ctx, id)
+		if err != nil && !errors.Is(err, slackstore.ErrNotFound) {
+			addErr(fmt.Errorf("loading slack provider: %w", err))
+			return
+		}
+		mu.Lock(); sp = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.jiraRepo.GetIssuesByContext(ctx, id, false)
+		if err != nil { addErr(fmt.Errorf("loading issues: %w", err)); return }
+		mu.Lock(); issues = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.slackRepo.ListSlackThreads(ctx, id, false)
+		if err != nil { addErr(fmt.Errorf("loading slack threads: %w", err)); return }
+		mu.Lock(); threads = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.slackRepo.ListSlackChannels(ctx, id, false)
+		if err != nil { addErr(fmt.Errorf("loading slack channels: %w", err)); return }
+		mu.Lock(); channels = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.slackRepo.ListSlackDMConfigs(ctx, id, false)
+		if err != nil { addErr(fmt.Errorf("loading slack dm configs: %w", err)); return }
+		mu.Lock(); dmConfigs = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.store.ListContextTexts(ctx, id, false)
+		if err != nil { addErr(fmt.Errorf("loading context texts: %w", err)); return }
+		mu.Lock(); ctxTexts = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.store.ListUploadedFiles(ctx, id, false)
+		if err != nil { addErr(fmt.Errorf("loading uploaded files: %w", err)); return }
+		mu.Lock(); uploaded = v; mu.Unlock()
+	})
+	run(func() {
+		v, err := svc.store.ListContextRelations(ctx, id)
+		if err != nil { addErr(fmt.Errorf("loading relations: %w", err)); return }
+		mu.Lock(); relations = v; mu.Unlock()
+	})
+	if svc.vcsStore != nil {
+		run(func() {
+			v, err := svc.vcsStore.Branches.ListBranches(ctx, id)
+			if err != nil {
+				svc.logger.Warn("loading vcs branches failed", zap.String("contextID", id), zap.Error(err))
+				return
+			}
+			mu.Lock(); branches = v; mu.Unlock()
+		})
+		run(func() {
+			v, err := svc.vcsStore.PullRequests.ListPRsForContext(ctx, id)
+			if err != nil {
+				svc.logger.Warn("loading vcs prs failed", zap.String("contextID", id), zap.Error(err))
+				return
+			}
+			mu.Lock(); prs = v; mu.Unlock()
+		})
 	}
+	wg.Wait()
+
+	if len(phase1Errs) > 0 {
+		return nil, phase1Errs[0]
+	}
+
+	// Phase 2: fetch comments now that issue IDs and PR IDs are known.
+	var (
+		commentsByIssue map[string][]jirastore.Comment
+		commentsByPR    map[string][]vcsstore.PRComment
+	)
+	var wg2 sync.WaitGroup
+	if len(issues) > 0 {
+		wg2.Add(1)
+		go func() {
+			defer wg2.Done()
+			issueIDs := make([]string, len(issues))
+			for i, iss := range issues { issueIDs[i] = iss.ID }
+			v, err := svc.jiraRepo.GetCommentsByIssues(ctx, issueIDs, false)
+			if err != nil { addErr(fmt.Errorf("loading comments: %w", err)); return }
+			mu.Lock(); commentsByIssue = v; mu.Unlock()
+		}()
+	}
+	if svc.vcsStore != nil && len(prs) > 0 {
+		wg2.Add(1)
+		go func() {
+			defer wg2.Done()
+			prIDs := make([]string, len(prs))
+			for i, pr := range prs { prIDs[i] = pr.ID }
+			v, err := svc.vcsStore.PullRequests.ListCommentsForPRs(ctx, prIDs)
+			if err != nil {
+				svc.logger.Warn("loading pr comments failed", zap.Error(err))
+				return
+			}
+			mu.Lock(); commentsByPR = v; mu.Unlock()
+		}()
+	}
+	wg2.Wait()
+
+	if len(phase1Errs) > 0 {
+		return nil, phase1Errs[0]
+	}
+
+	// Assemble detail (single goroutine from here).
 	for i, iss := range issues {
 		issues[i].Comments = commentsByIssue[iss.ID]
 	}
-	detail.Issues = issues
-
-	threads, err := svc.slackRepo.ListSlackThreads(ctx, id, false)
-	if err != nil {
-		return nil, fmt.Errorf("loading slack threads: %w", err)
-	}
-	detail.SlackThreads = threads
-
-	channels, err := svc.slackRepo.ListSlackChannels(ctx, id, false)
-	if err != nil {
-		return nil, fmt.Errorf("loading slack channels: %w", err)
-	}
-	detail.SlackChannels = channels
-
-	dmConfigs, err := svc.slackRepo.ListSlackDMConfigs(ctx, id, false)
-	if err != nil {
-		return nil, fmt.Errorf("loading slack dm configs: %w", err)
-	}
-	detail.SlackDMConfigs = dmConfigs
-
-	contextTexts, err := svc.store.ListContextTexts(ctx, id, false)
-	if err != nil {
-		return nil, fmt.Errorf("loading context texts: %w", err)
-	}
-	detail.ContextTexts = contextTexts
-
-	uploadedFiles, err := svc.store.ListUploadedFiles(ctx, id, false)
-	if err != nil {
-		return nil, fmt.Errorf("loading uploaded files: %w", err)
-	}
-	detail.UploadedFiles = uploadedFiles
-
-	// Load VCS branches and PRs when the vcsStore is configured.
 	if svc.vcsStore != nil {
-		branches, err := svc.vcsStore.Branches.ListBranches(ctx, id)
-		if err != nil {
-			svc.logger.Warn("loading vcs branches failed", zap.String("contextID", id), zap.Error(err))
-		} else {
-			detail.VCSBranches = branches
-		}
-
-		prs, err := svc.vcsStore.PullRequests.ListPRsForContext(ctx, id)
-		if err != nil {
-			svc.logger.Warn("loading vcs prs failed", zap.String("contextID", id), zap.Error(err))
-		} else {
-			// Load comments for all PRs in a single batch query.
-			prIDs := make([]string, len(prs))
-			for i, pr := range prs {
-				prIDs[i] = pr.ID
-			}
-			commentsByPR, err := svc.vcsStore.PullRequests.ListCommentsForPRs(ctx, prIDs)
-			if err != nil {
-				svc.logger.Warn("loading pr comments failed", zap.Error(err))
-			} else {
-				for i, pr := range prs {
-					prs[i].Comments = vcsstore.BuildCommentTree(commentsByPR[pr.ID])
-				}
-			}
-			detail.PullRequests = prs
+		for i, pr := range prs {
+			prs[i].Comments = vcsstore.BuildCommentTree(commentsByPR[pr.ID])
 		}
 	}
 
-	relations, err := svc.store.ListContextRelations(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("loading relations: %w", err)
-	}
+	detail.Jira = jp
+	detail.Slack = sp
+	detail.Issues = issues
+	detail.SlackThreads = threads
+	detail.SlackChannels = channels
+	detail.SlackDMConfigs = dmConfigs
+	detail.ContextTexts = ctxTexts
+	detail.UploadedFiles = uploaded
+	detail.VCSBranches = branches
+	detail.PullRequests = prs
 	detail.Relations = relations
 
 	return detail, nil
