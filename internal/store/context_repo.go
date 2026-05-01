@@ -29,7 +29,7 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		includeArchivedParam = 1
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.key, c.status, c.created_at, c.updated_at,
+		SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
 		       COUNT(DISTINCT i.id) AS issue_count,
 		       COALESCE((
 		           SELECT MAX(ts) FROM (
@@ -372,7 +372,7 @@ func scanContextRows(rows *sql.Rows) ([]Context, error) {
 	for rows.Next() {
 		var c Context
 		if err := rows.Scan(
-			&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+			&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
 			&c.IssueCount, &c.LastItemAt, &c.UnviewedCount,
 			&c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles,
 			&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,

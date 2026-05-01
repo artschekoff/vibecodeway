@@ -111,7 +111,7 @@ func (s *Store) SetContextOrg(ctx context.Context, contextID, orgID string) erro
 // ListContextsByOrg returns all contexts (including archived) for a given organization.
 func (s *Store) ListContextsByOrg(ctx context.Context, orgID string) ([]Context, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.key, c.status, c.created_at, c.updated_at,
+		SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
 		       COUNT(DISTINCT i.id),
 		       COALESCE((
 		           SELECT MAX(ts) FROM (
