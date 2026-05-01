@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
-import { HashRouter, Routes, Route } from "react-router-dom";
+import { TabProvider, useTabContext } from "./contexts/TabContext";
 import ContextList from "./pages/ContextList";
 import ContextDetail from "./pages/ContextDetail";
 import Settings from "./pages/Settings";
 import HamburgerMenu from "./components/HamburgerMenu";
+import TabBar from "./components/TabBar";
 import { SetSlackPassphrase } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
@@ -11,6 +12,8 @@ import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
 import { AccessibilityBanner } from "./components/AccessibilityBanner";
 import { EventsOn, EventsOff, SendNotification, InitializeNotifications } from "../wailsjs/runtime/runtime";
 import "./style.css";
+
+// ─── Passphrase gate ─────────────────────────────────────────────────────────
 
 function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
   const [value, setValue] = useState("");
@@ -20,11 +23,7 @@ function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!value.trim()) {
-      setError("Passphrase is required.");
-      inputRef.current?.focus();
-      return;
-    }
+    if (!value.trim()) { setError("Passphrase is required."); inputRef.current?.focus(); return; }
     setSubmitting(true);
     setError("");
     try {
@@ -45,16 +44,9 @@ function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
           Enter your <code>SLACK_MCP_PASSPHRASE</code> to authenticate Slack CLI calls.
         </p>
         <form onSubmit={(e) => void handleSubmit(e)} className="passphrase-form">
-          <input
-            ref={inputRef}
-            type="password"
-            className="passphrase-input"
-            placeholder="Enter passphrase…"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-            autoComplete="off"
-          />
+          <input ref={inputRef} type="password" className="passphrase-input"
+            placeholder="Enter passphrase…" value={value}
+            onChange={(e) => setValue(e.target.value)} autoFocus autoComplete="off" />
           {error && <div className="field-error passphrase-error">{error}</div>}
           <button type="submit" className="btn-primary passphrase-btn" disabled={submitting}>
             {submitting ? "Unlocking…" : "Continue"}
@@ -65,25 +57,48 @@ function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
   );
 }
 
-const isWailsContext = () => typeof (window as unknown as Record<string, unknown>)["go"] !== "undefined";
+const isWailsContext = () =>
+  typeof (window as unknown as Record<string, unknown>)["go"] !== "undefined";
 
-/** Unsubscribes a Wails event listener. Handles both return-value styles across Wails versions. */
 const safeOff = (off: unknown, event: string) => {
   if (typeof off === "function") (off as () => void)();
   else EventsOff(event);
 };
 
-interface PickerState {
-  visible: boolean;
-  text: string;
+// ─── Tab content renderer ────────────────────────────────────────────────────
+
+function TabContent() {
+  const { tabs, activeTabId } = useTabContext();
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  if (!activeTab) {
+    return (
+      <div className="empty-state" style={{ margin: "auto", padding: "40px", textAlign: "center" }}>
+        <p style={{ color: "var(--text-muted)" }}>Open an organization from the ☰ menu to get started.</p>
+      </div>
+    );
+  }
+
+  if (activeTab.type === "settings") return <Settings />;
+  if (activeTab.type === "org") {
+    return <ContextList orgId={activeTab.orgId!} tabId={activeTab.id} />;
+  }
+  if (activeTab.type === "context") {
+    return <ContextDetail contextId={activeTab.contextId!} tabId={activeTab.id} />;
+  }
+  return null;
 }
 
-function App() {
-  const [unlocked, setUnlocked] = useState(!isWailsContext());
+// ─── Main app shell ──────────────────────────────────────────────────────────
+
+interface PickerState { visible: boolean; text: string }
+
+function AppShell() {
   const [picker, setPicker] = useState<PickerState>({ visible: false, text: "" });
   const [showA11yBanner, setShowA11yBanner] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { openContextTab } = useTabContext();
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -91,30 +106,17 @@ function App() {
     toastTimer.current = setTimeout(() => setToastMsg(""), 3000);
   }, []);
 
-  // Clear the toast timer on unmount.
-  useEffect(() => {
-    return () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    };
-  }, []);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
-  // Initialise notifications and listen for the global hotkey event.
   useEffect(() => {
     if (!isWailsContext()) return;
     InitializeNotifications().catch(() => {});
-
-    const offPicker = EventsOn("hotkey:show-picker", (text: string) => {
-      setPicker({ visible: true, text: text ?? "" });
-    });
-    const offA11y = EventsOn("accessibility:needed", () => {
-      setShowA11yBanner(true);
-    });
-    const offA11yGranted = EventsOn("accessibility:granted", () => {
-      setShowA11yBanner(false);
-    });
-    const offNoSelection = EventsOn("hotkey:no-selection", () => {
-      showToast("No text selected — select text in another app first");
-    });
+    const offPicker = EventsOn("hotkey:show-picker", (text: string) =>
+      setPicker({ visible: true, text: text ?? "" }));
+    const offA11y = EventsOn("accessibility:needed", () => setShowA11yBanner(true));
+    const offA11yGranted = EventsOn("accessibility:granted", () => setShowA11yBanner(false));
+    const offNoSelection = EventsOn("hotkey:no-selection", () =>
+      showToast("No text selected — select text in another app first"));
     return () => {
       safeOff(offPicker, "hotkey:show-picker");
       safeOff(offA11y, "accessibility:needed");
@@ -127,52 +129,50 @@ function App() {
     (contextKey: string, contextId: string) => {
       setPicker({ visible: false, text: "" });
       showToast(`Attached to "${contextKey}"`);
-      // Signal any mounted ContextDetail to silently reload.
       window.dispatchEvent(new CustomEvent("context:updated", { detail: { id: contextId } }));
-      // Navigate to the context so the user sees what was attached.
-      window.location.hash = `/context/${contextId}`;
+      openContextTab(contextId, contextKey);
       SendNotification({
         id: `quick-attach-${Date.now()}`,
         title: "Attached",
         body: `Added to context: ${contextKey}`,
       }).catch(() => {});
     },
-    [showToast]
+    [showToast, openContextTab]
   );
-
-  const handleDismiss = useCallback(() => {
-    setPicker({ visible: false, text: "" });
-  }, []);
-
-  if (!unlocked) {
-    return <PassphraseGate onUnlocked={() => setUnlocked(true)} />;
-  }
 
   return (
     <ProgressProvider>
       <ProgressModal />
-      <HashRouter>
-        <HamburgerMenu />
-        <Routes>
-          <Route path="/" element={<ContextList />} />
-          <Route path="/context/:id" element={<ContextDetail />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </HashRouter>
-
-      {showA11yBanner && (
-        <AccessibilityBanner onDismiss={() => setShowA11yBanner(false)} />
-      )}
-
+      <div className="app-shell">
+        <div className="app-topbar">
+          <HamburgerMenu />
+        </div>
+        <TabBar />
+        <div className="app-content">
+          <TabContent />
+        </div>
+      </div>
+      {showA11yBanner && <AccessibilityBanner onDismiss={() => setShowA11yBanner(false)} />}
       <QuickAttachOverlay
         visible={picker.visible}
         text={picker.text}
         onAttach={handleAttach}
-        onDismiss={handleDismiss}
+        onDismiss={() => setPicker({ visible: false, text: "" })}
       />
-
       {toastMsg && <div className="toast toast--success">{toastMsg}</div>}
     </ProgressProvider>
+  );
+}
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
+function App() {
+  const [unlocked, setUnlocked] = useState(!isWailsContext());
+  if (!unlocked) return <PassphraseGate onUnlocked={() => setUnlocked(true)} />;
+  return (
+    <TabProvider>
+      <AppShell />
+    </TabProvider>
   );
 }
 
