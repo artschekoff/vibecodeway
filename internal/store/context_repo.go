@@ -85,18 +85,7 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		return nil, fmt.Errorf("listing contexts: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-
-	var contexts []Context
-	for rows.Next() {
-		var c Context
-		if err := rows.Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt, &c.IssueCount, &c.LastItemAt, &c.UnviewedCount, &c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles,
-			&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
-			&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning context: %w", err)
-		}
-		contexts = append(contexts, c)
-	}
-	return contexts, rows.Err()
+	return scanContextRows(rows)
 }
 
 // GetContext returns a single context by ID.
@@ -374,6 +363,26 @@ func (s *Store) SearchContextIDs(ctx context.Context, query string) ([]string, e
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// scanContextRows scans a *sql.Rows result set into []Context.
+// Column order must match the SELECT in ListContexts and ListContextsByOrg.
+func scanContextRows(rows *sql.Rows) ([]Context, error) {
+	var contexts []Context
+	for rows.Next() {
+		var c Context
+		if err := rows.Scan(
+			&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+			&c.IssueCount, &c.LastItemAt, &c.UnviewedCount,
+			&c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles,
+			&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
+			&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning context: %w", err)
+		}
+		contexts = append(contexts, c)
+	}
+	return contexts, rows.Err()
 }
 
 // fts5PrefixQuery converts a user query like "batch met" into FTS5 syntax "batch" * AND "met" *.

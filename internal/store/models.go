@@ -181,3 +181,12 @@ type WorkflowProposal struct {
 	UpdatedAt            string  `json:"updatedAt"`
 	CreatedAt            string  `json:"createdAt"`
 }
+
+// Organization is a named workspace that groups related contexts.
+type Organization struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	SortOrder int    `json:"sortOrder"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
