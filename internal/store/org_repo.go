@@ -64,7 +64,10 @@ func (s *Store) UpdateOrganization(ctx context.Context, id, name string) (*Organ
 	err = s.db.QueryRowContext(ctx, `
 		SELECT id, name, sort_order, created_at, updated_at FROM organizations WHERE id=?
 	`, id).Scan(&o.ID, &o.Name, &o.SortOrder, &o.CreatedAt, &o.UpdatedAt)
-	return &o, err
+	if err != nil {
+		return nil, fmt.Errorf("fetching updated organization: %w", err)
+	}
+	return &o, nil
 }
 
 // DeleteOrganization removes an organization. Contexts with this org_id are set to NULL via FK ON DELETE SET NULL.
@@ -83,13 +86,13 @@ func (s *Store) SetOrganizationsOrder(ctx context.Context, ids []string) error {
 
 	stmt, err := tx.PrepareContext(ctx, `UPDATE organizations SET sort_order=? WHERE id=?`)
 	if err != nil {
-		return err
+		return fmt.Errorf("prepare set org order: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, id := range ids {
 		if _, err := stmt.ExecContext(ctx, i, id); err != nil {
-			return err
+			return fmt.Errorf("setting org order for %s: %w", id, err)
 		}
 	}
 	return tx.Commit()
