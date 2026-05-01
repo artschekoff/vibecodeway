@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// ErrAIKeyNotSet is returned by GetAIOpenAIKey when no encrypted key has been stored.
-var ErrAIKeyNotSet = errors.New("openai key not set in database")
+// ErrAIKeyNotSet is returned by GetAIOpenAIKey and GetAIAnthropicKey when no encrypted key has been stored.
+var ErrAIKeyNotSet = errors.New("ai key not set in database")
 
 const aiSettingsSingletonID = 1
 
@@ -52,13 +52,13 @@ func (s *Store) GetAISettings(ctx context.Context) (*AISettings, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading ai settings: %w", err)
 	}
+	if provider == "" {
+		provider = ProviderOpenAI
+	}
 	hasOpenAI := len(keyEnc) > 0 && len(keyNonce) > 0
 	hasAnthropic := len(antKeyEnc) > 0 && len(antKeyNonce) > 0
 	hasKey := (provider == ProviderAnthropic && hasAnthropic) ||
 		(provider != ProviderAnthropic && (hasOpenAI || provider == ProviderLocal))
-	if provider == "" {
-		provider = ProviderOpenAI
-	}
 	return &AISettings{
 		Provider:        provider,
 		HasKey:          hasKey,
@@ -177,12 +177,22 @@ func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) 
 			return fmt.Errorf("inserting ai settings: %w", err)
 		}
 	} else {
-		setClauses := []string{"model = ?", "base_url = ?", "updated_at = ?"}
-		args := []any{opts.Model, opts.BaseURL, now}
+		setClauses := []string{}
+		args := []any{}
 		if opts.Provider != "" {
 			setClauses = append(setClauses, "provider = ?")
 			args = append(args, opts.Provider)
 		}
+		if opts.Model != "" {
+			setClauses = append(setClauses, "model = ?")
+			args = append(args, opts.Model)
+		}
+		if opts.BaseURL != "" {
+			setClauses = append(setClauses, "base_url = ?")
+			args = append(args, opts.BaseURL)
+		}
+		setClauses = append(setClauses, "updated_at = ?")
+		args = append(args, now)
 		if opts.OpenAIKey != "" {
 			setClauses = append(setClauses, "openai_key_enc = ?", "openai_key_nonce = ?")
 			args = append(args, openAIEnc, openAINonce)
