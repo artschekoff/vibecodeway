@@ -3,6 +3,17 @@
 
 import {appstore, cliclient, contextlog, jira, jiraservice, jirastore, slackstore, vcsservice} from '../models';
 
+export interface AISettingsResponse {
+  provider: string;
+  hasKey: boolean;
+  hasOpenAIKey: boolean;
+  hasAnthropicKey: boolean;
+  model: string;
+  baseUrl: string;
+  source: string;
+  updatedAt: string;
+}
+
 export function AddIssuesToContext(arg1:string,arg2:Array<string>):Promise<number>;
 
 export function AddSlackChannels(arg1:string,arg2:string,arg3:Array<slackstore.SlackChannelInput>):Promise<void>;
