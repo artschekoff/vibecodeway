@@ -336,12 +336,16 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 	if err != nil {
 		return nil, fmt.Errorf("loading issues: %w", err)
 	}
-	for i, issue := range issues {
-		comments, err := svc.jiraRepo.GetCommentsByIssue(ctx, issue.ID, false)
-		if err != nil {
-			return nil, fmt.Errorf("loading comments for %s: %w", issue.JiraKey, err)
-		}
-		issues[i].Comments = comments
+	issueIDs := make([]string, len(issues))
+	for i, iss := range issues {
+		issueIDs[i] = iss.ID
+	}
+	commentsByIssue, err := svc.jiraRepo.GetCommentsByIssues(ctx, issueIDs, false)
+	if err != nil {
+		return nil, fmt.Errorf("loading comments: %w", err)
+	}
+	for i, iss := range issues {
+		issues[i].Comments = commentsByIssue[iss.ID]
 	}
 	detail.Issues = issues
 

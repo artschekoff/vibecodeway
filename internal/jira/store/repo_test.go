@@ -232,6 +232,39 @@ func TestToggleCommentActive_NotFound(t *testing.T) {
 	assert.ErrorIs(t, err, jirastore.ErrNotFound)
 }
 
+func TestGetCommentsByIssues(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "ctx1")
+	require.NoError(t, err)
+
+	issue1, err := repo.UpsertIssue(ctx, c.ID, "PROJ-1", "issue 1", "open", "", "task", "", "2024-01-01T00:00:00Z")
+	require.NoError(t, err)
+	issue2, err := repo.UpsertIssue(ctx, c.ID, "PROJ-2", "issue 2", "open", "", "task", "", "2024-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	_, err = repo.UpsertComment(ctx, issue1, "jira-1", "alice", "first comment", "2024-01-01T00:00:00Z")
+	require.NoError(t, err)
+	_, err = repo.UpsertComment(ctx, issue1, "jira-2", "bob", "second comment", "2024-01-02T00:00:00Z")
+	require.NoError(t, err)
+	_, err = repo.UpsertComment(ctx, issue2, "jira-3", "carol", "other issue comment", "2024-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	got, err := repo.GetCommentsByIssues(ctx, []string{issue1, issue2}, false)
+	require.NoError(t, err)
+
+	assert.Len(t, got[issue1], 2)
+	assert.Len(t, got[issue2], 1)
+	assert.Equal(t, "first comment", got[issue1][0].Body)
+	assert.Equal(t, "other issue comment", got[issue2][0].Body)
+
+	// Empty input returns empty map, not an error.
+	empty, err := repo.GetCommentsByIssues(ctx, nil, false)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+}
+
 func TestFindContextsByJiraKeys(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()

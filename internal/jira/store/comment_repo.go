@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,6 +37,44 @@ func (r *Repo) GetCommentsByIssue(ctx context.Context, issueID string, activeOnl
 		comments = append(comments, c)
 	}
 	return comments, rows.Err()
+}
+
+// GetCommentsByIssues returns comments for multiple issues in a single query.
+// The result map is keyed by issueID. When activeOnly is true only is_active = 1
+// rows are returned. Empty input returns an empty map.
+func (r *Repo) GetCommentsByIssues(ctx context.Context, issueIDs []string, activeOnly bool) (map[string][]Comment, error) {
+	if len(issueIDs) == 0 {
+		return map[string][]Comment{}, nil
+	}
+	placeholders := strings.Repeat(",?", len(issueIDs))[1:]
+	args := make([]any, len(issueIDs))
+	for i, id := range issueIDs {
+		args[i] = id
+	}
+	q := `
+        SELECT id, issue_id, jira_id, author, body, jira_created, created_at, is_active, viewed_at, ai_processed_at
+        FROM jira_comments
+        WHERE issue_id IN (` + placeholders + `)`
+	if activeOnly {
+		q += " AND is_active = 1"
+	}
+	q += " ORDER BY issue_id, jira_created ASC"
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("bulk listing comments: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[string][]Comment, len(issueIDs))
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(&c.ID, &c.IssueID, &c.JiraID, &c.Author, &c.Body, &c.JiraCreated, &c.CreatedAt, &c.IsActive, &c.ViewedAt, &c.AiProcessedAt); err != nil {
+			return nil, fmt.Errorf("scanning comment: %w", err)
+		}
+		result[c.IssueID] = append(result[c.IssueID], c)
+	}
+	return result, rows.Err()
 }
 
 // ToggleCommentActive flips the is_active flag for the given comment and returns the updated record.
