@@ -467,3 +467,26 @@ export type WorkflowStatusValue =
   | 'in_progress'
   | 'needs_attention'
   | 'ready';
+
+// --- Organization ---
+
+export interface Organization {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Tab system ---
+
+export type TabType = "org" | "context" | "settings";
+
+export interface Tab {
+  id: string;          // unique tab instance ID (not entity ID)
+  type: TabType;
+  orgId?: string;      // present when type === "org"
+  contextId?: string;  // present when type === "context"
+  title: string;
+  pinned: boolean;
+}
