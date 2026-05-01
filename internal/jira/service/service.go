@@ -943,65 +943,74 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 		notify = onProgress[0]
 	}
 
-	results := make([]ReloadAllResult, 0, len(active))
+	results := make([]ReloadAllResult, len(active))
+	sem := make(chan struct{}, 4)
+
+	var wg sync.WaitGroup
 	for i, c := range active {
-		r := ReloadAllResult{ContextID: c.ID, ContextKey: c.Key}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, c appstore.Context) {
+			defer wg.Done()
+			defer func() { <-sem }()
 
-		before := svc.snapshotBefore(ctx, c.ID)
+			r := ReloadAllResult{ContextID: c.ID, ContextKey: c.Key}
+			before := svc.snapshotBefore(ctx, c.ID)
 
-		if notify != nil {
-			notify(i+1, len(active), c.Key, "")
-		}
-
-		type providerResult struct {
-			name  string
-			stats provider.Stats
-			err   error
-		}
-		ch := make(chan providerResult, len(svc.providers))
-
-		var wg sync.WaitGroup
-		for _, p := range svc.providers {
-			wg.Add(1)
-			go func(p provider.Provider) {
-				defer wg.Done()
-				stats, err := p.Reload(ctx, c.ID)
-				ch <- providerResult{name: p.Name(), stats: stats, err: err}
-			}(p)
-		}
-		wg.Wait()
-		close(ch)
-
-		var errs []string
-		for res := range ch {
-			if res.err != nil {
-				errs = append(errs, fmt.Sprintf("%s: %v", res.name, res.err))
-				svc.logger.Warn("reload: provider failed",
-					zap.String("provider", res.name), zap.String("contextID", c.ID), zap.Error(res.err))
-				continue
+			if notify != nil {
+				notify(i+1, len(active), c.Key, "")
 			}
-			// Map each provider's stats to the named result fields for frontend compatibility.
-			switch res.name {
-			case providerJira:
-				r.NewIssues += res.stats.ItemsRefreshed // new issues found by JQL
-				r.NewComments += res.stats.NewItems     // new comments
-			case providerSlack:
-				r.ThreadsRefreshed += res.stats.ItemsRefreshed
-				r.DMsRefreshed += res.stats.NewItems
-			case "vcs":
-				r.PRsRefreshed += res.stats.ItemsRefreshed
-				r.NewPRComments += res.stats.NewItems
-				r.NewNotifications += res.stats.NewNotifications
+
+			type providerResult struct {
+				name  string
+				stats provider.Stats
+				err   error
 			}
-		}
-		if len(errs) > 0 {
-			r.Error = strings.Join(errs, "; ")
-		}
+			ch := make(chan providerResult, len(svc.providers))
 
-		svc.recordContextChange(ctx, c.ID, contextlog.TriggerReload, before)
+			var pwg sync.WaitGroup
+			for _, p := range svc.providers {
+				pwg.Add(1)
+				go func(p provider.Provider) {
+					defer pwg.Done()
+					stats, err := p.Reload(ctx, c.ID)
+					ch <- providerResult{name: p.Name(), stats: stats, err: err}
+				}(p)
+			}
+			pwg.Wait()
+			close(ch)
 
-		results = append(results, r)
+			var errs []string
+			for res := range ch {
+				if res.err != nil {
+					errs = append(errs, fmt.Sprintf("%s: %v", res.name, res.err))
+					svc.logger.Warn("reload: provider failed",
+						zap.String("provider", res.name), zap.String("contextID", c.ID), zap.Error(res.err))
+					continue
+				}
+				// Map each provider's stats to the named result fields for frontend compatibility.
+				switch res.name {
+				case providerJira:
+					r.NewIssues += res.stats.ItemsRefreshed // new issues found by JQL
+					r.NewComments += res.stats.NewItems     // new comments
+				case providerSlack:
+					r.ThreadsRefreshed += res.stats.ItemsRefreshed
+					r.DMsRefreshed += res.stats.NewItems
+				case "vcs":
+					r.PRsRefreshed += res.stats.ItemsRefreshed
+					r.NewPRComments += res.stats.NewItems
+					r.NewNotifications += res.stats.NewNotifications
+				}
+			}
+			if len(errs) > 0 {
+				r.Error = strings.Join(errs, "; ")
+			}
+
+			svc.recordContextChange(ctx, c.ID, contextlog.TriggerReload, before)
+			results[i] = r
+		}(i, c)
 	}
+	wg.Wait()
 	return results, nil
 }
 

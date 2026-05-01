@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -64,4 +65,39 @@ func TestReloadAllContexts_ProvidersRunConcurrently(t *testing.T) {
 
 	assert.Less(t, elapsed, 150*time.Millisecond,
 		"providers should run concurrently")
+}
+
+// newTestContextService creates a minimal ContextService backed by a temp SQLite store.
+func newTestContextService(t *testing.T, providers ...provider.Provider) *ContextService {
+	t.Helper()
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	return NewContextService(s, nil, jirastore.NewRepo(s.DB()), slackstore.NewRepo(s.DB()), nil, logger, providers...)
+}
+
+// TestReloadAllContexts_ContextsRunConcurrently verifies that multiple contexts are
+// reloaded concurrently so that N contexts × delay finishes in roughly one delay's time.
+func TestReloadAllContexts_ContextsRunConcurrently(t *testing.T) {
+	delay := 60 * time.Millisecond
+	p := &slowProvider{name: "jira", delay: delay}
+
+	svc := newTestContextService(t, p)
+	ctx := context.Background()
+
+	// Create 3 contexts.
+	for i := 0; i < 3; i++ {
+		_, err := svc.store.CreateContext(ctx, fmt.Sprintf("ctx-%d", i))
+		require.NoError(t, err)
+	}
+
+	// contextLog is nil so snapshotBefore/recordContextChange are no-ops;
+	// elapsed includes ListContexts + goroutine fan-out with 3 contexts × 60ms providers.
+	start := time.Now()
+	results, err := svc.ReloadAllContexts(ctx)
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	assert.Len(t, results, 3)
+	// Sequential: 3 × 60ms = 180ms. Parallel: ~60ms. Threshold: 120ms gives 60ms headroom.
+	assert.Less(t, elapsed, 120*time.Millisecond, "contexts should reload concurrently")
 }
