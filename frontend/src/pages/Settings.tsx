@@ -188,7 +188,7 @@ export default function SettingsPage() {
       <div className="topbar">
         <button className="back-btn" onClick={() => navigate("/")}><ArrowLeft size={16} /> Back</button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 16, margin: 0 }}>Settings · OpenAI</h1>
+          <h1 style={{ fontSize: 16, margin: 0 }}>Settings</h1>
         </div>
       </div>
 
@@ -394,7 +394,12 @@ export default function SettingsPage() {
                       name="ai-provider"
                       value={p}
                       checked={provider === p}
-                      onChange={() => setProvider(p)}
+                      onChange={() => {
+                        setProvider(p);
+                        if (p === "openai") setModel("gpt-4.1");
+                        else if (p === "anthropic") setModel("claude-sonnet-4-6");
+                        else setModel("");
+                      }}
                     />
                     {p === "openai" ? "OpenAI" : p === "anthropic" ? "Anthropic (Claude)" : "Local (OpenAI-compatible)"}
                   </label>
