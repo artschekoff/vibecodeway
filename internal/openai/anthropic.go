@@ -58,8 +58,11 @@ func callAnthropic(ctx context.Context, apiKey, model string, messages []Message
 	}
 
 	var content string
-	if len(resp.Content) > 0 {
-		content = resp.Content[0].Text
+	for _, block := range resp.Content {
+		if block.Type == "text" {
+			content = block.Text
+			break
+		}
 	}
 
 	return &Response{

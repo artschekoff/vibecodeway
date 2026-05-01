@@ -172,12 +172,12 @@ func (c *Client) callOpenAI(ctx context.Context, apiKey, model, baseURL string, 
 // ChatCompletion sends messages to the configured LLM provider and returns the reply plus metadata.
 // Returns ErrNotConfigured when no API key is resolvable (for providers that require one).
 func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Response, error) {
-	apiKey, source, err := c.resolveAPIKey(ctx)
+	dbSettings, _, err := c.DescribeSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	dbSettings, _, err := c.DescribeSettings(ctx)
+	apiKey, source, err := c.resolveAPIKeyFromSettings(ctx, dbSettings)
 	if err != nil {
 		return nil, err
 	}
@@ -212,14 +212,9 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 	return resp, nil
 }
 
-// resolveAPIKey checks env first, then the encrypted DB row.
-// The DB key consulted depends on the configured provider.
-func (c *Client) resolveAPIKey(ctx context.Context) (string, Source, error) {
-	settings, err := c.store.GetAISettings(ctx)
-	if err != nil {
-		return "", SourceNone, fmt.Errorf("loading ai settings for key resolution: %w", err)
-	}
-
+// resolveAPIKeyFromSettings checks env first, then the encrypted DB row.
+// The DB key consulted depends on the provider in the supplied settings.
+func (c *Client) resolveAPIKeyFromSettings(ctx context.Context, settings *appstore.AISettings) (string, Source, error) {
 	switch settings.Provider {
 	case appstore.ProviderAnthropic:
 		if k := strings.TrimSpace(os.Getenv(EnvAnthropicAPIKey)); k != "" {
