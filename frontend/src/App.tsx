@@ -5,7 +5,7 @@ import ContextDetail from "./pages/ContextDetail";
 import Settings from "./pages/Settings";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
-import { SetSlackPassphrase } from "../wailsjs/go/main/App";
+import { SetSlackPassphrase, ListAllContexts } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
@@ -98,7 +98,7 @@ function AppShell() {
   const [showA11yBanner, setShowA11yBanner] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { openContextTab } = useTabContext();
+  const { openContextTab, tabs, forceCloseTab } = useTabContext();
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -124,6 +124,25 @@ function AppShell() {
       safeOff(offNoSelection, "hotkey:no-selection");
     };
   }, [showToast]);
+
+  // On mount: validate restored context tabs against live context list
+  useEffect(() => {
+    if (!isWailsContext()) return;
+    void (async () => {
+      try {
+        const all = await ListAllContexts();
+        const validIds = new Set((all ?? []).map((c) => c.id));
+        for (const tab of tabs) {
+          if (tab.type === "context" && tab.contextId && !validIds.has(tab.contextId)) {
+            forceCloseTab(tab.id);
+          }
+        }
+      } catch {
+        // best-effort — if the call fails, leave tabs as-is
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount only
 
   const handleAttach = useCallback(
     (contextKey: string, contextId: string) => {
