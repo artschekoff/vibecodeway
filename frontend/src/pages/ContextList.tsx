@@ -52,9 +52,7 @@ import {
   PickRepoDirectory,
   SetTrackedRepoPath,
   DismissReviewRequest,
-  // @ts-ignore
   ListOrganizations,
-  // @ts-ignore
   SetContextOrg,
   // @ts-ignore
   AddContextRelation,
