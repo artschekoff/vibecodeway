@@ -946,6 +946,7 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 	results := make([]ReloadAllResult, len(active))
 	sem := make(chan struct{}, 4)
 
+	var notifyMu sync.Mutex
 	var wg sync.WaitGroup
 	for i, c := range active {
 		wg.Add(1)
@@ -958,7 +959,9 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 			before := svc.snapshotBefore(ctx, c.ID)
 
 			if notify != nil {
+				notifyMu.Lock()
 				notify(i+1, len(active), c.Key, "")
+				notifyMu.Unlock()
 			}
 
 			type providerResult struct {

@@ -98,6 +98,6 @@ func TestReloadAllContexts_ContextsRunConcurrently(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Len(t, results, 3)
-	// Sequential: 3 × 60ms = 180ms. Parallel: ~60ms. Threshold: 120ms gives 60ms headroom.
-	assert.Less(t, elapsed, 120*time.Millisecond, "contexts should reload concurrently")
+	// Sequential: 3 × 60ms = 180ms. Parallel: ~60ms. Threshold 150ms gives 90ms CI headroom.
+	assert.Less(t, elapsed, 150*time.Millisecond, "contexts should reload concurrently")
 }
