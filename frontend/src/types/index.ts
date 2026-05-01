@@ -2,6 +2,7 @@ export interface Context {
   id: string;
   key: string;
   status: string;
+  orgId?: string;
   createdAt: string;
   updatedAt: string;
   issueCount?: number;

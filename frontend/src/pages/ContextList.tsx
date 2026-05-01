@@ -53,6 +53,10 @@ import {
   SetTrackedRepoPath,
   DismissReviewRequest,
   // @ts-ignore
+  ListOrganizations,
+  // @ts-ignore
+  SetContextOrg,
+  // @ts-ignore
   AddContextRelation,
   // @ts-ignore
   RemoveContextRelation,
@@ -62,7 +66,7 @@ import type {
   ContextText, Context, Issue, SlackChannel, SlackDMConfig,
   SlackSavePayload, TextFilesPayload, UploadedFile,
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
-  ContextRelation, RelationsPayload,
+  ContextRelation, RelationsPayload, Organization,
 } from "../types";
 import { effectiveStatus, effectiveComment, effectiveNextStep } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
@@ -221,6 +225,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [searchQuery, setSearchQuery] = useState("");
   const [matchedIDs, setMatchedIDs] = useState<Set<string> | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [orgs, setOrgs] = useState<Organization[]>([]);
 
   // ── Reviews state ──
   const [repoGroups, setRepoGroups] = useState<RepoGroup[]>([]);
@@ -320,6 +325,10 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     void checkAuth();
     void loadReviews();
   }, [load, checkAuth, loadReviews]);
+
+  useEffect(() => {
+    ListOrganizations().then((list: Organization[]) => setOrgs(list ?? [])).catch(() => {});
+  }, []);
 
   // ── Background refresh event listeners ──
   useEffect(() => {
@@ -836,6 +845,22 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                 </td>
                                 <td>
                                   <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                                    <select
+                                      className="btn-ghost"
+                                      style={{ fontSize: 11 }}
+                                      value={c.orgId ?? ""}
+                                      onChange={async (e) => {
+                                        await SetContextOrg(c.id, e.target.value);
+                                        void load();
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="Assign to organization"
+                                    >
+                                      <option value="">No org</option>
+                                      {orgs.map((o) => (
+                                        <option key={o.id} value={o.id}>{o.name}</option>
+                                      ))}
+                                    </select>
                                     <button className="btn-ghost" title="Edit" onClick={(e) => { e.stopPropagation(); void openEditForm(c); }}>
                                       <Pencil size={14} />
                                     </button>
