@@ -328,8 +328,8 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 
 	// Phase 1: fire all independent queries concurrently.
 	var (
-		mu          sync.Mutex
-		phase1Errs  []error
+		mu   sync.Mutex
+		errs []error
 
 		jp        *jirastore.JiraProvider
 		sp        *slackstore.SlackProvider
@@ -346,7 +346,7 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 
 	addErr := func(e error) {
 		mu.Lock()
-		phase1Errs = append(phase1Errs, e)
+		errs = append(errs, e)
 		mu.Unlock()
 	}
 
@@ -427,8 +427,8 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 	}
 	wg.Wait()
 
-	if len(phase1Errs) > 0 {
-		return nil, phase1Errs[0]
+	if len(errs) > 0 {
+		return nil, errs[0]
 	}
 
 	// Phase 2: fetch comments now that issue IDs and PR IDs are known.
@@ -464,8 +464,11 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 	}
 	wg2.Wait()
 
-	if len(phase1Errs) > 0 {
-		return nil, phase1Errs[0]
+	// Phase 2 error handling is asymmetric by design: Jira comment failures are
+	// fatal (matching original behavior) while VCS PR comment failures are
+	// non-fatal warnings (VCS data is supplementary).
+	if len(errs) > 0 {
+		return nil, errs[0]
 	}
 
 	// Assemble detail (single goroutine from here).
