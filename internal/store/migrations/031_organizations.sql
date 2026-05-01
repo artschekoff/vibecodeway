@@ -1,4 +1,4 @@
--- 031_organizations.sql
+-- +goose Up
 CREATE TABLE organizations (
   id         TEXT PRIMARY KEY,
   name       TEXT UNIQUE NOT NULL,

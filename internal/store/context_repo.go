@@ -79,7 +79,7 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		WHERE (? OR c.status = 'active')
 		GROUP BY c.id
-		ORDER BY c.sort_order ASC, c.updated_at DESC
+		ORDER BY c.sort_order ASC NULLS LAST, c.updated_at DESC
 	`, includeArchivedParam)
 	if err != nil {
 		return nil, fmt.Errorf("listing contexts: %w", err)
@@ -92,12 +92,12 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 	var c Context
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, key, status, created_at, updated_at,
+		`SELECT id, key, status, org_id, created_at, updated_at,
 		       ai_proposed_status, ai_proposed_comment, ai_proposed_next_step, ai_proposed_at,
 		       user_status_override, user_comment_override, user_next_step_override, user_override_updated_at
 		FROM contexts WHERE id = ?`,
 		id,
-	).Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
 		&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
 		&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -113,12 +113,12 @@ func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, error) {
 	var c Context
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, key, status, created_at, updated_at,
+		`SELECT id, key, status, org_id, created_at, updated_at,
 		       ai_proposed_status, ai_proposed_comment, ai_proposed_next_step, ai_proposed_at,
 		       user_status_override, user_comment_override, user_next_step_override, user_override_updated_at
 		FROM contexts WHERE key = ?`,
 		key,
-	).Scan(&c.ID, &c.Key, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
 		&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
 		&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {

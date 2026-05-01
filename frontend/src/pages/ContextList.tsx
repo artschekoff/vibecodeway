@@ -20,7 +20,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  ListAllContexts,
   ListContextsByOrg,
   CreateContext,
   UpdateContext,
@@ -379,6 +378,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     progress.begin("Creating Context", itemLabels);
     try {
       const ctx = await CreateContext(key);
+      if (orgId) await SetContextOrg(ctx.id, orgId);
       if (searchQuery.trim()) await SetJiraConfig(ctx.id, searchQuery.trim());
       for (const jiraKey of jiraKeys) {
         progress.next(`Adding issue ${jiraKey}`);

@@ -14,7 +14,7 @@ export default function HamburgerMenu() {
   const [showNewOrg, setShowNewOrg] = useState(false);
   const [editOrg, setEditOrg] = useState<Organization | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { openOrgTab, openSettingsTab } = useTabContext();
+  const { openOrgTab, openSettingsTab, tabs, closeTab } = useTabContext();
 
   const loadOrgs = useCallback(async () => {
     try {
@@ -49,8 +49,14 @@ export default function HamburgerMenu() {
 
   const handleDelete = async (org: Organization) => {
     if (!confirm(`Delete organization "${org.name}"? Contexts will be unassigned.`)) return;
-    await DeleteOrganization(org.id);
-    await loadOrgs();
+    try {
+      await DeleteOrganization(org.id);
+      const openTab = tabs.find((t) => t.type === "org" && t.orgId === org.id);
+      if (openTab) closeTab(openTab.id);
+      await loadOrgs();
+    } catch (err) {
+      alert(`Failed to delete organization: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   return (
