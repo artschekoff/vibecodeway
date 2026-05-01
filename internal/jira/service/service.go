@@ -9,6 +9,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/contextlog"
@@ -22,6 +23,11 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/workflow"
 	"go.uber.org/zap"
 )
+
+// commentLister is the subset of the Jira client used by syncIssueComments.
+type commentLister interface {
+	ListComments(ctx context.Context, issueKey string) ([]jira.Comment, error)
+}
 
 const (
 	// providerJira and providerSlack are the canonical provider name strings.
@@ -603,26 +609,52 @@ func (svc *ContextService) SyncAllComments(ctx context.Context, contextID string
 
 // syncIssueComments fetches and deduplicates comments for the given issues.
 // Errors per-issue are logged and skipped; returns the count of newly inserted comments.
-func syncIssueComments(ctx context.Context, jiraClient *jira.Client, jiraRepo *jirastore.Repo, issues []jirastore.Issue, logger *zap.Logger) (int, error) {
-	total := 0
-	for _, issue := range issues {
-		comments, err := jiraClient.ListComments(ctx, issue.JiraKey)
-		if err != nil {
-			logger.Warn("sync comments: list failed", zap.String("key", issue.JiraKey), zap.Error(err))
-			continue
-		}
-		for _, c := range comments {
-			inserted, err := jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
-			if err != nil {
-				logger.Warn("sync comments: upsert failed",
-					zap.String("issue", issue.JiraKey), zap.String("jiraID", c.ID), zap.Error(err))
-				continue
-			}
-			if inserted {
-				total++
-			}
-		}
+// Comments are fetched concurrently using a pool of 5 workers.
+func syncIssueComments(ctx context.Context, jiraClient commentLister, jiraRepo *jirastore.Repo, issues []jirastore.Issue, logger *zap.Logger) (int, error) {
+	const workers = 5
+
+	jobs := make(chan jirastore.Issue, len(issues))
+	for _, iss := range issues {
+		jobs <- iss
 	}
+	close(jobs)
+
+	var (
+		mu    sync.Mutex
+		total int
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			for issue := range jobs {
+				comments, err := jiraClient.ListComments(ctx, issue.JiraKey)
+				if err != nil {
+					logger.Warn("sync comments: list failed", zap.String("key", issue.JiraKey), zap.Error(err))
+					continue
+				}
+				if jiraRepo == nil {
+					continue
+				}
+				for _, c := range comments {
+					inserted, err := jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
+					if err != nil {
+						logger.Warn("sync comments: upsert failed",
+							zap.String("issue", issue.JiraKey), zap.String("jiraID", c.ID), zap.Error(err))
+						continue
+					}
+					if inserted {
+						mu.Lock()
+						total++
+						mu.Unlock()
+					}
+				}
+			}
+		}()
+	}
+	wg.Wait()
 	return total, nil
 }
 
