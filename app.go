@@ -16,7 +16,6 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/extract"
 	"github.com/artschekoff/context-consolidator/internal/hotkey"
-	"github.com/google/uuid"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
@@ -29,6 +28,7 @@ import (
 	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
 	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
@@ -72,7 +72,7 @@ func userVisibleExtractionError(err error, name string) string {
 // files that were rejected (e.g. images with no readable text).
 type UploadBatchResult struct {
 	Files  []appstore.ContextUploadedFile `json:"files"`
-	Errors []string                        `json:"errors"`
+	Errors []string                       `json:"errors"`
 }
 
 // UploadPreviewBatchResult is returned by PickAndExtractFilesPreview.
@@ -794,42 +794,49 @@ func (a *App) ApplyChatSuggestion(messageID string) (*contextlog.ConsolidatedLog
 
 // --- AI settings ---
 
-// AISettingsResponse is the shape returned to the frontend; the raw API key is never included.
+// AISettingsResponse is the shape returned to the frontend; raw API keys are never included.
 type AISettingsResponse struct {
-	HasKey    bool   `json:"hasKey"`
-	Model     string `json:"model"`
-	BaseURL   string `json:"baseUrl"`
-	Source    string `json:"source"`
-	UpdatedAt string `json:"updatedAt"`
+	Provider        string `json:"provider"`
+	HasKey          bool   `json:"hasKey"`
+	HasOpenAIKey    bool   `json:"hasOpenAIKey"`
+	HasAnthropicKey bool   `json:"hasAnthropicKey"`
+	Model           string `json:"model"`
+	BaseURL         string `json:"baseUrl"`
+	Source          string `json:"source"`
+	UpdatedAt       string `json:"updatedAt"`
 }
 
-// GetAISettings returns the current AI configuration metadata (without the raw key).
+// GetAISettings returns the current AI configuration metadata (without the raw keys).
 func (a *App) GetAISettings() (*AISettingsResponse, error) {
 	result, err := a.cliRunner.GetAISettings(a.ctx)
 	if err != nil {
 		return nil, err
 	}
 	return &AISettingsResponse{
-		HasKey:    result.HasKey,
-		Model:     result.Model,
-		BaseURL:   result.BaseURL,
-		Source:    result.Source,
-		UpdatedAt: result.UpdatedAt,
+		Provider:        result.Provider,
+		HasKey:          result.HasKey,
+		HasOpenAIKey:    result.HasOpenAIKey,
+		HasAnthropicKey: result.HasAnthropicKey,
+		Model:           result.Model,
+		BaseURL:         result.BaseURL,
+		Source:          result.Source,
+		UpdatedAt:       result.UpdatedAt,
 	}, nil
 }
 
-// SetAISettings upserts the AI configuration. When apiKey is non-empty it is encrypted
-// with the current Slack passphrase; passing an empty apiKey preserves the existing key
-// and only updates model / baseURL.
-func (a *App) SetAISettings(apiKey, model, baseURL string) error {
+// SetAISettings upserts the AI configuration for the given provider.
+// Empty key strings preserve existing stored keys.
+func (a *App) SetAISettings(provider, openaiKey, anthropicKey, model, baseURL string) error {
 	passphrase := a.slackRunner.Passphrase()
-	if apiKey != "" && passphrase == "" {
+	if (openaiKey != "" || anthropicKey != "") && passphrase == "" {
 		return fmt.Errorf("set Slack passphrase first (used to encrypt the API key)")
 	}
 	_, err := a.cliRunner.SetAISettings(a.ctx, cliclient.SetAISettingsOpts{
-		APIKey:  apiKey,
-		Model:   model,
-		BaseURL: baseURL,
+		Provider:     provider,
+		APIKey:       openaiKey,
+		AnthropicKey: anthropicKey,
+		Model:        model,
+		BaseURL:      baseURL,
 	})
 	return err
 }
