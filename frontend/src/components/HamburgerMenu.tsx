@@ -1,59 +1,158 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import { useTabContext } from "../contexts/TabContext";
+import OrgFormModal from "./OrgFormModal";
+import {
+  ListOrganizations,
+  DeleteOrganization,
+} from "../../wailsjs/go/main/App";
+import type { Organization } from "../types";
 
 export default function HamburgerMenu() {
   const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [showNewOrg, setShowNewOrg] = useState(false);
+  const [editOrg, setEditOrg] = useState<Organization | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { openOrgTab, openSettingsTab } = useTabContext();
+
+  const loadOrgs = useCallback(async () => {
+    try {
+      const list = await ListOrganizations();
+      setOrgs(list ?? []);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    void loadOrgs();
+  }, [loadOrgs]);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadOrgs();
+  }, [open, loadOrgs]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
     };
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Close on navigation
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
-
-  const go = (path: string) => {
-    navigate(path);
+  const handleOrgClick = (org: Organization) => {
+    openOrgTab(org.id, org.name);
     setOpen(false);
   };
 
-  return (
-    <div className="app-menu" ref={menuRef}>
-      <button
-        className="app-menu-btn"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Menu"
-        aria-expanded={open}
-      >
-        <span className="app-menu-icon" />
-        <span className="app-menu-icon" />
-        <span className="app-menu-icon" />
-      </button>
+  const handleDelete = async (org: Organization) => {
+    if (!confirm(`Delete organization "${org.name}"? Contexts will be unassigned.`)) return;
+    await DeleteOrganization(org.id);
+    await loadOrgs();
+  };
 
-      {open && (
-        <div className="app-menu-dropdown">
-          <button className="app-menu-item" onClick={() => go("/")}>
-            Home
-          </button>
-          <div className="app-menu-divider" />
-          <button className="app-menu-item" onClick={() => go("/settings")}>
-            Settings
-          </button>
-          <button className="app-menu-item app-menu-item--sub" onClick={() => go("/settings#hotkeys")}>
-            Hotkeys
-          </button>
-        </div>
+  return (
+    <>
+      <div className="app-menu" ref={menuRef}>
+        <button
+          className="app-menu-btn"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Menu"
+          aria-expanded={open}
+        >
+          <span className="app-menu-icon" />
+          <span className="app-menu-icon" />
+          <span className="app-menu-icon" />
+        </button>
+
+        {open && (
+          <div className="app-menu-dropdown">
+            {/* Organizations section */}
+            <div className="app-menu-section-header">
+              <span>Organizations</span>
+              <button
+                onClick={() => { setShowNewOrg(true); setOpen(false); }}
+                title="New organization"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+
+            {orgs.length === 0 && (
+              <div style={{ padding: "4px 12px", fontSize: 12, color: "var(--text-muted)" }}>
+                No organizations yet
+              </div>
+            )}
+
+            {orgs.map((org) => (
+              <div
+                key={org.id}
+                className="app-menu-org-item"
+                onClick={() => handleOrgClick(org)}
+              >
+                <span className="app-menu-org-item__name">{org.name}</span>
+                <div
+                  style={{ display: "flex", gap: 2 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", padding: "2px" }}
+                    title="Rename"
+                    onClick={() => { setEditOrg(org); setOpen(false); }}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", padding: "2px" }}
+                    title="Delete"
+                    onClick={() => void handleDelete(org)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            <div className="app-menu-divider" />
+
+            <button
+              className="app-menu-item"
+              onClick={() => { openSettingsTab(); setOpen(false); }}
+            >
+              Settings
+            </button>
+            <button
+              className="app-menu-item app-menu-item--sub"
+              onClick={() => { openSettingsTab(); setOpen(false); }}
+            >
+              Hotkeys
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showNewOrg && (
+        <OrgFormModal
+          onSave={(saved) => {
+            setOrgs((prev) => [...prev, saved]);
+            setShowNewOrg(false);
+          }}
+          onClose={() => setShowNewOrg(false)}
+        />
       )}
-    </div>
+
+      {editOrg && (
+        <OrgFormModal
+          org={editOrg}
+          onSave={(saved) => {
+            setOrgs((prev) => prev.map((o) => (o.id === saved.id ? saved : o)));
+            setEditOrg(null);
+          }}
+          onClose={() => setEditOrg(null)}
+        />
+      )}
+    </>
   );
 }
