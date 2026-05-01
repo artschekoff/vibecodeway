@@ -185,7 +185,7 @@ interface ContextListProps {
 }
 
 export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) {
-  const { openContextTab, openNewContextTab, openSettingsTab } = useTabContext();
+  const { openContextTab, openNewContextTab, openSettingsTab, tabs, forceCloseTab } = useTabContext();
   const progress = useProgress();
 
   // ── Tab state (persisted) ──
@@ -507,8 +507,17 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    try { await DeleteContext(deleteTarget.id); setDeleteTarget(null); load(); }
-    finally { setDeleting(false); }
+    const deletedId = deleteTarget.id;
+    try {
+      await DeleteContext(deletedId);
+      setDeleteTarget(null);
+      // Close the open tab before reloading, so it's removed regardless of reload result
+      const openTab = tabs.find((t) => t.type === "context" && t.contextId === deletedId);
+      if (openTab) forceCloseTab(openTab.id);
+      void load();
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleReloadAll = async () => {
@@ -721,8 +730,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         className="needs-attention-item"
                         role="button"
                         tabIndex={0}
-                        onClick={() => openContextTab(c.id, c.key)}
-                        onKeyDown={(e) => e.key === "Enter" && openContextTab(c.id, c.key)}
+                        onClick={() => openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name)}
+                        onKeyDown={(e) => e.key === "Enter" && openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name)}
                       >
                         <span className="needs-attention-key">{c.key}</span>
                         {comment && <span className="needs-attention-comment">{comment}</span>}
@@ -776,7 +785,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                             id={c.id}
                             disabled={!isDraggingEnabled}
                             className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
-                            onClick={() => openContextTab(c.id, c.key)}
+                            onClick={() => openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name)}
                           >
                             {(dragHandleProps) => (
                               <>
@@ -1053,8 +1062,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                       {...(!r.error && {
                         role: "button" as const,
                         tabIndex: 0,
-                        onClick: () => { openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); },
-                        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); } },
+                        onClick: () => { const orgName = orgs.find((o) => o.id === contexts.find((c) => c.id === r.contextId)?.orgId)?.name; openNewContextTab(r.contextId, r.contextKey, orgName); setReloadResults(null); },
+                        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const orgName = orgs.find((o) => o.id === contexts.find((c) => c.id === r.contextId)?.orgId)?.name; openNewContextTab(r.contextId, r.contextKey, orgName); setReloadResults(null); } },
                       })}
                     >
                       <span className="reload-result-key">{r.contextKey}</span>
