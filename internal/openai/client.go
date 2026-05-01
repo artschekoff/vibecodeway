@@ -34,7 +34,7 @@ const (
 
 // ErrNotConfigured is returned by ChatCompletion when no API key is available
 // either from the environment or the local database.
-var ErrNotConfigured = errors.New("openai not configured — set OPENAI_API_KEY or save a key in Settings")
+var ErrNotConfigured = errors.New("llm not configured — set an API key in Settings")
 
 // Message mirrors a chat-completion message at the package boundary.
 type Message struct {
@@ -82,49 +82,60 @@ func (c *Client) DescribeSettings(ctx context.Context) (*appstore.AISettings, So
 	if err != nil {
 		return nil, SourceNone, fmt.Errorf("loading ai settings: %w", err)
 	}
-	envKey := strings.TrimSpace(os.Getenv(EnvAPIKey))
-	src := SourceNone
-	switch {
-	case envKey != "":
-		src = SourceEnv
-	case dbSettings.HasKey:
-		src = SourceDB
-	}
 
 	effective := *dbSettings
-	if envModel := strings.TrimSpace(os.Getenv(EnvModel)); envModel != "" {
-		effective.Model = envModel
+	src := SourceNone
+
+	switch dbSettings.Provider {
+	case appstore.ProviderAnthropic:
+		envKey := strings.TrimSpace(os.Getenv(EnvAnthropicAPIKey))
+		switch {
+		case envKey != "":
+			src = SourceEnv
+		case dbSettings.HasAnthropicKey:
+			src = SourceDB
+		}
+		if effective.Model == "" {
+			effective.Model = DefaultAnthropicModel
+		}
+
+	case appstore.ProviderLocal:
+		src = SourceDB // always considered configured; base URL is what matters
+		if effective.Model == "" {
+			effective.Model = "llama3.2"
+		}
+		if envBase := strings.TrimSpace(os.Getenv(EnvBaseURL)); envBase != "" {
+			effective.BaseURL = envBase
+		}
+
+	default: // openai
+		envKey := strings.TrimSpace(os.Getenv(EnvAPIKey))
+		switch {
+		case envKey != "":
+			src = SourceEnv
+		case dbSettings.HasOpenAIKey:
+			src = SourceDB
+		}
+		if envModel := strings.TrimSpace(os.Getenv(EnvModel)); envModel != "" {
+			effective.Model = envModel
+		}
+		if effective.Model == "" {
+			effective.Model = contextlog.DefaultModel
+		}
+		if envBase := strings.TrimSpace(os.Getenv(EnvBaseURL)); envBase != "" {
+			effective.BaseURL = envBase
+		}
 	}
-	if effective.Model == "" {
-		effective.Model = contextlog.DefaultModel
-	}
-	if envBase := strings.TrimSpace(os.Getenv(EnvBaseURL)); envBase != "" {
-		effective.BaseURL = envBase
-	}
-	effective.HasKey = src != SourceNone
+
+	effective.HasKey = src != SourceNone || dbSettings.Provider == appstore.ProviderLocal
 	return &effective, src, nil
 }
 
-// ChatCompletion sends messages to OpenAI and returns the assistant reply plus metadata.
-// Returns ErrNotConfigured when no API key is resolvable.
-func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Response, error) {
-	apiKey, source, err := c.resolveAPIKey(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if apiKey == "" {
-		return nil, ErrNotConfigured
-	}
-
-	dbSettings, _, err := c.DescribeSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+// callOpenAI dispatches to the OpenAI-compatible API (used for "openai" and "local" providers).
+func (c *Client) callOpenAI(ctx context.Context, apiKey, model, baseURL string, messages []Message) (*Response, error) {
 	cfg := openai.DefaultConfig(apiKey)
-	if dbSettings.BaseURL != "" {
-		cfg.BaseURL = strings.TrimRight(dbSettings.BaseURL, "/") + "/v1"
-		// Users commonly paste the full /v1 URL; normalise to avoid /v1/v1.
+	if baseURL != "" {
+		cfg.BaseURL = strings.TrimRight(baseURL, "/") + "/v1"
 		cfg.BaseURL = strings.Replace(cfg.BaseURL, "/v1/v1", "/v1", 1)
 	}
 	sdkClient := openai.NewClientWithConfig(cfg)
@@ -138,7 +149,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 	}
 
 	resp, err := sdkClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:    dbSettings.Model,
+		Model:    model,
 		Messages: sdkMessages,
 	})
 	if err != nil {
@@ -147,43 +158,128 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 	if len(resp.Choices) == 0 {
 		return nil, errors.New("openai returned no choices")
 	}
-	out := &Response{
+	return &Response{
 		Content: resp.Choices[0].Message.Content,
-		Model:   dbSettings.Model,
+		Model:   model,
 		Usage: Usage{
 			PromptTokens:     resp.Usage.PromptTokens,
 			CompletionTokens: resp.Usage.CompletionTokens,
 			TotalTokens:      resp.Usage.TotalTokens,
 		},
-		Source: source,
+	}, nil
+}
+
+// ChatCompletion sends messages to the configured LLM provider and returns the reply plus metadata.
+// Returns ErrNotConfigured when no API key is resolvable (for providers that require one).
+func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Response, error) {
+	apiKey, source, err := c.resolveAPIKey(ctx)
+	if err != nil {
+		return nil, err
 	}
-	c.logger.Info("openai.chat_completion",
-		zap.String("model", out.Model),
-		zap.Int("promptTokens", out.Usage.PromptTokens),
-		zap.Int("completionTokens", out.Usage.CompletionTokens),
+
+	dbSettings, _, err := c.DescribeSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if apiKey == "" {
+		if dbSettings.Provider == appstore.ProviderLocal {
+			apiKey = "local" // go-openai requires non-empty; local servers typically ignore it
+		} else {
+			return nil, ErrNotConfigured
+		}
+	}
+
+	var resp *Response
+	switch dbSettings.Provider {
+	case appstore.ProviderAnthropic:
+		resp, err = callAnthropic(ctx, apiKey, dbSettings.Model, messages)
+	default: // openai, local
+		resp, err = c.callOpenAI(ctx, apiKey, dbSettings.Model, dbSettings.BaseURL, messages)
+	}
+	if err != nil {
+		return nil, err
+	}
+	resp.Source = source
+
+	c.logger.Info("llm.chat_completion",
+		zap.String("provider", dbSettings.Provider),
+		zap.String("model", resp.Model),
+		zap.Int("promptTokens", resp.Usage.PromptTokens),
+		zap.Int("completionTokens", resp.Usage.CompletionTokens),
 		zap.String("source", string(source)),
 	)
-	return out, nil
+	return resp, nil
 }
 
 // resolveAPIKey checks env first, then the encrypted DB row.
+// The DB key consulted depends on the configured provider.
 func (c *Client) resolveAPIKey(ctx context.Context) (string, Source, error) {
-	if k := strings.TrimSpace(os.Getenv(EnvAPIKey)); k != "" {
-		return k, SourceEnv, nil
-	}
-	if c.passphrase == nil {
-		return "", SourceNone, nil
-	}
-	pass := c.passphrase()
-	if pass == "" {
-		return "", SourceNone, nil
-	}
-	key, err := c.store.GetAIOpenAIKey(ctx, pass)
-	if errors.Is(err, appstore.ErrAIKeyNotSet) {
-		return "", SourceNone, nil
-	}
+	settings, err := c.store.GetAISettings(ctx)
 	if err != nil {
-		return "", SourceNone, err
+		return "", SourceNone, fmt.Errorf("loading ai settings for key resolution: %w", err)
 	}
-	return key, SourceDB, nil
+
+	switch settings.Provider {
+	case appstore.ProviderAnthropic:
+		if k := strings.TrimSpace(os.Getenv(EnvAnthropicAPIKey)); k != "" {
+			return k, SourceEnv, nil
+		}
+		if c.passphrase == nil {
+			return "", SourceNone, nil
+		}
+		pass := c.passphrase()
+		if pass == "" {
+			return "", SourceNone, nil
+		}
+		key, err := c.store.GetAIAnthropicKey(ctx, pass)
+		if errors.Is(err, appstore.ErrAIKeyNotSet) {
+			return "", SourceNone, nil
+		}
+		if err != nil {
+			return "", SourceNone, err
+		}
+		return key, SourceDB, nil
+
+	case appstore.ProviderLocal:
+		// Local endpoints may not require a key; use env/db key if set, otherwise empty.
+		if k := strings.TrimSpace(os.Getenv(EnvAPIKey)); k != "" {
+			return k, SourceEnv, nil
+		}
+		if c.passphrase == nil {
+			return "", SourceDB, nil
+		}
+		pass := c.passphrase()
+		if pass == "" {
+			return "", SourceDB, nil
+		}
+		key, err := c.store.GetAIOpenAIKey(ctx, pass)
+		if errors.Is(err, appstore.ErrAIKeyNotSet) {
+			return "", SourceDB, nil
+		}
+		if err != nil {
+			return "", SourceNone, err
+		}
+		return key, SourceDB, nil
+
+	default: // openai
+		if k := strings.TrimSpace(os.Getenv(EnvAPIKey)); k != "" {
+			return k, SourceEnv, nil
+		}
+		if c.passphrase == nil {
+			return "", SourceNone, nil
+		}
+		pass := c.passphrase()
+		if pass == "" {
+			return "", SourceNone, nil
+		}
+		key, err := c.store.GetAIOpenAIKey(ctx, pass)
+		if errors.Is(err, appstore.ErrAIKeyNotSet) {
+			return "", SourceNone, nil
+		}
+		if err != nil {
+			return "", SourceNone, err
+		}
+		return key, SourceDB, nil
+	}
 }
