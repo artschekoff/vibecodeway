@@ -1049,11 +1049,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   return (
                     <div
                       key={r.contextId}
-                      className={`reload-result-item reload-result-item--clickable${hasNew ? " reload-result-item--new" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => { openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); }}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); } }}
+                      className={`reload-result-item${!r.error ? " reload-result-item--clickable" : ""}${hasNew ? " reload-result-item--new" : ""}`}
+                      {...(!r.error && {
+                        role: "button" as const,
+                        tabIndex: 0,
+                        onClick: () => { openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); },
+                        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openNewContextTab(r.contextId, r.contextKey); setReloadResults(null); } },
+                      })}
                     >
                       <span className="reload-result-key">{r.contextKey}</span>
                       <span className="reload-result-summary">
