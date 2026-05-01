@@ -12,6 +12,7 @@ interface TabContextValue {
   activeTabId: string | null;
   openOrgTab: (orgId: string, orgName: string) => void;
   openContextTab: (contextId: string, contextKey: string) => void;
+  openNewContextTab: (contextId: string, contextKey: string) => void;
   openSettingsTab: () => void;
   closeTab: (tabId: string) => void;
   pinTab: (tabId: string) => void;
@@ -82,6 +83,23 @@ export function TabProvider({ children }: { children: ReactNode }) {
     [focusOrOpen]
   );
 
+  const openNewContextTab = useCallback(
+    (contextId: string, contextKey: string) => {
+      setTabs((prev) => {
+        const tab: Tab = {
+          id: newTabId(),
+          type: "context" as const,
+          contextId,
+          title: contextKey,
+          pinned: false,
+        };
+        setActiveTabId(tab.id);
+        return [...prev, tab];
+      });
+    },
+    []
+  );
+
   const openSettingsTab = useCallback(() => {
     focusOrOpen(
       (t) => t.type === "settings",
@@ -134,6 +152,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         activeTabId,
         openOrgTab,
         openContextTab,
+        openNewContextTab,
         openSettingsTab,
         closeTab,
         pinTab,
