@@ -392,14 +392,18 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 		if err != nil {
 			svc.logger.Warn("loading vcs prs failed", zap.String("contextID", id), zap.Error(err))
 		} else {
-			// Load comments for each PR.
+			// Load comments for all PRs in a single batch query.
+			prIDs := make([]string, len(prs))
 			for i, pr := range prs {
-				comments, err := svc.vcsStore.PullRequests.ListCommentsForPR(ctx, pr.ID)
-				if err != nil {
-					svc.logger.Warn("loading pr comments failed", zap.String("prID", pr.ID), zap.Error(err))
-					continue
+				prIDs[i] = pr.ID
+			}
+			commentsByPR, err := svc.vcsStore.PullRequests.ListCommentsForPRs(ctx, prIDs)
+			if err != nil {
+				svc.logger.Warn("loading pr comments failed", zap.Error(err))
+			} else {
+				for i, pr := range prs {
+					prs[i].Comments = vcsstore.BuildCommentTree(commentsByPR[pr.ID])
 				}
-				prs[i].Comments = vcsstore.BuildCommentTree(comments)
 			}
 			detail.PullRequests = prs
 		}

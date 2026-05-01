@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -248,6 +249,45 @@ func (r *PRRepo) ListCommentsForPRFiltered(ctx context.Context, prID string, inc
 	}
 	defer func() { _ = rows.Close() }()
 	return r.scanComments(rows)
+}
+
+// ListCommentsForPRs returns comments for multiple PRs in a single query.
+// The result map is keyed by prID. Empty input returns an empty map.
+func (r *PRRepo) ListCommentsForPRs(ctx context.Context, prIDs []string) (map[string][]PRComment, error) {
+	if len(prIDs) == 0 {
+		return map[string][]PRComment{}, nil
+	}
+	placeholders := strings.Repeat(",?", len(prIDs))[1:]
+	args := make([]any, len(prIDs))
+	for i, id := range prIDs {
+		args[i] = id
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, pr_id, external_id, parent_id, comment_type, author, body, path, line,
+		       is_resolved, in_reply_to_id, comment_created_at, comment_updated_at, viewed_at, ai_processed_at
+		FROM vcs_pr_comments
+		WHERE pr_id IN (`+placeholders+`)
+		ORDER BY comment_created_at ASC
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("bulk list pr comments: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[string][]PRComment, len(prIDs))
+	for rows.Next() {
+		var c PRComment
+		var resolved int
+		if err := rows.Scan(
+			&c.ID, &c.PRID, &c.ExternalID, &c.ParentID, &c.CommentType, &c.Author, &c.Body,
+			&c.Path, &c.Line, &resolved, &c.InReplyToID, &c.CommentCreatedAt, &c.CommentUpdatedAt, &c.ViewedAt, &c.AiProcessedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan vcs comment: %w", err)
+		}
+		c.IsResolved = resolved == 1
+		result[c.PRID] = append(result[c.PRID], c)
+	}
+	return result, rows.Err()
 }
 
 // BuildCommentTree takes a flat list of comments and nests replies under their parents.
