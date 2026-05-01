@@ -949,31 +949,49 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 
 		before := svc.snapshotBefore(ctx, c.ID)
 
-		var errs []string
+		if notify != nil {
+			notify(i+1, len(active), c.Key, "")
+		}
+
+		type providerResult struct {
+			name  string
+			stats provider.Stats
+			err   error
+		}
+		ch := make(chan providerResult, len(svc.providers))
+
+		var wg sync.WaitGroup
 		for _, p := range svc.providers {
-			// Notify before each provider so the frontend shows which step is running.
-			if notify != nil {
-				notify(i+1, len(active), c.Key, p.Name())
-			}
-			stats, err := p.Reload(ctx, c.ID)
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("%s: %v", p.Name(), err))
+			wg.Add(1)
+			go func(p provider.Provider) {
+				defer wg.Done()
+				stats, err := p.Reload(ctx, c.ID)
+				ch <- providerResult{name: p.Name(), stats: stats, err: err}
+			}(p)
+		}
+		wg.Wait()
+		close(ch)
+
+		var errs []string
+		for res := range ch {
+			if res.err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v", res.name, res.err))
 				svc.logger.Warn("reload: provider failed",
-					zap.String("provider", p.Name()), zap.String("contextID", c.ID), zap.Error(err))
+					zap.String("provider", res.name), zap.String("contextID", c.ID), zap.Error(res.err))
 				continue
 			}
 			// Map each provider's stats to the named result fields for frontend compatibility.
-			switch p.Name() {
+			switch res.name {
 			case providerJira:
-				r.NewIssues += stats.ItemsRefreshed // new issues found by JQL
-				r.NewComments += stats.NewItems     // new comments
+				r.NewIssues += res.stats.ItemsRefreshed // new issues found by JQL
+				r.NewComments += res.stats.NewItems     // new comments
 			case providerSlack:
-				r.ThreadsRefreshed += stats.ItemsRefreshed
-				r.DMsRefreshed += stats.NewItems
+				r.ThreadsRefreshed += res.stats.ItemsRefreshed
+				r.DMsRefreshed += res.stats.NewItems
 			case "vcs":
-				r.PRsRefreshed += stats.ItemsRefreshed
-				r.NewPRComments += stats.NewItems
-				r.NewNotifications += stats.NewNotifications
+				r.PRsRefreshed += res.stats.ItemsRefreshed
+				r.NewPRComments += res.stats.NewItems
+				r.NewNotifications += res.stats.NewNotifications
 			}
 		}
 		if len(errs) > 0 {
