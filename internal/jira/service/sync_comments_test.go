@@ -34,6 +34,8 @@ func TestSyncIssueComments_AllIssuesFetched(t *testing.T) {
 	stub := &stubCommentLister{}
 	total, err := syncIssueComments(ctx, stub, nil, issues, logger)
 	require.NoError(t, err)
-	assert.Equal(t, int32(20), stub.calls.Load(), "all issues must be fetched")
+	// nil jiraRepo now causes an early return before spawning goroutines;
+	// no ListComments calls are expected.
+	assert.Equal(t, int32(0), stub.calls.Load(), "nil repo early-returns without fetching")
 	assert.Equal(t, 0, total)
 }

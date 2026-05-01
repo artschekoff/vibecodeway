@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/contextlog"
@@ -609,9 +610,13 @@ func (svc *ContextService) SyncAllComments(ctx context.Context, contextID string
 
 // syncIssueComments fetches and deduplicates comments for the given issues.
 // Errors per-issue are logged and skipped; returns the count of newly inserted comments.
-// Comments are fetched concurrently using a pool of 5 workers.
+// Comments are fetched concurrently using a pool of up to 5 workers.
 func syncIssueComments(ctx context.Context, jiraClient commentLister, jiraRepo *jirastore.Repo, issues []jirastore.Issue, logger *zap.Logger) (int, error) {
-	const workers = 5
+	if len(issues) == 0 || jiraRepo == nil {
+		return 0, nil
+	}
+
+	workers := min(5, len(issues))
 
 	jobs := make(chan jirastore.Issue, len(issues))
 	for _, iss := range issues {
@@ -619,10 +624,7 @@ func syncIssueComments(ctx context.Context, jiraClient commentLister, jiraRepo *
 	}
 	close(jobs)
 
-	var (
-		mu    sync.Mutex
-		total int
-	)
+	var total atomic.Int64
 
 	var wg sync.WaitGroup
 	wg.Add(workers)
@@ -635,9 +637,6 @@ func syncIssueComments(ctx context.Context, jiraClient commentLister, jiraRepo *
 					logger.Warn("sync comments: list failed", zap.String("key", issue.JiraKey), zap.Error(err))
 					continue
 				}
-				if jiraRepo == nil {
-					continue
-				}
 				for _, c := range comments {
 					inserted, err := jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
 					if err != nil {
@@ -646,16 +645,14 @@ func syncIssueComments(ctx context.Context, jiraClient commentLister, jiraRepo *
 						continue
 					}
 					if inserted {
-						mu.Lock()
-						total++
-						mu.Unlock()
+						total.Add(1)
 					}
 				}
 			}
 		}()
 	}
 	wg.Wait()
-	return total, nil
+	return int(total.Load()), nil
 }
 
 // LoadSlackContext calls slack-cli load-context, stores the markdown output for the given thread.
