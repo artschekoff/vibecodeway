@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
-import { useNavigate } from "react-router-dom";
+import { useTabContext } from "../contexts/TabContext";
 import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy } from "lucide-react";
 import {
   DndContext,
@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ListAllContexts,
+  ListContextsByOrg,
   CreateContext,
   UpdateContext,
   DeleteContext,
@@ -177,8 +178,13 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 type HomeTab = "contexts" | "reviews";
 
-export default function ContextList() {
-  const navigate = useNavigate();
+interface ContextListProps {
+  orgId: string;
+  tabId: string;
+}
+
+export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) {
+  const { openContextTab, openSettingsTab } = useTabContext();
   const progress = useProgress();
 
   // ── Tab state (persisted) ──
@@ -266,14 +272,14 @@ export default function ContextList() {
   // ── Load contexts ──
   const load = useCallback(async () => {
     try {
-      const list = await ListAllContexts();
+      const list = await ListContextsByOrg(orgId);
       setContexts(list ?? []);
     } catch {
       // Wails bridge not available or load failed
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [orgId]);
 
   // ── Load reviews ──
   const loadReviews = useCallback(async () => {
@@ -671,7 +677,7 @@ export default function ContextList() {
                   ? <span className="btn-with-spinner"><Spinner size={14} color="var(--text)" /> Reloading…</span>
                   : <><RotateCcw size={16} /> Reload All</>}
               </button>
-              <button className="btn-ghost topbar-settings-btn" onClick={() => navigate("/settings")} title="Settings">
+              <button className="btn-ghost topbar-settings-btn" onClick={() => openSettingsTab()} title="Settings">
                 <Settings size={20} />
               </button>
               <button className="btn-primary" onClick={() => setShowForm(true)}>+ New Context</button>
@@ -681,7 +687,7 @@ export default function ContextList() {
 
         {activeTab === "reviews" && (
           <div className="topbar-actions">
-            <button className="btn-ghost topbar-settings-btn" onClick={() => navigate("/settings")} title="Settings">
+            <button className="btn-ghost topbar-settings-btn" onClick={() => openSettingsTab()} title="Settings">
               <Settings size={20} />
             </button>
           </div>
@@ -708,8 +714,8 @@ export default function ContextList() {
                         className="needs-attention-item"
                         role="button"
                         tabIndex={0}
-                        onClick={() => navigate(`/context/${c.id}`)}
-                        onKeyDown={(e) => e.key === "Enter" && navigate(`/context/${c.id}`)}
+                        onClick={() => openContextTab(c.id, c.key)}
+                        onKeyDown={(e) => e.key === "Enter" && openContextTab(c.id, c.key)}
                       >
                         <span className="needs-attention-key">{c.key}</span>
                         {comment && <span className="needs-attention-comment">{comment}</span>}
@@ -745,6 +751,7 @@ export default function ContextList() {
                         <th style={{ width: 20 }}></th>
                         <th style={{ width: 40 }}>Active</th>
                         <th>Key</th>
+                        <th style={{ width: 120 }}>Status</th>
                         <th style={{ width: 88 }}></th>
                         <th>Issues</th>
                         <th>Unread</th>
@@ -762,7 +769,7 @@ export default function ContextList() {
                             id={c.id}
                             disabled={!isDraggingEnabled}
                             className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
-                            onClick={() => navigate(`/context/${c.id}`)}
+                            onClick={() => openContextTab(c.id, c.key)}
                           >
                             {(dragHandleProps) => (
                               <>
@@ -785,7 +792,13 @@ export default function ContextList() {
                                 </td>
                                 <td>
                                   <span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span>
-                                  <WorkflowStatusBadge status={effectiveStatus(c)} isAI={!c.userStatusOverride || c.aiProposedStatus === "needs_attention"} />
+                                </td>
+                                <td>
+                                  <WorkflowStatusBadge
+                                    status={effectiveStatus(c)}
+                                    isAI={!c.userStatusOverride || c.aiProposedStatus === "needs_attention"}
+                                    title={effectiveComment(c) || undefined}
+                                  />
                                 </td>
                                 <td>
                                   <div className="ctx-src-icons">
