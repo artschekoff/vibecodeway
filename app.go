@@ -241,6 +241,41 @@ func (a *App) SetContextsOrder(ids []string) error {
 	return a.db.SetContextsOrder(a.ctx, ids)
 }
 
+// ListOrganizations returns all organizations ordered by sort_order.
+func (a *App) ListOrganizations() ([]appstore.Organization, error) {
+	return a.db.ListOrganizations(a.ctx)
+}
+
+// CreateOrganization creates a new named organization.
+func (a *App) CreateOrganization(name string) (*appstore.Organization, error) {
+	return a.db.CreateOrganization(a.ctx, name)
+}
+
+// UpdateOrganization renames an organization.
+func (a *App) UpdateOrganization(id, name string) (*appstore.Organization, error) {
+	return a.db.UpdateOrganization(a.ctx, id, name)
+}
+
+// DeleteOrganization removes an organization. Contexts' org_id is set to NULL via FK cascade.
+func (a *App) DeleteOrganization(id string) error {
+	return a.db.DeleteOrganization(a.ctx, id)
+}
+
+// SetOrganizationsOrder persists the display order of organizations.
+func (a *App) SetOrganizationsOrder(ids []string) error {
+	return a.db.SetOrganizationsOrder(a.ctx, ids)
+}
+
+// SetContextOrg assigns a context to an organization. Pass empty orgID to remove from org.
+func (a *App) SetContextOrg(contextID, orgID string) error {
+	return a.db.SetContextOrg(a.ctx, contextID, orgID)
+}
+
+// ListContextsByOrg returns all contexts belonging to a given organization.
+func (a *App) ListContextsByOrg(orgID string) ([]appstore.Context, error) {
+	return a.db.ListContextsByOrg(a.ctx, orgID)
+}
+
 // CreateContext creates a new context.
 func (a *App) CreateContext(key string) (*appstore.Context, error) {
 	return a.cliRunner.CreateContext(a.ctx, key)
