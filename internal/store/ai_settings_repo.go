@@ -22,6 +22,7 @@ type SetAISettingsStoreOpts struct {
 	OpenAIKey    string // empty = preserve existing ciphertext
 	AnthropicKey string // empty = preserve existing ciphertext
 	Model        string
+	// BaseURL to set; empty string clears the stored base URL (unlike key fields which preserve on empty).
 	BaseURL      string
 	Passphrase   string
 }
@@ -183,14 +184,14 @@ func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) 
 			setClauses = append(setClauses, "provider = ?")
 			args = append(args, opts.Provider)
 		}
+		// model: preserve-on-empty (user may not always send it from CLI)
 		if opts.Model != "" {
 			setClauses = append(setClauses, "model = ?")
 			args = append(args, opts.Model)
 		}
-		if opts.BaseURL != "" {
-			setClauses = append(setClauses, "base_url = ?")
-			args = append(args, opts.BaseURL)
-		}
+		// base_url: always update (empty string = clear/use default endpoint)
+		setClauses = append(setClauses, "base_url = ?")
+		args = append(args, opts.BaseURL)
 		setClauses = append(setClauses, "updated_at = ?")
 		args = append(args, now)
 		if opts.OpenAIKey != "" {

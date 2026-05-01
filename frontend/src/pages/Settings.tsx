@@ -396,6 +396,7 @@ export default function SettingsPage() {
                       checked={provider === p}
                       onChange={() => {
                         setProvider(p);
+                        setBaseUrl("");
                         if (p === "openai") setModel("gpt-4.1");
                         else if (p === "anthropic") setModel("claude-sonnet-4-6");
                         else setModel("");
