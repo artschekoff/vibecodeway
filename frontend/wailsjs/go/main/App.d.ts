@@ -234,6 +234,8 @@ export function UpdateContextLog(arg1:string,arg2:string):Promise<contextlog.Con
 
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
 
+export function UpdateTrackedRepoMeta(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function UpdateVCSBranchLabel(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateVCSRepoMeta(arg1:string,arg2:string,arg3:string):Promise<void>;

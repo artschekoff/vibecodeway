@@ -224,6 +224,11 @@ func (a *App) ListTrackedRepos(platform string) ([]vcsstore.VCSRepo, error) {
 	return a.vcsStore.Repos.ListRepos(a.ctx, platform)
 }
 
+// UpdateTrackedRepoMeta updates the human-readable label and description for a tracked repo.
+func (a *App) UpdateTrackedRepoMeta(repoID, label, description string) error {
+	return a.vcsStore.Repos.UpdateRepoMeta(a.ctx, repoID, label, description)
+}
+
 // --- Pending Code Reviews ---
 
 // GetPendingCodeReviews returns stored review requests across all tracked repos.
