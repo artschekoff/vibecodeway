@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// instanceURLRE matches the first http/https URL in a string.
-var instanceURLRE = regexp.MustCompile(`https?://[^\s]+`)
+// instanceSiteRE extracts the bare hostname from the "Site:" line of acli jira auth status output.
+var instanceSiteRE = regexp.MustCompile(`(?i)Site:\s*(\S+)`)
 
 // Client wraps the acli Runner and provides typed Jira query methods.
 type Client struct {
@@ -37,8 +37,12 @@ func (c *Client) GetInstanceURL(ctx context.Context) string {
 		c.logger.Debug("GetInstanceURL: auth status failed", zap.Error(err))
 		return ""
 	}
-	m := instanceURLRE.FindString(out)
-	return strings.TrimRight(m, "/.")
+	m := instanceSiteRE.FindStringSubmatch(out)
+	if len(m) < 2 {
+		return ""
+	}
+	host := strings.TrimRight(m[1], "/.")
+	return "https://" + host
 }
 
 // Search executes a JQL search and returns matching issues.
