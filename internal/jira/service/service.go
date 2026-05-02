@@ -58,11 +58,13 @@ func jiraLinkToRelationType(typeName, direction string) string {
 // slackMessage is one entry in the messages array returned by slack-cli search-channels
 // and list-dms --with-messages.
 // search-channels uses "user" (display name); list-dms uses "userId" (Slack user ID).
+// Replies holds thread replies when search-channels returns structured responses.
 type slackMessage struct {
-	User      string `json:"user"`
-	UserID    string `json:"userId"`
-	Text      string `json:"text"`
-	Timestamp string `json:"timestamp"`
+	User      string         `json:"user"`
+	UserID    string         `json:"userId"`
+	Text      string         `json:"text"`
+	Timestamp string         `json:"timestamp"`
+	Replies   []slackMessage `json:"replies,omitempty"`
 }
 
 // displayUser returns the best available user label: display name when present, user ID otherwise.
@@ -267,6 +269,12 @@ func (svc *ContextService) SetVCSStore(vs *vcsstore.Store) {
 // AuthStatus returns the current acli authentication status.
 func (svc *ContextService) AuthStatus(ctx context.Context) (string, error) {
 	return svc.jira.AuthStatus(ctx)
+}
+
+// GetJiraInstanceURL returns the Jira instance base URL from acli auth status.
+// Returns empty string when not authenticated or URL cannot be determined.
+func (svc *ContextService) GetJiraInstanceURL(ctx context.Context) string {
+	return svc.jira.GetInstanceURL(ctx)
 }
 
 // ListContexts returns active contexts only.
@@ -810,19 +818,21 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 		return fmt.Errorf("loading context: %w", err)
 	}
 	for _, ch := range channels {
-		if _, err := svc.slackRepo.UpsertSlackChannel(ctx, contextID, workspace, ch.ChannelID, ch.ChannelName, ch.StartFrom); err != nil {
+		slackCh, err := svc.slackRepo.UpsertSlackChannel(ctx, contextID, workspace, ch.ChannelID, ch.ChannelName, ch.StartFrom)
+		if err != nil {
 			return fmt.Errorf("upserting channel %q: %w", ch.ChannelName, err)
 		}
 		if ch.Content != "" {
-			// thread_ts="" is intentional: this represents the whole-channel snapshot,
-			// not a specific thread. The upsert key (context_id, channel_id, thread_ts)
-			// ensures re-adding the channel updates rather than duplicates the record.
+			// Store a temporary whole-channel blob (ThreadTS="") so the user sees
+			// content immediately without needing to Refresh. The next Refresh will
+			// delete this blob and replace it with individual per-message thread rows.
 			if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
-				Workspace:   workspace,
-				ChannelID:   ch.ChannelID,
-				ThreadTS:    "",
-				ChannelName: ch.ChannelName,
-				Content:     ch.Content,
+				SlackChannelID: slackCh.ID,
+				Workspace:      workspace,
+				ChannelID:      ch.ChannelID,
+				ThreadTS:       "",
+				ChannelName:    ch.ChannelName,
+				Content:        ch.Content,
 			}); err != nil {
 				svc.logger.Warn("add channels: upsert thread failed",
 					zap.String("channel", ch.ChannelName), zap.Error(err))

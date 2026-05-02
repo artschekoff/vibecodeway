@@ -206,6 +206,12 @@ func (a *App) AuthStatus() string {
 	return status
 }
 
+// GetJiraInstanceURL returns the Jira instance base URL derived from acli auth status.
+// Returns empty string when not authenticated or URL cannot be determined.
+func (a *App) GetJiraInstanceURL() string {
+	return a.svc.GetJiraInstanceURL(a.ctx)
+}
+
 // SetSlackPassphrase stores the SLACK_MCP_PASSPHRASE value that will be injected
 // as an environment variable into every subsequent slack-cli invocation.
 func (a *App) SetSlackPassphrase(passphrase string) error {
@@ -874,8 +880,10 @@ func (a *App) onHotkey() {
 	// Drop if picker is already waiting for a response.
 	a.pickerMu.Lock()
 	alreadyPending := a.pendingText != ""
+	pendingLen := len(a.pendingText)
 	a.pickerMu.Unlock()
 	if alreadyPending {
+		a.logger.Info("hotkey drop: picker already pending", zap.Int("pendingTextLen", pendingLen))
 		return
 	}
 
@@ -889,6 +897,7 @@ func (a *App) onHotkey() {
 		time.Sleep(clipboardCopyWait)
 		after := hotkey.ReadClipboard()
 		if after == before || strings.TrimSpace(after) == "" {
+			a.logger.Info("hotkey: no text selected in source app")
 			runtime.EventsEmit(a.ctx, "hotkey:no-selection")
 			return
 		}
@@ -1008,12 +1017,15 @@ func (a *App) OpenAccessibilityPreferences() {
 }
 
 // DismissPicker clears the always-on-top state and pending text without saving.
-// Called when the user cancels the quick-attach overlay.
+// Called when the user cancels or completes the quick-attach overlay.
 func (a *App) DismissPicker() {
 	a.pickerMu.Lock()
 	a.pendingText = ""
 	a.pickerMu.Unlock()
 	runtime.WindowSetAlwaysOnTop(a.ctx, false)
+	// Return focus to the source app so the user can immediately select more
+	// text and use Cmd+Shift+C again without having to manually switch apps.
+	hotkey.DeactivateApp()
 }
 
 func buildLogger() (*zap.Logger, error) {
