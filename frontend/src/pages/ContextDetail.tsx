@@ -45,6 +45,7 @@ import {
   GetWorkflowSummary,
   GetOpenQuestions,
   GetWorkflowProposals,
+  GetJiraInstanceURL,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
@@ -262,6 +263,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [proposals, setProposals] = useState<WorkflowProposal[]>([]);
   const [showProposalHistory, setShowProposalHistory] = useState(false);
   const [workflowError, setWorkflowError] = useState("");
+  const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
 
   const loadBreakdown = useCallback(async () => {
     if (!id) return;
@@ -331,6 +333,10 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     load();
     void loadWorkflow();
   }, [load, loadWorkflow]);
+
+  useEffect(() => {
+    GetJiraInstanceURL().then(setJiraInstanceUrl).catch(() => {});
+  }, []);
 
   const handleRefresh = async () => {
     if (!id) return;
@@ -818,7 +824,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       onToggleComment={(id) => void handleToggleComment(id)}
                       onMarkIssueViewed={async (iid) => { await MarkIssueViewed(iid); load(true); void loadBreakdown(); }}
                       onMarkCommentViewed={async (cid) => { await MarkCommentViewed(cid); load(true); void loadBreakdown(); }}
-                      jiraBaseUrl={detail?.jira?.baseUrl}
+                      jiraBaseUrl={detail?.jira?.baseUrl || jiraInstanceUrl}
                     />
                   ))}
                 </div>
