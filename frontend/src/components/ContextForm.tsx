@@ -1581,7 +1581,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                       {repoPickerOpen && (
                         <div className="branch-picker-dropdown">
                           {trackedRepos.length === 0 ? (
-                            <div className="branch-picker-empty">No tracked repositories. Add repos in the Code Reviews tab first.</div>
+                            <div className="branch-picker-empty">No tracked repositories. Add repos in the Repositories tab.</div>
                           ) : (
                             <>
                               <div className="branch-picker-search-row">
