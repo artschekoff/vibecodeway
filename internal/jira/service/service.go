@@ -30,6 +30,15 @@ type commentLister interface {
 	ListComments(ctx context.Context, issueKey string) ([]jira.Comment, error)
 }
 
+// JiraAPI is the Jira client interface used by ContextService and JiraProvider.
+type JiraAPI interface {
+	commentLister
+	ViewIssue(ctx context.Context, key string) (*jira.IssueDetail, error)
+	Search(ctx context.Context, jql string) ([]jira.SearchResult, error)
+	AuthStatus(ctx context.Context) (string, error)
+	GetInstanceURL(ctx context.Context) string
+}
+
 const (
 	// providerJira and providerSlack are the canonical provider name strings.
 	providerJira  = "jira"
@@ -203,7 +212,7 @@ type ContextService struct {
 	jiraRepo      *jirastore.Repo
 	slackRepo     *slackstore.Repo
 	vcsStore      *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
-	jira          *jira.Client
+	jira          JiraAPI
 	slack         SlackRunner
 	logger        *zap.Logger
 	providers     []provider.Provider
@@ -248,7 +257,7 @@ func (svc *ContextService) SetAgentProposal(ctx context.Context, contextID, stat
 // Pass provider implementations as variadic arguments to enable cross-cutting operations
 // (Refresh, Reload, FormatContext). Each provider must have a unique Name().
 // slack may be nil if Slack support is not needed.
-func NewContextService(s *appstore.Store, j *jira.Client, jiraRepo *jirastore.Repo, slackRepo *slackstore.Repo, slack SlackRunner, logger *zap.Logger, providers ...provider.Provider) *ContextService {
+func NewContextService(s *appstore.Store, j JiraAPI, jiraRepo *jirastore.Repo, slackRepo *slackstore.Repo, slack SlackRunner, logger *zap.Logger, providers ...provider.Provider) *ContextService {
 	return &ContextService{
 		store:     s,
 		jiraRepo:  jiraRepo,
