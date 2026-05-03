@@ -136,7 +136,7 @@ func TestAddIssuesToContext_AddsChildIssuesViaJQL(t *testing.T) {
 			"JH-302": makeDetail("JH-302"),
 		},
 		searchResults: map[string][]jira.SearchResult{
-			"parent = JH-300": {
+			`parent = "JH-300"`: {
 				{Key: "JH-301"},
 				{Key: "JH-302"},
 			},
@@ -162,7 +162,7 @@ func TestAddIssuesToContext_DeduplicatesRefsSameKey(t *testing.T) {
 			"JH-401": makeDetail("JH-401"),
 		},
 		searchResults: map[string][]jira.SearchResult{
-			"parent = JH-400": {{Key: "JH-401"}},
+			`parent = "JH-400"`: {{Key: "JH-401"}},
 		},
 	}
 	svc, s := newServiceWithJira(t, j)
@@ -203,7 +203,7 @@ func TestAddIssuesToContext_SearchFailureTolerated(t *testing.T) {
 			"JH-600": makeDetail("JH-600"),
 		},
 		searchErr: map[string]error{
-			"parent = JH-600": fmt.Errorf("acli failed"),
+			`parent = "JH-600"`: fmt.Errorf("acli failed"),
 		},
 	}
 	svc, s := newServiceWithJira(t, j)

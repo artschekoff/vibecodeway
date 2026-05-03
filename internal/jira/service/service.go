@@ -551,15 +551,15 @@ func (svc *ContextService) SearchNewIssues(ctx context.Context, contextID string
 }
 
 // AddIssuesToContext fetches full details for the given Jira keys and upserts them into the context.
-// Automatically adds one level of subtasks for each issue.
-// After upserting, it inspects Jira issue links: if a linked Jira key belongs to a different context,
-// a context relation is auto-created with the corresponding type. Returns the count of issues added.
+// For each primary issue it also adds: subtasks from the API subtasks field, direct child issues
+// found via JQL "parent = KEY" (handles next-gen Jira projects), and all linked issues.
+// Cross-context relations are still auto-created for linked keys that exist in other contexts.
+// Returns the count of issues added.
 func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID string, jiraKeys []string) (int, error) {
 	if len(jiraKeys) == 0 {
 		return 0, nil
 	}
 	added := 0
-	var subtaskKeys []string
 	seen := make(map[string]bool, len(jiraKeys))
 	for _, key := range jiraKeys {
 		seen[key] = true
@@ -571,50 +571,77 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 		linkedKey string
 	}
 	var collectedLinks []pendingLink
+	var refKeys []string // subtasks + linked issues + JQL children
 
-	upsertIssue := func(key string) bool {
+	// upsertSimple fetches full details, persists the issue, and returns the detail for ref collection.
+	// Returns nil if fetch or persist fails.
+	upsertSimple := func(key string) *jira.IssueDetail {
 		detail, err := svc.jira.ViewIssue(ctx, key)
 		if err != nil {
 			svc.logger.Warn("failed to view issue", zap.String("key", key), zap.Error(err))
-			return false
+			return nil
 		}
 		if _, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
 			detail.IssueType, detail.Description, detail.Updated,
 		); err != nil {
 			svc.logger.Warn("failed to upsert issue", zap.String("key", key), zap.Error(err))
-			return false
+			return nil
 		}
+		return detail
+	}
+
+	// Primary pass: upsert each requested issue and collect all refs.
+	for _, key := range jiraKeys {
+		detail := upsertSimple(key)
+		if detail == nil {
+			continue
+		}
+		added++
 		for _, sub := range detail.Subtasks {
 			if !seen[sub.Key] {
 				seen[sub.Key] = true
-				subtaskKeys = append(subtaskKeys, sub.Key)
+				refKeys = append(refKeys, sub.Key)
 			}
 		}
 		for _, link := range detail.Links {
+			if !seen[link.LinkedKey] {
+				seen[link.LinkedKey] = true
+				refKeys = append(refKeys, link.LinkedKey)
+			}
 			collectedLinks = append(collectedLinks, pendingLink{
 				typeName:  link.TypeName,
 				direction: link.Direction,
 				linkedKey: link.LinkedKey,
 			})
 		}
-		return true
 	}
 
+	// Fetch child issues via JQL for next-gen Jira projects where child issues
+	// are not included in the subtasks API field.
 	for _, key := range jiraKeys {
-		if upsertIssue(key) {
-			added++
+		children, err := svc.jira.Search(ctx, fmt.Sprintf("parent = %q", key))
+		if err != nil {
+			svc.logger.Warn("child search failed", zap.String("key", key), zap.Error(err))
+			continue
+		}
+		for _, child := range children {
+			if !seen[child.Key] {
+				seen[child.Key] = true
+				refKeys = append(refKeys, child.Key)
+			}
 		}
 	}
-	for _, key := range subtaskKeys {
-		if upsertIssue(key) {
+
+	// Ref pass: upsert all referenced issues (subtasks, linked, children).
+	for _, key := range refKeys {
+		if upsertSimple(key) != nil {
 			added++
 		}
 	}
 
-	// Auto-link related contexts via Jira issue links.
+	// Auto-link related contexts via Jira issue links (existing behavior).
 	if len(collectedLinks) > 0 {
-		// Deduplicate linked keys before querying to avoid redundant DB lookups.
 		seenLinkedKeys := make(map[string]bool)
 		linkedKeys := make([]string, 0, len(collectedLinks))
 		for _, l := range collectedLinks {
@@ -642,7 +669,6 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 					deduped[dedupeKey] = true
 					if _, err := svc.store.AddContextRelation(ctx, contextID, targetCtxID, relType); err != nil {
 						if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-							// Relation already exists — not an error.
 							continue
 						}
 						svc.logger.Warn("auto-link: failed to create relation",
