@@ -46,6 +46,7 @@ import {
   ListTrackedRepos,
   AddTrackedRepo,
   RemoveTrackedRepo,
+  UpdateTrackedRepoMeta,
   GetSupportedPlatforms,
   SetContextsOrder,
   PickRepoDirectory,
@@ -177,7 +178,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   text: "Syncing texts & files",
 };
 
-type HomeTab = "contexts" | "reviews";
+type HomeTab = "contexts" | "reviews" | "repositories";
 
 interface ContextListProps {
   orgId: string;
@@ -191,7 +192,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   // ── Tab state (persisted) ──
   const [activeTab, setActiveTab] = useState<HomeTab>(() => {
     const saved = localStorage.getItem("home-tab");
-    return saved === "reviews" ? "reviews" : "contexts";
+    if (saved === "reviews" || saved === "repositories") return saved;
+    return "contexts";
   });
 
   const switchTab = (tab: HomeTab) => {
@@ -235,6 +237,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
   const [addRepoError, setAddRepoError] = useState("");
   const [addingRepo, setAddingRepo] = useState(false);
+
+  // ── Repositories edit state ──
+  const [editingRepoId, setEditingRepoId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   // ── DnD ──
   const isDraggingEnabled = !matchedIDs; // disable while searching
@@ -604,6 +613,32 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     } catch (e) { setError(String(e)); }
   };
 
+  const handleUpdateRepoMeta = async (repoId: string) => {
+    setEditSaving(true);
+    setEditError("");
+    try {
+      await UpdateTrackedRepoMeta(repoId, editLabel.trim(), editDescription.trim());
+      setEditingRepoId(null);
+      await loadReviews();
+    } catch (e) {
+      setEditError(String(e));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const startEdit = (repo: VCSRepo) => {
+    setEditingRepoId(repo.id);
+    setEditLabel(repo.label ?? "");
+    setEditDescription(repo.description ?? "");
+    setEditError("");
+  };
+
+  const cancelEdit = () => {
+    setEditingRepoId(null);
+    setEditError("");
+  };
+
   // ── Formatters ──
   const formatDate = (iso: string) => {
     try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
@@ -665,6 +700,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
               {refreshingReviews ? <Spinner size={11} color="currentColor" /> : <RefreshCw size={11} />}
             </button>
           </div>
+
+          <div
+            className={`home-tab${activeTab === "repositories" ? " home-tab--active" : ""}`}
+            onClick={() => switchTab("repositories")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && switchTab("repositories")}
+          >
+            <span className="home-tab-label">Repositories</span>
+            {trackedRepos.length > 0 && (
+              <span className="home-tab-badge">{trackedRepos.length}</span>
+            )}
+          </div>
         </div>
 
         {/* Contextual right-side actions */}
@@ -702,6 +750,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         )}
 
         {activeTab === "reviews" && (
+          <div className="topbar-actions">
+            <button className="btn-ghost topbar-settings-btn" onClick={() => openSettingsTab()} title="Settings">
+              <Settings size={20} />
+            </button>
+          </div>
+        )}
+
+        {activeTab === "repositories" && (
           <div className="topbar-actions">
             <button className="btn-ghost topbar-settings-btn" onClick={() => openSettingsTab()} title="Settings">
               <Settings size={20} />
@@ -892,70 +948,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         {/* ── REVIEWS TAB ── */}
         {activeTab === "reviews" && (
           <>
-            {/* Tracked repos bar */}
-            <div className="tracked-repos-bar">
-              <span className="tracked-repos-label">Tracked repositories</span>
-              <div className="tracked-repos-chips">
-                {trackedRepos.map((repo) => {
-                  const url = repoUrl(repo);
-                  return (
-                    <div key={repo.id} className="tracked-repo-chip">
-                      <span className="platform-badge">{repo.platform}</span>
-                      <span className="tracked-repo-name">{repo.owner}/{repo.name}</span>
-                      <button
-                        className={`tracked-repo-link${repo.localPath ? " tracked-repo-link--active" : ""}`}
-                        onClick={() => void handleSetRepoPath(repo.id)}
-                        title={repo.localPath ? `Local path: ${repo.localPath}` : "Set local path"}
-                      >
-                        {repo.localPath ? <FolderOpen size={11} /> : <Folder size={11} />}
-                      </button>
-                      {url && (
-                        <button className="tracked-repo-link" onClick={() => BrowserOpenURL(url)} title={`Open ${repo.owner}/${repo.name}`}>
-                          <ExternalLink size={11} />
-                        </button>
-                      )}
-                      <button className="tracked-repo-remove" onClick={() => void handleRemoveRepo(repo.id)} title="Remove">
-                        <X size={11} />
-                      </button>
-                    </div>
-                  );
-                })}
-
-                {showAddRepo ? (
-                  <div className="tracked-repo-add-form">
-                    <select
-                      className="passphrase-input"
-                      style={{ width: 110, fontSize: 11, padding: "2px 6px" }}
-                      value={addPlatform}
-                      onChange={(e) => setAddPlatform(e.target.value as VCSPlatform)}
-                    >
-                      {(platforms.length > 0 ? platforms : [{ platform: "github" as VCSPlatform, label: "GitHub", enabled: true }]).map((p) => (
-                        <option key={p.platform} value={p.platform} disabled={!p.enabled}>
-                          {p.label}{!p.enabled ? " (soon)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="passphrase-input"
-                      style={{ width: 160, fontSize: 11, padding: "2px 8px" }}
-                      placeholder="owner/repo"
-                      value={addOwnerRepo}
-                      onChange={(e) => setAddOwnerRepo(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAddRepo(); } }}
-                      autoFocus
-                    />
-                    <button className="btn-primary" style={{ fontSize: 11, padding: "2px 10px", whiteSpace: "nowrap" }} onClick={() => void handleAddRepo()} disabled={addingRepo}>
-                      {addingRepo ? "Adding…" : "Add"}
-                    </button>
-                    <button className="btn-secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => { setShowAddRepo(false); setAddRepoError(""); setAddOwnerRepo(""); }}>
-                      Cancel
-                    </button>
-                    {addRepoError && <span className="field-error">{addRepoError}</span>}
-                  </div>
-                ) : (
-                  <button className="tracked-repo-add-btn" onClick={() => setShowAddRepo(true)}>+ Add</button>
-                )}
-              </div>
+            {/* Repo management moved to Repositories tab */}
+            <div style={{ padding: "8px 16px", fontSize: 12, color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
+              Repositories managed in the{" "}
+              <button
+                style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 12, padding: 0 }}
+                onClick={() => switchTab("repositories")}
+              >
+                Repositories tab
+              </button>
+              .
             </div>
 
             {/* Reviews grouped by repo */}
@@ -1006,6 +1008,168 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   </section>
                 );
               })
+            )}
+          </>
+        )}
+
+        {/* ── REPOSITORIES TAB ── */}
+        {activeTab === "repositories" && (
+          <>
+            {/* Add repo form */}
+            <div className="repo-add-section">
+              <div className="tracked-repos-bar" style={{ border: "none", padding: "16px 0 10px" }}>
+                <span className="tracked-repos-label">Add Repository</span>
+                <div className="tracked-repos-chips">
+                  {showAddRepo ? (
+                    <div className="tracked-repo-add-form">
+                      <select
+                        className="passphrase-input"
+                        style={{ width: 110, fontSize: 11, padding: "2px 6px" }}
+                        value={addPlatform}
+                        onChange={(e) => setAddPlatform(e.target.value as VCSPlatform)}
+                      >
+                        {(platforms.length > 0 ? platforms : [{ platform: "github" as VCSPlatform, label: "GitHub", enabled: true }]).map((p) => (
+                          <option key={p.platform} value={p.platform} disabled={!p.enabled}>
+                            {p.label}{!p.enabled ? " (soon)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="passphrase-input"
+                        style={{ width: 160, fontSize: 11, padding: "2px 8px" }}
+                        placeholder="owner/repo"
+                        value={addOwnerRepo}
+                        onChange={(e) => setAddOwnerRepo(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAddRepo(); } }}
+                        autoFocus
+                      />
+                      <button
+                        className="btn-primary"
+                        style={{ fontSize: 11, padding: "2px 10px", whiteSpace: "nowrap" }}
+                        onClick={() => void handleAddRepo()}
+                        disabled={addingRepo}
+                      >
+                        {addingRepo ? "Adding…" : "Add"}
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 11, padding: "2px 8px" }}
+                        onClick={() => { setShowAddRepo(false); setAddRepoError(""); setAddOwnerRepo(""); }}
+                      >
+                        Cancel
+                      </button>
+                      {addRepoError && <span className="field-error">{addRepoError}</span>}
+                    </div>
+                  ) : (
+                    <button className="tracked-repo-add-btn" onClick={() => setShowAddRepo(true)}>
+                      + Add Repository
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Repo card list */}
+            {trackedRepos.length === 0 ? (
+              <div className="detail-empty" style={{ marginTop: 16 }}>
+                No repositories tracked yet. Click "+ Add Repository" above.
+              </div>
+            ) : (
+              <div className="repo-list">
+                {trackedRepos.map((repo) => {
+                  const url = repoUrl(repo);
+                  const isEditing = editingRepoId === repo.id;
+                  const displayName = `${repo.owner}/${repo.name}`;
+                  return (
+                    <div key={repo.id} className="repo-card">
+                      <div className="repo-card-header">
+                        <span className="platform-badge">{repo.platform}</span>
+                        <span className="repo-card-name">{displayName}</span>
+                        {repo.label && <span className="repo-card-label">{repo.label}</span>}
+                        <div className="repo-card-actions">
+                          {url && (
+                            <button onClick={() => BrowserOpenURL(url)} title={`Open on ${repo.platform}`}>
+                              <ExternalLink size={12} /> Open
+                            </button>
+                          )}
+                          <button
+                            className={repo.localPath ? "tracked-repo-link--active" : ""}
+                            onClick={() => void handleSetRepoPath(repo.id)}
+                            title={repo.localPath ? `Local path: ${repo.localPath}\nClick to change` : "Set local path"}
+                          >
+                            {repo.localPath ? <FolderOpen size={12} /> : <Folder size={12} />}
+                            {repo.localPath ? "Path set" : "Set path"}
+                          </button>
+                          {!isEditing && (
+                            <button onClick={() => startEdit(repo)} title="Edit label and description">
+                              <Pencil size={12} /> Edit
+                            </button>
+                          )}
+                          <button
+                            className="danger"
+                            onClick={() => void handleRemoveRepo(repo.id)}
+                            title="Remove repository"
+                          >
+                            <X size={12} /> Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      {repo.description && !isEditing && (
+                        <div className="repo-card-description">{repo.description}</div>
+                      )}
+
+                      {isEditing && (
+                        <div className="repo-card-edit-form">
+                          <div className="repo-card-edit-row">
+                            <label>Label</label>
+                            <input
+                              value={editLabel}
+                              onChange={(e) => setEditLabel(e.target.value)}
+                              placeholder="e.g. API, Frontend, Infra"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); void handleUpdateRepoMeta(repo.id); }
+                                if (e.key === "Escape") cancelEdit();
+                              }}
+                            />
+                          </div>
+                          <div className="repo-card-edit-row">
+                            <label>Description</label>
+                            <input
+                              value={editDescription}
+                              onChange={(e) => setEditDescription(e.target.value)}
+                              placeholder="Short description (optional)"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); void handleUpdateRepoMeta(repo.id); }
+                                if (e.key === "Escape") cancelEdit();
+                              }}
+                            />
+                          </div>
+                          {editError && <span className="field-error">{editError}</span>}
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              className="btn-primary"
+                              style={{ fontSize: 11, padding: "2px 10px" }}
+                              onClick={() => void handleUpdateRepoMeta(repo.id)}
+                              disabled={editSaving}
+                            >
+                              {editSaving ? "Saving…" : "Save"}
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              style={{ fontSize: 11, padding: "2px 8px" }}
+                              onClick={cancelEdit}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </>
         )}
