@@ -964,7 +964,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
             {repoGroups.length === 0 ? (
               <div className="detail-empty" style={{ marginTop: 32 }}>
                 {trackedRepos.length === 0
-                  ? "Add repositories above, then click Refresh to load pending reviews."
+                  ? "Add repositories in the Repositories tab, then click Refresh to load pending reviews."
                   : "No pending code reviews. Click Refresh to check."}
               </div>
             ) : (
