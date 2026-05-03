@@ -297,7 +297,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     try {
       const [reviews, repos, plats] = await Promise.all([
         GetPendingCodeReviews() as Promise<ReviewRequest[]>,
-        ListTrackedRepos("github") as Promise<VCSRepo[]>,
+        ListTrackedRepos("") as Promise<VCSRepo[]>,
         GetSupportedPlatforms() as Promise<VCSPlatformInfo[]>,
       ]);
       const safeRepos = repos ?? [];
@@ -600,8 +600,11 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   };
 
   const handleRemoveRepo = async (repoId: string) => {
-    try { await RemoveTrackedRepo(repoId); await loadReviews(); }
-    catch (e) { setError(String(e)); }
+    try {
+      await RemoveTrackedRepo(repoId);
+      if (editingRepoId === repoId) setEditingRepoId(null);
+      await loadReviews();
+    } catch (e) { setError(String(e)); }
   };
 
   const handleSetRepoPath = async (repoId: string) => {
