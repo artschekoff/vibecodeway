@@ -4016,7 +4016,7 @@ select {
 .repo-card-label {
   font-size: 11px;
   padding: 2px 7px;
-  background: rgba(var(--accent-rgb, 99,160,255), 0.15);
+  background: rgba(79, 142, 247, 0.15);
   color: var(--accent);
   border-radius: 4px;
   white-space: nowrap;
