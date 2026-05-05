@@ -153,7 +153,7 @@ describe("SlackDMConfigCard", () => {
     expect(deleteButtons).toHaveLength(2);
   });
 
-  it("calls onDeleteEntry with dmId and entryId when delete button is clicked", async () => {
+  it("calls onDeleteEntry with dmId and entryId when delete button is clicked and confirmed", async () => {
     const user = userEvent.setup();
     const jsonContent = JSON.stringify([
       { id: "D1", userName: "alice", messages: [] },
@@ -168,6 +168,10 @@ describe("SlackDMConfigCard", () => {
 
     const deleteButtons = document.querySelectorAll(".dm-entry-delete-btn");
     await user.click(deleteButtons[0]);
+
+    // Confirm modal appears — click the confirm/Delete button
+    const confirmBtn = screen.getByRole("button", { name: /delete/i });
+    await user.click(confirmBtn);
 
     expect(onDeleteEntry).toHaveBeenCalledTimes(1);
     expect(onDeleteEntry).toHaveBeenCalledWith("dm-1", "D1");
