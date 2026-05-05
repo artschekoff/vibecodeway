@@ -3,7 +3,6 @@ package vcsstore
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -64,19 +63,4 @@ func (r *RepoPathRepo) Delete(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
-}
-
-// getByID returns a path row by its primary key. Used internally.
-func (r *RepoPathRepo) getByID(ctx context.Context, id string) (*VCSRepoPath, error) {
-	var p VCSRepoPath
-	err := r.db.QueryRowContext(ctx,
-		`SELECT id, repo_id, path, created_at FROM vcs_repo_paths WHERE id = ?`, id,
-	).Scan(&p.ID, &p.RepoID, &p.Path, &p.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get vcs_repo_path: %w", err)
-	}
-	return &p, nil
 }
