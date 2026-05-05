@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -14,8 +15,8 @@ interface TabContextValue {
   tabs: Tab[];
   activeTabId: string | null;
   openOrgTab: (orgId: string, orgName: string) => void;
-  openContextTab: (contextId: string, contextKey: string, orgName?: string) => void;
-  openNewContextTab: (contextId: string, contextKey: string, orgName?: string) => void;
+  openContextTab: (contextId: string, contextKey: string, orgName?: string, orgId?: string) => void;
+  openNewContextTab: (contextId: string, contextKey: string, orgName?: string, orgId?: string) => void;
   openSettingsTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
@@ -23,6 +24,7 @@ interface TabContextValue {
   unpinTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   updateTabTitle: (tabId: string, title: string) => void;
+  navigateBack: (tabId: string) => void;
 }
 
 const TabContext = createContext<TabContextValue | null>(null);
@@ -69,6 +71,14 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const [tabs, setTabs] = useState<Tab[]>(_initial.tabs);
   const [activeTabId, setActiveTabId] = useState<string | null>(_initial.activeTabId);
 
+  const previousActiveTabIdRef = useRef<string | null>(null);
+  const previousActiveTabIdTrackerRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    previousActiveTabIdRef.current = previousActiveTabIdTrackerRef.current;
+    previousActiveTabIdTrackerRef.current = activeTabId;
+  }, [activeTabId]);
+
   useEffect(() => {
     try {
       localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify({ tabs, activeTabId }));
@@ -107,7 +117,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
   );
 
   const openContextTab = useCallback(
-    (contextId: string, contextKey: string, orgName?: string) => {
+    (contextId: string, contextKey: string, orgName?: string, orgId?: string) => {
       const title = orgName ? `${orgName} / ${contextKey}` : contextKey;
       focusOrOpen(
         (t) => t.type === "context" && t.contextId === contextId,
@@ -115,6 +125,8 @@ export function TabProvider({ children }: { children: ReactNode }) {
           id: newTabId(),
           type: "context" as const,
           contextId,
+          orgId,
+          orgName,
           title,
           pinned: false,
         })
@@ -124,13 +136,15 @@ export function TabProvider({ children }: { children: ReactNode }) {
   );
 
   const openNewContextTab = useCallback(
-    (contextId: string, contextKey: string, orgName?: string) => {
+    (contextId: string, contextKey: string, orgName?: string, orgId?: string) => {
       const title = orgName ? `${orgName} / ${contextKey}` : contextKey;
       setTabs((prev) => {
         const tab: Tab = {
           id: newTabId(),
           type: "context" as const,
           contextId,
+          orgId,
+          orgName,
           title,
           pinned: false,
         };
@@ -200,6 +214,45 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const navigateBack = useCallback(
+    (tabId: string) => {
+      setTabs((prev) => {
+        const tab = prev.find((t) => t.id === tabId);
+        if (!tab) return prev;
+
+        if (tab.type === "context" && tab.orgId) {
+          const orgTab = prev.find((t) => t.type === "org" && t.orgId === tab.orgId);
+          if (orgTab) {
+            setActiveTabId(orgTab.id);
+          } else {
+            const name = tab.orgName ?? tab.orgId;
+            const newOrgTab: Tab = {
+              id: newTabId(),
+              type: "org" as const,
+              orgId: tab.orgId,
+              title: name,
+              pinned: false,
+            };
+            setActiveTabId(newOrgTab.id);
+            return [...prev, newOrgTab];
+          }
+        } else if (tab.type === "settings") {
+          const prevId = previousActiveTabIdRef.current;
+          const prevTab = prevId ? prev.find((t) => t.id === prevId) : null;
+          if (prevTab) {
+            setActiveTabId(prevTab.id);
+          } else {
+            const fallback = prev.find((t) => t.type !== "settings");
+            if (fallback) setActiveTabId(fallback.id);
+          }
+        }
+
+        return prev;
+      });
+    },
+    []
+  );
+
   return (
     <TabContext.Provider
       value={{
@@ -215,6 +268,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         unpinTab,
         setActiveTab,
         updateTabTitle,
+        navigateBack,
       }}
     >
       {children}
