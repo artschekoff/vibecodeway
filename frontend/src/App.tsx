@@ -1,61 +1,18 @@
-import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { TabProvider, useTabContext } from "./contexts/TabContext";
+import { PassphraseProvider } from "./contexts/PassphraseContext";
 import ContextList from "./pages/ContextList";
 import ContextDetail from "./pages/ContextDetail";
 import Settings from "./pages/Settings";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
-import { SetSlackPassphrase, ListAllContexts } from "../wailsjs/go/main/App";
+import { ListAllContexts } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
 import { AccessibilityBanner } from "./components/AccessibilityBanner";
 import { EventsOn, EventsOff, SendNotification, InitializeNotifications } from "../wailsjs/runtime/runtime";
 import "./style.css";
-
-// ─── Passphrase gate ─────────────────────────────────────────────────────────
-
-function PassphraseGate({ onUnlocked }: { onUnlocked: () => void }) {
-  const [value, setValue] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!value.trim()) { setError("Passphrase is required."); inputRef.current?.focus(); return; }
-    setSubmitting(true);
-    setError("");
-    try {
-      await SetSlackPassphrase(value.trim());
-      onUnlocked();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to set passphrase — Wails bridge not available.");
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="passphrase-screen">
-      <div className="passphrase-card">
-        <div className="passphrase-icon">🔑</div>
-        <h1 className="passphrase-title">Slack Passphrase</h1>
-        <p className="passphrase-desc">
-          Enter your <code>SLACK_MCP_PASSPHRASE</code> to authenticate Slack CLI calls.
-        </p>
-        <form onSubmit={(e) => void handleSubmit(e)} className="passphrase-form">
-          <input ref={inputRef} type="password" className="passphrase-input"
-            placeholder="Enter passphrase…" value={value}
-            onChange={(e) => setValue(e.target.value)} autoFocus autoComplete="off" />
-          {error && <div className="field-error passphrase-error">{error}</div>}
-          <button type="submit" className="btn-primary passphrase-btn" disabled={submitting}>
-            {submitting ? "Unlocking…" : "Continue"}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 const isWailsContext = () =>
   typeof (window as unknown as Record<string, unknown>)["go"] !== "undefined";
@@ -186,12 +143,12 @@ function AppShell() {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 function App() {
-  const [unlocked, setUnlocked] = useState(!isWailsContext());
-  if (!unlocked) return <PassphraseGate onUnlocked={() => setUnlocked(true)} />;
   return (
-    <TabProvider>
-      <AppShell />
-    </TabProvider>
+    <PassphraseProvider>
+      <TabProvider>
+        <AppShell />
+      </TabProvider>
+    </PassphraseProvider>
   );
 }
 
