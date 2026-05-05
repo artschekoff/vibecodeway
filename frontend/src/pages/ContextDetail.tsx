@@ -66,6 +66,7 @@ import ContextForm from "../components/ContextForm";
 import WorkflowProposalCard from "../components/WorkflowProposalCard";
 import OpenQuestionsPanel from "../components/OpenQuestionsPanel";
 import { useProgress } from "../contexts/ProgressContext";
+import { usePassphrase } from "../contexts/PassphraseContext";
 
 function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string }) {
   const isMerged = status === "merged";
@@ -240,6 +241,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const id = contextId;
   const { closeTab, navigateBack, openContextTab } = useTabContext();
   const progress = useProgress();
+  const { ensurePassphrase } = usePassphrase();
   const [detail, setDetail] = useState<service.ContextDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshError, setRefreshError] = useState("");
@@ -349,6 +351,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     setRefreshing(true);
     setRefreshError("");
     setToastMsg("");
+
+    const hasSlack =
+      (detail?.slackChannels?.length ?? 0) > 0 ||
+      (detail?.slackDMConfigs?.length ?? 0) > 0;
+    if (hasSlack && !(await ensurePassphrase())) {
+      setRefreshing(false);
+      return;
+    }
 
     progress.begin("Refreshing Context", [], () => { void CancelRefresh(); });
 
@@ -488,9 +498,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       for (const dmId of removedDMConfigIds) {
         try { await DeleteSlackDMConfig(dmId); } catch { /* best-effort */ }
       }
-      for (const dm of dmConfigs) {
-        progress.next(`Loading DMs from ${dm.workspace}`);
-        try { await UpsertSlackDMConfig(id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
+      if (dmConfigs.length > 0 && !(await ensurePassphrase())) {
+        // skip DM upserts — user cancelled passphrase prompt
+      } else {
+        for (const dm of dmConfigs) {
+          progress.next(`Loading DMs from ${dm.workspace}`);
+          try { await UpsertSlackDMConfig(id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
+        }
       }
       for (const fId of removedTextFileIds) {
         try { await DeleteContextText(fId); } catch { /* best-effort */ }
