@@ -238,7 +238,7 @@ interface ContextDetailProps {
 
 export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextDetailProps) {
   const id = contextId;
-  const { closeTab, openContextTab } = useTabContext();
+  const { closeTab, navigateBack, openContextTab } = useTabContext();
   const progress = useProgress();
   const [detail, setDetail] = useState<service.ContextDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -722,7 +722,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   if (!detail) return (
     <div className="page">
       <div className="topbar">
-        <button className="back-btn" onClick={() => closeTab(_tabId)}><ArrowLeft size={16} /> Back</button>
+        <button className="back-btn" onClick={() => navigateBack(_tabId)}><ArrowLeft size={16} /> Back</button>
       </div>
       <div className="content">
         <div className="error-banner">{refreshError || "Context not found"}</div>
@@ -744,7 +744,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   return (
     <div className="page">
       <div className="topbar">
-        <button className="back-btn" onClick={() => closeTab(_tabId)}><ArrowLeft size={16} /> Back</button>
+        <button className="back-btn" onClick={() => navigateBack(_tabId)}><ArrowLeft size={16} /> Back</button>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <h1 style={{ fontSize: 16, margin: 0, whiteSpace: "nowrap" }}>{context.key}</h1>
           <span className={`badge badge-${context.status}`}>{context.status}</span>

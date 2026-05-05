@@ -28,7 +28,7 @@ const CLAUDE_MODELS = [
 ] as const;
 
 export default function SettingsPage() {
-  const { activeTabId, closeTab } = useTabContext();
+  const { activeTabId, closeTab, navigateBack } = useTabContext();
   const hotkeysRef = useRef<HTMLElement>(null);
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [provider, setProvider] = useState<"openai" | "anthropic" | "local">("openai");
@@ -184,7 +184,7 @@ export default function SettingsPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button className="back-btn" onClick={() => activeTabId && closeTab(activeTabId)}><ArrowLeft size={16} /> Back</button>
+        <button className="back-btn" onClick={() => activeTabId && navigateBack(activeTabId)}><ArrowLeft size={16} /> Back</button>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 16, margin: 0 }}>Settings</h1>
         </div>
