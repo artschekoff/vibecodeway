@@ -498,6 +498,7 @@ export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)
   type: TabType;
   orgId?: string;      // present when type === "org"; also on type === "context" to link back to parent org
+  orgName?: string;    // org display name; stored on context tabs for fallback org-tab creation
   contextId?: string;  // present when type === "context"
   title: string;
   pinned: boolean;
