@@ -354,7 +354,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       // Include newly selected channels.
       for (const ch of selectedChannels) {
         const arr = groupMap.get(ch.workspace) ?? [];
-        arr.push({ channelId: ch.channelId, channelName: ch.channelName, startFrom: ch.startFrom || undefined, content: ch.content });
+        arr.push({ channelId: ch.channelId, channelName: ch.channelName, startFrom: ch.startFrom || undefined });
         groupMap.set(ch.workspace, arr);
       }
       // Re-upsert existing channels whose startFrom was edited (to persist the new date).
@@ -432,7 +432,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       if (prev.some((ch) => ch.channelId === result.id)) {
         return prev.filter((ch) => ch.channelId !== result.id);
       }
-      return [...prev, { channelId: result.id, channelName: result.name, workspace: result.workspace, startFrom: channelStartFrom, content: result.content }];
+      return [...prev, { channelId: result.id, channelName: result.name, workspace: result.workspace, startFrom: channelStartFrom, messages: result.messages ?? [] }];
     });
   };
 

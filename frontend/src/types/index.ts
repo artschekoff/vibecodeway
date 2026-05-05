@@ -111,11 +111,20 @@ export interface SearchDiff {
   existing: SearchResult[];
 }
 
+export interface SlackMessageItem {
+  user: string;
+  userId: string;
+  text: string;
+  timestamp: string;
+  rawTs?: string;
+  replies?: SlackMessageItem[];
+}
+
 export interface SlackChannelInput {
   channelId: string;
   channelName: string;
   startFrom?: string;
-  content?: string;
+  messages?: SlackMessageItem[];
 }
 
 export interface SlackChannelGroup {
@@ -179,6 +188,7 @@ export interface SlackChannel {
 export interface SlackChannelResult {
   id: string;
   name: string;
+  messages?: SlackMessageItem[];
   content?: string;
 }
 
