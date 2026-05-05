@@ -188,7 +188,15 @@ export function SearchSlackChannels(arg1:string,arg2:string):Promise<Array<servi
 
 export function SetAISettings(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number):Promise<void>;
+export function AddRepoLocalPath(arg1:string):Promise<vcsstore.VCSRepoPath>;
+
+export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
+
+export function ListRepoLocalPaths(arg1:string):Promise<Array<vcsstore.VCSRepoPath>>;
+
+export function RemoveRepoLocalPath(arg1:string):Promise<void>;
+
+export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number,arg5:string):Promise<void>;
 
 export function SetContextOrg(arg1:string,arg2:string):Promise<void>;
 

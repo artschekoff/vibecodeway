@@ -358,8 +358,24 @@ export function SetAISettings(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetAISettings'](arg1, arg2, arg3);
 }
 
-export function SetAppSettings(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['SetAppSettings'](arg1, arg2, arg3, arg4);
+export function AddRepoLocalPath(arg1) {
+  return window['go']['main']['App']['AddRepoLocalPath'](arg1);
+}
+
+export function CheckoutBranch(arg1, arg2) {
+  return window['go']['main']['App']['CheckoutBranch'](arg1, arg2);
+}
+
+export function ListRepoLocalPaths(arg1) {
+  return window['go']['main']['App']['ListRepoLocalPaths'](arg1);
+}
+
+export function RemoveRepoLocalPath(arg1) {
+  return window['go']['main']['App']['RemoveRepoLocalPath'](arg1);
+}
+
+export function SetAppSettings(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SetAppSettings'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SetContextOrg(arg1, arg2) {

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Copy, Check } from "lucide-react";
 import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
+import { useTabContext } from "../contexts/TabContext";
 
 export default function SettingsPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { activeTabId, closeTab } = useTabContext();
   const hotkeysRef = useRef<HTMLElement>(null);
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -31,14 +30,9 @@ export default function SettingsPage() {
   const [contextRefetchInterval, setContextRefetchInterval] = useState(30);
   const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
   const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
+  const [terminalAppPath, setTerminalAppPath] = useState("");
   const [savingRefetch, setSavingRefetch] = useState(false);
   const [refetchMessage, setRefetchMessage] = useState("");
-
-  useEffect(() => {
-    if (location.hash === "#hotkeys" && hotkeysRef.current) {
-      hotkeysRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [location.hash]);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +55,7 @@ export default function SettingsPage() {
           setContextRefetchInterval(typedAppS.contextRefetchIntervalMin);
           setReviewsRefetchEnabled(typedAppS.reviewsRefetchEnabled);
           setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
+          setTerminalAppPath(typedAppS.terminalAppPath ?? "");
         }
 
         const typedPlats = (plats ?? []) as VCSPlatformInfo[];
@@ -119,14 +114,17 @@ export default function SettingsPage() {
     setSavingRefetch(true);
     setRefetchMessage("");
     try {
-      await SetAppSettings(
+      // SetAppSettings binding accepts 5th arg (terminalAppPath) once regenerated
+      await (SetAppSettings as (a: boolean, b: number, c: boolean, d: number, e: string) => Promise<void>)(
         contextRefetchEnabled,
         Math.max(1, contextRefetchInterval),
         reviewsRefetchEnabled,
         Math.max(1, reviewsRefetchInterval),
+        terminalAppPath.trim(),
       );
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
+      setTerminalAppPath(updated.terminalAppPath ?? "");
       setRefetchMessage("Saved.");
     } catch (e) {
       setError(String(e));
@@ -166,7 +164,7 @@ export default function SettingsPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button className="back-btn" onClick={() => navigate("/")}><ArrowLeft size={16} /> Back</button>
+        <button className="back-btn" onClick={() => activeTabId && closeTab(activeTabId)}><ArrowLeft size={16} /> Back</button>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 16, margin: 0 }}>Settings · OpenAI</h1>
         </div>
@@ -350,6 +348,30 @@ export default function SettingsPage() {
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
               When enabled, the app will silently refresh data in the background at the specified interval.
               Changes take effect immediately without restarting the app.
+            </div>
+          </div>
+        </section>
+
+        <section className="detail-section">
+          <div className="detail-section-header">
+            <span className="detail-section-title">Terminal</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 14px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                Terminal app name or .app path
+              </label>
+              <input
+                className="passphrase-input"
+                placeholder="kitty  or  /Applications/iTerm.app"
+                value={terminalAppPath}
+                onChange={(e) => setTerminalAppPath(e.target.value)}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                Used when checking out a branch. Enter an app name (e.g. <code>kitty</code>,{" "}
+                <code>iTerm</code>, <code>Terminal</code>) or full .app path. Saved with the Background Refresh Save button above.
+              </div>
             </div>
           </div>
         </section>
