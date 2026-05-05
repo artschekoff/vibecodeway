@@ -75,6 +75,7 @@ import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import { useProgress } from "../contexts/ProgressContext";
+import { usePassphrase } from "../contexts/PassphraseContext";
 
 // ─── Reviews helpers ──────────────────────────────────────────────────────────
 
@@ -191,6 +192,7 @@ interface ContextListProps {
 export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) {
   const { openContextTab, openNewContextTab, openSettingsTab, tabs, forceCloseTab } = useTabContext();
   const progress = useProgress();
+  const { ensurePassphrase } = usePassphrase();
 
   // ── Tab state (persisted) ──
   const [activeTab, setActiveTab] = useState<HomeTab>(() => {
@@ -414,9 +416,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         progress.next(`Adding ${group.channels.map((ch) => `#${ch.channelName}`).join(", ")} from ${group.workspace}`);
         try { await AddSlackChannels(ctx.id, group.workspace, group.channels); } catch { /* best-effort */ }
       }
-      for (const dm of dmConfigs) {
-        progress.next(`Loading DMs from ${dm.workspace}`);
-        try { await UpsertSlackDMConfig(ctx.id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
+      if (dmConfigs.length > 0 && !(await ensurePassphrase())) {
+        // user cancelled passphrase — skip DM upserts
+      } else {
+        for (const dm of dmConfigs) {
+          progress.next(`Loading DMs from ${dm.workspace}`);
+          try { await UpsertSlackDMConfig(ctx.id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
+        }
       }
       for (const f of newTextFiles) {
         progress.next(`Saving ${f.name || "text file"}`);
@@ -508,9 +514,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         try { await AddSlackChannels(editTarget.id, group.workspace, group.channels); } catch { /* best-effort */ }
       }
       for (const id of removedDMConfigIds) { try { await DeleteSlackDMConfig(id); } catch { /* best-effort */ } }
-      for (const dm of dmConfigs) {
-        progress.next(`Loading DMs from ${dm.workspace}`);
-        try { await UpsertSlackDMConfig(editTarget.id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
+      if (dmConfigs.length > 0 && !(await ensurePassphrase())) {
+        // user cancelled passphrase — skip DM upserts
+      } else {
+        for (const dm of dmConfigs) {
+          progress.next(`Loading DMs from ${dm.workspace}`);
+          try { await UpsertSlackDMConfig(editTarget.id, dm.workspace, dm.startFrom); } catch { /* best-effort */ }
+        }
       }
       for (const id of removedTextFileIds) { try { await DeleteContextText(id); } catch { /* best-effort */ } }
       for (const f of editedTextFiles) { try { await UpsertContextText(f.id, editTarget.id, f.name, f.content); } catch { /* best-effort */ } }

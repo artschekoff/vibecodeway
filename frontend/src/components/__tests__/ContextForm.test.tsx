@@ -13,6 +13,18 @@ vi.mock("../../../wailsjs/go/main/App", () => ({
   SearchJQL: vi.fn().mockResolvedValue([]),
   SearchSlackChannels: vi.fn().mockResolvedValue([]),
   DeleteUploadedFile: vi.fn().mockResolvedValue(undefined),
+  GetSupportedPlatforms: vi.fn().mockResolvedValue([]),
+  ListRepoBranches: vi.fn().mockResolvedValue([]),
+  ListTrackedRepos: vi.fn().mockResolvedValue([]),
+  ListContexts: vi.fn().mockResolvedValue([]),
+  UpdateVCSRepoMeta: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../contexts/PassphraseContext", () => ({
+  usePassphrase: () => ({
+    isSet: true,
+    ensurePassphrase: vi.fn().mockResolvedValue(true),
+  }),
 }));
 
 describe("ContextForm — Files tab (creation mode)", () => {
@@ -95,8 +107,9 @@ describe("ContextForm — Files tab (creation mode)", () => {
     await user.click(createBtn);
 
     expect(onSave).toHaveBeenCalled();
-    const lastCallArgs = onSave.mock.calls[0];
-    const pendingUploadTempIds = lastCallArgs[lastCallArgs.length - 1];
+    const callArgs = onSave.mock.calls[0];
+    // pendingUploadTempIds is the 9th argument (index 8) in onSave's signature
+    const pendingUploadTempIds = callArgs[8];
     expect(pendingUploadTempIds).toEqual(["tmp-1"]);
   });
 });

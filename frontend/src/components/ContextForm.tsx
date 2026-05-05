@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
+import { usePassphrase } from "../contexts/PassphraseContext";
 import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, UpdateVCSRepoMeta } from "../../wailsjs/go/main/App";
 import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo, ContextRelation, RelationInput, RelationsPayload, ContextRelationType } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
@@ -91,6 +92,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("jira");
+
+  const { ensurePassphrase } = usePassphrase();
 
   const [jqlFocused, setJqlFocused] = useState(false);
   const [jqlResults, setJqlResults] = useState<SearchResult[]>([]);
@@ -187,19 +190,6 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [showRelationDropdown, setShowRelationDropdown] = useState(false);
 
   useEffect(() => {
-    setWorkspacesLoading(true);
-    ListSlackWorkspaces()
-      .then((results) => {
-        const ws = results ?? [];
-        setWorkspaces(ws);
-        if (ws.length > 0) {
-          setSlackWorkspace((prev) => prev || ws[0].name);
-          setDmWorkspace((prev) => prev || ws[0].name);
-        }
-      })
-      .catch((err: unknown) => setWorkspacesError(String(err)))
-      .finally(() => setWorkspacesLoading(false));
-
     GetSupportedPlatforms()
       .then((platforms) => {
         setVCSPlatforms((platforms ?? []) as VCSPlatformInfo[]);
@@ -207,6 +197,29 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const workspacesLoadedRef = useRef(false);
+  useEffect(() => {
+    if (activeTab !== "slack" || workspacesLoadedRef.current) return;
+    workspacesLoadedRef.current = true;
+    void (async () => {
+      if (!(await ensurePassphrase())) return;
+      setWorkspacesLoading(true);
+      try {
+        const results = await ListSlackWorkspaces();
+        const ws = results ?? [];
+        setWorkspaces(ws);
+        if (ws.length > 0) {
+          setSlackWorkspace((prev) => prev || ws[0].name);
+          setDmWorkspace((prev) => prev || ws[0].name);
+        }
+      } catch (err: unknown) {
+        setWorkspacesError(String(err));
+      } finally {
+        setWorkspacesLoading(false);
+      }
+    })();
+  }, [activeTab, ensurePassphrase]);
 
   const isEdit = !!initial;
 
@@ -270,6 +283,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       setChannelError("Select a workspace and enter a pattern to search.");
       return;
     }
+    if (!(await ensurePassphrase())) return;
 
     setSearching(true);
     setChannelError("");
@@ -456,6 +470,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       setDmLoadError("Select a workspace first.");
       return;
     }
+    if (!(await ensurePassphrase())) return;
     setDmLoading(true);
     setDmLoadError("");
     try {

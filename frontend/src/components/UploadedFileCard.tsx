@@ -99,7 +99,7 @@ export default function UploadedFileCard({ file, onDelete, onToggle }: Props) {
     <div className={`uploaded-file-card${isInactive ? " uploaded-file-card--inactive" : ""}`}>
       <div
         className="uploaded-file-header uploaded-file-header--clickable"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => hasContent && setExpanded(!expanded)}
       >
         {onToggle && (
           <ActiveToggle isActive={file.isActive} onToggle={(e) => { e.stopPropagation(); onToggle(file.id); }} />
@@ -110,7 +110,7 @@ export default function UploadedFileCard({ file, onDelete, onToggle }: Props) {
           <span className="uploaded-file-date">{formatDate(file.createdAt)}</span>
           <span className="uploaded-file-type-badge">{file.fileType.toUpperCase()}</span>
           <span className="uploaded-file-size">{formatSize(file.fileSize)}</span>
-          <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
+          {hasContent && <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />}
           {onDelete && (
             <button
               className="card-delete-btn"

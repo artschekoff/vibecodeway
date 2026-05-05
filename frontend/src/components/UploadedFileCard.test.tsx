@@ -84,13 +84,17 @@ describe("UploadedFileCard", () => {
     expect(document.querySelector(".uploaded-file-body")).not.toBeInTheDocument();
   });
 
-  it("calls onDelete when delete button is clicked", async () => {
+  it("calls onDelete when delete button is clicked and confirmed", async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn();
     render(<UploadedFileCard file={makeFile()} onDelete={onDelete} onToggle={vi.fn()} />);
 
     const deleteBtn = screen.getByTitle("Remove uploaded file");
     await user.click(deleteBtn);
+
+    // Confirm modal appears — click the confirm/Delete button
+    const confirmBtn = screen.getByRole("button", { name: /delete/i });
+    await user.click(confirmBtn);
 
     expect(onDelete).toHaveBeenCalledWith("uf-1");
   });
