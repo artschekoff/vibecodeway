@@ -51,6 +51,9 @@ import {
   SetContextsOrder,
   PickRepoDirectory,
   SetTrackedRepoPath,
+  ListRepoLocalPaths,
+  AddRepoLocalPath,
+  RemoveRepoLocalPath,
   DismissReviewRequest,
   ListOrganizations,
   SetContextOrg,
@@ -64,7 +67,7 @@ import type {
   ContextText, Context, Issue, SlackChannel, SlackDMConfig,
   SlackSavePayload, TextFilesPayload, UploadedFile,
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
-  ContextRelation, RelationsPayload, Organization,
+  ContextRelation, RelationsPayload, Organization, VCSRepoPath,
 } from "../types";
 import { effectiveStatus, effectiveComment, effectiveNextStep } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
@@ -240,6 +243,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
 
   // ── Repositories edit state ──
   const [editingRepoId, setEditingRepoId] = useState<string | null>(null);
+  const [repoPaths, setRepoPaths] = useState<Record<string, VCSRepoPath[]>>({});
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -309,6 +313,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         reviews: safeReviews.filter((r) => r.repoId === repo.id),
       })));
       setTotalReviews(safeReviews.filter((r) => !r.reviewedAt).length);
+      // Fetch local paths for each repo
+      const pathResults = await Promise.allSettled(
+        safeRepos.map((repo) =>
+          (ListRepoLocalPaths(repo.id) as Promise<VCSRepoPath[]>).then(
+            (paths) => ({ id: repo.id, paths: paths ?? [] })
+          )
+        )
+      );
+      const pathMap: Record<string, VCSRepoPath[]> = {};
+      for (const r of pathResults) {
+        if (r.status === "fulfilled") pathMap[r.value.id] = r.value.paths;
+      }
+      setRepoPaths(pathMap);
     } catch {
       // best-effort
     }
@@ -616,6 +633,24 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     } catch (e) { setError(String(e)); }
   };
 
+  const handleAddRepoPath = async (repoId: string) => {
+    try {
+      await AddRepoLocalPath(repoId);
+      await loadReviews();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleRemoveRepoPath = async (pathId: string) => {
+    try {
+      await RemoveRepoLocalPath(pathId);
+      await loadReviews();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const handleUpdateRepoMeta = async (repoId: string) => {
     setEditSaving(true);
     setEditError("");
@@ -789,8 +824,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         className="needs-attention-item"
                         role="button"
                         tabIndex={0}
-                        onClick={() => openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name)}
-                        onKeyDown={(e) => e.key === "Enter" && openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name)}
+                        onClick={() => openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name, c.orgId)}
+                        onKeyDown={(e) => e.key === "Enter" && openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name, c.orgId)}
                       >
                         <span className="needs-attention-key">{c.key}</span>
                         {comment && <span className="needs-attention-comment">{comment}</span>}
@@ -844,7 +879,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                             id={c.id}
                             disabled={!isDraggingEnabled}
                             className={`context-row${isActive ? " context-row-active" : " context-row-archived"}`}
-                            onClick={() => openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name)}
+                            onClick={() => openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name, c.orgId)}
                           >
                             {(dragHandleProps) => (
                               <>
@@ -1096,12 +1131,10 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                             </button>
                           )}
                           <button
-                            className={repo.localPath ? "tracked-repo-link--active" : ""}
-                            onClick={() => void handleSetRepoPath(repo.id)}
-                            title={repo.localPath ? `Local path: ${repo.localPath}\nClick to change` : "Set local path"}
+                            onClick={() => void handleAddRepoPath(repo.id)}
+                            title="Add local path"
                           >
-                            {repo.localPath ? <FolderOpen size={12} /> : <Folder size={12} />}
-                            {repo.localPath ? "Path set" : "Set path"}
+                            <Folder size={12} /> Add path
                           </button>
                           {!isEditing && (
                             <button onClick={() => startEdit(repo)} title="Edit label and description">
@@ -1117,6 +1150,24 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                           </button>
                         </div>
                       </div>
+
+                      {(repoPaths[repo.id] ?? []).length > 0 && (
+                        <div className="repo-paths-list">
+                          {(repoPaths[repo.id] ?? []).map((p) => (
+                            <div key={p.id} className="repo-path-row">
+                              <FolderOpen size={11} style={{ flexShrink: 0 }} />
+                              <span className="repo-path-value" title={p.path}>{p.path}</span>
+                              <button
+                                className="repo-path-remove"
+                                title="Remove path"
+                                onClick={() => void handleRemoveRepoPath(p.id)}
+                              >
+                                <X size={11} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {repo.description && !isEditing && (
                         <div className="repo-card-description">{repo.description}</div>
@@ -1229,8 +1280,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                       {...(!r.error && {
                         role: "button" as const,
                         tabIndex: 0,
-                        onClick: () => { const orgName = orgs.find((o) => o.id === contexts.find((c) => c.id === r.contextId)?.orgId)?.name; openNewContextTab(r.contextId, r.contextKey, orgName); setReloadResults(null); },
-                        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const orgName = orgs.find((o) => o.id === contexts.find((c) => c.id === r.contextId)?.orgId)?.name; openNewContextTab(r.contextId, r.contextKey, orgName); setReloadResults(null); } },
+                        onClick: () => { const ctxOrgId = contexts.find((c) => c.id === r.contextId)?.orgId; const orgName = orgs.find((o) => o.id === ctxOrgId)?.name; openNewContextTab(r.contextId, r.contextKey, orgName, ctxOrgId); setReloadResults(null); },
+                        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const ctxOrgId = contexts.find((c) => c.id === r.contextId)?.orgId; const orgName = orgs.find((o) => o.id === ctxOrgId)?.name; openNewContextTab(r.contextId, r.contextKey, orgName, ctxOrgId); setReloadResults(null); } },
                       })}
                     >
                       <span className="reload-result-key">{r.contextKey}</span>
