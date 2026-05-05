@@ -30,6 +30,8 @@ import {
   ListSlackDMConfigs,
   AddVCSBranch,
   RemoveVCSBranch,
+  CheckoutBranch,
+  ListRepoLocalPaths,
   // @ts-ignore
   AddContextRelation,
   // @ts-ignore
@@ -49,7 +51,7 @@ import {
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal, VCSRepoPath } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -264,6 +266,10 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [showProposalHistory, setShowProposalHistory] = useState(false);
   const [workflowError, setWorkflowError] = useState("");
   const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
+  const [checkoutTarget, setCheckoutTarget] = useState<{ branch: string; repoId: string } | null>(null);
+  const [checkoutPaths, setCheckoutPaths] = useState<VCSRepoPath[]>([]);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
 
   const loadBreakdown = useCallback(async () => {
     if (!id) return;
@@ -674,6 +680,43 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }
   };
 
+  const handleCheckout = async (branch: string, repoId: string) => {
+    setCheckoutError("");
+    setCheckoutLoading(true);
+    try {
+      const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
+      if (paths.length === 0) {
+        setCheckoutError("No local path set for this repository. Add one in the Repositories tab.");
+        return;
+      }
+      if (paths.length === 1) {
+        await CheckoutBranch(paths[0].path, branch);
+        return;
+      }
+      setCheckoutPaths(paths);
+      setCheckoutTarget({ branch, repoId });
+    } catch (e) {
+      setCheckoutError(String(e));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleCheckoutWithPath = async (localPath: string) => {
+    if (!checkoutTarget) return;
+    setCheckoutError("");
+    setCheckoutLoading(true);
+    try {
+      await CheckoutBranch(localPath, checkoutTarget.branch);
+      setCheckoutTarget(null);
+      setCheckoutPaths([]);
+    } catch (e) {
+      setCheckoutError(String(e));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   if (loading) return <div className="loading">Loading…</div>;
 
   if (!detail) return (
@@ -924,7 +967,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               <section className="detail-section">
                 <div className="detail-section-header">
                   <span className="detail-section-title">
-                    Pull Requests
+                    Branches and PRs
                     {breakdown && (breakdown.prs + breakdown.prComments + breakdown.notifications) > 0 && (
                       <span className="unread-badge" style={{ marginLeft: 6 }}>
                         {breakdown.prs + breakdown.prComments + breakdown.notifications} new
@@ -933,6 +976,15 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                   </span>
                   <span className="detail-section-count">{pullRequests.length}</span>
                 </div>
+                {checkoutError && (
+                  <div className="error-banner" style={{ margin: "0 14px 8px" }}>
+                    {checkoutError}
+                    <button
+                      style={{ marginLeft: 8, background: "none", border: "none", cursor: "pointer", color: "inherit" }}
+                      onClick={() => setCheckoutError("")}
+                    >×</button>
+                  </div>
+                )}
                 <div className="issue-list">
                   {vcsBranches.map((b) => {
                     const repoUrl = b.repo
@@ -973,6 +1025,17 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                               title={`Open branch ${b.branch} on GitHub`}
                             >
                               <GitBranch size={11} /> {b.branch}
+                            </button>
+                          )}
+                          {b.branch && (
+                            <button
+                              type="button"
+                              className="vcs-checkout-btn"
+                              title={`Checkout ${b.branch} in terminal`}
+                              disabled={checkoutLoading}
+                              onClick={() => void handleCheckout(b.branch, b.repoId)}
+                            >
+                              Checkout
                             </button>
                           )}
                           {branchPRs.length > 0 && (
@@ -1103,6 +1166,38 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           onSave={handleUpdate}
           onCancel={closeEditForm}
         />
+      )}
+      {checkoutTarget && checkoutPaths.length > 1 && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Select Local Path</h2>
+            <p className="confirm-msg">
+              Choose which local clone to use for checking out <strong>{checkoutTarget.branch}</strong>:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "12px 0" }}>
+              {checkoutPaths.map((p) => (
+                <button
+                  key={p.id}
+                  className="btn-secondary"
+                  style={{ textAlign: "left", padding: "8px 12px", fontSize: 12 }}
+                  disabled={checkoutLoading}
+                  onClick={() => void handleCheckoutWithPath(p.path)}
+                >
+                  {p.path}
+                </button>
+              ))}
+            </div>
+            {checkoutError && <div className="error-banner">{checkoutError}</div>}
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                onClick={() => { setCheckoutTarget(null); setCheckoutPaths([]); setCheckoutError(""); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

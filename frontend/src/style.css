@@ -5005,3 +5005,22 @@ select {
   align-items: center;
 }
 .repo-path-remove:hover { color: var(--danger); }
+
+.vcs-checkout-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.vcs-checkout-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.vcs-checkout-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
