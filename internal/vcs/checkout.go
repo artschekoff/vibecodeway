@@ -7,6 +7,12 @@ import (
 
 // GitCheckout switches the working tree at dir to the given branch.
 func GitCheckout(dir, branch string) error {
+	if dir == "" {
+		return fmt.Errorf("GitCheckout: dir must not be empty")
+	}
+	if branch == "" {
+		return fmt.Errorf("GitCheckout: branch must not be empty")
+	}
 	cmd := exec.Command("git", "-C", dir, "checkout", branch)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

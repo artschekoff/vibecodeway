@@ -284,7 +284,11 @@ func (a *App) CheckoutBranch(localPath, branch string) error {
 		return err
 	}
 	settings, err := a.db.GetAppSettings(a.ctx)
-	if err != nil || settings.TerminalAppPath == "" {
+	if err != nil {
+		a.logger.Sugar().Warnf("CheckoutBranch: failed to load settings, terminal will not open: %v", err)
+		return nil
+	}
+	if settings.TerminalAppPath == "" {
 		return nil
 	}
 	cmd := exec.Command("open", "-a", settings.TerminalAppPath, localPath)

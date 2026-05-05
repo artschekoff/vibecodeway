@@ -28,10 +28,16 @@ func initTestRepo(t *testing.T) string {
 	if err := os.WriteFile(f, []byte("hello"), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
-	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "init").Run()
-	exec.Command("git", "-C", dir, "checkout", "-b", "feature/test").Run()
-	exec.Command("git", "-C", dir, "checkout", "main").Run()
+	for _, args := range [][]string{
+		{"git", "-C", dir, "add", "."},
+		{"git", "-C", dir, "commit", "-m", "init"},
+		{"git", "-C", dir, "checkout", "-b", "feature/test"},
+		{"git", "-C", dir, "checkout", "main"},
+	} {
+		if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", args, out)
+		}
+	}
 	return dir
 }
 
