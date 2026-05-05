@@ -25,6 +25,15 @@ type VCSRepo struct {
 // FullName returns "owner/name".
 func (r VCSRepo) FullName() string { return r.Owner + "/" + r.Name }
 
+// VCSRepoPath is one local filesystem path for a tracked repo.
+// A repo can have multiple paths (e.g. different clones for different teams).
+type VCSRepoPath struct {
+	ID        string `json:"id"`
+	RepoID    string `json:"repoId"`
+	Path      string `json:"path"`
+	CreatedAt string `json:"createdAt"`
+}
+
 // ContextVCSBranch links a specific branch of a VCSRepo to a context.
 type ContextVCSBranch struct {
 	ID        string   `json:"id"`
