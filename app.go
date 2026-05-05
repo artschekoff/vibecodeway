@@ -218,6 +218,12 @@ func (a *App) SetSlackPassphrase(passphrase string) error {
 	return a.slackRunner.SetPassphrase(passphrase)
 }
 
+// HasSlackPassphrase reports whether a non-empty Slack passphrase is currently held
+// in memory. Returns true when set via the env var at startup or via SetSlackPassphrase.
+func (a *App) HasSlackPassphrase() bool {
+	return a.slackRunner.Passphrase() != ""
+}
+
 // --- Context CRUD ---
 
 // ListContexts returns active contexts only.

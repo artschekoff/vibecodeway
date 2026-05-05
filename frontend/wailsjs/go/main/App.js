@@ -406,6 +406,10 @@ export function SetSlackPassphrase(arg1) {
   return window['go']['main']['App']['SetSlackPassphrase'](arg1);
 }
 
+export function HasSlackPassphrase() {
+  return window['go']['main']['App']['HasSlackPassphrase']();
+}
+
 export function SetTrackedRepoPath(arg1, arg2) {
   return window['go']['main']['App']['SetTrackedRepoPath'](arg1, arg2);
 }

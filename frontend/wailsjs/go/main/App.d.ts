@@ -212,6 +212,8 @@ export function SetSlackConfig(arg1:string,arg2:string,arg3:string):Promise<slac
 
 export function SetSlackPassphrase(arg1:string):Promise<void>;
 
+export function HasSlackPassphrase():Promise<boolean>;
+
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
 export function SetUserWorkflowOverrides(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
