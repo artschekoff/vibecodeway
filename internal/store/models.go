@@ -151,6 +151,7 @@ type AppSettings struct {
 	ContextRefetchIntervalMin int    `json:"contextRefetchIntervalMin"`
 	ReviewsRefetchEnabled     bool   `json:"reviewsRefetchEnabled"`
 	ReviewsRefetchIntervalMin int    `json:"reviewsRefetchIntervalMin"`
+	TerminalAppPath           string `json:"terminalAppPath"`
 	UpdatedAt                 string `json:"updatedAt"`
 }
 

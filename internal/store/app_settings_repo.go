@@ -17,6 +17,7 @@ func defaultAppSettings() *AppSettings {
 		ContextRefetchIntervalMin: 30,
 		ReviewsRefetchEnabled:     false,
 		ReviewsRefetchIntervalMin: 30,
+		TerminalAppPath:           "",
 	}
 }
 
@@ -28,14 +29,16 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		contextIntervalMin int
 		reviewsEnabled     int
 		reviewsIntervalMin int
+		terminalAppPath    string
 		updatedAt          string
 	)
 	err := s.db.QueryRowContext(ctx,
 		`SELECT context_refetch_enabled, context_refetch_interval_min,
-		        reviews_refetch_enabled, reviews_refetch_interval_min, updated_at
+		        reviews_refetch_enabled, reviews_refetch_interval_min,
+		        terminal_app_path, updated_at
 		 FROM app_settings WHERE id = ?`,
 		appSettingsSingletonID,
-	).Scan(&contextEnabled, &contextIntervalMin, &reviewsEnabled, &reviewsIntervalMin, &updatedAt)
+	).Scan(&contextEnabled, &contextIntervalMin, &reviewsEnabled, &reviewsIntervalMin, &terminalAppPath, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return defaultAppSettings(), nil
 	}
@@ -47,6 +50,7 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		ContextRefetchIntervalMin: contextIntervalMin,
 		ReviewsRefetchEnabled:     reviewsEnabled != 0,
 		ReviewsRefetchIntervalMin: reviewsIntervalMin,
+		TerminalAppPath:           terminalAppPath,
 		UpdatedAt:                 updatedAt,
 	}, nil
 }
@@ -67,17 +71,20 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO app_settings
 		     (id, context_refetch_enabled, context_refetch_interval_min,
-		      reviews_refetch_enabled, reviews_refetch_interval_min, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?)
+		      reviews_refetch_enabled, reviews_refetch_interval_min,
+		      terminal_app_path, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     context_refetch_enabled      = excluded.context_refetch_enabled,
 		     context_refetch_interval_min = excluded.context_refetch_interval_min,
 		     reviews_refetch_enabled      = excluded.reviews_refetch_enabled,
 		     reviews_refetch_interval_min = excluded.reviews_refetch_interval_min,
+		     terminal_app_path            = excluded.terminal_app_path,
 		     updated_at                   = excluded.updated_at`,
 		appSettingsSingletonID,
 		contextEnabled, settings.ContextRefetchIntervalMin,
 		reviewsEnabled, settings.ReviewsRefetchIntervalMin,
+		settings.TerminalAppPath,
 		now,
 	)
 	if err != nil {
