@@ -267,7 +267,10 @@ export interface ChatMessage {
 }
 
 export interface AISettings {
+  provider: "openai" | "anthropic" | "local";
   hasKey: boolean;
+  hasOpenAIKey: boolean;
+  hasAnthropicKey: boolean;
   model: string;
   baseUrl: string;
   source: "env" | "db" | "none";

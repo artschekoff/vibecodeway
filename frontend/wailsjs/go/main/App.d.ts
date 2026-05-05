@@ -10,9 +10,22 @@ import {jira} from '../models';
 import {jirastore} from '../models';
 import {vcs} from '../models';
 
+export interface AISettingsResponse {
+  provider: string;
+  hasKey: boolean;
+  hasOpenAIKey: boolean;
+  hasAnthropicKey: boolean;
+  model: string;
+  baseUrl: string;
+  source: string;
+  updatedAt: string;
+}
+
 export function AddContextRelation(arg1:string,arg2:string,arg3:string):Promise<store.ContextRelation>;
 
 export function AddIssuesToContext(arg1:string,arg2:Array<string>):Promise<number>;
+
+export function AddRepoLocalPath(arg1:string):Promise<void>;
 
 export function AddSlackChannels(arg1:string,arg2:string,arg3:Array<slackstore.SlackChannelInput>):Promise<void>;
 
@@ -36,6 +49,8 @@ export function ChatWithContext(arg1:string,arg2:string):Promise<contextlog.Chat
 
 export function CheckAccessibility():Promise<boolean>;
 
+export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
+
 export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Array<store.ContextUploadedFile>>;
 
 export function CreateContext(arg1:string):Promise<store.Context>;
@@ -55,6 +70,8 @@ export function DeleteJiraComment(arg1:string):Promise<void>;
 export function DeleteJiraIssue(arg1:string):Promise<void>;
 
 export function DeleteOrganization(arg1:string):Promise<void>;
+
+export function DeleteSlackChannel(arg1:string):Promise<void>;
 
 export function DeleteSlackDMConfig(arg1:string):Promise<void>;
 
@@ -116,6 +133,8 @@ export function ListOrganizations():Promise<Array<store.Organization>>;
 
 export function ListRepoBranches(arg1:string,arg2:string):Promise<Array<string>>;
 
+export function ListRepoLocalPaths(arg1:string):Promise<Array<vcsstore.VCSRepoPath>>;
+
 export function ListSlackChannels(arg1:string):Promise<Array<slackstore.SlackChannel>>;
 
 export function ListSlackDMConfigs(arg1:string):Promise<Array<slackstore.SlackDMConfig>>;
@@ -170,6 +189,8 @@ export function ReloadAllContexts():Promise<Array<service.ReloadAllResult>>;
 
 export function RemoveContextRelation(arg1:string):Promise<void>;
 
+export function RemoveRepoLocalPath(arg1:string):Promise<void>;
+
 export function RemoveSlackChannel(arg1:string):Promise<void>;
 
 export function RemoveSlackDMEntry(arg1:string,arg2:string):Promise<void>;
@@ -177,6 +198,8 @@ export function RemoveSlackDMEntry(arg1:string,arg2:string):Promise<void>;
 export function RemoveTrackedRepo(arg1:string):Promise<void>;
 
 export function RemoveVCSBranch(arg1:string):Promise<void>;
+
+export function SearchChannelMetadata(arg1:string,arg2:string):Promise<service.ChannelMetadataResult>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
@@ -186,15 +209,7 @@ export function SearchNewIssues(arg1:string):Promise<service.SearchDiff>;
 
 export function SearchSlackChannels(arg1:string,arg2:string):Promise<Array<service.SlackChannelResult>>;
 
-export function SetAISettings(arg1:string,arg2:string,arg3:string):Promise<void>;
-
-export function AddRepoLocalPath(arg1:string):Promise<vcsstore.VCSRepoPath>;
-
-export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
-
-export function ListRepoLocalPaths(arg1:string):Promise<Array<vcsstore.VCSRepoPath>>;
-
-export function RemoveRepoLocalPath(arg1:string):Promise<void>;
+export function SetAISettings(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number,arg5:string):Promise<void>;
 
@@ -203,6 +218,7 @@ export function SetContextOrg(arg1:string,arg2:string):Promise<void>;
 export function SetContextsOrder(arg1:Array<string>):Promise<void>;
 
 export function SetJiraBaseURL(arg1:string,arg2:string):Promise<void>;
+
 
 export function SetJiraConfig(arg1:string,arg2:string):Promise<jirastore.JiraProvider>;
 
@@ -215,6 +231,7 @@ export function SetSlackPassphrase(arg1:string):Promise<void>;
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
 export function SetUserWorkflowOverrides(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 
 export function SyncAllComments(arg1:string):Promise<number>;
 
@@ -255,3 +272,4 @@ export function UpsertSlackDMConfig(arg1:string,arg2:string,arg3:string):Promise
 export function VCSLoginComplete(arg1:string,arg2:string,arg3:number):Promise<string>;
 
 export function VCSLoginStart(arg1:string):Promise<vcs.DeviceCodeInfo>;
+

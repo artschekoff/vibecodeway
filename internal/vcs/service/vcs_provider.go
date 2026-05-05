@@ -192,7 +192,7 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 
 // WriteContext appends a human-readable PR section for contextID to w.
 // Only items on or after startAt are included; pass a zero time for no filter.
-func (p *VCSProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time) error {
+func (p *VCSProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, _ bool) error {
 	prs, err := p.store.PullRequests.ListPRsForContext(ctx, contextID)
 	if err != nil {
 		return fmt.Errorf("vcs write context: list prs: %w", err)

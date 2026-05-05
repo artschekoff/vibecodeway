@@ -10,6 +10,10 @@ export function AddIssuesToContext(arg1, arg2) {
   return window['go']['main']['App']['AddIssuesToContext'](arg1, arg2);
 }
 
+export function AddRepoLocalPath(arg1) {
+  return window['go']['main']['App']['AddRepoLocalPath'](arg1);
+}
+
 export function AddSlackChannels(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddSlackChannels'](arg1, arg2, arg3);
 }
@@ -52,6 +56,10 @@ export function ChatWithContext(arg1, arg2) {
 
 export function CheckAccessibility() {
   return window['go']['main']['App']['CheckAccessibility']();
+}
+
+export function CheckoutBranch(arg1, arg2) {
+  return window['go']['main']['App']['CheckoutBranch'](arg1, arg2);
 }
 
 export function CommitPendingUploads(arg1, arg2) {
@@ -214,6 +222,10 @@ export function ListRepoBranches(arg1, arg2) {
   return window['go']['main']['App']['ListRepoBranches'](arg1, arg2);
 }
 
+export function ListRepoLocalPaths(arg1) {
+  return window['go']['main']['App']['ListRepoLocalPaths'](arg1);
+}
+
 export function ListSlackChannels(arg1) {
   return window['go']['main']['App']['ListSlackChannels'](arg1);
 }
@@ -322,6 +334,10 @@ export function RemoveContextRelation(arg1) {
   return window['go']['main']['App']['RemoveContextRelation'](arg1);
 }
 
+export function RemoveRepoLocalPath(arg1) {
+  return window['go']['main']['App']['RemoveRepoLocalPath'](arg1);
+}
+
 export function RemoveSlackChannel(arg1) {
   return window['go']['main']['App']['RemoveSlackChannel'](arg1);
 }
@@ -354,24 +370,8 @@ export function SearchSlackChannels(arg1, arg2) {
   return window['go']['main']['App']['SearchSlackChannels'](arg1, arg2);
 }
 
-export function SetAISettings(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SetAISettings'](arg1, arg2, arg3);
-}
-
-export function AddRepoLocalPath(arg1) {
-  return window['go']['main']['App']['AddRepoLocalPath'](arg1);
-}
-
-export function CheckoutBranch(arg1, arg2) {
-  return window['go']['main']['App']['CheckoutBranch'](arg1, arg2);
-}
-
-export function ListRepoLocalPaths(arg1) {
-  return window['go']['main']['App']['ListRepoLocalPaths'](arg1);
-}
-
-export function RemoveRepoLocalPath(arg1) {
-  return window['go']['main']['App']['RemoveRepoLocalPath'](arg1);
+export function SetAISettings(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SetAISettings'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SetAppSettings(arg1, arg2, arg3, arg4, arg5) {
@@ -493,3 +493,4 @@ export function VCSLoginComplete(arg1, arg2, arg3) {
 export function VCSLoginStart(arg1) {
   return window['go']['main']['App']['VCSLoginStart'](arg1);
 }
+

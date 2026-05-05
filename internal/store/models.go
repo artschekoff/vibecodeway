@@ -136,14 +136,25 @@ type ContextRelation struct {
 	CreatedAt    string `json:"createdAt"`
 }
 
-// AISettings holds OpenAI configuration stored in the local database.
-// The raw API key is never persisted or serialised — only the flag HasKey is exposed.
+// AISettings holds multi-provider AI configuration stored in the local database.
+// The raw API keys are never persisted or serialised — only the HasKey flags are exposed.
+// Provider is one of "openai", "anthropic", or "local".
 type AISettings struct {
-	HasKey    bool   `json:"hasKey"`
-	Model     string `json:"model"`
-	BaseURL   string `json:"baseUrl"`
-	UpdatedAt string `json:"updatedAt"`
+	Provider        string `json:"provider"`
+	HasKey          bool   `json:"hasKey"`          // true when the active provider has a key configured
+	HasOpenAIKey    bool   `json:"hasOpenAIKey"`    // true when an OpenAI key is stored
+	HasAnthropicKey bool   `json:"hasAnthropicKey"` // true when an Anthropic key is stored
+	Model           string `json:"model"`
+	BaseURL         string `json:"baseUrl"`
+	UpdatedAt       string `json:"updatedAt"`
 }
+
+// Provider constants for AISettings.Provider.
+const (
+	ProviderOpenAI    = "openai"
+	ProviderAnthropic = "anthropic"
+	ProviderLocal     = "local"
+)
 
 // AppSettings holds application-level preferences stored in the local database.
 type AppSettings struct {
