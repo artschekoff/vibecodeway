@@ -230,6 +230,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
               id: newTabId(),
               type: "org" as const,
               orgId: tab.orgId,
+              orgName: tab.orgName,
               title: name,
               pinned: false,
             };

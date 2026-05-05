@@ -263,6 +263,34 @@ func (a *App) PickRepoDirectory() (string, error) {
 	return path, nil
 }
 
+// ListRepoLocalPaths returns all local filesystem paths registered for a tracked repo.
+func (a *App) ListRepoLocalPaths(repoID string) ([]vcsstore.VCSRepoPath, error) {
+	return a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
+}
+
+// AddRepoLocalPath opens a directory picker and adds the selected path to the tracked repo.
+// Returns nil without error if the user cancels the picker.
+func (a *App) AddRepoLocalPath(repoID string) (*vcsstore.VCSRepoPath, error) {
+	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select repository directory",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open directory dialog: %w", err)
+	}
+	if path == "" {
+		return nil, nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("path does not exist: %w", err)
+	}
+	return a.vcsStore.RepoPaths.Add(a.ctx, repoID, path)
+}
+
+// RemoveRepoLocalPath deletes a local filesystem path entry by ID.
+func (a *App) RemoveRepoLocalPath(pathID string) error {
+	return a.vcsStore.RepoPaths.Delete(a.ctx, pathID)
+}
+
 // SetTrackedRepoPath associates a local filesystem directory with a tracked repo.
 // Pass an empty string to clear the path.
 func (a *App) SetTrackedRepoPath(repoID, localPath string) error {

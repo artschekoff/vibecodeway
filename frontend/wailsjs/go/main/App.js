@@ -493,4 +493,3 @@ export function VCSLoginComplete(arg1, arg2, arg3) {
 export function VCSLoginStart(arg1) {
   return window['go']['main']['App']['VCSLoginStart'](arg1);
 }
-
