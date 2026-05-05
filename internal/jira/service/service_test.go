@@ -871,3 +871,74 @@ func TestSetAgentProposal_UnknownContextID_ReturnsError(t *testing.T) {
 	_, err := svc.SetAgentProposal(ctx, "nonexistent-id", "in_progress", "", "")
 	require.Error(t, err)
 }
+
+// --- SlackProvider per-message reload tests ---
+
+func TestSlackProvider_Reload_StoresPerMessageRecords(t *testing.T) {
+	ctx := context.Background()
+	searchOut := `[{"id":"C1","name":"general","messages":[
+		{"user":"Alice","text":"hello","timestamp":"2026-05-05 10:00 UTC","rawTs":"1746441000.000000"},
+		{"user":"Bob","text":"world","timestamp":"2026-05-05 11:00 UTC","rawTs":"1746444600.000000"}
+	]}]`
+
+	runner := &cmdRoutingRunner{outputs: map[string]string{"search-channels": searchOut}}
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	sRepo := slackstore.NewRepo(s.DB())
+
+	ctxRec, err := s.CreateContext(ctx, "test-per-msg")
+	require.NoError(t, err)
+
+	_, err = sRepo.UpsertSlackChannel(ctx, ctxRec.ID, "acme", "C1", "general", "")
+	require.NoError(t, err)
+
+	p := NewSlackProvider(sRepo, runner, logger)
+	_, err = p.Reload(ctx, ctxRec.ID)
+	require.NoError(t, err)
+
+	threads, err := sRepo.ListSlackThreads(ctx, ctxRec.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 2, "one record per message")
+	assert.Contains(t, threads[0].Content, "Alice")
+	assert.Contains(t, threads[0].Content, "hello")
+	assert.Contains(t, threads[1].Content, "Bob")
+	assert.Contains(t, threads[1].Content, "world")
+}
+
+func TestSlackProvider_Reload_DeletesOldBlob(t *testing.T) {
+	ctx := context.Background()
+	searchOut := `[{"id":"C1","name":"general","messages":[
+		{"user":"Alice","text":"hi","timestamp":"2026-05-05 10:00 UTC","rawTs":"1746441000.000000"}
+	]}]`
+
+	runner := &cmdRoutingRunner{outputs: map[string]string{"search-channels": searchOut}}
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	sRepo := slackstore.NewRepo(s.DB())
+
+	ctxRec, err := s.CreateContext(ctx, "test-del-blob")
+	require.NoError(t, err)
+
+	ch, err := sRepo.UpsertSlackChannel(ctx, ctxRec.ID, "acme", "C1", "general", "")
+	require.NoError(t, err)
+
+	// Insert an old channel blob (thread_ts="")
+	_, err = sRepo.UpsertSlackThread(ctx, ctxRec.ID, slackstore.UpsertSlackThreadArgs{
+		SlackChannelID: ch.ID,
+		Workspace:      "acme",
+		ChannelID:      "C1",
+		ThreadTS:       "",
+		ChannelName:    "general",
+		Content:        "old blob content",
+	})
+	require.NoError(t, err)
+
+	p := NewSlackProvider(sRepo, runner, logger)
+	_, err = p.Reload(ctx, ctxRec.ID)
+	require.NoError(t, err)
+
+	threads, err := sRepo.ListSlackThreads(ctx, ctxRec.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 1, "blob deleted; one per-message record remains")
+	assert.NotEmpty(t, threads[0].ThreadTS, "per-message record has non-empty thread_ts")
+}

@@ -142,6 +142,20 @@ func (r *Repo) MarkSlackThreadViewed(ctx context.Context, id string) error {
 
 // nullableString converts an empty string to nil so SQLite stores NULL
 // for optional FK columns instead of an empty string that would violate the FK.
+// DeleteChannelBlobs removes whole-channel snapshot records (thread_ts="") for the given
+// channel. Called during Refresh after per-message records have been successfully upserted
+// so stale blobs from the old single-record format do not accumulate.
+func (r *Repo) DeleteChannelBlobs(ctx context.Context, contextID, channelID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"DELETE FROM slack_threads WHERE context_id = ? AND channel_id = ? AND thread_ts = ''",
+		contextID, channelID,
+	)
+	if err != nil {
+		return fmt.Errorf("deleting channel blobs: %w", err)
+	}
+	return nil
+}
+
 func nullableString(s string) any {
 	if s == "" {
 		return nil

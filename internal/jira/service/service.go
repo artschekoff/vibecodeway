@@ -64,63 +64,44 @@ func jiraLinkToRelationType(typeName, direction string) string {
 	}
 }
 
-// slackMessage is one entry in the messages array returned by slack-cli search-channels
-// and list-dms --with-messages.
-// search-channels uses "user" (display name); list-dms uses "userId" (Slack user ID).
-// Replies holds thread replies when search-channels returns structured responses.
-type slackMessage struct {
-	User      string         `json:"user"`
-	UserID    string         `json:"userId"`
-	Text      string         `json:"text"`
-	Timestamp string         `json:"timestamp"`
-	Replies   []slackMessage `json:"replies,omitempty"`
-}
-
-// displayUser returns the best available user label: display name when present, user ID otherwise.
-func (m slackMessage) displayUser() string {
-	if m.User != "" {
-		return m.User
-	}
-	return m.UserID
-}
-
 // slackDMEntry is one DM conversation returned by slack-cli list-dms --with-messages.
 // The CLI may return the message as "lastMessage" (current), "message" (singular), or
 // "messages" (array). All three are decoded for forward/backward compatibility.
 type slackDMEntry struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	UserID      string         `json:"userId"`
-	UserName    string         `json:"userName"`
-	IsIM        bool           `json:"isIm"`
-	Messages    []slackMessage `json:"messages"`
-	Message     *slackMessage  `json:"message"`
-	LastMessage *slackMessage  `json:"lastMessage"`
+	ID          string                    `json:"id"`
+	Name        string                    `json:"name"`
+	UserID      string                    `json:"userId"`
+	UserName    string                    `json:"userName"`
+	IsIM        bool                      `json:"isIm"`
+	Messages    []slackstore.SlackMessage `json:"messages"`
+	Message     *slackstore.SlackMessage  `json:"message"`
+	LastMessage *slackstore.SlackMessage  `json:"lastMessage"`
 }
 
 // allMessages returns all messages for this DM entry across all possible field shapes.
-func (e slackDMEntry) allMessages() []slackMessage {
+func (e slackDMEntry) allMessages() []slackstore.SlackMessage {
 	if len(e.Messages) > 0 {
 		return e.Messages
 	}
 	if e.LastMessage != nil {
-		return []slackMessage{*e.LastMessage}
+		return []slackstore.SlackMessage{*e.LastMessage}
 	}
 	if e.Message != nil {
-		return []slackMessage{*e.Message}
+		return []slackstore.SlackMessage{*e.Message}
 	}
 	return nil
 }
 
 // SlackChannelResult is one channel returned by SearchSlackChannels.
 // The JSON shape matches what slack-cli search-channels emits:
-// [{id, name, messages:[{user, text, timestamp}]}]
-// Content is derived by formatting Messages and is not present in the raw JSON.
+// [{id, name, messages:[{user, text, timestamp, rawTs}]}]
+// Content is derived by formatting Messages for the search-result preview in ContextForm;
+// it is NOT stored to the DB — AddSlackChannels uses Messages directly.
 type SlackChannelResult struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Messages []slackMessage `json:"messages"`
-	Content  string         `json:"content,omitempty"` // formatted from Messages; not in CLI output but sent to frontend
+	ID       string                    `json:"id"`
+	Name     string                    `json:"name"`
+	Messages []slackstore.SlackMessage `json:"messages"`
+	Content  string                    `json:"content,omitempty"` // formatted preview; not in CLI output but sent to frontend
 }
 
 // SlackWorkspaceResult is one workspace returned by ListSlackWorkspaces.
@@ -840,8 +821,8 @@ func (svc *ContextService) SearchSlackChannels(ctx context.Context, workspace, n
 }
 
 // AddSlackChannels upserts multiple Slack channels into a context.
-// If a channel carries Content (pre-loaded by slack-cli search-channels), it is also
-// stored immediately as a slack_thread so the user sees data without a separate Refresh.
+// If a channel carries Messages (pre-loaded by slack-cli search-channels), each message is
+// stored immediately as its own slack_thread record so the user sees content without a Refresh.
 func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, workspace string, channels []slackstore.SlackChannelInput) error {
 	if workspace == "" {
 		return fmt.Errorf("slack workspace is required")
@@ -857,20 +838,25 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 		if err != nil {
 			return fmt.Errorf("upserting channel %q: %w", ch.ChannelName, err)
 		}
-		if ch.Content != "" {
-			// Store a temporary whole-channel blob (ThreadTS="") so the user sees
-			// content immediately without needing to Refresh. The next Refresh will
-			// delete this blob and replace it with individual per-message thread rows.
+		// Store each message as its own slack_thread record so users can manage
+		// individual messages (delete, enable/disable) without a separate Refresh.
+		// Iterate in reverse so oldest messages get the earliest created_at timestamps.
+		for i := len(ch.Messages) - 1; i >= 0; i-- {
+			msg := ch.Messages[i]
+			if msg.RawTS == "" {
+				continue
+			}
+			content := formatSingleMessage(msg)
 			if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 				SlackChannelID: slackCh.ID,
 				Workspace:      workspace,
 				ChannelID:      ch.ChannelID,
-				ThreadTS:       "",
+				ThreadTS:       msg.RawTS,
 				ChannelName:    ch.ChannelName,
-				Content:        ch.Content,
+				Content:        content,
 			}); err != nil {
-				svc.logger.Warn("add channels: upsert thread failed",
-					zap.String("channel", ch.ChannelName), zap.Error(err))
+				svc.logger.Warn("add channels: upsert message thread failed",
+					zap.String("channel", ch.ChannelName), zap.String("ts", msg.RawTS), zap.Error(err))
 			}
 		}
 	}
@@ -1251,7 +1237,7 @@ func formatDMContent(raw string) string {
 		}
 		fmt.Fprintf(&sb, "# DM with %s\n\n", label)
 		for _, m := range msgs {
-			fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.displayUser(), m.Text)
+			fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.DisplayUser(), m.Text)
 		}
 		sb.WriteString("\n")
 	}

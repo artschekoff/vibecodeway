@@ -593,3 +593,59 @@ func TestDeleteContextCascadesToSlackChannels(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, channels, "channels should be deleted with context (cascade)")
 }
+
+func TestDeleteChannelBlobs_RemovesOnlyEmptyThreadTS(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "blob-ctx")
+	require.NoError(t, err)
+
+	// Old whole-channel blob (thread_ts="")
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "", ChannelName: "general", Content: "old blob",
+	})
+	require.NoError(t, err)
+
+	// Per-message record (thread_ts set)
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "1746441180.000000", ChannelName: "general", Content: "message",
+	})
+	require.NoError(t, err)
+
+	err = repo.DeleteChannelBlobs(ctx, c.ID, "C1")
+	require.NoError(t, err)
+
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 1, "only the per-message record should remain")
+	assert.Equal(t, "1746441180.000000", threads[0].ThreadTS, "per-message record must survive")
+}
+
+func TestDeleteChannelBlobs_LeavesOtherChannelsUntouched(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	c, err := s.CreateContext(ctx, "blob-ctx2")
+	require.NoError(t, err)
+
+	// Blob for C1 (to be deleted)
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "", ChannelName: "general", Content: "c1 blob",
+	})
+	require.NoError(t, err)
+
+	// Blob for C2 (must NOT be deleted)
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C2", ThreadTS: "", ChannelName: "other", Content: "c2 blob",
+	})
+	require.NoError(t, err)
+
+	err = repo.DeleteChannelBlobs(ctx, c.ID, "C1")
+	require.NoError(t, err)
+
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 1, "C2 blob must survive")
+	assert.Equal(t, "C2", threads[0].ChannelID)
+}
