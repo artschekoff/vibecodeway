@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/artschekoff/context-consolidator/internal/vcs"
@@ -271,4 +272,24 @@ func (a *App) SetTrackedRepoPath(repoID, localPath string) error {
 		}
 	}
 	return a.vcsStore.Repos.UpdateLocalPath(a.ctx, repoID, localPath)
+}
+
+// CheckoutBranch switches to branch in localPath, then opens the configured terminal there.
+// If no terminal app is configured, the terminal is not opened.
+func (a *App) CheckoutBranch(localPath, branch string) error {
+	if _, err := os.Stat(localPath); err != nil {
+		return fmt.Errorf("local path not accessible: %w", err)
+	}
+	if err := vcs.GitCheckout(localPath, branch); err != nil {
+		return err
+	}
+	settings, err := a.db.GetAppSettings(a.ctx)
+	if err != nil || settings.TerminalAppPath == "" {
+		return nil
+	}
+	cmd := exec.Command("open", "-a", settings.TerminalAppPath, localPath)
+	if err := cmd.Start(); err != nil {
+		a.logger.Sugar().Warnf("open terminal failed: app=%s err=%v", settings.TerminalAppPath, err)
+	}
+	return nil
 }
