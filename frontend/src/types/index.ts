@@ -267,7 +267,10 @@ export interface ChatMessage {
 }
 
 export interface AISettings {
+  provider: "openai" | "anthropic" | "local";
   hasKey: boolean;
+  hasOpenAIKey: boolean;
+  hasAnthropicKey: boolean;
   model: string;
   baseUrl: string;
   source: "env" | "db" | "none";
@@ -279,6 +282,7 @@ export interface AppSettings {
   contextRefetchIntervalMin: number;
   reviewsRefetchEnabled: boolean;
   reviewsRefetchIntervalMin: number;
+  terminalAppPath: string;
   updatedAt: string;
 }
 
@@ -308,6 +312,13 @@ export interface VCSRepo {
   localPath: string;
   label: string;
   description: string;
+  createdAt: string;
+}
+
+export interface VCSRepoPath {
+  id: string;
+  repoId: string;
+  path: string;
   createdAt: string;
 }
 
@@ -486,7 +497,8 @@ export type TabType = "org" | "context" | "settings";
 export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)
   type: TabType;
-  orgId?: string;      // present when type === "org"
+  orgId?: string;      // present when type === "org"; also on type === "context" to link back to parent org
+  orgName?: string;    // org display name; stored on context tabs for fallback org-tab creation
   contextId?: string;  // present when type === "context"
   title: string;
   pinned: boolean;

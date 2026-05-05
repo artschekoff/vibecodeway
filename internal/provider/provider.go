@@ -40,5 +40,5 @@ type Provider interface {
 
 	// WriteContext appends a human-readable section for contextID to w.
 	// Only items on or after startAt are included; pass a zero time for no filter.
-	WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time) error
+	WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, activeOnly bool) error
 }

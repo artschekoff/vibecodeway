@@ -30,6 +30,15 @@ type commentLister interface {
 	ListComments(ctx context.Context, issueKey string) ([]jira.Comment, error)
 }
 
+// JiraAPI is the Jira client interface used by ContextService and JiraProvider.
+type JiraAPI interface {
+	commentLister
+	ViewIssue(ctx context.Context, key string) (*jira.IssueDetail, error)
+	Search(ctx context.Context, jql string) ([]jira.SearchResult, error)
+	AuthStatus(ctx context.Context) (string, error)
+	GetInstanceURL(ctx context.Context) string
+}
+
 const (
 	// providerJira and providerSlack are the canonical provider name strings.
 	providerJira  = "jira"
@@ -58,11 +67,13 @@ func jiraLinkToRelationType(typeName, direction string) string {
 // slackMessage is one entry in the messages array returned by slack-cli search-channels
 // and list-dms --with-messages.
 // search-channels uses "user" (display name); list-dms uses "userId" (Slack user ID).
+// Replies holds thread replies when search-channels returns structured responses.
 type slackMessage struct {
-	User      string `json:"user"`
-	UserID    string `json:"userId"`
-	Text      string `json:"text"`
-	Timestamp string `json:"timestamp"`
+	User      string         `json:"user"`
+	UserID    string         `json:"userId"`
+	Text      string         `json:"text"`
+	Timestamp string         `json:"timestamp"`
+	Replies   []slackMessage `json:"replies,omitempty"`
 }
 
 // displayUser returns the best available user label: display name when present, user ID otherwise.
@@ -201,7 +212,7 @@ type ContextService struct {
 	jiraRepo      *jirastore.Repo
 	slackRepo     *slackstore.Repo
 	vcsStore      *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
-	jira          *jira.Client
+	jira          JiraAPI
 	slack         SlackRunner
 	logger        *zap.Logger
 	providers     []provider.Provider
@@ -246,7 +257,7 @@ func (svc *ContextService) SetAgentProposal(ctx context.Context, contextID, stat
 // Pass provider implementations as variadic arguments to enable cross-cutting operations
 // (Refresh, Reload, FormatContext). Each provider must have a unique Name().
 // slack may be nil if Slack support is not needed.
-func NewContextService(s *appstore.Store, j *jira.Client, jiraRepo *jirastore.Repo, slackRepo *slackstore.Repo, slack SlackRunner, logger *zap.Logger, providers ...provider.Provider) *ContextService {
+func NewContextService(s *appstore.Store, j JiraAPI, jiraRepo *jirastore.Repo, slackRepo *slackstore.Repo, slack SlackRunner, logger *zap.Logger, providers ...provider.Provider) *ContextService {
 	return &ContextService{
 		store:     s,
 		jiraRepo:  jiraRepo,
@@ -267,6 +278,12 @@ func (svc *ContextService) SetVCSStore(vs *vcsstore.Store) {
 // AuthStatus returns the current acli authentication status.
 func (svc *ContextService) AuthStatus(ctx context.Context) (string, error) {
 	return svc.jira.AuthStatus(ctx)
+}
+
+// GetJiraInstanceURL returns the Jira instance base URL from acli auth status.
+// Returns empty string when not authenticated or URL cannot be determined.
+func (svc *ContextService) GetJiraInstanceURL(ctx context.Context) string {
+	return svc.jira.GetInstanceURL(ctx)
 }
 
 // ListContexts returns active contexts only.
@@ -534,15 +551,15 @@ func (svc *ContextService) SearchNewIssues(ctx context.Context, contextID string
 }
 
 // AddIssuesToContext fetches full details for the given Jira keys and upserts them into the context.
-// Automatically adds one level of subtasks for each issue.
-// After upserting, it inspects Jira issue links: if a linked Jira key belongs to a different context,
-// a context relation is auto-created with the corresponding type. Returns the count of issues added.
+// For each primary issue it also adds: subtasks from the API subtasks field, direct child issues
+// found via JQL "parent = KEY" (handles next-gen Jira projects), and all linked issues.
+// Cross-context relations are still auto-created for linked keys that exist in other contexts.
+// Returns the count of issues added.
 func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID string, jiraKeys []string) (int, error) {
 	if len(jiraKeys) == 0 {
 		return 0, nil
 	}
 	added := 0
-	var subtaskKeys []string
 	seen := make(map[string]bool, len(jiraKeys))
 	for _, key := range jiraKeys {
 		seen[key] = true
@@ -554,50 +571,77 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 		linkedKey string
 	}
 	var collectedLinks []pendingLink
+	var refKeys []string // subtasks + linked issues + JQL children
 
-	upsertIssue := func(key string) bool {
+	// upsertSimple fetches full details, persists the issue, and returns the detail for ref collection.
+	// Returns nil if fetch or persist fails.
+	upsertSimple := func(key string) *jira.IssueDetail {
 		detail, err := svc.jira.ViewIssue(ctx, key)
 		if err != nil {
 			svc.logger.Warn("failed to view issue", zap.String("key", key), zap.Error(err))
-			return false
+			return nil
 		}
 		if _, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
 			detail.IssueType, detail.Description, detail.Updated,
 		); err != nil {
 			svc.logger.Warn("failed to upsert issue", zap.String("key", key), zap.Error(err))
-			return false
+			return nil
 		}
+		return detail
+	}
+
+	// Primary pass: upsert each requested issue and collect all refs.
+	for _, key := range jiraKeys {
+		detail := upsertSimple(key)
+		if detail == nil {
+			continue
+		}
+		added++
 		for _, sub := range detail.Subtasks {
 			if !seen[sub.Key] {
 				seen[sub.Key] = true
-				subtaskKeys = append(subtaskKeys, sub.Key)
+				refKeys = append(refKeys, sub.Key)
 			}
 		}
 		for _, link := range detail.Links {
+			if !seen[link.LinkedKey] {
+				seen[link.LinkedKey] = true
+				refKeys = append(refKeys, link.LinkedKey)
+			}
 			collectedLinks = append(collectedLinks, pendingLink{
 				typeName:  link.TypeName,
 				direction: link.Direction,
 				linkedKey: link.LinkedKey,
 			})
 		}
-		return true
 	}
 
+	// Fetch child issues via JQL for next-gen Jira projects where child issues
+	// are not included in the subtasks API field.
 	for _, key := range jiraKeys {
-		if upsertIssue(key) {
-			added++
+		children, err := svc.jira.Search(ctx, fmt.Sprintf("parent = %q", key))
+		if err != nil {
+			svc.logger.Warn("child search failed", zap.String("key", key), zap.Error(err))
+			continue
+		}
+		for _, child := range children {
+			if !seen[child.Key] {
+				seen[child.Key] = true
+				refKeys = append(refKeys, child.Key)
+			}
 		}
 	}
-	for _, key := range subtaskKeys {
-		if upsertIssue(key) {
+
+	// Ref pass: upsert all referenced issues (subtasks, linked, children).
+	for _, key := range refKeys {
+		if upsertSimple(key) != nil {
 			added++
 		}
 	}
 
-	// Auto-link related contexts via Jira issue links.
+	// Auto-link related contexts via Jira issue links (existing behavior).
 	if len(collectedLinks) > 0 {
-		// Deduplicate linked keys before querying to avoid redundant DB lookups.
 		seenLinkedKeys := make(map[string]bool)
 		linkedKeys := make([]string, 0, len(collectedLinks))
 		for _, l := range collectedLinks {
@@ -625,7 +669,6 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 					deduped[dedupeKey] = true
 					if _, err := svc.store.AddContextRelation(ctx, contextID, targetCtxID, relType); err != nil {
 						if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-							// Relation already exists — not an error.
 							continue
 						}
 						svc.logger.Warn("auto-link: failed to create relation",
@@ -810,19 +853,21 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 		return fmt.Errorf("loading context: %w", err)
 	}
 	for _, ch := range channels {
-		if _, err := svc.slackRepo.UpsertSlackChannel(ctx, contextID, workspace, ch.ChannelID, ch.ChannelName, ch.StartFrom); err != nil {
+		slackCh, err := svc.slackRepo.UpsertSlackChannel(ctx, contextID, workspace, ch.ChannelID, ch.ChannelName, ch.StartFrom)
+		if err != nil {
 			return fmt.Errorf("upserting channel %q: %w", ch.ChannelName, err)
 		}
 		if ch.Content != "" {
-			// thread_ts="" is intentional: this represents the whole-channel snapshot,
-			// not a specific thread. The upsert key (context_id, channel_id, thread_ts)
-			// ensures re-adding the channel updates rather than duplicates the record.
+			// Store a temporary whole-channel blob (ThreadTS="") so the user sees
+			// content immediately without needing to Refresh. The next Refresh will
+			// delete this blob and replace it with individual per-message thread rows.
 			if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
-				Workspace:   workspace,
-				ChannelID:   ch.ChannelID,
-				ThreadTS:    "",
-				ChannelName: ch.ChannelName,
-				Content:     ch.Content,
+				SlackChannelID: slackCh.ID,
+				Workspace:      workspace,
+				ChannelID:      ch.ChannelID,
+				ThreadTS:       "",
+				ChannelName:    ch.ChannelName,
+				Content:        ch.Content,
 			}); err != nil {
 				svc.logger.Warn("add channels: upsert thread failed",
 					zap.String("channel", ch.ChannelName), zap.Error(err))

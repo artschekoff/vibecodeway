@@ -465,11 +465,11 @@ func (r *Runner) SearchSlackChannels(ctx context.Context, workspace, pattern str
 
 // AddSlackChannelsOpts holds parameters for adding channels to a context.
 type AddSlackChannelsOpts struct {
-	ContextID  string
-	Workspace  string
-	ChannelIDs []string
+	ContextID    string
+	Workspace    string
+	ChannelIDs   []string
 	ChannelNames []string
-	StartFrom  string
+	StartFrom    string
 }
 
 // AddSlackChannels adds Slack channels to a context.
@@ -747,11 +747,14 @@ func (r *Runner) AuthStatus(ctx context.Context) (string, error) {
 // AISettingsResult holds AI settings metadata plus the source of the active key,
 // mirroring the JSON emitted by the ai-settings-get CLI subcommand.
 type AISettingsResult struct {
-	HasKey    bool   `json:"hasKey"`
-	Model     string `json:"model"`
-	BaseURL   string `json:"baseUrl"`
-	Source    string `json:"source"`
-	UpdatedAt string `json:"updatedAt"`
+	Provider        string `json:"provider"`
+	HasKey          bool   `json:"hasKey"`
+	HasOpenAIKey    bool   `json:"hasOpenAIKey"`
+	HasAnthropicKey bool   `json:"hasAnthropicKey"`
+	Model           string `json:"model"`
+	BaseURL         string `json:"baseUrl"`
+	Source          string `json:"source"`
+	UpdatedAt       string `json:"updatedAt"`
 }
 
 // GetAISettings returns AI settings metadata including the source (env/db/none).
@@ -774,15 +777,19 @@ func (r *Runner) ReloadAllContexts(ctx context.Context) ([]jiraservice.ReloadAll
 
 // SetAISettingsOpts holds AI settings to update.
 type SetAISettingsOpts struct {
-	APIKey  string
-	Model   string
-	BaseURL string
+	Provider     string
+	APIKey       string
+	AnthropicKey string
+	Model        string
+	BaseURL      string
 }
 
 // SetAISettings saves AI configuration.
 func (r *Runner) SetAISettings(ctx context.Context, opts SetAISettingsOpts) (*appstore.AISettings, error) {
 	args := buildArgs("ai-settings-set",
+		"--provider", opts.Provider,
 		"--api-key", opts.APIKey,
+		"--anthropic-key", opts.AnthropicKey,
 		"--model", opts.Model,
 		"--base-url", opts.BaseURL,
 	)

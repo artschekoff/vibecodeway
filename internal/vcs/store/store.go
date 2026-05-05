@@ -4,10 +4,11 @@ import "database/sql"
 
 // Store aggregates all VCS sub-repositories.
 type Store struct {
-	Auth          *AuthRepo
-	Repos         *RepoRepo
-	Branches      *BranchRepo
-	PullRequests  *PRRepo
+	Auth           *AuthRepo
+	Repos          *RepoRepo
+	RepoPaths      *RepoPathRepo
+	Branches       *BranchRepo
+	PullRequests   *PRRepo
 	ReviewRequests *ReviewRequestRepo
 }
 
@@ -16,6 +17,7 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{
 		Auth:           NewAuthRepo(db),
 		Repos:          NewRepoRepo(db),
+		RepoPaths:      NewRepoPathRepo(db),
 		Branches:       NewBranchRepo(db),
 		PullRequests:   NewPRRepo(db),
 		ReviewRequests: NewReviewRequestRepo(db),

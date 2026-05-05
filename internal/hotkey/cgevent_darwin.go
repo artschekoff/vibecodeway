@@ -20,6 +20,14 @@ char* hk_read_clipboard(void) {
 	}
 }
 
+// hk_deactivate_app hides the current application so the previously focused app
+// regains focus, allowing the user to immediately invoke the hotkey again.
+void hk_deactivate_app(void) {
+	@autoreleasepool {
+		[NSApp hide:nil];
+	}
+}
+
 // hk_get_selected_text reads the selected text from the frontmost app's focused
 // UI element via the Accessibility API — no clipboard is touched.
 char* hk_get_selected_text(void) {
@@ -128,4 +136,10 @@ func SimulateCmdC() {
 // responsible for directing the user to System Settings manually.
 func CheckAccessibility() bool {
 	return C.hk_check_accessibility() != 0
+}
+
+// DeactivateApp hides the current application so the previously focused app
+// regains focus immediately, without requiring the user to switch apps manually.
+func DeactivateApp() {
+	C.hk_deactivate_app()
 }

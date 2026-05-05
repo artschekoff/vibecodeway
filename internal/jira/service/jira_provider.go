@@ -7,7 +7,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/jira"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	"github.com/artschekoff/context-consolidator/internal/provider"
 	"go.uber.org/zap"
@@ -16,12 +15,12 @@ import (
 // JiraProvider implements provider.Provider for Atlassian Jira.
 type JiraProvider struct {
 	jiraRepo *jirastore.Repo
-	jira     *jira.Client
+	jira     JiraAPI
 	logger   *zap.Logger
 }
 
 // NewJiraProvider constructs a JiraProvider.
-func NewJiraProvider(jiraRepo *jirastore.Repo, jiraClient *jira.Client, logger *zap.Logger) *JiraProvider {
+func NewJiraProvider(jiraRepo *jirastore.Repo, jiraClient JiraAPI, logger *zap.Logger) *JiraProvider {
 	return &JiraProvider{jiraRepo: jiraRepo, jira: jiraClient, logger: logger}
 }
 
@@ -132,15 +131,16 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 	return stats, nil
 }
 
-// WriteContext appends active Jira issues and their active comments for contextID to w.
-func (p *JiraProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time) error {
-	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, true)
+// WriteContext appends Jira issues and their comments for contextID to w.
+// When activeOnly is true only active issues and comments are included.
+func (p *JiraProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, activeOnly bool) error {
+	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, activeOnly)
 	if err != nil {
 		return fmt.Errorf("loading issues: %w", err)
 	}
 
 	for i, issue := range issues {
-		comments, err := p.jiraRepo.GetCommentsByIssue(ctx, issue.ID, true)
+		comments, err := p.jiraRepo.GetCommentsByIssue(ctx, issue.ID, activeOnly)
 		if err != nil {
 			return fmt.Errorf("loading comments for %s: %w", issue.JiraKey, err)
 		}

@@ -56,7 +56,7 @@ func (p *TextProvider) Reload(_ context.Context, _ string) (provider.Stats, erro
 
 // WriteContext appends active texts and uploaded documents for the context to w.
 // startAt is ignored because texts are not time-stamped data.
-func (p *TextProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, _ time.Time) error {
+func (p *TextProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, _ time.Time, _ bool) error {
 	texts, err := p.store.ListContextTexts(ctx, contextID, true)
 	if err != nil {
 		return fmt.Errorf("loading context texts: %w", err)

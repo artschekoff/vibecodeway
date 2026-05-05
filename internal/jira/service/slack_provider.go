@@ -288,7 +288,7 @@ func formatMessages(channelName string, msgs []slackMessage) string {
 }
 
 // WriteContext appends active Slack channels, threads, and DM configs for contextID to w.
-func (p *SlackProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time) error {
+func (p *SlackProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, _ bool) error {
 	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID, true)
 	if err != nil {
 		return fmt.Errorf("loading channels: %w", err)

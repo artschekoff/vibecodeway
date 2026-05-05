@@ -4,10 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
 	"go.uber.org/zap"
 )
+
+// instanceSiteRE extracts the bare hostname from the "Site:" line of acli jira auth status output.
+var instanceSiteRE = regexp.MustCompile(`(?i)Site:\s*(\S+)`)
 
 // Client wraps the acli Runner and provides typed Jira query methods.
 type Client struct {
@@ -23,6 +28,21 @@ func NewClient(runner *acli.Runner, logger *zap.Logger) *Client {
 // AuthStatus returns the current acli authentication status string.
 func (c *Client) AuthStatus(ctx context.Context) (string, error) {
 	return c.runner.Run(ctx, []string{"jira", "auth", "status"}, nil, nil)
+}
+
+// GetInstanceURL extracts the Jira instance URL from the auth status output.
+func (c *Client) GetInstanceURL(ctx context.Context) string {
+	out, err := c.AuthStatus(ctx)
+	if err != nil {
+		c.logger.Debug("GetInstanceURL: auth status failed", zap.Error(err))
+		return ""
+	}
+	m := instanceSiteRE.FindStringSubmatch(out)
+	if len(m) < 2 {
+		return ""
+	}
+	host := strings.TrimRight(m[1], "/.")
+	return "https://" + host
 }
 
 // Search executes a JQL search and returns matching issues.

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/artschekoff/context-consolidator/internal/vcs"
@@ -224,6 +225,11 @@ func (a *App) ListTrackedRepos(platform string) ([]vcsstore.VCSRepo, error) {
 	return a.vcsStore.Repos.ListRepos(a.ctx, platform)
 }
 
+// UpdateTrackedRepoMeta updates the human-readable label and description for a tracked repo.
+func (a *App) UpdateTrackedRepoMeta(repoID, label, description string) error {
+	return a.vcsStore.Repos.UpdateRepoMeta(a.ctx, repoID, label, description)
+}
+
 // --- Pending Code Reviews ---
 
 // GetPendingCodeReviews returns stored review requests across all tracked repos.
@@ -257,6 +263,34 @@ func (a *App) PickRepoDirectory() (string, error) {
 	return path, nil
 }
 
+// ListRepoLocalPaths returns all local filesystem paths registered for a tracked repo.
+func (a *App) ListRepoLocalPaths(repoID string) ([]vcsstore.VCSRepoPath, error) {
+	return a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
+}
+
+// AddRepoLocalPath opens a directory picker and adds the selected path to the tracked repo.
+// Returns nil without error if the user cancels the picker.
+func (a *App) AddRepoLocalPath(repoID string) (*vcsstore.VCSRepoPath, error) {
+	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select repository directory",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open directory dialog: %w", err)
+	}
+	if path == "" {
+		return nil, nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("path does not exist: %w", err)
+	}
+	return a.vcsStore.RepoPaths.Add(a.ctx, repoID, path)
+}
+
+// RemoveRepoLocalPath deletes a local filesystem path entry by ID.
+func (a *App) RemoveRepoLocalPath(pathID string) error {
+	return a.vcsStore.RepoPaths.Delete(a.ctx, pathID)
+}
+
 // SetTrackedRepoPath associates a local filesystem directory with a tracked repo.
 // Pass an empty string to clear the path.
 func (a *App) SetTrackedRepoPath(repoID, localPath string) error {
@@ -266,4 +300,28 @@ func (a *App) SetTrackedRepoPath(repoID, localPath string) error {
 		}
 	}
 	return a.vcsStore.Repos.UpdateLocalPath(a.ctx, repoID, localPath)
+}
+
+// CheckoutBranch switches to branch in localPath, then opens the configured terminal there.
+// If no terminal app is configured, the terminal is not opened.
+func (a *App) CheckoutBranch(localPath, branch string) error {
+	if _, err := os.Stat(localPath); err != nil {
+		return fmt.Errorf("local path not accessible: %w", err)
+	}
+	if err := vcs.GitCheckout(localPath, branch); err != nil {
+		return err
+	}
+	settings, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		a.logger.Sugar().Warnf("CheckoutBranch: failed to load settings, terminal will not open: %v", err)
+		return nil
+	}
+	if settings.TerminalAppPath == "" {
+		return nil
+	}
+	cmd := exec.Command("open", "-a", settings.TerminalAppPath, localPath)
+	if err := cmd.Start(); err != nil {
+		a.logger.Sugar().Warnf("open terminal failed: app=%s err=%v", settings.TerminalAppPath, err)
+	}
+	return nil
 }

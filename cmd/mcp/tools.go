@@ -69,7 +69,7 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 
 	s.AddTool(
 		mcp.NewTool("context_add",
-			mcp.WithDescription("Add selected Jira issues to a context by their Jira keys, then sync all comments for the entire context. Call after context_search once the user has confirmed which issues to add."),
+			mcp.WithDescription("Add selected Jira issues to a context by their Jira keys, then sync all comments for the entire context. For each added issue, subtasks, linked issues, and child issues (via parent JQL) are also added automatically. Call after context_search once the user has confirmed which issues to add."),
 			mcp.WithString("context_id",
 				mcp.Required(),
 				mcp.Description("Context UUID."),

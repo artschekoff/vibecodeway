@@ -1,16 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Copy, Check } from "lucide-react";
 import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
+import { useTabContext } from "../contexts/TabContext";
+
+const OPENAI_MODELS = [
+  { id: "gpt-4.1",       label: "GPT-4.1 (recommended)" },
+  { id: "gpt-4.1-mini",  label: "GPT-4.1 Mini" },
+  { id: "gpt-4.1-nano",  label: "GPT-4.1 Nano" },
+  { id: "gpt-4o",        label: "GPT-4o" },
+  { id: "gpt-4o-mini",   label: "GPT-4o Mini" },
+  { id: "o4-mini",       label: "o4-mini" },
+  { id: "o3-mini",       label: "o3-mini" },
+  { id: "gpt-4-turbo",   label: "GPT-4 Turbo" },
+  { id: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+] as const;
+
+const CLAUDE_MODELS = [
+  { id: "claude-opus-4-6",            label: "Claude Opus 4.6 (most capable)" },
+  { id: "claude-sonnet-4-6",          label: "Claude Sonnet 4.6 (recommended)" },
+  { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (fast)" },
+  { id: "claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet" },
+  { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
+  { id: "claude-3-5-haiku-20241022",  label: "Claude 3.5 Haiku" },
+  { id: "claude-3-opus-20240229",     label: "Claude 3 Opus" },
+] as const;
 
 export default function SettingsPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { activeTabId, closeTab, navigateBack } = useTabContext();
   const hotkeysRef = useRef<HTMLElement>(null);
   const [settings, setSettings] = useState<AISettings | null>(null);
+  const [provider, setProvider] = useState<"openai" | "anthropic" | "local">("openai");
   const [apiKey, setApiKey] = useState("");
+  const [anthropicKey, setAnthropicKey] = useState("");
   const [model, setModel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [loading, setLoading] = useState(true);
@@ -31,14 +54,9 @@ export default function SettingsPage() {
   const [contextRefetchInterval, setContextRefetchInterval] = useState(30);
   const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
   const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
+  const [terminalAppPath, setTerminalAppPath] = useState("");
   const [savingRefetch, setSavingRefetch] = useState(false);
   const [refetchMessage, setRefetchMessage] = useState("");
-
-  useEffect(() => {
-    if (location.hash === "#hotkeys" && hotkeysRef.current) {
-      hotkeysRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [location.hash]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +69,7 @@ export default function SettingsPage() {
         if (cancelled) return;
         const typed = s as unknown as AISettings;
         setSettings(typed);
+        setProvider(typed.provider ?? "openai");
         setModel(typed.model);
         setBaseUrl(typed.baseUrl);
 
@@ -61,6 +80,7 @@ export default function SettingsPage() {
           setContextRefetchInterval(typedAppS.contextRefetchIntervalMin);
           setReviewsRefetchEnabled(typedAppS.reviewsRefetchEnabled);
           setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
+          setTerminalAppPath(typedAppS.terminalAppPath ?? "");
         }
 
         const typedPlats = (plats ?? []) as VCSPlatformInfo[];
@@ -119,14 +139,17 @@ export default function SettingsPage() {
     setSavingRefetch(true);
     setRefetchMessage("");
     try {
-      await SetAppSettings(
+      // SetAppSettings binding accepts 5th arg (terminalAppPath) once regenerated
+      await (SetAppSettings as (a: boolean, b: number, c: boolean, d: number, e: string) => Promise<void>)(
         contextRefetchEnabled,
         Math.max(1, contextRefetchInterval),
         reviewsRefetchEnabled,
         Math.max(1, reviewsRefetchInterval),
+        terminalAppPath.trim(),
       );
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
+      setTerminalAppPath(updated.terminalAppPath ?? "");
       setRefetchMessage("Saved.");
     } catch (e) {
       setError(String(e));
@@ -140,12 +163,14 @@ export default function SettingsPage() {
     setError("");
     setMessage("");
     try {
-      await SetAISettings(apiKey, model, baseUrl);
+      await SetAISettings(provider, apiKey, anthropicKey, model, baseUrl);
       const updated = await GetAISettings() as unknown as AISettings;
       setSettings(updated);
+      setProvider(updated.provider ?? "openai");
       setModel(updated.model);
       setBaseUrl(updated.baseUrl);
       setApiKey("");
+      setAnthropicKey("");
       setMessage("Settings saved.");
     } catch (e) {
       setError(String(e));
@@ -156,19 +181,12 @@ export default function SettingsPage() {
 
   if (loading) return <div className="loading">Loading…</div>;
 
-  const sourceLabel =
-    settings?.source === "env"
-      ? "Environment variable OPENAI_API_KEY"
-      : settings?.source === "db"
-      ? "Stored in app (encrypted)"
-      : "Not configured";
-
   return (
     <div className="page">
       <div className="topbar">
-        <button className="back-btn" onClick={() => navigate("/")}><ArrowLeft size={16} /> Back</button>
+        <button className="back-btn" onClick={() => activeTabId && navigateBack(activeTabId)}><ArrowLeft size={16} /> Back</button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 16, margin: 0 }}>Settings · OpenAI</h1>
+          <h1 style={{ fontSize: 16, margin: 0 }}>Settings</h1>
         </div>
       </div>
 
@@ -356,65 +374,181 @@ export default function SettingsPage() {
 
         <section className="detail-section">
           <div className="detail-section-header">
-            <span className="detail-section-title">OpenAI credentials</span>
+            <span className="detail-section-title">Terminal</span>
           </div>
-
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 14px" }}>
             <div>
               <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                Current source
+                Terminal app name or .app path
               </label>
-              <div style={{ fontSize: 13 }}>
-                <strong>{sourceLabel}</strong>
+              <input
+                className="passphrase-input"
+                placeholder="kitty  or  /Applications/iTerm.app"
+                value={terminalAppPath}
+                onChange={(e) => setTerminalAppPath(e.target.value)}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                Used when checking out a branch. Enter an app name (e.g. <code>kitty</code>,{" "}
+                <code>iTerm</code>, <code>Terminal</code>) or full .app path. Saved with the Background Refresh Save button above.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="detail-section">
+          <div className="detail-section-header">
+            <span className="detail-section-title">AI Provider</span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "12px 14px" }}>
+
+            {/* Provider selector */}
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
+                Provider
+              </label>
+              <div style={{ display: "flex", gap: 16 }}>
+                {(["openai", "anthropic", "local"] as const).map((p) => (
+                  <label key={p} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="ai-provider"
+                      value={p}
+                      checked={provider === p}
+                      onChange={() => {
+                        setProvider(p);
+                        setBaseUrl("");
+                        if (p === "openai") setModel("gpt-4.1");
+                        else if (p === "anthropic") setModel("claude-sonnet-4-6");
+                        else setModel("");
+                      }}
+                    />
+                    {p === "openai" ? "OpenAI" : p === "anthropic" ? "Anthropic (Claude)" : "Local (OpenAI-compatible)"}
+                  </label>
+                ))}
               </div>
             </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                API key {settings?.hasKey ? "(leave empty to keep existing)" : ""}
-              </label>
-              <input
-                type="password"
-                className="passphrase-input"
-                placeholder={settings?.hasKey ? "•••••••••••••••" : "sk-…"}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                autoComplete="off"
-                style={{ width: "100%" }}
-              />
-              {settings?.source === "env" && (
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                  The environment variable <code>OPENAI_API_KEY</code> is currently active and
-                  overrides any key stored here.
-                </div>
-              )}
-            </div>
-
+            {/* Model selection */}
             <div>
               <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
                 Model
               </label>
-              <input
-                className="passphrase-input"
-                placeholder="gpt-4o-mini"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                style={{ width: "100%" }}
-              />
+              {provider === "openai" && (
+                <select
+                  className="passphrase-input"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  {OPENAI_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              )}
+              {provider === "anthropic" && (
+                <select
+                  className="passphrase-input"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  {CLAUDE_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              )}
+              {provider === "local" && (
+                <input
+                  className="passphrase-input"
+                  placeholder="llama3.2"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  style={{ width: "100%" }}
+                />
+              )}
             </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                Base URL (optional, e.g. self-hosted compatible endpoint)
-              </label>
-              <input
-                className="passphrase-input"
-                placeholder="https://api.openai.com"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                style={{ width: "100%" }}
-              />
-            </div>
+            {/* OpenAI API key — only for openai provider */}
+            {provider === "openai" && (
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                  OpenAI API key {settings?.hasOpenAIKey ? "(leave empty to keep existing)" : ""}
+                </label>
+                <input
+                  type="password"
+                  className="passphrase-input"
+                  placeholder={settings?.hasOpenAIKey ? "•••••••••••••••" : "sk-…"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  autoComplete="off"
+                  style={{ width: "100%" }}
+                />
+                {settings?.source === "env" && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                    The environment variable <code>OPENAI_API_KEY</code> is active and overrides any key stored here.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Anthropic API key — only for anthropic provider */}
+            {provider === "anthropic" && (
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                  Anthropic API key {settings?.hasAnthropicKey ? "(leave empty to keep existing)" : ""}
+                </label>
+                <input
+                  type="password"
+                  className="passphrase-input"
+                  placeholder={settings?.hasAnthropicKey ? "•••••••••••••••" : "sk-ant-…"}
+                  value={anthropicKey}
+                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  autoComplete="off"
+                  style={{ width: "100%" }}
+                />
+                {settings?.source === "env" && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                    The environment variable <code>ANTHROPIC_API_KEY</code> is active and overrides any key stored here.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Base URL — for openai (optional) and local (required) */}
+            {(provider === "openai" || provider === "local") && (
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                  Base URL {provider === "local" ? "(required — e.g. http://localhost:11434)" : "(optional — e.g. for proxy or Azure)"}
+                </label>
+                <input
+                  className="passphrase-input"
+                  placeholder={provider === "local" ? "http://localhost:11434" : "https://api.openai.com"}
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  style={{ width: "100%" }}
+                />
+              </div>
+            )}
+
+            {/* Local optional key */}
+            {provider === "local" && (
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                  API key (optional)
+                </label>
+                <input
+                  type="password"
+                  className="passphrase-input"
+                  placeholder="(leave empty if not required)"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  autoComplete="off"
+                  style={{ width: "100%" }}
+                />
+              </div>
+            )}
 
             <div>
               <button
@@ -427,8 +561,8 @@ export default function SettingsPage() {
             </div>
 
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              API keys are encrypted with your Slack passphrase before being stored on disk. You must
-              unlock the app with that passphrase before saving a key for the first time.
+              API keys are encrypted with your Slack passphrase before being stored on disk.
+              You must unlock the app with that passphrase before saving a key for the first time.
             </div>
           </div>
         </section>
