@@ -59,9 +59,21 @@ func newTestService(t *testing.T, runner SlackRunner) *ContextService {
 }
 
 // createCtx is a helper that creates a bare context in the store.
+// It reuses the first existing organization, or creates one named "test-org" on first call.
 func createCtx(t *testing.T, svc *ContextService, key string) *appstore.Context {
 	t.Helper()
-	c, err := svc.store.CreateContext(context.Background(), key)
+	ctx := context.Background()
+	orgs, err := svc.store.ListOrganizations(ctx)
+	require.NoError(t, err)
+	var orgID string
+	if len(orgs) > 0 {
+		orgID = orgs[0].ID
+	} else {
+		org, err := svc.store.CreateOrganization(ctx, "test-org")
+		require.NoError(t, err)
+		orgID = org.ID
+	}
+	c, err := svc.store.CreateContext(ctx, key, orgID)
 	require.NoError(t, err)
 	return c
 }
@@ -883,7 +895,9 @@ func TestSlackProvider_Reload_StoresPerMessageRecords(t *testing.T) {
 	s := openTestStore(t)
 	sRepo := slackstore.NewRepo(s.DB())
 
-	ctxRec, err := s.CreateContext(ctx, "test-per-msg")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	ctxRec, err := s.CreateContext(ctx, "test-per-msg", org.ID)
 	require.NoError(t, err)
 
 	_, err = sRepo.UpsertSlackChannel(ctx, ctxRec.ID, "acme", "C1", "general", "")
@@ -913,7 +927,9 @@ func TestSlackProvider_Reload_DeletesOldBlob(t *testing.T) {
 	s := openTestStore(t)
 	sRepo := slackstore.NewRepo(s.DB())
 
-	ctxRec, err := s.CreateContext(ctx, "test-del-blob")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	ctxRec, err := s.CreateContext(ctx, "test-del-blob", org.ID)
 	require.NoError(t, err)
 
 	ch, err := sRepo.UpsertSlackChannel(ctx, ctxRec.ID, "acme", "C1", "general", "")

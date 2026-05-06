@@ -13,7 +13,9 @@ func TestListAll_returnsLogsWithContextKey(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "sprint-42")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "sprint-42", org.ID)
 	require.NoError(t, err)
 
 	_, err = svc.CreateManualLog(ctx, c.ID, "First note")
@@ -25,7 +27,7 @@ func TestListAll_returnsLogsWithContextKey(t *testing.T) {
 	require.Len(t, entries, 1)
 	assert.Equal(t, "sprint-42", entries[0].ContextKey)
 	assert.Equal(t, "First note", entries[0].SummaryMd)
-	assert.Equal(t, "", entries[0].OrgName)
+	assert.Equal(t, "test-org", entries[0].OrgName)
 }
 
 func TestListAll_joinsOrgName(t *testing.T) {
@@ -35,7 +37,7 @@ func TestListAll_joinsOrgName(t *testing.T) {
 	org, err := s.CreateOrganization(ctx, "Acme Corp")
 	require.NoError(t, err)
 
-	c, err := s.CreateContext(ctx, "project-x")
+	c, err := s.CreateContext(ctx, "project-x", org.ID)
 	require.NoError(t, err)
 
 	err = s.SetContextOrg(ctx, c.ID, org.ID)
@@ -56,7 +58,9 @@ func TestListAll_filterByTrigger(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ctx-a")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ctx-a", org.ID)
 	require.NoError(t, err)
 
 	_, err = svc.CreateManualLog(ctx, c.ID, "Manual entry")
@@ -85,7 +89,9 @@ func TestListAll_respectsLimit(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ctx-b")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ctx-b", org.ID)
 	require.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
@@ -103,7 +109,9 @@ func TestListAll_orderedNewestFirst(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ctx-c")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ctx-c", org.ID)
 	require.NoError(t, err)
 
 	_, err = svc.CreateManualLog(ctx, c.ID, "first")

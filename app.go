@@ -278,7 +278,7 @@ func (a *App) SetOrganizationsOrder(ids []string) error {
 	return a.db.SetOrganizationsOrder(a.ctx, ids)
 }
 
-// SetContextOrg assigns a context to an organization. Pass empty orgID to remove from org.
+// SetContextOrg reassigns a context to a different organization.
 func (a *App) SetContextOrg(contextID, orgID string) error {
 	return a.db.SetContextOrg(a.ctx, contextID, orgID)
 }
@@ -288,9 +288,9 @@ func (a *App) ListContextsByOrg(orgID string) ([]appstore.Context, error) {
 	return a.db.ListContextsByOrg(a.ctx, orgID)
 }
 
-// CreateContext creates a new context.
-func (a *App) CreateContext(key string) (*appstore.Context, error) {
-	return a.cliRunner.CreateContext(a.ctx, key)
+// CreateContext creates a new context inside the specified organization.
+func (a *App) CreateContext(key, orgID string) (*appstore.Context, error) {
+	return a.cliRunner.CreateContext(a.ctx, key, orgID)
 }
 
 // UpdateContext updates an existing context.

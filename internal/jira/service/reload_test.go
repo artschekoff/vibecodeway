@@ -50,7 +50,9 @@ func TestReloadAllContexts_ProvidersRunConcurrently(t *testing.T) {
 	svc := NewContextService(s, nil, jRepo, sRepo, nil, logger, p1, p2)
 
 	ctx := context.Background()
-	_, err := svc.store.CreateContext(ctx, "concurrent-test")
+	org, err := svc.store.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	_, err = svc.store.CreateContext(ctx, "concurrent-test", org.ID)
 	require.NoError(t, err)
 
 	// contextLog is nil so snapshotBefore/recordContextChange are no-ops; elapsed
@@ -84,8 +86,10 @@ func TestReloadAllContexts_ContextsRunConcurrently(t *testing.T) {
 	ctx := context.Background()
 
 	// Create 3 contexts.
+	org, err := svc.store.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
 	for i := 0; i < 3; i++ {
-		_, err := svc.store.CreateContext(ctx, fmt.Sprintf("ctx-%d", i))
+		_, err := svc.store.CreateContext(ctx, fmt.Sprintf("ctx-%d", i), org.ID)
 		require.NoError(t, err)
 	}
 

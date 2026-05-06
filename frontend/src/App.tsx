@@ -55,7 +55,11 @@ function AppShell() {
   const [showA11yBanner, setShowA11yBanner] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { openContextTab, tabs, forceCloseTab } = useTabContext();
+  const { openContextTab, tabs, activeTabId, forceCloseTab } = useTabContext();
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeOrgId = activeTab?.type === "org" ? activeTab.orgId
+    : activeTab?.type === "context" ? activeTab.orgId
+    : tabs.find((t) => t.type === "org")?.orgId;
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -136,6 +140,7 @@ function AppShell() {
       <QuickAttachOverlay
         visible={picker.visible}
         text={picker.text}
+        orgId={activeOrgId}
         onAttach={handleAttach}
         onDismiss={() => setPicker({ visible: false, text: "" })}
       />

@@ -12,7 +12,9 @@ func TestAttachFile_and_ListLogs_populatesFiles(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	log, err := svc.CreateManualLog(ctx, c.ID, "notes")
@@ -39,7 +41,9 @@ func TestAttachFile_idempotent(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	log, err := svc.CreateManualLog(ctx, c.ID, "notes")
@@ -60,7 +64,9 @@ func TestDetachFile_removesLink(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	log, err := svc.CreateManualLog(ctx, c.ID, "notes")
@@ -81,7 +87,9 @@ func TestAttachFile_deletingFileCascades(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	log, err := svc.CreateManualLog(ctx, c.ID, "notes")

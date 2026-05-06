@@ -26,7 +26,9 @@ func TestCreateAgentLog_persists(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	entry, err := svc.CreateAgentLog(ctx, c.ID, "Agent completed code review.")
@@ -44,7 +46,9 @@ func TestCreateAgentLog_emptyMessage_returnsError(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = svc.CreateAgentLog(ctx, c.ID, "   ")
@@ -56,7 +60,9 @@ func TestCreateAgentLog_appearsInListLogs(t *testing.T) {
 	s, svc := openTestSvc(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = svc.CreateAgentLog(ctx, c.ID, "First agent note.")

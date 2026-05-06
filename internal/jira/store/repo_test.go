@@ -25,7 +25,9 @@ func TestUpsertAndGetJiraProvider(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "jira-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "jira-ctx", org.ID)
 	require.NoError(t, err)
 
 	jp, err := repo.UpsertJiraProvider(ctx, c.ID, "project = TEAM")
@@ -44,7 +46,9 @@ func TestUpsertJiraProviderUpdatesOnDuplicate(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "jira-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "jira-ctx", org.ID)
 	require.NoError(t, err)
 
 	jp1, err := repo.UpsertJiraProvider(ctx, c.ID, "project = OLD")
@@ -66,7 +70,9 @@ func TestDeleteContextCascadesToJiraProvider(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "del-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "del-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = repo.UpsertJiraProvider(ctx, c.ID, "project = DEL")
@@ -84,7 +90,9 @@ func TestUpsertAndGetIssues(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Fix login", "Open", "alice", "Bug", "desc", "", "")
@@ -102,7 +110,9 @@ func TestUpsertIssueUpdatesOnDuplicate(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	id1, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "original", "Open", "alice", "Bug", "", "", "")
@@ -125,7 +135,9 @@ func TestUpsertAndGetComments(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "alice", "Bug", "", "", "")
 	require.NoError(t, err)
@@ -150,7 +162,9 @@ func TestIssueActiveByDefault(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	_, err = repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
@@ -165,7 +179,9 @@ func TestToggleIssueActive(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	id, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
@@ -189,7 +205,9 @@ func TestCommentActiveByDefault(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
@@ -206,7 +224,9 @@ func TestToggleCommentActive(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
@@ -236,7 +256,9 @@ func TestGetCommentsByIssues(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ctx1")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ctx1", org.ID)
 	require.NoError(t, err)
 
 	issue1, err := repo.UpsertIssue(ctx, c.ID, "PROJ-1", "issue 1", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
@@ -270,9 +292,11 @@ func TestFindContextsByJiraKeys(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two contexts and insert issues in each.
-	c1, err := s.CreateContext(ctx, "ctx-one")
+	org, err := s.CreateOrganization(ctx, "test-org")
 	require.NoError(t, err)
-	c2, err := s.CreateContext(ctx, "ctx-two")
+	c1, err := s.CreateContext(ctx, "ctx-one", org.ID)
+	require.NoError(t, err)
+	c2, err := s.CreateContext(ctx, "ctx-two", org.ID)
 	require.NoError(t, err)
 
 	_, err = repo.UpsertIssue(ctx, c1.ID, "ALPHA-1", "Alpha one", "Open", "", "Bug", "", "", "")

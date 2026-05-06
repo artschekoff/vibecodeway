@@ -17,11 +17,12 @@ import { parseAttachableContent } from "../lib/parseAttachableContent";
 interface Props {
   visible: boolean;
   text: string;
+  orgId?: string;
   onAttach: (contextKey: string, contextId: string) => void;
   onDismiss: () => void;
 }
 
-export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props) => {
+export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }: Props) => {
   const [contexts, setContexts] = useState<Context[]>([]);
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -54,7 +55,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     setLoading(true);
     try {
       const all = await ListAllContexts();
-      const active = all.filter((c) => c.status === "active" && c.orgId);
+      const active = all.filter((c) => c.status === "active" && (!orgId || c.orgId === orgId));
       setContexts(active);
       if (active.length === 1) setSelectedId(active[0].id);
     } catch {
@@ -63,7 +64,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
       setLoading(false);
       focusTimerRef.current = setTimeout(() => filterRef.current?.focus(), 50);
     }
-  }, []);
+  }, [orgId]);
 
   useEffect(() => {
     if (!visible) return;
@@ -155,7 +156,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     setCreatingCtx(true);
     setNewCtxError("");
     try {
-      const ctx = await CreateContext(key);
+      const ctx = await CreateContext(key, orgId ?? "");
       setContexts((prev) => [...prev, ctx]);
       setSelectedId(ctx.id);
       setShowNewCtx(false);
@@ -167,7 +168,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     } finally {
       setCreatingCtx(false);
     }
-  }, [newCtxKey, attachTo]);
+  }, [newCtxKey, orgId, attachTo]);
 
   if (!visible) return null;
 
@@ -364,10 +365,19 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
             Cancel
           </button>
           <button
-            className="btn-primary"
+            className={`btn-primary${attaching ? " btn-with-spinner" : ""}`}
             onClick={() => { void handleAttach(); }}
             disabled={attaching || creatingCtx || !selectedId || loading}
           >
+            {attaching && (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none"
+                style={{ animation: "progress-spin 0.8s linear infinite", flexShrink: 0 }}
+              >
+                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2" />
+                <path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
             {attaching ? `${attachLabel}ing…` : attachLabel}
           </button>
         </div>

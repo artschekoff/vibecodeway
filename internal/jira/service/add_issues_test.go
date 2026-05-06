@@ -97,7 +97,9 @@ func TestAddIssuesToContext_AddsSubtasksFromAPIField(t *testing.T) {
 	}
 	svc, s := newServiceWithJira(t, j)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, []string{"JH-100"})
@@ -119,7 +121,9 @@ func TestAddIssuesToContext_AddsLinkedIssues(t *testing.T) {
 	}
 	svc, s := newServiceWithJira(t, j)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, []string{"JH-200"})
@@ -144,7 +148,9 @@ func TestAddIssuesToContext_AddsChildIssuesViaJQL(t *testing.T) {
 	}
 	svc, s := newServiceWithJira(t, j)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, []string{"JH-300"})
@@ -167,7 +173,9 @@ func TestAddIssuesToContext_DeduplicatesRefsSameKey(t *testing.T) {
 	}
 	svc, s := newServiceWithJira(t, j)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, []string{"JH-400"})
@@ -188,7 +196,9 @@ func TestAddIssuesToContext_PrimaryKeyNotDuplicated(t *testing.T) {
 	}
 	svc, s := newServiceWithJira(t, j)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, []string{"JH-500", "JH-501"})
@@ -208,7 +218,9 @@ func TestAddIssuesToContext_SearchFailureTolerated(t *testing.T) {
 	}
 	svc, s := newServiceWithJira(t, j)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, []string{"JH-600"})
@@ -230,7 +242,9 @@ func TestAddIssuesToContext_RefViewIssueFailureTolerated(t *testing.T) {
 	}
 	svc, s := newServiceWithJira(t, j)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, []string{"JH-700"})
@@ -242,7 +256,9 @@ func TestAddIssuesToContext_RefViewIssueFailureTolerated(t *testing.T) {
 func TestAddIssuesToContext_EmptyKeysReturnsZero(t *testing.T) {
 	svc, s := newServiceWithJira(t, &fakeJira{issues: map[string]*jira.IssueDetail{}})
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test", org.ID)
 	require.NoError(t, err)
 
 	added, err := svc.AddIssuesToContext(ctx, c.ID, nil)

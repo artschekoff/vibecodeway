@@ -74,8 +74,8 @@ export function CommitPendingUploads(arg1, arg2) {
   return window['go']['main']['App']['CommitPendingUploads'](arg1, arg2);
 }
 
-export function CreateContext(arg1) {
-  return window['go']['main']['App']['CreateContext'](arg1);
+export function CreateContext(arg1, arg2) {
+  return window['go']['main']['App']['CreateContext'](arg1, arg2);
 }
 
 export function CreateContextLog(arg1, arg2) {
@@ -226,6 +226,10 @@ export function ListAllContexts() {
   return window['go']['main']['App']['ListAllContexts']();
 }
 
+export function ListAllLogs(arg1, arg2) {
+  return window['go']['main']['App']['ListAllLogs'](arg1, arg2);
+}
+
 export function ListAllWorkspaces() {
   return window['go']['main']['App']['ListAllWorkspaces']();
 }
@@ -236,10 +240,6 @@ export function ListContextChat(arg1) {
 
 export function ListContextLogs(arg1) {
   return window['go']['main']['App']['ListContextLogs'](arg1);
-}
-
-export function ListAllLogs(arg1, arg2) {
-  return window['go']['main']['App']['ListAllLogs'](arg1, arg2);
 }
 
 export function ListContextTexts(arg1) {

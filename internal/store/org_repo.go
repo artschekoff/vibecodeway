@@ -70,8 +70,16 @@ func (s *Store) UpdateOrganization(ctx context.Context, id, name string) (*Organ
 	return &o, nil
 }
 
-// DeleteOrganization removes an organization. Contexts with this org_id are set to NULL via FK ON DELETE SET NULL.
+// DeleteOrganization removes an organization. Fails if any contexts are still assigned to it.
+// Reassign or delete the contexts first before deleting the organization.
 func (s *Store) DeleteOrganization(ctx context.Context, id string) error {
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM contexts WHERE org_id=?`, id).Scan(&count); err != nil {
+		return fmt.Errorf("checking contexts for org: %w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("organization still has %d context(s); reassign or delete them first", count)
+	}
 	_, err := s.db.ExecContext(ctx, `DELETE FROM organizations WHERE id=?`, id)
 	return err
 }
@@ -98,11 +106,10 @@ func (s *Store) SetOrganizationsOrder(ctx context.Context, ids []string) error {
 	return tx.Commit()
 }
 
-// SetContextOrg assigns a context to an organization. Pass empty orgID to clear the assignment.
+// SetContextOrg assigns a context to an organization.
 func (s *Store) SetContextOrg(ctx context.Context, contextID, orgID string) error {
 	if orgID == "" {
-		_, err := s.db.ExecContext(ctx, `UPDATE contexts SET org_id=NULL WHERE id=?`, contextID)
-		return err
+		return fmt.Errorf("orgID is required; contexts must belong to an organization")
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE contexts SET org_id=? WHERE id=?`, orgID, contextID)
 	return err

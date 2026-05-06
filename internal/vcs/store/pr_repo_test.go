@@ -25,7 +25,9 @@ func TestListCommentsForPRs(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a context
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
 	// Create a VCS repo

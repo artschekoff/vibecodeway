@@ -420,8 +420,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     ];
     progress.begin("Creating Context", itemLabels);
     try {
-      const ctx = await CreateContext(key);
-      if (orgId) await SetContextOrg(ctx.id, orgId);
+      const ctx = await CreateContext(key, orgId);
       if (searchQuery.trim()) await SetJiraConfig(ctx.id, searchQuery.trim());
       for (const jiraKey of jiraKeys) {
         progress.next(`Adding issue ${jiraKey}`);
@@ -1015,7 +1014,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                     <select
                                       className="btn-ghost"
                                       style={{ fontSize: 11 }}
-                                      value={c.orgId ?? ""}
+                                      value={c.orgId}
                                       onChange={async (e) => {
                                         await SetContextOrg(c.id, e.target.value);
                                         void load();

@@ -12,9 +12,11 @@ func TestAddContextRelation(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c1, err := s.CreateContext(ctx, "project-alpha")
+	org, err := s.CreateOrganization(ctx, "test-org")
 	require.NoError(t, err)
-	c2, err := s.CreateContext(ctx, "project-beta")
+	c1, err := s.CreateContext(ctx, "project-alpha", org.ID)
+	require.NoError(t, err)
+	c2, err := s.CreateContext(ctx, "project-beta", org.ID)
 	require.NoError(t, err)
 
 	rel, err := s.AddContextRelation(ctx, c1.ID, c2.ID, "blocks")
@@ -31,8 +33,9 @@ func TestAddContextRelation_DuplicateErrors(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c1, _ := s.CreateContext(ctx, "alpha")
-	c2, _ := s.CreateContext(ctx, "beta")
+	org, _ := s.CreateOrganization(ctx, "test-org")
+	c1, _ := s.CreateContext(ctx, "alpha", org.ID)
+	c2, _ := s.CreateContext(ctx, "beta", org.ID)
 	_, err := s.AddContextRelation(ctx, c1.ID, c2.ID, "blocks")
 	require.NoError(t, err)
 
@@ -44,9 +47,10 @@ func TestListContextRelations(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c1, _ := s.CreateContext(ctx, "alpha")
-	c2, _ := s.CreateContext(ctx, "beta")
-	c3, _ := s.CreateContext(ctx, "gamma")
+	org, _ := s.CreateOrganization(ctx, "test-org")
+	c1, _ := s.CreateContext(ctx, "alpha", org.ID)
+	c2, _ := s.CreateContext(ctx, "beta", org.ID)
+	c3, _ := s.CreateContext(ctx, "gamma", org.ID)
 	_, _ = s.AddContextRelation(ctx, c1.ID, c2.ID, "blocks")
 	_, _ = s.AddContextRelation(ctx, c1.ID, c3.ID, "relates-to")
 
@@ -64,8 +68,9 @@ func TestRemoveContextRelation(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c1, _ := s.CreateContext(ctx, "alpha")
-	c2, _ := s.CreateContext(ctx, "beta")
+	org, _ := s.CreateOrganization(ctx, "test-org")
+	c1, _ := s.CreateContext(ctx, "alpha", org.ID)
+	c2, _ := s.CreateContext(ctx, "beta", org.ID)
 	rel, _ := s.AddContextRelation(ctx, c1.ID, c2.ID, "blocks")
 
 	err := s.RemoveContextRelation(ctx, rel.ID)

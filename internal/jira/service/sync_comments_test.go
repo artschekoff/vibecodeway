@@ -35,7 +35,9 @@ func TestSyncIssueComments_AllIssuesFetched(t *testing.T) {
 	repo := jirastore.NewRepo(s.DB())
 
 	// Create a context and 20 real issues.
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	issues := make([]jirastore.Issue, 20)
 	for i := range issues {

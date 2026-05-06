@@ -6,7 +6,7 @@ type Context struct {
 	ID         string  `json:"id"`
 	Key        string  `json:"key"`
 	Status     string  `json:"status"`
-	OrgID      *string `json:"orgId,omitempty"`
+	OrgID      string  `json:"orgId"`
 	CreatedAt  string  `json:"createdAt"`
 	UpdatedAt  string `json:"updatedAt"`
 	IssueCount int    `json:"issueCount,omitempty"`

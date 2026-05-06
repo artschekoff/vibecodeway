@@ -46,7 +46,7 @@ export function CheckoutInWorkspace(arg1:string,arg2:string):Promise<void>;
 
 export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Array<store.ContextUploadedFile>>;
 
-export function CreateContext(arg1:string):Promise<store.Context>;
+export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
 export function CreateContextLog(arg1:string,arg2:string):Promise<contextlog.ContextLog>;
 
@@ -122,13 +122,13 @@ export function InitializeConsolidatedLog(arg1:string):Promise<contextlog.Consol
 
 export function ListAllContexts():Promise<Array<store.Context>>;
 
+export function ListAllLogs(arg1:string,arg2:number):Promise<Array<contextlog.LogEntry>>;
+
 export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;
 
 export function ListContextChat(arg1:string):Promise<Array<contextlog.ChatMessage>>;
 
 export function ListContextLogs(arg1:string):Promise<Array<contextlog.ContextLog>>;
-
-export function ListAllLogs(arg1:string,arg2:number):Promise<Array<contextlog.LogEntry>>;
 
 export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 

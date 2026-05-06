@@ -287,12 +287,12 @@ func (svc *ContextService) ToggleContextStatus(ctx context.Context, id string) (
 	return svc.store.ToggleContextStatus(ctx, id)
 }
 
-// CreateContext creates a new context with the given key.
-func (svc *ContextService) CreateContext(ctx context.Context, key string) (*appstore.Context, error) {
+// CreateContext creates a new context with the given key inside the specified organization.
+func (svc *ContextService) CreateContext(ctx context.Context, key, orgID string) (*appstore.Context, error) {
 	if key == "" {
 		return nil, fmt.Errorf("key is required")
 	}
-	return svc.store.CreateContext(ctx, key)
+	return svc.store.CreateContext(ctx, key, orgID)
 }
 
 // UpdateContext updates mutable fields of a context.

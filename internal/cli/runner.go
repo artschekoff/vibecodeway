@@ -228,9 +228,9 @@ func (r *Runner) ListContexts(ctx context.Context, includeArchived bool) ([]apps
 	return unmarshalSlice[appstore.Context](out, "context-list")
 }
 
-// CreateContext creates a new context.
-func (r *Runner) CreateContext(ctx context.Context, key string) (*appstore.Context, error) {
-	out, err := r.run(ctx, []string{"context-create", "--key", key})
+// CreateContext creates a new context inside the specified organization.
+func (r *Runner) CreateContext(ctx context.Context, key, orgID string) (*appstore.Context, error) {
+	out, err := r.run(ctx, []string{"context-create", "--key", key, "--org-id", orgID})
 	if err != nil {
 		return nil, err
 	}

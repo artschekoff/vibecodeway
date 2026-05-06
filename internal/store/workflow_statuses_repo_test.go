@@ -120,7 +120,9 @@ func TestDeleteWorkflowStatus_NullsContextUserOverride(t *testing.T) {
 	st, err := s.CreateWorkflowStatus(ctx, "custom_done", "Custom Done")
 	require.NoError(t, err)
 
-	c, err := s.CreateContext(ctx, "test-context")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-context", org.ID)
 	require.NoError(t, err)
 	require.NoError(t, s.SetUserOverride(ctx, c.ID, "custom_done", "", ""))
 
@@ -138,7 +140,9 @@ func TestDeleteWorkflowStatus_ResetsAIProposedStatus(t *testing.T) {
 	st, err := s.CreateWorkflowStatus(ctx, "review_pending", "Review Pending")
 	require.NoError(t, err)
 
-	c, err := s.CreateContext(ctx, "ai-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ai-ctx", org.ID)
 	require.NoError(t, err)
 	_, err = s.SetAIProposal(ctx, c.ID, "review_pending", "waiting for review", "", "")
 	require.NoError(t, err)
