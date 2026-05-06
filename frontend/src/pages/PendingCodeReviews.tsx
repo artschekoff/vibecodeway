@@ -11,9 +11,17 @@ import {
   DismissReviewRequest,
   PickRepoDirectory,
   SetTrackedRepoPath,
+  CheckoutBranch,
+  ListRepoLocalPaths,
+  FindWorkspaceForBranch,
+  CheckoutInWorkspace,
+  OpenWorkspaceTerminal,
+  ListAllWorkspaces,
+  DeleteWorkspace,
+  MarkWorkspaceShouldDelete,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
-import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo } from "../types";
+import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo, VCSRepoPath, VCSWorkspace } from "../types";
 import Spinner from "../components/Spinner";
 
 function repoUrl(repo: VCSRepo): string {
@@ -22,7 +30,23 @@ function repoUrl(repo: VCSRepo): string {
   return "";
 }
 
-function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: (id: string) => void }) {
+function ReviewCard({
+  review,
+  workspace,
+  onDismiss,
+  onCheckout,
+  onDeleteWorkspace,
+  onMarkWorkspaceDone,
+  checkoutLoading,
+}: {
+  review: ReviewRequest;
+  workspace?: VCSWorkspace;
+  onDismiss?: (id: string) => void;
+  onCheckout?: (branch: string, repoId: string) => void;
+  onDeleteWorkspace?: (id: string) => void;
+  onMarkWorkspaceDone?: (id: string) => void;
+  checkoutLoading?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const isWaiting = !!review.reviewedAt;
 
@@ -56,6 +80,43 @@ function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: 
               Open <ExternalLink size={11} />
             </button>
           )}
+          {review.headBranch && onCheckout && (
+            <>
+              <button
+                className="vcs-checkout-btn"
+                title={workspace ? `Open workspace for ${review.headBranch}` : `Checkout ${review.headBranch} in workspace`}
+                disabled={checkoutLoading}
+                onClick={() => onCheckout(review.headBranch!, review.repoId)}
+              >
+                {workspace ? "Open workspace" : "Checkout"}
+              </button>
+              {workspace && (
+                <>
+                  <span className={`workspace-status-badge workspace-status-badge--${workspace.status}`}>
+                    {workspace.status === "should_delete" ? "done" : "active"}
+                  </span>
+                  {workspace.status === "active" && onMarkWorkspaceDone && (
+                    <button
+                      className="vcs-checkout-btn"
+                      title="Mark workspace as done"
+                      onClick={() => onMarkWorkspaceDone(workspace.id)}
+                    >
+                      Mark done
+                    </button>
+                  )}
+                  {onDeleteWorkspace && (
+                    <button
+                      className="vcs-checkout-btn vcs-checkout-btn--danger"
+                      title="Delete workspace"
+                      onClick={() => onDeleteWorkspace(workspace.id)}
+                    >
+                      Delete workspace
+                    </button>
+                  )}
+                </>
+              )}
+            </>
+          )}
           {isWaiting && onDismiss && (
             <button className="review-open-btn review-dismiss-btn" onClick={() => onDismiss(review.id)} title="Dismiss">
               <X size={11} />
@@ -85,6 +146,11 @@ export default function PendingCodeReviews() {
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
+  const [checkoutTarget, setCheckoutTarget] = useState<{ branch: string; repoId: string } | null>(null);
+  const [checkoutPaths, setCheckoutPaths] = useState<VCSRepoPath[]>([]);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
 
   const loadData = useCallback(async () => {
     try {
@@ -103,6 +169,8 @@ export default function PendingCodeReviews() {
         reviews: (reviews ?? []).filter((r) => r.repoId === repo.id),
       }));
       setRepoGroups(groups);
+      const ws = (await ListAllWorkspaces() as VCSWorkspace[]) ?? [];
+      setWorkspaces(ws);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -180,6 +248,68 @@ export default function PendingCodeReviews() {
     } catch (e) { setError(String(e)); }
   };
 
+  const handleCheckout = async (branch: string, repoId: string) => {
+    setCheckoutError("");
+    setCheckoutLoading(true);
+    try {
+      const existing = await FindWorkspaceForBranch(repoId, branch) as VCSWorkspace | null;
+      if (existing) {
+        await OpenWorkspaceTerminal(existing.id);
+        return;
+      }
+      const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
+      if (paths.length === 0) {
+        setCheckoutError("No local path set for this repository. Click the folder icon to set one.");
+        return;
+      }
+      if (paths.length === 1) {
+        await CheckoutInWorkspace(paths[0].id, branch);
+        setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
+        return;
+      }
+      setCheckoutPaths(paths);
+      setCheckoutTarget({ branch, repoId });
+    } catch (e) {
+      setCheckoutError(String(e));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleCheckoutWithPath = async (pathId: string) => {
+    if (!checkoutTarget) return;
+    setCheckoutError("");
+    setCheckoutLoading(true);
+    try {
+      await CheckoutInWorkspace(pathId, checkoutTarget.branch);
+      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
+      setCheckoutTarget(null);
+      setCheckoutPaths([]);
+    } catch (e) {
+      setCheckoutError(String(e));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleDeleteWorkspace = async (workspaceId: string) => {
+    try {
+      await DeleteWorkspace(workspaceId);
+      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleMarkWorkspaceDone = async (workspaceId: string) => {
+    try {
+      await MarkWorkspaceShouldDelete(workspaceId);
+      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   if (loading) return <div className="loading"><Spinner /> Loading…</div>;
 
   const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt).length, 0);
@@ -207,6 +337,7 @@ export default function PendingCodeReviews() {
 
       <div className="content">
         {error && <div className="error-banner">{error}</div>}
+        {checkoutError && <div className="error-banner">{checkoutError}</div>}
 
         {/* Tracked Repositories */}
         <div className="tracked-repos-bar">
@@ -323,7 +454,7 @@ export default function PendingCodeReviews() {
                 ) : (
                   <div className="pr-list">
                     {pending.map((review) => (
-                      <ReviewCard key={review.id} review={review} />
+                      <ReviewCard key={review.id} review={review} workspace={workspaces.find((w) => w.branch === review.headBranch && w.repoId === review.repoId)} onCheckout={handleCheckout} onDeleteWorkspace={handleDeleteWorkspace} onMarkWorkspaceDone={handleMarkWorkspaceDone} checkoutLoading={checkoutLoading} />
                     ))}
                   </div>
                 )}
@@ -336,7 +467,7 @@ export default function PendingCodeReviews() {
                     </div>
                     <div className="pr-list">
                       {waiting.map((review) => (
-                        <ReviewCard key={review.id} review={review} onDismiss={handleDismiss} />
+                        <ReviewCard key={review.id} review={review} workspace={workspaces.find((w) => w.branch === review.headBranch && w.repoId === review.repoId)} onDismiss={handleDismiss} onCheckout={handleCheckout} onDeleteWorkspace={handleDeleteWorkspace} onMarkWorkspaceDone={handleMarkWorkspaceDone} checkoutLoading={checkoutLoading} />
                       ))}
                     </div>
                   </>
@@ -346,6 +477,43 @@ export default function PendingCodeReviews() {
           })
         )}
       </div>
+
+      {checkoutTarget && checkoutPaths.length > 1 && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Select Local Path</h2>
+            <p className="confirm-msg">
+              Choose which local clone to use for checking out <strong>{checkoutTarget.branch}</strong>:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "12px 0" }}>
+              {checkoutPaths.map((p) => (
+                <button
+                  key={p.id}
+                  className="btn-secondary"
+                  style={{ textAlign: "left", padding: "8px 12px", fontSize: 12 }}
+                  disabled={checkoutLoading}
+                  onClick={() => void handleCheckoutWithPath(p.id)}
+                >
+                  {p.path}
+                </button>
+              ))}
+            </div>
+            {checkoutError && <div className="error-banner">{checkoutError}</div>}
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setCheckoutTarget(null);
+                  setCheckoutPaths([]);
+                  setCheckoutError("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy } from "lucide-react";
+import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -55,6 +55,10 @@ import {
   AddRepoLocalPath,
   RemoveRepoLocalPath,
   DismissReviewRequest,
+  ListWorkspaces,
+  RefreshWorkspacesForRepo,
+  DeleteWorkspace,
+  MarkWorkspaceShouldDelete,
   ListOrganizations,
   SetContextOrg,
   // @ts-ignore
@@ -67,7 +71,7 @@ import type {
   ContextText, Context, Issue, SlackChannel, SlackDMConfig,
   SlackSavePayload, TextFilesPayload, UploadedFile,
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
-  ContextRelation, RelationsPayload, Organization, VCSRepoPath,
+  ContextRelation, RelationsPayload, Organization, VCSRepoPath, VCSWorkspace,
 } from "../types";
 import { effectiveStatus, effectiveComment, effectiveNextStep } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
@@ -246,6 +250,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   // ── Repositories edit state ──
   const [editingRepoId, setEditingRepoId] = useState<string | null>(null);
   const [repoPaths, setRepoPaths] = useState<Record<string, VCSRepoPath[]>>({});
+  const [repoWorkspaces, setRepoWorkspaces] = useState<Record<string, VCSWorkspace[]>>({});
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -328,6 +333,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         if (r.status === "fulfilled") pathMap[r.value.id] = r.value.paths;
       }
       setRepoPaths(pathMap);
+      // Fetch workspaces for each path
+      const wsMap: Record<string, VCSWorkspace[]> = {};
+      for (const r of pathResults) {
+        if (r.status === "fulfilled") {
+          for (const p of r.value.paths) {
+            wsMap[p.id] = (await ListWorkspaces(p.id) as VCSWorkspace[]) ?? [];
+          }
+        }
+      }
+      setRepoWorkspaces(wsMap);
     } catch {
       // best-effort
     }
@@ -405,8 +420,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     ];
     progress.begin("Creating Context", itemLabels);
     try {
-      const ctx = await CreateContext(key);
-      if (orgId) await SetContextOrg(ctx.id, orgId);
+      const ctx = await CreateContext(key, orgId);
       if (searchQuery.trim()) await SetJiraConfig(ctx.id, searchQuery.trim());
       for (const jiraKey of jiraKeys) {
         progress.next(`Adding issue ${jiraKey}`);
@@ -414,7 +428,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       }
       for (const group of slackGroups) {
         progress.next(`Adding ${group.channels.map((ch) => `#${ch.channelName}`).join(", ")} from ${group.workspace}`);
-        try { await AddSlackChannels(ctx.id, group.workspace, group.channels); } catch { /* best-effort */ }
+        try { await AddSlackChannels(ctx.id, group.workspace, group.channels as any); } catch { /* best-effort */ }
       }
       if (dmConfigs.length > 0 && !(await ensurePassphrase())) {
         // user cancelled passphrase — skip DM upserts
@@ -511,7 +525,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       for (const id of removedChannelIds) { try { await RemoveSlackChannel(id); } catch { /* best-effort */ } }
       for (const group of slackGroups) {
         progress.next(`Adding ${group.channels.map((ch) => `#${ch.channelName}`).join(", ")} from ${group.workspace}`);
-        try { await AddSlackChannels(editTarget.id, group.workspace, group.channels); } catch { /* best-effort */ }
+        try { await AddSlackChannels(editTarget.id, group.workspace, group.channels as any); } catch { /* best-effort */ }
       }
       for (const id of removedDMConfigIds) { try { await DeleteSlackDMConfig(id); } catch { /* best-effort */ } }
       if (dmConfigs.length > 0 && !(await ensurePassphrase())) {
@@ -661,6 +675,44 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     }
   };
 
+  const loadWorkspacesForRepo = async (repoId: string) => {
+    const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
+    const result: Record<string, VCSWorkspace[]> = {};
+    await Promise.all(
+      paths.map(async (p) => {
+        result[p.id] = (await ListWorkspaces(p.id) as VCSWorkspace[]) ?? [];
+      })
+    );
+    setRepoWorkspaces((prev) => ({ ...prev, ...result }));
+  };
+
+  const handleRefreshWorkspaces = async (repoId: string) => {
+    try {
+      await RefreshWorkspacesForRepo(repoId);
+      await loadWorkspacesForRepo(repoId);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleDeleteWorkspace = async (workspaceId: string, repoId: string) => {
+    try {
+      await DeleteWorkspace(workspaceId);
+      await loadWorkspacesForRepo(repoId);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleMarkWorkspaceDone = async (workspaceId: string, repoId: string) => {
+    try {
+      await MarkWorkspaceShouldDelete(workspaceId);
+      await loadWorkspacesForRepo(repoId);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const handleUpdateRepoMeta = async (repoId: string) => {
     setEditSaving(true);
     setEditError("");
@@ -773,6 +825,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 placeholder="Search…"
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
               />
               {searchQuery && (
                 <button className="context-search-clear" onClick={() => handleSearchChange("")} title="Clear search">×</button>
@@ -959,7 +1014,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                     <select
                                       className="btn-ghost"
                                       style={{ fontSize: 11 }}
-                                      value={c.orgId ?? ""}
+                                      value={c.orgId}
                                       onChange={async (e) => {
                                         await SetContextOrg(c.id, e.target.value);
                                         void load();
@@ -1090,6 +1145,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         onChange={(e) => setAddOwnerRepo(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAddRepo(); } }}
                         autoFocus
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                       />
                       <button
                         className="btn-primary"
@@ -1164,16 +1222,53 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                       {(repoPaths[repo.id] ?? []).length > 0 && (
                         <div className="repo-paths-list">
                           {(repoPaths[repo.id] ?? []).map((p) => (
-                            <div key={p.id} className="repo-path-row">
-                              <FolderOpen size={11} style={{ flexShrink: 0 }} />
-                              <span className="repo-path-value" title={p.path}>{p.path}</span>
-                              <button
-                                className="repo-path-remove"
-                                title="Remove path"
-                                onClick={() => void handleRemoveRepoPath(p.id)}
-                              >
-                                <X size={11} />
-                              </button>
+                            <div key={p.id}>
+                              <div className="repo-path-row">
+                                <FolderOpen size={11} style={{ flexShrink: 0 }} />
+                                <span className="repo-path-value" title={p.path}>{p.path}</span>
+                                <button
+                                  className="repo-path-refresh"
+                                  title="Refresh workspaces"
+                                  onClick={() => void handleRefreshWorkspaces(repo.id)}
+                                >
+                                  <RefreshCw size={11} />
+                                </button>
+                                <button
+                                  className="repo-path-remove"
+                                  title="Remove path"
+                                  onClick={() => void handleRemoveRepoPath(p.id)}
+                                >
+                                  <X size={11} />
+                                </button>
+                              </div>
+                              {(repoWorkspaces[p.id] ?? []).map((w) => (
+                                <div key={w.id} className="workspace-row">
+                                  <GitBranch size={10} style={{ flexShrink: 0 }} />
+                                  <span className="workspace-folder" title={w.worktreePath}>
+                                    {w.worktreePath.split("/").pop()}
+                                  </span>
+                                  <span className="workspace-branch">{w.branch}</span>
+                                  <span className={`workspace-status-badge workspace-status-badge--${w.status}`}>
+                                    {w.status === "should_delete" ? "done" : "active"}
+                                  </span>
+                                  {w.status === "active" && (
+                                    <button
+                                      className="workspace-action-btn"
+                                      title="Mark as done (ready to delete)"
+                                      onClick={() => void handleMarkWorkspaceDone(w.id, repo.id)}
+                                    >
+                                      <Check size={10} /> Done
+                                    </button>
+                                  )}
+                                  <button
+                                    className="workspace-action-btn workspace-action-btn--danger"
+                                    title="Delete workspace"
+                                    onClick={() => void handleDeleteWorkspace(w.id, repo.id)}
+                                  >
+                                    <Trash2 size={10} /> Delete
+                                  </button>
+                                </div>
+                              ))}
                             </div>
                           ))}
                         </div>
@@ -1192,6 +1287,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               onChange={(e) => setEditLabel(e.target.value)}
                               placeholder="e.g. API, Frontend, Infra"
                               autoFocus
+                              autoCorrect="off"
+                              autoCapitalize="none"
+                              spellCheck={false}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") { e.preventDefault(); void handleUpdateRepoMeta(repo.id); }
                                 if (e.key === "Escape") cancelEdit();
@@ -1204,6 +1302,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               value={editDescription}
                               onChange={(e) => setEditDescription(e.target.value)}
                               placeholder="Short description (optional)"
+                              autoCorrect="off"
+                              autoCapitalize="none"
+                              spellCheck={false}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") { e.preventDefault(); void handleUpdateRepoMeta(repo.id); }
                                 if (e.key === "Escape") cancelEdit();

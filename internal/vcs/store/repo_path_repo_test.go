@@ -62,3 +62,22 @@ func TestRepoPathRepo_DeleteNotFound(t *testing.T) {
 	err := vcsStore.RepoPaths.Delete(ctx, "nonexistent-id")
 	assert.ErrorIs(t, err, vcsstore.ErrNotFound)
 }
+
+func TestRepoPathRepo_Get(t *testing.T) {
+	_, vcsStore := openTestDB(t)
+	ctx := context.Background()
+
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "owner", "getrepo")
+	require.NoError(t, err)
+
+	p, err := vcsStore.RepoPaths.Add(ctx, repo.ID, "/home/user/getrepo")
+	require.NoError(t, err)
+
+	got, err := vcsStore.RepoPaths.Get(ctx, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, repo.ID, got.RepoID)
+	require.Equal(t, "/home/user/getrepo", got.Path)
+
+	_, err = vcsStore.RepoPaths.Get(ctx, "nonexistent")
+	require.ErrorIs(t, err, vcsstore.ErrNotFound)
+}

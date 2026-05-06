@@ -17,7 +17,9 @@ func TestUpsertContextText_create(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	ct, err := s.UpsertContextText(ctx, "", c.ID, "My Doc", "Hello world content")
@@ -34,7 +36,9 @@ func TestUpsertContextText_update(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	ct, err := s.UpsertContextText(ctx, "", c.ID, "Original", "original content")
@@ -51,7 +55,9 @@ func TestListContextTexts_empty(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	texts, err := s.ListContextTexts(ctx, c.ID, false)
@@ -63,7 +69,9 @@ func TestListContextTexts_returnsAll(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = s.UpsertContextText(ctx, "", c.ID, "Doc 1", "content one")
@@ -80,9 +88,11 @@ func TestListContextTexts_isolatedByContext(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c1, err := s.CreateContext(ctx, "ctx-1")
+	org, err := s.CreateOrganization(ctx, "test-org")
 	require.NoError(t, err)
-	c2, err := s.CreateContext(ctx, "ctx-2")
+	c1, err := s.CreateContext(ctx, "ctx-1", org.ID)
+	require.NoError(t, err)
+	c2, err := s.CreateContext(ctx, "ctx-2", org.ID)
 	require.NoError(t, err)
 
 	_, err = s.UpsertContextText(ctx, "", c1.ID, "Doc A", "content a")
@@ -105,7 +115,9 @@ func TestDeleteContextText(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	ct, err := s.UpsertContextText(ctx, "", c.ID, "To Delete", "some content")
@@ -129,7 +141,9 @@ func TestContextTextsDeletedWithContext(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = s.UpsertContextText(ctx, "", c.ID, "Doc", "content")
@@ -150,7 +164,9 @@ func TestContextTextActiveByDefault(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 	_, err = s.UpsertContextText(ctx, "", c.ID, "Doc", "content")
 	require.NoError(t, err)
@@ -165,7 +181,9 @@ func TestToggleContextTextActive(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 	ct, err := s.UpsertContextText(ctx, "", c.ID, "Doc", "content")
 	require.NoError(t, err)
@@ -189,7 +207,9 @@ func TestUpsertContextText_largeContent(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	// Simulate large text content (e.g., 100KB)
@@ -214,7 +234,9 @@ func TestInsertUploadedFile(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	f, err := s.InsertUploadedFile(ctx, c.ID, "report.pdf", "pdf", "extracted text here", []byte("raw-pdf-bytes"), 42)
@@ -233,7 +255,9 @@ func TestListUploadedFiles(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = s.InsertUploadedFile(ctx, c.ID, "a.pdf", "pdf", "text a", []byte{}, 10)
@@ -250,7 +274,9 @@ func TestListUploadedFiles_activeOnly(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	f1, err := s.InsertUploadedFile(ctx, c.ID, "a.pdf", "pdf", "text a", []byte{}, 10)
@@ -272,7 +298,9 @@ func TestDeleteUploadedFile(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	f, err := s.InsertUploadedFile(ctx, c.ID, "report.pdf", "pdf", "text", []byte{}, 10)
@@ -296,7 +324,9 @@ func TestGetUploadedFileContent(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	content := []byte("binary-content-here")
@@ -312,7 +342,9 @@ func TestUploadedFilesDeletedWithContext(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = s.InsertUploadedFile(ctx, c.ID, "report.pdf", "pdf", "text", []byte{}, 10)

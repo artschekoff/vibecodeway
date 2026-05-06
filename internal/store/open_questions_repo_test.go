@@ -12,7 +12,9 @@ func TestOpenQuestionsRepo_CRUD(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "oq-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "oq-ctx", org.ID)
 	require.NoError(t, err)
 
 	q, err := s.CreateOpenQuestion(ctx, c.ID, "What is the deadline?", "ai")

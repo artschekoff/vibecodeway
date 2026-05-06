@@ -42,6 +42,10 @@ export function ApplyChatSuggestion(arg1) {
   return window['go']['main']['App']['ApplyChatSuggestion'](arg1);
 }
 
+export function AttachLogFile(arg1, arg2) {
+  return window['go']['main']['App']['AttachLogFile'](arg1, arg2);
+}
+
 export function AuthStatus() {
   return window['go']['main']['App']['AuthStatus']();
 }
@@ -62,12 +66,16 @@ export function CheckoutBranch(arg1, arg2) {
   return window['go']['main']['App']['CheckoutBranch'](arg1, arg2);
 }
 
+export function CheckoutInWorkspace(arg1, arg2) {
+  return window['go']['main']['App']['CheckoutInWorkspace'](arg1, arg2);
+}
+
 export function CommitPendingUploads(arg1, arg2) {
   return window['go']['main']['App']['CommitPendingUploads'](arg1, arg2);
 }
 
-export function CreateContext(arg1) {
-  return window['go']['main']['App']['CreateContext'](arg1);
+export function CreateContext(arg1, arg2) {
+  return window['go']['main']['App']['CreateContext'](arg1, arg2);
 }
 
 export function CreateContextLog(arg1, arg2) {
@@ -76,6 +84,10 @@ export function CreateContextLog(arg1, arg2) {
 
 export function CreateOrganization(arg1) {
   return window['go']['main']['App']['CreateOrganization'](arg1);
+}
+
+export function CreateWorkflowStatus(arg1, arg2) {
+  return window['go']['main']['App']['CreateWorkflowStatus'](arg1, arg2);
 }
 
 export function DeleteContext(arg1) {
@@ -114,6 +126,18 @@ export function DeleteUploadedFile(arg1) {
   return window['go']['main']['App']['DeleteUploadedFile'](arg1);
 }
 
+export function DeleteWorkflowStatus(arg1) {
+  return window['go']['main']['App']['DeleteWorkflowStatus'](arg1);
+}
+
+export function DeleteWorkspace(arg1) {
+  return window['go']['main']['App']['DeleteWorkspace'](arg1);
+}
+
+export function DetachLogFile(arg1, arg2) {
+  return window['go']['main']['App']['DetachLogFile'](arg1, arg2);
+}
+
 export function DiscardPendingUpload(arg1) {
   return window['go']['main']['App']['DiscardPendingUpload'](arg1);
 }
@@ -128,6 +152,10 @@ export function DismissPicker() {
 
 export function DismissReviewRequest(arg1) {
   return window['go']['main']['App']['DismissReviewRequest'](arg1);
+}
+
+export function FindWorkspaceForBranch(arg1, arg2) {
+  return window['go']['main']['App']['FindWorkspaceForBranch'](arg1, arg2);
 }
 
 export function GetAISettings() {
@@ -186,12 +214,24 @@ export function GetWorkflowSummary(arg1) {
   return window['go']['main']['App']['GetWorkflowSummary'](arg1);
 }
 
+export function HasSlackPassphrase() {
+  return window['go']['main']['App']['HasSlackPassphrase']();
+}
+
 export function InitializeConsolidatedLog(arg1) {
   return window['go']['main']['App']['InitializeConsolidatedLog'](arg1);
 }
 
 export function ListAllContexts() {
   return window['go']['main']['App']['ListAllContexts']();
+}
+
+export function ListAllLogs(arg1, arg2) {
+  return window['go']['main']['App']['ListAllLogs'](arg1, arg2);
+}
+
+export function ListAllWorkspaces() {
+  return window['go']['main']['App']['ListAllWorkspaces']();
 }
 
 export function ListContextChat(arg1) {
@@ -258,6 +298,14 @@ export function ListVCSRepos(arg1) {
   return window['go']['main']['App']['ListVCSRepos'](arg1);
 }
 
+export function ListWorkflowStatuses() {
+  return window['go']['main']['App']['ListWorkflowStatuses']();
+}
+
+export function ListWorkspaces(arg1) {
+  return window['go']['main']['App']['ListWorkspaces'](arg1);
+}
+
 export function LoadSlackContext(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['LoadSlackContext'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
@@ -290,8 +338,16 @@ export function MarkSlackThreadViewed(arg1) {
   return window['go']['main']['App']['MarkSlackThreadViewed'](arg1);
 }
 
+export function MarkWorkspaceShouldDelete(arg1) {
+  return window['go']['main']['App']['MarkWorkspaceShouldDelete'](arg1);
+}
+
 export function OpenAccessibilityPreferences() {
   return window['go']['main']['App']['OpenAccessibilityPreferences']();
+}
+
+export function OpenWorkspaceTerminal(arg1) {
+  return window['go']['main']['App']['OpenWorkspaceTerminal'](arg1);
 }
 
 export function PickAndExtractFiles(arg1) {
@@ -324,6 +380,10 @@ export function RefreshContext(arg1) {
 
 export function RefreshPendingReviews() {
   return window['go']['main']['App']['RefreshPendingReviews']();
+}
+
+export function RefreshWorkspacesForRepo(arg1) {
+  return window['go']['main']['App']['RefreshWorkspacesForRepo'](arg1);
 }
 
 export function ReloadAllContexts() {
@@ -406,10 +466,6 @@ export function SetSlackPassphrase(arg1) {
   return window['go']['main']['App']['SetSlackPassphrase'](arg1);
 }
 
-export function HasSlackPassphrase() {
-  return window['go']['main']['App']['HasSlackPassphrase']();
-}
-
 export function SetTrackedRepoPath(arg1, arg2) {
   return window['go']['main']['App']['SetTrackedRepoPath'](arg1, arg2);
 }
@@ -480,6 +536,10 @@ export function UpdateVCSBranchLabel(arg1, arg2) {
 
 export function UpdateVCSRepoMeta(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateVCSRepoMeta'](arg1, arg2, arg3);
+}
+
+export function UpdateWorkflowStatus(arg1, arg2) {
+  return window['go']['main']['App']['UpdateWorkflowStatus'](arg1, arg2);
 }
 
 export function UpsertContextText(arg1, arg2, arg3, arg4) {

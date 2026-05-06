@@ -2,18 +2,36 @@ package contextlog
 
 // ContextLog is a single change-log entry persisted in context_logs.
 type ContextLog struct {
-	ID               string `json:"id"`
-	ContextID        string `json:"contextId"`
-	Trigger          string `json:"trigger"`
-	Source           string `json:"source,omitempty"`
-	Model            string `json:"model,omitempty"`
-	PromptTokens    int    `json:"promptTokens,omitempty"`
-	CompletionTokens int    `json:"completionTokens,omitempty"`
-	DiffJSON         string `json:"diffJson,omitempty"`
-	SummaryMd        string `json:"summaryMd"`
-	IsManual         bool   `json:"isManual"`
-	EditedAt         string `json:"editedAt,omitempty"`
-	CreatedAt        string `json:"createdAt"`
+	ID               string         `json:"id"`
+	ContextID        string         `json:"contextId"`
+	Trigger          string         `json:"trigger"`
+	Source           string         `json:"source,omitempty"`
+	Model            string         `json:"model,omitempty"`
+	PromptTokens     int            `json:"promptTokens,omitempty"`
+	CompletionTokens int            `json:"completionTokens,omitempty"`
+	DiffJSON         string         `json:"diffJson,omitempty"`
+	SummaryMd        string         `json:"summaryMd"`
+	IsManual         bool           `json:"isManual"`
+	EditedAt         string         `json:"editedAt,omitempty"`
+	CreatedAt        string         `json:"createdAt"`
+	Files            []AttachedFile `json:"files,omitempty"`
+}
+
+// LogEntry is a ContextLog enriched with its context's key and organization name.
+// Returned by ListAll for cross-context log views.
+type LogEntry struct {
+	ContextLog
+	ContextKey string `json:"contextKey"`
+	OrgName    string `json:"orgName,omitempty"`
+}
+
+// AttachedFile is an uploaded file referenced by a log entry.
+type AttachedFile struct {
+	FileID        string `json:"fileId"`
+	OriginalName  string `json:"originalName"`
+	FileType      string `json:"fileType"`
+	ExtractedText string `json:"extractedText"`
+	CreatedAt     string `json:"createdAt"`
 }
 
 // ConsolidatedLog is the rolling AI-maintained summary for a context.

@@ -6,7 +6,7 @@ type Context struct {
 	ID         string  `json:"id"`
 	Key        string  `json:"key"`
 	Status     string  `json:"status"`
-	OrgID      *string `json:"orgId,omitempty"`
+	OrgID      string  `json:"orgId"`
 	CreatedAt  string  `json:"createdAt"`
 	UpdatedAt  string `json:"updatedAt"`
 	IssueCount int    `json:"issueCount,omitempty"`
@@ -68,6 +68,16 @@ func (c *Context) EffectiveNextStep() string {
 		return *c.AIProposedNextStep
 	}
 	return ""
+}
+
+// WorkflowStatus is a user-configurable status option for context workflow.
+// System statuses (IsSystem = true) are seeded on first run and cannot be deleted.
+type WorkflowStatus struct {
+	ID        string `json:"id"`
+	Slug      string `json:"slug"`
+	Label     string `json:"label"`
+	IsSystem  bool   `json:"isSystem"`
+	CreatedAt string `json:"createdAt"`
 }
 
 // UnviewedBreakdown reports how many unread items exist per item type for a context.

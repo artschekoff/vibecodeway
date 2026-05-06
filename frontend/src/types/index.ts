@@ -2,7 +2,7 @@ export interface Context {
   id: string;
   key: string;
   status: string;
-  orgId?: string;
+  orgId: string;
   createdAt: string;
   updatedAt: string;
   issueCount?: number;
@@ -71,6 +71,7 @@ export interface Issue {
   issueType: string;
   description: string;
   jiraUpdated: string;
+  parentKey: string;
   createdAt: string;
   isActive: boolean;
   viewedAt?: string;
@@ -111,11 +112,20 @@ export interface SearchDiff {
   existing: SearchResult[];
 }
 
+export interface SlackMessageItem {
+  user: string;
+  userId: string;
+  text: string;
+  timestamp: string;
+  rawTs?: string;
+  replies?: SlackMessageItem[];
+}
+
 export interface SlackChannelInput {
   channelId: string;
   channelName: string;
   startFrom?: string;
-  content?: string;
+  messages?: SlackMessageItem[];
 }
 
 export interface SlackChannelGroup {
@@ -155,6 +165,7 @@ export interface SlackThread {
   workspace: string;
   channelId: string;
   threadTs: string;
+  parentThreadTs?: string;
   channelName: string;
   permalink: string;
   searchQuery: string;
@@ -179,6 +190,7 @@ export interface SlackChannel {
 export interface SlackChannelResult {
   id: string;
   name: string;
+  messages?: SlackMessageItem[];
   content?: string;
 }
 
@@ -233,6 +245,14 @@ export interface UploadPreviewBatchResult {
   errors: string[];
 }
 
+export interface AttachedFile {
+  fileId: string;
+  originalName: string;
+  fileType: string;
+  extractedText: string;
+  createdAt: string;
+}
+
 export interface ContextLog {
   id: string;
   contextId: string;
@@ -246,6 +266,12 @@ export interface ContextLog {
   isManual: boolean;
   editedAt?: string;
   createdAt: string;
+  files?: AttachedFile[];
+}
+
+export interface LogEntry extends ContextLog {
+  contextKey: string;
+  orgName?: string;
 }
 
 export interface ConsolidatedLog {
@@ -322,6 +348,17 @@ export interface VCSRepoPath {
   createdAt: string;
 }
 
+export interface VCSWorkspace {
+  id: string;
+  repoPathId: string;
+  repoId: string;
+  branch: string;
+  worktreePath: string;
+  status: "active" | "should_delete";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface VCSBranch {
   id: string;
   contextId: string;
@@ -390,6 +427,7 @@ export interface ReviewRequest {
   prAuthor: string;
   prUrl: string;
   reviewStatus: string;
+  headBranch?: string;
   requestedAt: string;
   fetchedAt: string;
   reviewedAt?: string;
@@ -430,6 +468,14 @@ export interface RelationInput {
 export interface RelationsPayload {
   newRelations: RelationInput[];
   removedRelationIds: string[];
+}
+
+export interface WorkflowStatus {
+  id: string;
+  slug: string;
+  label: string;
+  isSystem: boolean;
+  createdAt: string;
 }
 
 export interface WorkflowSummary {

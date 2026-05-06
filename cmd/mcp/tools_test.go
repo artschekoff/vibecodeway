@@ -123,18 +123,3 @@ func TestFilterActiveItems_InactiveIssueDropsItsComments(t *testing.T) {
 	assert.Empty(t, filtered.Issues, "inactive issue and all its comments should be excluded")
 }
 
-func TestIsValidWorkflowStatus_AllValidStatuses(t *testing.T) {
-	for _, s := range validWorkflowStatuses {
-		assert.True(t, isValidWorkflowStatus(s), "expected %q to be valid", s)
-	}
-}
-
-func TestIsValidWorkflowStatus_EmptyString_Invalid(t *testing.T) {
-	assert.False(t, isValidWorkflowStatus(""))
-}
-
-func TestIsValidWorkflowStatus_Unknown_Invalid(t *testing.T) {
-	assert.False(t, isValidWorkflowStatus("unknown"))
-	assert.False(t, isValidWorkflowStatus("READY"))  // case-sensitive
-	assert.False(t, isValidWorkflowStatus("active"))
-}

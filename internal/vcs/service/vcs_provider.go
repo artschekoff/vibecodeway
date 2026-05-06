@@ -4,7 +4,6 @@ package vcsservice
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -13,6 +12,25 @@ import (
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"go.uber.org/zap"
 )
+
+// parseVCSTime tries common ISO 8601 layouts and returns zero time on failure.
+func parseVCSTime(s string) time.Time {
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
+// formatVCSDateTime formats a stored date string as "YYYY-MM-DD HH:MM".
+func formatVCSDateTime(s string) string {
+	t := parseVCSTime(s)
+	if t.IsZero() {
+		return s
+	}
+	return t.Format("2006-01-02 15:04")
+}
 
 // NotifyFunc is called when a tracked PR undergoes a notable state change.
 // contextID identifies the context; entityID is the internal vcs_pull_requests.id.
@@ -190,55 +208,49 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 	return stats, nil
 }
 
-// WriteContext appends a human-readable PR section for contextID to w.
+// CollectItems returns one Item per PR for global sorting.
 // Only items on or after startAt are included; pass a zero time for no filter.
-func (p *VCSProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, _ bool) error {
+func (p *VCSProvider) CollectItems(ctx context.Context, contextID string, startAt time.Time, _ bool) ([]provider.Item, error) {
 	prs, err := p.store.PullRequests.ListPRsForContext(ctx, contextID)
 	if err != nil {
-		return fmt.Errorf("vcs write context: list prs: %w", err)
-	}
-	if len(prs) == 0 {
-		return nil
+		return nil, fmt.Errorf("vcs collect items: list prs: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "--- PULL REQUESTS (%d) ---\n\n", len(prs))
-
+	var items []provider.Item
 	for _, pr := range prs {
-		// Apply startAt filter by PR updated time.
-		if !startAt.IsZero() {
-			t, _ := time.Parse(time.RFC3339, pr.PRUpdatedAt)
-			if !t.IsZero() && t.Before(startAt) {
-				continue
-			}
+		ts := parseVCSTime(pr.PRUpdatedAt)
+		if ts.IsZero() {
+			ts = parseVCSTime(pr.PRCreatedAt)
 		}
-
-		_, _ = fmt.Fprintf(w, "[PR #%d] %s\n", pr.PRNumber, pr.Title)
-		_, _ = fmt.Fprintf(w, "Author: %s | State: %s | Review: %s\n", pr.Author, pr.State, pr.ReviewStatus)
-		if pr.URL != "" {
-			_, _ = fmt.Fprintf(w, "URL: %s\n", pr.URL)
-		}
-
-		// Load and print unresolved comments.
-		comments, err := p.store.PullRequests.ListCommentsForPRFiltered(ctx, pr.ID, false)
-		if err != nil {
-			p.logger.Warn("vcs write context: list comments failed", zap.String("prID", pr.ID), zap.Error(err))
-			_, _ = fmt.Fprint(w, "\n")
+		if !startAt.IsZero() && !ts.IsZero() && ts.Before(startAt) {
 			continue
 		}
 
+		comments, err := p.store.PullRequests.ListCommentsForPRFiltered(ctx, pr.ID, false)
+		if err != nil {
+			p.logger.Warn("vcs collect items: list comments failed", zap.String("prID", pr.ID), zap.Error(err))
+		}
+
+		var buf strings.Builder
+		fmt.Fprintf(&buf, "[%s · PR] [PR #%d] %s\n", formatVCSDateTime(pr.PRUpdatedAt), pr.PRNumber, pr.Title)
+		fmt.Fprintf(&buf, "Author: %s | State: %s | Review: %s\n", pr.Author, pr.State, pr.ReviewStatus)
+		if pr.URL != "" {
+			fmt.Fprintf(&buf, "URL: %s\n", pr.URL)
+		}
 		tree := vcsstore.BuildCommentTree(comments)
 		if len(tree) > 0 {
-			_, _ = fmt.Fprintf(w, "\nUnresolved comments (%d):\n", len(tree))
+			fmt.Fprintf(&buf, "\nUnresolved comments (%d):\n", len(tree))
 			for _, c := range tree {
-				writeComment(w, c, "  ")
+				writeComment(&buf, c, "  ")
 			}
 		}
-		_, _ = fmt.Fprint(w, "\n")
+		fmt.Fprint(&buf, "\n")
+		items = append(items, provider.Item{CreatedAt: ts, Body: buf.String()})
 	}
-	return nil
+	return items, nil
 }
 
-func writeComment(w io.Writer, c vcsstore.PRComment, indent string) {
+func writeComment(w *strings.Builder, c vcsstore.PRComment, indent string) {
 	author := c.Author
 	if author == "" {
 		author = "Unknown"
@@ -251,9 +263,9 @@ func writeComment(w io.Writer, c vcsstore.PRComment, indent string) {
 		}
 		location += "]"
 	}
-	_, _ = fmt.Fprintf(w, "%s%s%s:\n", indent, author, location)
+	fmt.Fprintf(w, "%s%s%s:\n", indent, author, location)
 	for _, line := range strings.Split(c.Body, "\n") {
-		_, _ = fmt.Fprintf(w, "%s  %s\n", indent, line)
+		fmt.Fprintf(w, "%s  %s\n", indent, line)
 	}
 	for _, reply := range c.Replies {
 		writeComment(w, reply, indent+"  ")
@@ -307,7 +319,7 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 			activeNumbers = append(activeNumbers, pr.Number)
 			if err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
-				pr.ReviewStatus, pr.CreatedAt,
+				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt,
 			); err != nil {
 				p.logger.Warn("vcs: upsert review request failed",
 					zap.Int("pr", pr.Number), zap.Error(err))

@@ -35,11 +35,13 @@ func TestSyncIssueComments_AllIssuesFetched(t *testing.T) {
 	repo := jirastore.NewRepo(s.DB())
 
 	// Create a context and 20 real issues.
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	issues := make([]jirastore.Issue, 20)
 	for i := range issues {
-		id, err := repo.UpsertIssue(ctx, c.ID, fmt.Sprintf("PROJ-%d", i+1), "summary", "open", "", "task", "", "2024-01-01T00:00:00Z")
+		id, err := repo.UpsertIssue(ctx, c.ID, fmt.Sprintf("PROJ-%d", i+1), "summary", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
 		require.NoError(t, err)
 		issues[i] = jirastore.Issue{ID: id, JiraKey: fmt.Sprintf("PROJ-%d", i+1)}
 	}

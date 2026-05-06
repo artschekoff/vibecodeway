@@ -228,9 +228,9 @@ func (r *Runner) ListContexts(ctx context.Context, includeArchived bool) ([]apps
 	return unmarshalSlice[appstore.Context](out, "context-list")
 }
 
-// CreateContext creates a new context.
-func (r *Runner) CreateContext(ctx context.Context, key string) (*appstore.Context, error) {
-	out, err := r.run(ctx, []string{"context-create", "--key", key})
+// CreateContext creates a new context inside the specified organization.
+func (r *Runner) CreateContext(ctx context.Context, key, orgID string) (*appstore.Context, error) {
+	out, err := r.run(ctx, []string{"context-create", "--key", key, "--org-id", orgID})
 	if err != nil {
 		return nil, err
 	}
@@ -635,6 +635,20 @@ func (r *Runner) ListContextLogs(ctx context.Context, contextID string) ([]conte
 	return unmarshalSlice[contextlog.ContextLog](out, "log-list")
 }
 
+// ListAllLogs returns log entries across all contexts, optionally filtered by trigger.
+// Pass empty string for trigger to return all triggers.
+func (r *Runner) ListAllLogs(ctx context.Context, trigger string, limit int) ([]contextlog.LogEntry, error) {
+	args := []string{"log-list-all", "--limit", fmt.Sprintf("%d", limit)}
+	if trigger != "" {
+		args = append(args, "--trigger", trigger)
+	}
+	out, err := r.run(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalSlice[contextlog.LogEntry](out, "log-list-all")
+}
+
 // CreateContextLog creates a manual log entry.
 func (r *Runner) CreateContextLog(ctx context.Context, contextID, summaryMd string) (*contextlog.ContextLog, error) {
 	out, err := r.run(ctx, []string{"log-create",
@@ -658,6 +672,16 @@ func (r *Runner) UpdateContextLog(ctx context.Context, id, summaryMd string) (*c
 // DeleteContextLog removes a log entry.
 func (r *Runner) DeleteContextLog(ctx context.Context, id string) error {
 	return r.runNoOutput(ctx, []string{"log-delete", "--id", id})
+}
+
+// AttachLogFile links an uploaded file to a log entry.
+func (r *Runner) AttachLogFile(ctx context.Context, logID, fileID string) error {
+	return r.runNoOutput(ctx, []string{"log-attach-file", "--log-id", logID, "--file-id", fileID})
+}
+
+// DetachLogFile removes the link between a log entry and an uploaded file.
+func (r *Runner) DetachLogFile(ctx context.Context, logID, fileID string) error {
+	return r.runNoOutput(ctx, []string{"log-detach-file", "--log-id", logID, "--file-id", fileID})
 }
 
 // --- Consolidated log ---

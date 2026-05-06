@@ -64,63 +64,44 @@ func jiraLinkToRelationType(typeName, direction string) string {
 	}
 }
 
-// slackMessage is one entry in the messages array returned by slack-cli search-channels
-// and list-dms --with-messages.
-// search-channels uses "user" (display name); list-dms uses "userId" (Slack user ID).
-// Replies holds thread replies when search-channels returns structured responses.
-type slackMessage struct {
-	User      string         `json:"user"`
-	UserID    string         `json:"userId"`
-	Text      string         `json:"text"`
-	Timestamp string         `json:"timestamp"`
-	Replies   []slackMessage `json:"replies,omitempty"`
-}
-
-// displayUser returns the best available user label: display name when present, user ID otherwise.
-func (m slackMessage) displayUser() string {
-	if m.User != "" {
-		return m.User
-	}
-	return m.UserID
-}
-
 // slackDMEntry is one DM conversation returned by slack-cli list-dms --with-messages.
 // The CLI may return the message as "lastMessage" (current), "message" (singular), or
 // "messages" (array). All three are decoded for forward/backward compatibility.
 type slackDMEntry struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	UserID      string         `json:"userId"`
-	UserName    string         `json:"userName"`
-	IsIM        bool           `json:"isIm"`
-	Messages    []slackMessage `json:"messages"`
-	Message     *slackMessage  `json:"message"`
-	LastMessage *slackMessage  `json:"lastMessage"`
+	ID          string                    `json:"id"`
+	Name        string                    `json:"name"`
+	UserID      string                    `json:"userId"`
+	UserName    string                    `json:"userName"`
+	IsIM        bool                      `json:"isIm"`
+	Messages    []slackstore.SlackMessage `json:"messages"`
+	Message     *slackstore.SlackMessage  `json:"message"`
+	LastMessage *slackstore.SlackMessage  `json:"lastMessage"`
 }
 
 // allMessages returns all messages for this DM entry across all possible field shapes.
-func (e slackDMEntry) allMessages() []slackMessage {
+func (e slackDMEntry) allMessages() []slackstore.SlackMessage {
 	if len(e.Messages) > 0 {
 		return e.Messages
 	}
 	if e.LastMessage != nil {
-		return []slackMessage{*e.LastMessage}
+		return []slackstore.SlackMessage{*e.LastMessage}
 	}
 	if e.Message != nil {
-		return []slackMessage{*e.Message}
+		return []slackstore.SlackMessage{*e.Message}
 	}
 	return nil
 }
 
 // SlackChannelResult is one channel returned by SearchSlackChannels.
 // The JSON shape matches what slack-cli search-channels emits:
-// [{id, name, messages:[{user, text, timestamp}]}]
-// Content is derived by formatting Messages and is not present in the raw JSON.
+// [{id, name, messages:[{user, text, timestamp, rawTs}]}]
+// Content is derived by formatting Messages for the search-result preview in ContextForm;
+// it is NOT stored to the DB — AddSlackChannels uses Messages directly.
 type SlackChannelResult struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Messages []slackMessage `json:"messages"`
-	Content  string         `json:"content,omitempty"` // formatted from Messages; not in CLI output but sent to frontend
+	ID       string                    `json:"id"`
+	Name     string                    `json:"name"`
+	Messages []slackstore.SlackMessage `json:"messages"`
+	Content  string                    `json:"content,omitempty"` // formatted preview; not in CLI output but sent to frontend
 }
 
 // SlackWorkspaceResult is one workspace returned by ListSlackWorkspaces.
@@ -253,6 +234,11 @@ func (svc *ContextService) SetAgentProposal(ctx context.Context, contextID, stat
 	return svc.store.SetAIProposal(ctx, contextID, status, comment, nextStep, "")
 }
 
+// IsValidWorkflowStatus reports whether slug is a registered workflow status in the DB.
+func (svc *ContextService) IsValidWorkflowStatus(ctx context.Context, slug string) (bool, error) {
+	return svc.store.IsValidWorkflowStatus(ctx, slug)
+}
+
 // NewContextService creates a new ContextService.
 // Pass provider implementations as variadic arguments to enable cross-cutting operations
 // (Refresh, Reload, FormatContext). Each provider must have a unique Name().
@@ -301,12 +287,12 @@ func (svc *ContextService) ToggleContextStatus(ctx context.Context, id string) (
 	return svc.store.ToggleContextStatus(ctx, id)
 }
 
-// CreateContext creates a new context with the given key.
-func (svc *ContextService) CreateContext(ctx context.Context, key string) (*appstore.Context, error) {
+// CreateContext creates a new context with the given key inside the specified organization.
+func (svc *ContextService) CreateContext(ctx context.Context, key, orgID string) (*appstore.Context, error) {
 	if key == "" {
 		return nil, fmt.Errorf("key is required")
 	}
-	return svc.store.CreateContext(ctx, key)
+	return svc.store.CreateContext(ctx, key, orgID)
 }
 
 // UpdateContext updates mutable fields of a context.
@@ -583,7 +569,7 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 		}
 		if _, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
-			detail.IssueType, detail.Description, detail.Updated,
+			detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
 		); err != nil {
 			svc.logger.Warn("failed to upsert issue", zap.String("key", key), zap.Error(err))
 			return nil
@@ -840,8 +826,8 @@ func (svc *ContextService) SearchSlackChannels(ctx context.Context, workspace, n
 }
 
 // AddSlackChannels upserts multiple Slack channels into a context.
-// If a channel carries Content (pre-loaded by slack-cli search-channels), it is also
-// stored immediately as a slack_thread so the user sees data without a separate Refresh.
+// If a channel carries Messages (pre-loaded by slack-cli search-channels), each message is
+// stored immediately as its own slack_thread record so the user sees content without a Refresh.
 func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, workspace string, channels []slackstore.SlackChannelInput) error {
 	if workspace == "" {
 		return fmt.Errorf("slack workspace is required")
@@ -857,20 +843,41 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 		if err != nil {
 			return fmt.Errorf("upserting channel %q: %w", ch.ChannelName, err)
 		}
-		if ch.Content != "" {
-			// Store a temporary whole-channel blob (ThreadTS="") so the user sees
-			// content immediately without needing to Refresh. The next Refresh will
-			// delete this blob and replace it with individual per-message thread rows.
+		// Store each message (and its replies) as its own slack_thread record so users can manage
+		// individual messages (delete, enable/disable) without a separate Refresh.
+		// Iterate in reverse so oldest messages get the earliest created_at timestamps.
+		for i := len(ch.Messages) - 1; i >= 0; i-- {
+			msg := ch.Messages[i]
+			if msg.RawTS == "" {
+				continue
+			}
 			if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 				SlackChannelID: slackCh.ID,
 				Workspace:      workspace,
 				ChannelID:      ch.ChannelID,
-				ThreadTS:       "",
+				ThreadTS:       msg.RawTS,
 				ChannelName:    ch.ChannelName,
-				Content:        ch.Content,
+				Content:        formatSingleMessage(msg),
 			}); err != nil {
-				svc.logger.Warn("add channels: upsert thread failed",
-					zap.String("channel", ch.ChannelName), zap.Error(err))
+				svc.logger.Warn("add channels: upsert message thread failed",
+					zap.String("channel", ch.ChannelName), zap.String("ts", msg.RawTS), zap.Error(err))
+			}
+			for _, reply := range msg.Replies {
+				if reply.RawTS == "" {
+					continue
+				}
+				if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+					SlackChannelID: slackCh.ID,
+					Workspace:      workspace,
+					ChannelID:      ch.ChannelID,
+					ThreadTS:       reply.RawTS,
+					ParentThreadTS: msg.RawTS,
+					ChannelName:    ch.ChannelName,
+					Content:        formatSingleMessage(reply),
+				}); err != nil {
+					svc.logger.Warn("add channels: upsert reply thread failed",
+						zap.String("channel", ch.ChannelName), zap.String("ts", reply.RawTS), zap.Error(err))
+				}
 			}
 		}
 	}
@@ -1027,18 +1034,31 @@ func (svc *ContextService) recordContextChange(ctx context.Context, contextID, t
 	}
 }
 
-// FormatContext writes a human-readable summary of all provider data for contextID to w.
+// FormatContext collects all provider artifacts for contextID, sorts them globally
+// newest-first, and writes them to w.
 // filter limits output to a specific provider name (e.g. "jira", "slack"); empty = all providers.
 // Only items on or after startAt are included; pass a zero time for no filter.
 func (svc *ContextService) FormatContext(ctx context.Context, w io.Writer, contextID string, filter string, startAt time.Time, activeOnly bool) error {
+	var all []provider.Item
 	for _, p := range svc.providers {
 		if filter != "" && filter != p.Name() {
 			continue
 		}
-		if err := p.WriteContext(ctx, w, contextID, startAt, activeOnly); err != nil {
+		items, err := p.CollectItems(ctx, contextID, startAt, activeOnly)
+		if err != nil {
 			svc.logger.Warn("format context: provider failed",
 				zap.String("provider", p.Name()), zap.String("contextID", contextID), zap.Error(err))
+			continue
 		}
+		all = append(all, items...)
+	}
+
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].CreatedAt.After(all[j].CreatedAt)
+	})
+
+	for _, item := range all {
+		_, _ = fmt.Fprint(w, item.Body)
 	}
 	return nil
 }
@@ -1251,7 +1271,7 @@ func formatDMContent(raw string) string {
 		}
 		fmt.Fprintf(&sb, "# DM with %s\n\n", label)
 		for _, m := range msgs {
-			fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.displayUser(), m.Text)
+			fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.DisplayUser(), m.Text)
 		}
 		sb.WriteString("\n")
 	}

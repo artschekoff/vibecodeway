@@ -74,7 +74,9 @@ func TestCreateAndGetContext(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "sprint-1")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "sprint-1", org.ID)
 	require.NoError(t, err)
 	assert.NotEmpty(t, c.ID)
 	assert.Equal(t, "sprint-1", c.Key)
@@ -90,7 +92,9 @@ func TestGetContextByKey(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "my-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-ctx", org.ID)
 	require.NoError(t, err)
 
 	got, err := s.GetContextByKey(ctx, "my-ctx")
@@ -108,10 +112,12 @@ func TestListContexts_DefaultExcludesArchived(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	_, err := s.CreateContext(ctx, "active-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	_, err = s.CreateContext(ctx, "active-ctx", org.ID)
 	require.NoError(t, err)
 
-	archived, err := s.CreateContext(ctx, "archived-ctx")
+	archived, err := s.CreateContext(ctx, "archived-ctx", org.ID)
 	require.NoError(t, err)
 	_, err = s.UpdateContext(ctx, archived.ID, archived.Key, "archived")
 	require.NoError(t, err)
@@ -126,10 +132,12 @@ func TestListContexts_IncludeArchivedReturnsAll(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	_, err := s.CreateContext(ctx, "active-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	_, err = s.CreateContext(ctx, "active-ctx", org.ID)
 	require.NoError(t, err)
 
-	archived, err := s.CreateContext(ctx, "archived-ctx")
+	archived, err := s.CreateContext(ctx, "archived-ctx", org.ID)
 	require.NoError(t, err)
 	_, err = s.UpdateContext(ctx, archived.ID, archived.Key, "archived")
 	require.NoError(t, err)
@@ -143,7 +151,9 @@ func TestToggleContextStatus(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "toggle-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "toggle-ctx", org.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "active", c.Status)
 
@@ -165,7 +175,9 @@ func TestToggleContextStatus_NotFound(t *testing.T) {
 func TestAIProposalDefaults(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	c, err := s.CreateContext(ctx, "test-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "not_started", c.AIProposedStatus)
 	assert.Nil(t, c.UserStatusOverride)

@@ -9,6 +9,7 @@ import {
   SetJiraBaseURL,
   AddVCSBranch,
   AddSpecificPR,
+  CreateContextLog,
 } from "../../wailsjs/go/main/App";
 import type { Context } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
@@ -16,17 +17,22 @@ import { parseAttachableContent } from "../lib/parseAttachableContent";
 interface Props {
   visible: boolean;
   text: string;
+  orgId?: string;
   onAttach: (contextKey: string, contextId: string) => void;
   onDismiss: () => void;
 }
 
-export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props) => {
+export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }: Props) => {
   const [contexts, setContexts] = useState<Context[]>([]);
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(false);
   const [attaching, setAttaching] = useState(false);
   const [error, setError] = useState("");
+
+  type Destination = "text" | "log";
+  const [destination, setDestination] = useState<Destination>("text");
+  const [logDraft, setLogDraft] = useState("");
 
   // "+ New Context" inline form state
   const [showNewCtx, setShowNewCtx] = useState(false);
@@ -49,7 +55,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     setLoading(true);
     try {
       const all = await ListAllContexts();
-      const active = all.filter((c) => c.status === "active");
+      const active = all.filter((c) => c.status === "active" && (!orgId || c.orgId === orgId));
       setContexts(active);
       if (active.length === 1) setSelectedId(active[0].id);
     } catch {
@@ -58,7 +64,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
       setLoading(false);
       focusTimerRef.current = setTimeout(() => filterRef.current?.focus(), 50);
     }
-  }, []);
+  }, [orgId]);
 
   useEffect(() => {
     if (!visible) return;
@@ -69,6 +75,8 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     setShowNewCtx(false);
     setNewCtxKey("");
     setNewCtxError("");
+    setDestination("text");
+    setLogDraft("");
     void loadContexts();
     return () => {
       if (focusTimerRef.current) {
@@ -110,12 +118,16 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
           await AddSpecificPR(contextID, kind.platform, kind.ownerRepo, kind.prNumber);
           break;
         default:
-          await QuickAttachText(contextID, text);
+          if (destination === "log") {
+            await CreateContextLog(contextID, logDraft.trim() || text);
+          } else {
+            await QuickAttachText(contextID, text);
+          }
       }
       DismissPicker().catch(() => {});
       onAttach(contextKey, contextID);
     },
-    [kind, text, onAttach],
+    [kind, text, destination, logDraft, onAttach],
   );
 
   const handleAttach = useCallback(async () => {
@@ -144,7 +156,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     setCreatingCtx(true);
     setNewCtxError("");
     try {
-      const ctx = await CreateContext(key);
+      const ctx = await CreateContext(key, orgId ?? "");
       setContexts((prev) => [...prev, ctx]);
       setSelectedId(ctx.id);
       setShowNewCtx(false);
@@ -156,7 +168,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     } finally {
       setCreatingCtx(false);
     }
-  }, [newCtxKey, attachTo]);
+  }, [newCtxKey, orgId, attachTo]);
 
   if (!visible) return null;
 
@@ -202,6 +214,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     kind.type === "jira" ? "Add Issue" :
     kind.type === "vcs_branch" ? (kind.branch ? "Link Branch" : "Link Repo") :
     kind.type === "vcs_pr" ? "Add PR" :
+    destination === "log" ? "Add to Log" :
     "Attach";
 
   return (
@@ -221,6 +234,43 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
 
         {renderPreview()}
 
+        {kind.type === "text" && (
+          <div className="quick-attach-destination">
+            <label className={`quick-attach-dest-option${destination === "text" ? " quick-attach-dest-option--selected" : ""}`}>
+              <input
+                type="radio"
+                name="destination"
+                value="text"
+                checked={destination === "text"}
+                onChange={() => { setDestination("text"); setLogDraft(""); }}
+              />
+              Add to Notes
+            </label>
+            <label className={`quick-attach-dest-option${destination === "log" ? " quick-attach-dest-option--selected" : ""}`}>
+              <input
+                type="radio"
+                name="destination"
+                value="log"
+                checked={destination === "log"}
+                onChange={() => { setDestination("log"); setLogDraft(text); }}
+              />
+              Add to Log
+            </label>
+          </div>
+        )}
+
+        {kind.type === "text" && destination === "log" && (
+          <div className="quick-attach-log-draft">
+            <textarea
+              className="chat-input"
+              value={logDraft}
+              onChange={(e) => setLogDraft(e.target.value)}
+              rows={5}
+              placeholder="Edit before saving as log entry…"
+            />
+          </div>
+        )}
+
         <div className="quick-attach-filter-row">
           <input
             ref={filterRef}
@@ -229,6 +279,9 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             disabled={attaching || creatingCtx}
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </div>
 
@@ -273,6 +326,9 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
                 if (e.key === "Escape") { setShowNewCtx(false); setNewCtxKey(""); setNewCtxError(""); }
               }}
               disabled={creatingCtx}
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
             />
             <button
               className="btn-primary"
@@ -309,10 +365,19 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
             Cancel
           </button>
           <button
-            className="btn-primary"
+            className={`btn-primary${attaching ? " btn-with-spinner" : ""}`}
             onClick={() => { void handleAttach(); }}
             disabled={attaching || creatingCtx || !selectedId || loading}
           >
+            {attaching && (
+              <svg
+                width="14" height="14" viewBox="0 0 14 14" fill="none"
+                style={{ animation: "progress-spin 0.8s linear infinite", flexShrink: 0 }}
+              >
+                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2" />
+                <path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
             {attaching ? `${attachLabel}ing…` : attachLabel}
           </button>
         </div>

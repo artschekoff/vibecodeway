@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -60,9 +59,21 @@ func newTestService(t *testing.T, runner SlackRunner) *ContextService {
 }
 
 // createCtx is a helper that creates a bare context in the store.
+// It reuses the first existing organization, or creates one named "test-org" on first call.
 func createCtx(t *testing.T, svc *ContextService, key string) *appstore.Context {
 	t.Helper()
-	c, err := svc.store.CreateContext(context.Background(), key)
+	ctx := context.Background()
+	orgs, err := svc.store.ListOrganizations(ctx)
+	require.NoError(t, err)
+	var orgID string
+	if len(orgs) > 0 {
+		orgID = orgs[0].ID
+	} else {
+		org, err := svc.store.CreateOrganization(ctx, "test-org")
+		require.NoError(t, err)
+		orgID = org.ID
+	}
+	c, err := svc.store.CreateContext(ctx, key, orgID)
 	require.NoError(t, err)
 	return c
 }
@@ -599,24 +610,22 @@ func TestReloadAllContexts_SeparatesDMsFromThreads(t *testing.T) {
 	assert.Equal(t, 1, results[0].DMsRefreshed, "should count only DM configs")
 }
 
-// --- writeSlackSection DM output ---
+// --- buildSlackItems DM output ---
 
-func TestWriteSlackSection_DMsWrittenWithoutThreads(t *testing.T) {
+func TestBuildSlackItems_DMsWrittenWithoutThreads(t *testing.T) {
 	dmConfigs := []slackstore.SlackDMConfig{
 		{ID: "dm1", Workspace: "acme", StartFrom: "2024-01-01", Content: "# DM with alice\n\n[2024-01-01] alice: hello"},
 	}
 
-	var buf bytes.Buffer
-	writeSlackSection(&buf, nil, nil, dmConfigs, time.Time{})
-	output := buf.String()
+	items := buildSlackItems(nil, dmConfigs, time.Time{})
+	require.Len(t, items, 1)
+	output := items[0].Body
 
-	assert.Contains(t, output, "1 DM config)", "header should count DM configs")
 	assert.Contains(t, output, "DMs (acme) since 2024-01-01", "DM label should be present")
 	assert.Contains(t, output, "# DM with alice", "DM content should be present")
-	assert.NotContains(t, output, "No Slack threads match", "should not show empty-threads message when DMs exist")
 }
 
-func TestWriteSlackSection_DMsWrittenAlongsideThreads(t *testing.T) {
+func TestBuildSlackItems_DMsWrittenAlongsideThreads(t *testing.T) {
 	threads := []slackstore.SlackThread{
 		{ID: "t1", Workspace: "acme", ChannelID: "C1", ChannelName: "general", Content: "thread content"},
 	}
@@ -624,12 +633,12 @@ func TestWriteSlackSection_DMsWrittenAlongsideThreads(t *testing.T) {
 		{ID: "dm1", Workspace: "acme", Content: "dm content"},
 	}
 
-	var buf bytes.Buffer
-	writeSlackSection(&buf, nil, threads, dmConfigs, time.Time{})
-	output := buf.String()
+	items := buildSlackItems(threads, dmConfigs, time.Time{})
+	require.Len(t, items, 2)
 
-	assert.Contains(t, output, "thread content")
-	assert.Contains(t, output, "dm content")
+	combined := items[0].Body + items[1].Body
+	assert.Contains(t, combined, "thread content")
+	assert.Contains(t, combined, "dm content")
 }
 
 // --- formatDMContent ---
@@ -870,4 +879,79 @@ func TestSetAgentProposal_UnknownContextID_ReturnsError(t *testing.T) {
 
 	_, err := svc.SetAgentProposal(ctx, "nonexistent-id", "in_progress", "", "")
 	require.Error(t, err)
+}
+
+// --- SlackProvider per-message reload tests ---
+
+func TestSlackProvider_Reload_StoresPerMessageRecords(t *testing.T) {
+	ctx := context.Background()
+	searchOut := `[{"id":"C1","name":"general","messages":[
+		{"user":"Alice","text":"hello","timestamp":"2026-05-05 10:00 UTC","rawTs":"1746441000.000000"},
+		{"user":"Bob","text":"world","timestamp":"2026-05-05 11:00 UTC","rawTs":"1746444600.000000"}
+	]}]`
+
+	runner := &cmdRoutingRunner{outputs: map[string]string{"search-channels": searchOut}}
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	sRepo := slackstore.NewRepo(s.DB())
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	ctxRec, err := s.CreateContext(ctx, "test-per-msg", org.ID)
+	require.NoError(t, err)
+
+	_, err = sRepo.UpsertSlackChannel(ctx, ctxRec.ID, "acme", "C1", "general", "")
+	require.NoError(t, err)
+
+	p := NewSlackProvider(sRepo, runner, logger)
+	_, err = p.Reload(ctx, ctxRec.ID)
+	require.NoError(t, err)
+
+	threads, err := sRepo.ListSlackThreads(ctx, ctxRec.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 2, "one record per message")
+	assert.Contains(t, threads[0].Content, "Alice")
+	assert.Contains(t, threads[0].Content, "hello")
+	assert.Contains(t, threads[1].Content, "Bob")
+	assert.Contains(t, threads[1].Content, "world")
+}
+
+func TestSlackProvider_Reload_DeletesOldBlob(t *testing.T) {
+	ctx := context.Background()
+	searchOut := `[{"id":"C1","name":"general","messages":[
+		{"user":"Alice","text":"hi","timestamp":"2026-05-05 10:00 UTC","rawTs":"1746441000.000000"}
+	]}]`
+
+	runner := &cmdRoutingRunner{outputs: map[string]string{"search-channels": searchOut}}
+	logger, _ := zap.NewDevelopment()
+	s := openTestStore(t)
+	sRepo := slackstore.NewRepo(s.DB())
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	ctxRec, err := s.CreateContext(ctx, "test-del-blob", org.ID)
+	require.NoError(t, err)
+
+	ch, err := sRepo.UpsertSlackChannel(ctx, ctxRec.ID, "acme", "C1", "general", "")
+	require.NoError(t, err)
+
+	// Insert an old channel blob (thread_ts="")
+	_, err = sRepo.UpsertSlackThread(ctx, ctxRec.ID, slackstore.UpsertSlackThreadArgs{
+		SlackChannelID: ch.ID,
+		Workspace:      "acme",
+		ChannelID:      "C1",
+		ThreadTS:       "",
+		ChannelName:    "general",
+		Content:        "old blob content",
+	})
+	require.NoError(t, err)
+
+	p := NewSlackProvider(sRepo, runner, logger)
+	_, err = p.Reload(ctx, ctxRec.ID)
+	require.NoError(t, err)
+
+	threads, err := sRepo.ListSlackThreads(ctx, ctxRec.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 1, "blob deleted; one per-message record remains")
+	assert.NotEmpty(t, threads[0].ThreadTS, "per-message record has non-empty thread_ts")
 }

@@ -62,7 +62,7 @@ func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error)
 // ViewIssue fetches full details for a single issue key.
 func (c *Client) ViewIssue(ctx context.Context, key string) (*IssueDetail, error) {
 	flags := []string{
-		"--fields", "key,issuetype,summary,status,assignee,description,updated,subtasks,issuelinks",
+		"--fields", "key,issuetype,summary,status,assignee,description,updated,subtasks,issuelinks,parent",
 		"--json",
 	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "view"}, []string{key}, flags)
@@ -128,6 +128,14 @@ func parseIssueDetail(raw string) (*IssueDetail, error) {
 		IssueType:   item.field("issuetype"),
 		Description: extractADFText(item.Fields["description"]),
 		Updated:     item.field("updated"),
+	}
+	if rawParent := item.Fields["parent"]; rawParent != nil {
+		var p struct {
+			Key string `json:"key"`
+		}
+		if json.Unmarshal(rawParent, &p) == nil {
+			detail.ParentKey = p.Key
+		}
 	}
 	if rawSubs := item.Fields["subtasks"]; rawSubs != nil {
 		var subs []rawSubtask

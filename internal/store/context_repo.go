@@ -133,12 +133,16 @@ func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, erro
 // CreateContext inserts a new context and returns it.
 // The new context is placed at the top of the list (sort_order = -1 so it sorts before existing rows).
 // A subsequent SetContextsOrder call will normalise all values.
-func (s *Store) CreateContext(ctx context.Context, key string) (*Context, error) {
+func (s *Store) CreateContext(ctx context.Context, key, orgID string) (*Context, error) {
+	if orgID == "" {
+		return nil, fmt.Errorf("orgID is required")
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	c := &Context{
 		ID:               uuid.New().String(),
 		Key:              key,
 		Status:           contextStatusActive,
+		OrgID:            orgID,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 		AIProposedStatus: "not_started",
@@ -146,9 +150,9 @@ func (s *Store) CreateContext(ctx context.Context, key string) (*Context, error)
 	// Place the new context first by giving it sort_order = MIN(existing) - 1.
 	// Defaults to 0 if there are no existing contexts.
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO contexts (id, key, status, created_at, updated_at, sort_order)
-		VALUES (?, ?, ?, ?, ?, COALESCE((SELECT MIN(sort_order) - 1 FROM contexts), 0))
-	`, c.ID, c.Key, c.Status, c.CreatedAt, c.UpdatedAt)
+		INSERT INTO contexts (id, key, status, org_id, created_at, updated_at, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT MIN(sort_order) - 1 FROM contexts), 0))
+	`, c.ID, c.Key, c.Status, c.OrgID, c.CreatedAt, c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating context: %w", err)
 	}

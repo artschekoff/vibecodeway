@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/artschekoff/context-consolidator/internal/vcs"
@@ -38,12 +39,23 @@ func (a *App) VCSLoginComplete(platform, deviceCode string, interval int) (strin
 }
 
 // GetVCSAuth returns the stored auth info for a platform. Returns empty strings if not authenticated.
+// If no DB record exists for GitHub, falls back to querying the gh CLI so that existing gh auth
+// survives a db-reinit without requiring the user to go through the OAuth device flow again.
 func (a *App) GetVCSAuth(platform string) (*vcsstore.VCSAuth, error) {
 	auth, err := a.vcsStore.Auth.GetAuth(a.ctx, platform)
-	if err != nil {
-		return &vcsstore.VCSAuth{Platform: platform}, nil // not authenticated, not an error
+	if err == nil {
+		return auth, nil
 	}
-	return auth, nil
+	// Bootstrap from gh CLI when the DB record is missing.
+	if vcs.Platform(platform) == vcs.PlatformGitHub {
+		if username, ghErr := a.vcsSvc.GetAuthUser(a.ctx, vcs.PlatformGitHub); ghErr == nil && username != "" {
+			if _, saveErr := a.vcsStore.Auth.UpsertAuth(a.ctx, platform, username, ""); saveErr != nil {
+				a.logger.Sugar().Warnf("GetVCSAuth: bootstrap save failed: %v", saveErr)
+			}
+			return &vcsstore.VCSAuth{Platform: platform, Username: username}, nil
+		}
+	}
+	return &vcsstore.VCSAuth{Platform: platform}, nil // not authenticated, not an error
 }
 
 // GetSupportedPlatforms returns all known VCS platforms with their enabled status and labels.
@@ -303,7 +315,7 @@ func (a *App) SetTrackedRepoPath(repoID, localPath string) error {
 }
 
 // CheckoutBranch switches to branch in localPath, then opens the configured terminal there.
-// If no terminal app is configured, the terminal is not opened.
+// Deprecated: use CheckoutInWorkspace for worktree-based isolation.
 func (a *App) CheckoutBranch(localPath, branch string) error {
 	if _, err := os.Stat(localPath); err != nil {
 		return fmt.Errorf("local path not accessible: %w", err)
@@ -311,17 +323,172 @@ func (a *App) CheckoutBranch(localPath, branch string) error {
 	if err := vcs.GitCheckout(localPath, branch); err != nil {
 		return err
 	}
+	return a.openTerminalAt(localPath)
+}
+
+// openTerminalAt opens the configured terminal app at path.
+// A missing or unconfigured terminal is silently ignored.
+func (a *App) openTerminalAt(path string) error {
 	settings, err := a.db.GetAppSettings(a.ctx)
 	if err != nil {
-		a.logger.Sugar().Warnf("CheckoutBranch: failed to load settings, terminal will not open: %v", err)
+		a.logger.Sugar().Warnf("openTerminalAt: failed to load settings: %v", err)
 		return nil
 	}
 	if settings.TerminalAppPath == "" {
 		return nil
 	}
-	cmd := exec.Command("open", "-a", settings.TerminalAppPath, localPath)
+	cmd := exec.Command("open", "-a", settings.TerminalAppPath, path)
 	if err := cmd.Start(); err != nil {
 		a.logger.Sugar().Warnf("open terminal failed: app=%s err=%v", settings.TerminalAppPath, err)
 	}
 	return nil
+}
+
+// ensureWorktreesIgnored appends ".worktrees" to baseDir/.gitignore if not already present.
+func ensureWorktreesIgnored(baseDir string) error {
+	gitignorePath := filepath.Join(baseDir, ".gitignore")
+	content, err := os.ReadFile(gitignorePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if strings.Contains(string(content), ".worktrees") {
+		return nil
+	}
+	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	prefix := ""
+	if len(content) > 0 && content[len(content)-1] != '\n' {
+		prefix = "\n"
+	}
+	_, err = fmt.Fprintf(f, "%s.worktrees\n", prefix)
+	return err
+}
+
+// --- Workspace (git worktree) management ---
+
+// FindWorkspaceForBranch returns an existing worktree workspace for the given repo and branch.
+// Returns nil, nil if no workspace exists.
+func (a *App) FindWorkspaceForBranch(repoID, branch string) (*vcsstore.VCSWorkspace, error) {
+	return a.vcsStore.Workspaces.FindByBranch(a.ctx, repoID, branch)
+}
+
+// CheckoutInWorkspace creates a git worktree for branch at the given repo path and opens terminal.
+// The worktree is created at <repoPath>/.worktrees/<branch-safe-name>.
+func (a *App) CheckoutInWorkspace(repoPathID, branch string) error {
+	repoPath, err := a.vcsStore.RepoPaths.Get(a.ctx, repoPathID)
+	if err != nil {
+		return fmt.Errorf("repo path not found: %w", err)
+	}
+	baseDir := repoPath.Path
+	if _, err := os.Stat(baseDir); err != nil {
+		return fmt.Errorf("local path not accessible: %w", err)
+	}
+	if err := ensureWorktreesIgnored(baseDir); err != nil {
+		a.logger.Sugar().Warnf("CheckoutInWorkspace: .gitignore update failed: %v", err)
+	}
+	worktreeName := vcs.BranchToWorktreeName(branch)
+	worktreePath := filepath.Join(baseDir, ".worktrees", worktreeName)
+	if err := vcs.GitWorktreeAdd(baseDir, worktreePath, branch); err != nil {
+		return err
+	}
+	w := &vcsstore.VCSWorkspace{
+		RepoPathID:   repoPathID,
+		RepoID:       repoPath.RepoID,
+		Branch:       branch,
+		WorktreePath: worktreePath,
+		Status:       "active",
+	}
+	if err := a.vcsStore.Workspaces.Create(a.ctx, w); err != nil {
+		return fmt.Errorf("storing workspace record: %w", err)
+	}
+	return a.openTerminalAt(worktreePath)
+}
+
+// OpenWorkspaceTerminal opens the configured terminal at the workspace's worktree path.
+func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
+	w, err := a.vcsStore.Workspaces.Get(a.ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("workspace not found: %w", err)
+	}
+	return a.openTerminalAt(w.WorktreePath)
+}
+
+// ListWorkspaces returns all workspaces for a specific repo path.
+func (a *App) ListWorkspaces(repoPathID string) ([]vcsstore.VCSWorkspace, error) {
+	return a.vcsStore.Workspaces.ListByPath(a.ctx, repoPathID)
+}
+
+// ListAllWorkspaces returns all known workspaces across all repos and paths.
+func (a *App) ListAllWorkspaces() ([]vcsstore.VCSWorkspace, error) {
+	return a.vcsStore.Workspaces.ListAll(a.ctx)
+}
+
+// RefreshWorkspacesForRepo reconciles DB workspace records with what git reports on disk
+// for all local paths of the repo. Removes stale DB entries; adds newly discovered ones.
+func (a *App) RefreshWorkspacesForRepo(repoID string) error {
+	paths, err := a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
+	if err != nil {
+		return err
+	}
+	for _, rp := range paths {
+		worktrees, err := vcs.GitWorktreeList(rp.Path)
+		if err != nil {
+			a.logger.Sugar().Warnf("RefreshWorkspacesForRepo: git worktree list failed for %s: %v", rp.Path, err)
+			continue
+		}
+		existing, err := a.vcsStore.Workspaces.ListByPath(a.ctx, rp.ID)
+		if err != nil {
+			return err
+		}
+		onDisk := make(map[string]string) // worktreePath -> branch
+		for _, wt := range worktrees {
+			if wt.Branch != "" {
+				onDisk[wt.Path] = wt.Branch
+			}
+		}
+		for _, w := range existing {
+			if _, ok := onDisk[w.WorktreePath]; !ok {
+				_ = a.vcsStore.Workspaces.Delete(a.ctx, w.ID)
+			}
+		}
+		existingPaths := make(map[string]bool)
+		for _, w := range existing {
+			existingPaths[w.WorktreePath] = true
+		}
+		for wPath, branch := range onDisk {
+			if wPath == rp.Path || existingPaths[wPath] {
+				continue
+			}
+			w := &vcsstore.VCSWorkspace{
+				RepoPathID:   rp.ID,
+				RepoID:       repoID,
+				Branch:       branch,
+				WorktreePath: wPath,
+				Status:       "active",
+			}
+			_ = a.vcsStore.Workspaces.Create(a.ctx, w)
+		}
+	}
+	return nil
+}
+
+// DeleteWorkspace removes the git worktree from disk and deletes its DB record.
+// If git worktree remove fails (e.g. already deleted), the DB record is still removed.
+func (a *App) DeleteWorkspace(workspaceID string) error {
+	w, err := a.vcsStore.Workspaces.Get(a.ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("workspace not found: %w", err)
+	}
+	if rmErr := vcs.GitWorktreeRemove(w.WorktreePath); rmErr != nil {
+		a.logger.Sugar().Warnf("DeleteWorkspace: git worktree remove failed (continuing): %v", rmErr)
+	}
+	return a.vcsStore.Workspaces.Delete(a.ctx, workspaceID)
+}
+
+// MarkWorkspaceShouldDelete sets a workspace's status to "should_delete".
+func (a *App) MarkWorkspaceShouldDelete(workspaceID string) error {
+	return a.vcsStore.Workspaces.UpdateStatus(a.ctx, workspaceID, "should_delete")
 }

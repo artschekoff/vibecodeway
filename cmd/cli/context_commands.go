@@ -39,13 +39,16 @@ func newContextListCmd() *cobra.Command {
 }
 
 func newContextCreateCmd() *cobra.Command {
-	var key string
+	var key, orgID string
 	cmd := &cobra.Command{
 		Use:   "context-create",
 		Short: "Create a new context",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if key == "" {
 				return fmt.Errorf("--key is required")
+			}
+			if orgID == "" {
+				return fmt.Errorf("--org-id is required")
 			}
 			ctx := context.Background()
 			env, err := openServiceEnv()
@@ -54,7 +57,7 @@ func newContextCreateCmd() *cobra.Command {
 			}
 			defer env.store.Close() //nolint:errcheck
 
-			c, err := env.svc.CreateContext(ctx, key)
+			c, err := env.svc.CreateContext(ctx, key, orgID)
 			if err != nil {
 				return fmt.Errorf("creating context: %w", err)
 			}
@@ -62,7 +65,9 @@ func newContextCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&key, "key", "", "Context key, e.g. 'sprint-42'")
+	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID the context belongs to")
 	_ = cmd.MarkFlagRequired("key")
+	_ = cmd.MarkFlagRequired("org-id")
 	return cmd
 }
 

@@ -22,10 +22,10 @@ func (r *Repo) UpsertSlackThread(ctx context.Context, contextID string, args Ups
 		_, err = r.db.ExecContext(ctx, `
 			UPDATE slack_threads
 			SET slack_channel_id = ?, workspace = ?, channel_name = ?, permalink = ?,
-			    search_query = ?, content = ?
+			    search_query = ?, content = ?, parent_thread_ts = ?
 			WHERE id = ?
 		`, nullableString(args.SlackChannelID), args.Workspace, args.ChannelName, args.Permalink,
-			args.SearchQuery, args.Content, existing)
+			args.SearchQuery, args.Content, args.ParentThreadTS, existing)
 		if err != nil {
 			return nil, fmt.Errorf("updating slack thread: %w", err)
 		}
@@ -41,10 +41,10 @@ func (r *Repo) UpsertSlackThread(ctx context.Context, contextID string, args Ups
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO slack_threads
 			(id, context_id, slack_channel_id, workspace, channel_id, thread_ts,
-			 channel_name, permalink, search_query, content, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 parent_thread_ts, channel_name, permalink, search_query, content, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, id, contextID, nullableString(args.SlackChannelID), args.Workspace,
-		args.ChannelID, args.ThreadTS, args.ChannelName, args.Permalink,
+		args.ChannelID, args.ThreadTS, args.ParentThreadTS, args.ChannelName, args.Permalink,
 		args.SearchQuery, args.Content, now)
 	if err != nil {
 		return nil, fmt.Errorf("inserting slack thread: %w", err)
@@ -57,7 +57,7 @@ func (r *Repo) UpsertSlackThread(ctx context.Context, contextID string, args Ups
 func (r *Repo) ListSlackThreads(ctx context.Context, contextID string, activeOnly bool) ([]SlackThread, error) {
 	q := `
 		SELECT id, context_id, COALESCE(slack_channel_id, ''), workspace, channel_id, thread_ts,
-		       channel_name, permalink, search_query, content, created_at, is_active, viewed_at, ai_processed_at
+		       parent_thread_ts, channel_name, permalink, search_query, content, created_at, is_active, viewed_at, ai_processed_at
 		FROM slack_threads
 		WHERE context_id = ?`
 	if activeOnly {
@@ -75,7 +75,7 @@ func (r *Repo) ListSlackThreads(ctx context.Context, contextID string, activeOnl
 		var t SlackThread
 		if err := rows.Scan(
 			&t.ID, &t.ContextID, &t.SlackChannelID, &t.Workspace, &t.ChannelID, &t.ThreadTS,
-			&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive, &t.ViewedAt, &t.AiProcessedAt,
+			&t.ParentThreadTS, &t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive, &t.ViewedAt, &t.AiProcessedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning slack thread: %w", err)
 		}
@@ -118,11 +118,11 @@ func (r *Repo) getSlackThread(ctx context.Context, id string) (*SlackThread, err
 	var t SlackThread
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, context_id, COALESCE(slack_channel_id, ''), workspace, channel_id, thread_ts,
-		       channel_name, permalink, search_query, content, created_at, is_active, viewed_at, ai_processed_at
+		       parent_thread_ts, channel_name, permalink, search_query, content, created_at, is_active, viewed_at, ai_processed_at
 		FROM slack_threads WHERE id = ?
 	`, id).Scan(
 		&t.ID, &t.ContextID, &t.SlackChannelID, &t.Workspace, &t.ChannelID, &t.ThreadTS,
-		&t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive, &t.ViewedAt, &t.AiProcessedAt,
+		&t.ParentThreadTS, &t.ChannelName, &t.Permalink, &t.SearchQuery, &t.Content, &t.CreatedAt, &t.IsActive, &t.ViewedAt, &t.AiProcessedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -142,6 +142,20 @@ func (r *Repo) MarkSlackThreadViewed(ctx context.Context, id string) error {
 
 // nullableString converts an empty string to nil so SQLite stores NULL
 // for optional FK columns instead of an empty string that would violate the FK.
+// DeleteChannelBlobs removes whole-channel snapshot records (thread_ts="") for the given
+// channel. Called during Refresh after per-message records have been successfully upserted
+// so stale blobs from the old single-record format do not accumulate.
+func (r *Repo) DeleteChannelBlobs(ctx context.Context, contextID, channelID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"DELETE FROM slack_threads WHERE context_id = ? AND channel_id = ? AND thread_ts = ''",
+		contextID, channelID,
+	)
+	if err != nil {
+		return fmt.Errorf("deleting channel blobs: %w", err)
+	}
+	return nil
+}
+
 func nullableString(s string) any {
 	if s == "" {
 		return nil

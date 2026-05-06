@@ -122,6 +122,56 @@ func newLogDeleteCmd() *cobra.Command {
 	return cmd
 }
 
+func newLogAttachFileCmd() *cobra.Command {
+	var logID, fileID string
+	cmd := &cobra.Command{
+		Use:   "log-attach-file",
+		Short: "Attach an uploaded file to a log entry",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx := context.Background()
+			env, err := openServiceEnv()
+			if err != nil {
+				return err
+			}
+			defer env.store.Close() //nolint:errcheck
+			if err := env.contextLog.AttachFile(ctx, logID, fileID); err != nil {
+				return fmt.Errorf("attaching file: %w", err)
+			}
+			return writeJSON(map[string]string{"logId": logID, "fileId": fileID})
+		},
+	}
+	cmd.Flags().StringVar(&logID, "log-id", "", "Log entry UUID")
+	cmd.Flags().StringVar(&fileID, "file-id", "", "Uploaded file UUID")
+	_ = cmd.MarkFlagRequired("log-id")
+	_ = cmd.MarkFlagRequired("file-id")
+	return cmd
+}
+
+func newLogDetachFileCmd() *cobra.Command {
+	var logID, fileID string
+	cmd := &cobra.Command{
+		Use:   "log-detach-file",
+		Short: "Remove an uploaded file from a log entry",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx := context.Background()
+			env, err := openServiceEnv()
+			if err != nil {
+				return err
+			}
+			defer env.store.Close() //nolint:errcheck
+			if err := env.contextLog.DetachFile(ctx, logID, fileID); err != nil {
+				return fmt.Errorf("detaching file: %w", err)
+			}
+			return writeJSON(map[string]string{"logId": logID, "fileId": fileID})
+		},
+	}
+	cmd.Flags().StringVar(&logID, "log-id", "", "Log entry UUID")
+	cmd.Flags().StringVar(&fileID, "file-id", "", "Uploaded file UUID")
+	_ = cmd.MarkFlagRequired("log-id")
+	_ = cmd.MarkFlagRequired("file-id")
+	return cmd
+}
+
 func newConsolidatedGetCmd() *cobra.Command {
 	var contextID string
 	cmd := &cobra.Command{
@@ -241,5 +291,31 @@ func newConsolidatedAnalyzeCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
+	return cmd
+}
+
+func newLogListAllCmd() *cobra.Command {
+	var trigger string
+	var limit int
+	cmd := &cobra.Command{
+		Use:   "log-list-all",
+		Short: "List log entries across all contexts",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx := context.Background()
+			env, err := openServiceEnv()
+			if err != nil {
+				return err
+			}
+			defer env.store.Close() //nolint:errcheck
+
+			entries, err := env.contextLog.ListAllLogs(ctx, trigger, limit)
+			if err != nil {
+				return fmt.Errorf("listing all logs: %w", err)
+			}
+			return writeJSON(entries)
+		},
+	}
+	cmd.Flags().StringVar(&trigger, "trigger", "", "Filter by trigger: refresh|reload|manual|init|agent (empty = all)")
+	cmd.Flags().IntVar(&limit, "limit", 100, "Maximum number of entries to return")
 	return cmd
 }

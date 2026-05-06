@@ -84,6 +84,7 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			pr_author     TEXT NOT NULL DEFAULT '',
 			pr_url        TEXT NOT NULL DEFAULT '',
 			review_status TEXT NOT NULL DEFAULT '',
+			head_branch   TEXT NOT NULL DEFAULT '',
 			requested_at  TEXT NOT NULL DEFAULT '',
 			fetched_at    TEXT NOT NULL,
 			reviewed_at   TEXT,

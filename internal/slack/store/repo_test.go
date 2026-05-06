@@ -25,7 +25,9 @@ func TestUpsertAndGetSlackProvider(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "slack-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "slack-ctx", org.ID)
 	require.NoError(t, err)
 
 	sp, err := repo.UpsertSlackProvider(ctx, c.ID, "acme", "deployment failed")
@@ -45,7 +47,9 @@ func TestUpsertSlackProviderUpdatesOnDuplicate(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "slack-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "slack-ctx", org.ID)
 	require.NoError(t, err)
 
 	sp1, err := repo.UpsertSlackProvider(ctx, c.ID, "ws-old", "old query")
@@ -68,7 +72,9 @@ func TestDeleteContextCascadesToSlackProvider(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "del-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "del-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = repo.UpsertSlackProvider(ctx, c.ID, "ws", "q")
@@ -86,7 +92,9 @@ func TestUpsertAndListSlackThreads(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "slack-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "slack-ctx", org.ID)
 	require.NoError(t, err)
 
 	thread, err := repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
@@ -116,7 +124,9 @@ func TestUpsertSlackThreadUpdatesOnDuplicate(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "slack-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "slack-ctx", org.ID)
 	require.NoError(t, err)
 
 	args := slackstore.UpsertSlackThreadArgs{
@@ -140,7 +150,9 @@ func TestDeleteContextCascadesToSlackThreads(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "del-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "del-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
@@ -161,7 +173,9 @@ func TestUpsertAndListSlackChannels(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 
 	ch, err := repo.UpsertSlackChannel(ctx, c.ID, "acme", "C01234567", "general", "")
@@ -182,7 +196,9 @@ func TestUpsertSlackChannelIsIdempotent(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 
 	ch1, err := repo.UpsertSlackChannel(ctx, c.ID, "acme", "C01", "general", "")
@@ -199,7 +215,9 @@ func TestListSlackChannels_MultipleChannels(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 
 	for _, name := range []string{"general", "deploy-alerts", "backend"} {
@@ -216,9 +234,11 @@ func TestListSlackChannels_EmptyForOtherContext(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c1, err := s.CreateContext(ctx, "ctx-1")
+	org, err := s.CreateOrganization(ctx, "test-org")
 	require.NoError(t, err)
-	c2, err := s.CreateContext(ctx, "ctx-2")
+	c1, err := s.CreateContext(ctx, "ctx-1", org.ID)
+	require.NoError(t, err)
+	c2, err := s.CreateContext(ctx, "ctx-2", org.ID)
 	require.NoError(t, err)
 
 	_, err = repo.UpsertSlackChannel(ctx, c1.ID, "acme", "C1", "general", "")
@@ -233,7 +253,9 @@ func TestRemoveSlackChannel_Success(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 
 	ch, err := repo.UpsertSlackChannel(ctx, c.ID, "acme", "C1", "general", "")
@@ -256,7 +278,9 @@ func TestRemoveSlackChannel_CascadesToThreads(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "cascade-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "cascade-ctx", org.ID)
 	require.NoError(t, err)
 
 	ch, err := repo.UpsertSlackChannel(ctx, c.ID, "acme", "C99", "incidents", "")
@@ -288,7 +312,9 @@ func TestSlackChannelActiveByDefault(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 	_, err = repo.UpsertSlackChannel(ctx, c.ID, "acme", "C1", "general", "")
 	require.NoError(t, err)
@@ -303,7 +329,9 @@ func TestToggleSlackChannelActive(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 	ch, err := repo.UpsertSlackChannel(ctx, c.ID, "acme", "C1", "general", "")
 	require.NoError(t, err)
@@ -327,7 +355,9 @@ func TestSlackThreadActiveByDefault(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
 		Workspace: "acme", ChannelID: "C1", ThreadTS: "1.1", Content: "msg",
@@ -344,7 +374,9 @@ func TestToggleSlackThreadActive(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "ch-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ch-ctx", org.ID)
 	require.NoError(t, err)
 	thread, err := repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
 		Workspace: "acme", ChannelID: "C1", ThreadTS: "1.1", Content: "msg",
@@ -372,7 +404,9 @@ func TestRemoveSlackDMEntry_Success(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -395,7 +429,9 @@ func TestRemoveSlackDMEntry_LastEntry(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -417,7 +453,9 @@ func TestRemoveSlackDMEntry_NotFoundEntry(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -440,7 +478,9 @@ func TestRemoveSlackDMEntry_EmptyContent(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -454,7 +494,9 @@ func TestRemoveSlackDMEntry_PlainTextContent(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -477,7 +519,9 @@ func TestRemoveSlackDMEntry_PlainTextLastEntry(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -499,7 +543,9 @@ func TestRemoveSlackDMEntry_PlainTextEntryNotFound(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -518,7 +564,9 @@ func TestUpsertSlackDMConfigIsIdempotent(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm1, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -540,7 +588,9 @@ func TestUpsertSlackDMConfigPreservesContent(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -558,7 +608,9 @@ func TestDeleteSlackDMConfig_Success(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "dm-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "dm-ctx", org.ID)
 	require.NoError(t, err)
 
 	dm, err := repo.UpsertSlackDMConfig(ctx, c.ID, "acme", "2025-01-01")
@@ -581,7 +633,9 @@ func TestDeleteContextCascadesToSlackChannels(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()
 
-	c, err := s.CreateContext(ctx, "del-ctx")
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "del-ctx", org.ID)
 	require.NoError(t, err)
 
 	_, err = repo.UpsertSlackChannel(ctx, c.ID, "ws", "C1", "general", "")
@@ -592,4 +646,64 @@ func TestDeleteContextCascadesToSlackChannels(t *testing.T) {
 	channels, err := repo.ListSlackChannels(ctx, c.ID, false)
 	require.NoError(t, err)
 	assert.Empty(t, channels, "channels should be deleted with context (cascade)")
+}
+
+func TestDeleteChannelBlobs_RemovesOnlyEmptyThreadTS(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "blob-ctx", org.ID)
+	require.NoError(t, err)
+
+	// Old whole-channel blob (thread_ts="")
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "", ChannelName: "general", Content: "old blob",
+	})
+	require.NoError(t, err)
+
+	// Per-message record (thread_ts set)
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "1746441180.000000", ChannelName: "general", Content: "message",
+	})
+	require.NoError(t, err)
+
+	err = repo.DeleteChannelBlobs(ctx, c.ID, "C1")
+	require.NoError(t, err)
+
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 1, "only the per-message record should remain")
+	assert.Equal(t, "1746441180.000000", threads[0].ThreadTS, "per-message record must survive")
+}
+
+func TestDeleteChannelBlobs_LeavesOtherChannelsUntouched(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "blob-ctx2", org.ID)
+	require.NoError(t, err)
+
+	// Blob for C1 (to be deleted)
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C1", ThreadTS: "", ChannelName: "general", Content: "c1 blob",
+	})
+	require.NoError(t, err)
+
+	// Blob for C2 (must NOT be deleted)
+	_, err = repo.UpsertSlackThread(ctx, c.ID, slackstore.UpsertSlackThreadArgs{
+		Workspace: "acme", ChannelID: "C2", ThreadTS: "", ChannelName: "other", Content: "c2 blob",
+	})
+	require.NoError(t, err)
+
+	err = repo.DeleteChannelBlobs(ctx, c.ID, "C1")
+	require.NoError(t, err)
+
+	threads, err := repo.ListSlackThreads(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, threads, 1, "C2 blob must survive")
+	assert.Equal(t, "C2", threads[0].ChannelID)
 }

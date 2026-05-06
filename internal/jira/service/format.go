@@ -24,6 +24,15 @@ func formatDateStr(s string) string {
 	return t.Format("Jan 2, 2006")
 }
 
+// FormatDateTime parses a stored date string and returns "YYYY-MM-DD HH:MM".
+func FormatDateTime(s string) string {
+	t := ParseTime(s)
+	if t.IsZero() {
+		return s
+	}
+	return t.Format("2006-01-02 15:04")
+}
+
 // indent prepends each non-empty line of text with the given prefix.
 func indent(text, prefix string) string {
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")

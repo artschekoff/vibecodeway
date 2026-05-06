@@ -497,8 +497,12 @@ func (h *handlers) handleContextSetStatus(ctx context.Context, req mcp.CallToolR
 	if status == "" {
 		return mcp.NewToolResultError("status is required"), nil
 	}
-	if !isValidWorkflowStatus(status) {
-		return mcp.NewToolResultError(fmt.Sprintf("invalid status %q — must be one of: %s", status, strings.Join(validWorkflowStatuses, ", "))), nil
+	valid, err := h.svc.IsValidWorkflowStatus(ctx, status)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("validating status: %v", err)), nil
+	}
+	if !valid {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid status %q — check available statuses in Settings", status)), nil
 	}
 
 	comment := strings.TrimSpace(req.GetString("comment", ""))
@@ -605,7 +609,38 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 		buf.WriteString("\n")
 	}
 
+	// Logs section — always last, only when no filter is active.
+	if filter == "" {
+		if cl := h.svc.ContextLog(); cl != nil {
+			logs, err := cl.ListLogs(ctx, detail.Context.ID)
+			if err == nil && len(logs) > 0 {
+				fmt.Fprintf(&buf, "\n--- LOGS (%d %s) ---\n\n", len(logs), pluralWord(len(logs), "entry", "entries"))
+				for _, l := range logs {
+					fmt.Fprintf(&buf, "[%s · %s]\n", jiraservice.FormatDateTime(l.CreatedAt), strings.ToUpper(l.Trigger))
+					fmt.Fprint(&buf, l.SummaryMd)
+					fmt.Fprint(&buf, "\n")
+					if len(l.Files) > 0 {
+						fmt.Fprint(&buf, "\nReferenced files:\n")
+						for _, f := range l.Files {
+							fmt.Fprintf(&buf, "### %s (%s)\n\n", f.OriginalName, f.FileType)
+							fmt.Fprint(&buf, f.ExtractedText)
+							fmt.Fprint(&buf, "\n\n")
+						}
+					}
+					fmt.Fprint(&buf, "\n")
+				}
+			}
+		}
+	}
+
 	return mcp.NewToolResultText(buf.String()), nil
+}
+
+func pluralWord(n int, singular, pluralForm string) string {
+	if n == 1 {
+		return singular
+	}
+	return pluralForm
 }
 
 func (h *handlers) handleContextAddText(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -866,14 +901,3 @@ func splitAndTrim(s string) []string {
 	return out
 }
 
-// validWorkflowStatuses is the closed set of accepted status values for context_set_status.
-var validWorkflowStatuses = []string{"not_started", "in_progress", "scoping", "needs_attention", "ready"}
-
-func isValidWorkflowStatus(s string) bool {
-	for _, v := range validWorkflowStatuses {
-		if s == v {
-			return true
-		}
-	}
-	return false
-}

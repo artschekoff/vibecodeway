@@ -99,6 +99,7 @@ type ReviewRequest struct {
 	PRAuthor     string  `json:"prAuthor"`
 	PRURL        string  `json:"prUrl"`
 	ReviewStatus string  `json:"reviewStatus"`
+	HeadBranch   string  `json:"headBranch"`
 	RequestedAt  string  `json:"requestedAt"`
 	FetchedAt    string  `json:"fetchedAt"`
 	// ReviewedAt is set when the item disappears from GitHub's review-requested list
@@ -113,4 +114,17 @@ type VCSPlatformInfo struct {
 	Platform string `json:"platform"`
 	Label    string `json:"label"`
 	Enabled  bool   `json:"enabled"`
+}
+
+// VCSWorkspace tracks a git worktree checked out for a specific branch.
+// Status is "active" or "should_delete".
+type VCSWorkspace struct {
+	ID           string `json:"id"`
+	RepoPathID   string `json:"repoPathId"`
+	RepoID       string `json:"repoId"`
+	Branch       string `json:"branch"`
+	WorktreePath string `json:"worktreePath"`
+	Status       string `json:"status"`
+	CreatedAt    string `json:"createdAt"`
+	UpdatedAt    string `json:"updatedAt"`
 }

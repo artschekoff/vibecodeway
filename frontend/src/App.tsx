@@ -6,7 +6,7 @@ import ContextDetail from "./pages/ContextDetail";
 import Settings from "./pages/Settings";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
-import { ListAllContexts } from "../wailsjs/go/main/App";
+import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
@@ -55,7 +55,11 @@ function AppShell() {
   const [showA11yBanner, setShowA11yBanner] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { openContextTab, tabs, forceCloseTab } = useTabContext();
+  const { openContextTab, tabs, activeTabId, forceCloseTab } = useTabContext();
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeOrgId = activeTab?.type === "org" ? activeTab.orgId
+    : activeTab?.type === "context" ? activeTab.orgId
+    : tabs.find((t) => t.type === "org")?.orgId;
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -82,15 +86,19 @@ function AppShell() {
     };
   }, [showToast]);
 
-  // On mount: validate restored context tabs against live context list
+  // On mount: validate restored tabs against live DB to close stale references
   useEffect(() => {
     if (!isWailsContext()) return;
     void (async () => {
       try {
-        const all = await ListAllContexts();
-        const validIds = new Set((all ?? []).map((c) => c.id));
+        const [allContexts, allOrgs] = await Promise.all([ListAllContexts(), ListOrganizations()]);
+        const validContextIds = new Set((allContexts ?? []).map((c) => c.id));
+        const validOrgIds = new Set((allOrgs ?? []).map((o) => o.id));
         for (const tab of tabs) {
-          if (tab.type === "context" && tab.contextId && !validIds.has(tab.contextId)) {
+          if (tab.type === "context" && tab.contextId && !validContextIds.has(tab.contextId)) {
+            forceCloseTab(tab.id);
+          }
+          if (tab.type === "org" && tab.orgId && !validOrgIds.has(tab.orgId)) {
             forceCloseTab(tab.id);
           }
         }
@@ -132,6 +140,7 @@ function AppShell() {
       <QuickAttachOverlay
         visible={picker.visible}
         text={picker.text}
+        orgId={activeOrgId}
         onAttach={handleAttach}
         onDismiss={() => setPicker({ visible: false, text: "" })}
       />

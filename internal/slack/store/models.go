@@ -18,6 +18,7 @@ type SlackThread struct {
 	Workspace      string  `json:"workspace"`
 	ChannelID      string  `json:"channelId"`
 	ThreadTS       string  `json:"threadTs"`
+	ParentThreadTS string  `json:"parentThreadTs,omitempty"`
 	ChannelName    string  `json:"channelName"`
 	Permalink      string  `json:"permalink"`
 	SearchQuery    string  `json:"searchQuery"`
@@ -34,6 +35,7 @@ type UpsertSlackThreadArgs struct {
 	Workspace      string
 	ChannelID      string
 	ThreadTS       string
+	ParentThreadTS string // empty for top-level messages; set to parent's RawTS for replies
 	ChannelName    string
 	Permalink      string
 	SearchQuery    string
@@ -52,14 +54,35 @@ type SlackChannel struct {
 	IsActive    bool   `json:"isActive"`
 }
 
+// SlackMessage is one message (or reply) returned by slack-cli search-channels.
+// User holds the resolved display name; UserID holds the raw Slack user ID.
+// RawTS is the Slack-format timestamp (e.g. "1746441180.000000") used as thread_ts
+// for per-message storage. Replies contains direct thread replies nested under the parent.
+type SlackMessage struct {
+	User      string         `json:"user"`
+	UserID    string         `json:"userId"`
+	Text      string         `json:"text"`
+	Timestamp string         `json:"timestamp"`
+	RawTS     string         `json:"rawTs,omitempty"`
+	Replies   []SlackMessage `json:"replies,omitempty"`
+}
+
+// DisplayUser returns the best available label: display name when present, raw user ID otherwise.
+func (m SlackMessage) DisplayUser() string {
+	if m.User != "" {
+		return m.User
+	}
+	return m.UserID
+}
+
 // SlackChannelInput carries the fields needed to add a channel to a context.
-// When Content is set (populated from the search-channels CLI response), AddSlackChannels
-// stores it immediately as a slack_thread record so the user sees content without a Refresh.
+// Messages holds the per-message data fetched by SearchSlackChannels so AddSlackChannels
+// can persist each message as its own slack_thread record immediately — no Refresh needed.
 type SlackChannelInput struct {
-	ChannelID   string `json:"channelId"`
-	ChannelName string `json:"channelName"`
-	StartFrom   string `json:"startFrom,omitempty"` // YYYY-MM-DD; optional
-	Content     string `json:"content,omitempty"`
+	ChannelID   string         `json:"channelId"`
+	ChannelName string         `json:"channelName"`
+	StartFrom   string         `json:"startFrom,omitempty"` // YYYY-MM-DD; optional
+	Messages    []SlackMessage `json:"messages,omitempty"`
 }
 
 // SlackDMConfig holds configuration for loading personal (direct) messages for a context.

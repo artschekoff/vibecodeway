@@ -28,7 +28,8 @@ func openTestStore(t *testing.T) *store.Store {
 func TestAnalyzeContext_ExtractsQuestions(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	c, _ := s.CreateContext(ctx, "ai-ctx")
+	org, _ := s.CreateOrganization(ctx, "test-org")
+	c, _ := s.CreateContext(ctx, "ai-ctx", org.ID)
 
 	ai := &mockAI{response: `[
         {"question": "What is the deployment environment?", "answer": null},
@@ -50,7 +51,8 @@ func TestAnalyzeContext_ExtractsQuestions(t *testing.T) {
 func TestAnalyzeContext_NoAI_NoOp(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	c, _ := s.CreateContext(ctx, "noai-ctx")
+	org, _ := s.CreateOrganization(ctx, "test-org")
+	c, _ := s.CreateContext(ctx, "noai-ctx", org.ID)
 	svc := openquestions.NewService(s, nil, nil)
 	assert.NoError(t, svc.AnalyzeContext(ctx, c.ID, "content", nil))
 }

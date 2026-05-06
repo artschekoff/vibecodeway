@@ -278,7 +278,7 @@ func (a *App) SetOrganizationsOrder(ids []string) error {
 	return a.db.SetOrganizationsOrder(a.ctx, ids)
 }
 
-// SetContextOrg assigns a context to an organization. Pass empty orgID to remove from org.
+// SetContextOrg reassigns a context to a different organization.
 func (a *App) SetContextOrg(contextID, orgID string) error {
 	return a.db.SetContextOrg(a.ctx, contextID, orgID)
 }
@@ -288,9 +288,9 @@ func (a *App) ListContextsByOrg(orgID string) ([]appstore.Context, error) {
 	return a.db.ListContextsByOrg(a.ctx, orgID)
 }
 
-// CreateContext creates a new context.
-func (a *App) CreateContext(key string) (*appstore.Context, error) {
-	return a.cliRunner.CreateContext(a.ctx, key)
+// CreateContext creates a new context inside the specified organization.
+func (a *App) CreateContext(key, orgID string) (*appstore.Context, error) {
+	return a.cliRunner.CreateContext(a.ctx, key, orgID)
 }
 
 // UpdateContext updates an existing context.
@@ -750,6 +750,12 @@ func (a *App) ListContextLogs(contextID string) ([]contextlog.ContextLog, error)
 	return a.cliRunner.ListContextLogs(a.ctx, contextID)
 }
 
+// ListAllLogs returns log entries across all contexts, optionally filtered by trigger.
+// Pass empty string for trigger to return all triggers. limit<=0 defaults to 100.
+func (a *App) ListAllLogs(trigger string, limit int) ([]contextlog.LogEntry, error) {
+	return a.cliRunner.ListAllLogs(a.ctx, trigger, limit)
+}
+
 // CreateContextLog adds a manual (user-authored) log entry and refreshes the consolidated log.
 func (a *App) CreateContextLog(contextID, summaryMd string) (*contextlog.ContextLog, error) {
 	return a.cliRunner.CreateContextLog(a.ctx, contextID, summaryMd)
@@ -763,6 +769,16 @@ func (a *App) UpdateContextLog(id, summaryMd string) (*contextlog.ContextLog, er
 // DeleteContextLog removes a single log entry and refreshes the consolidated log.
 func (a *App) DeleteContextLog(id string) error {
 	return a.cliRunner.DeleteContextLog(a.ctx, id)
+}
+
+// AttachLogFile links an uploaded file to a log entry.
+func (a *App) AttachLogFile(logID, fileID string) error {
+	return a.cliRunner.AttachLogFile(a.ctx, logID, fileID)
+}
+
+// DetachLogFile removes the link between a log entry and an uploaded file.
+func (a *App) DetachLogFile(logID, fileID string) error {
+	return a.cliRunner.DetachLogFile(a.ctx, logID, fileID)
 }
 
 // --- Consolidated log ---

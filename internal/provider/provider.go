@@ -4,7 +4,6 @@ package provider
 
 import (
 	"context"
-	"io"
 	"time"
 )
 
@@ -19,6 +18,13 @@ type Stats struct {
 	// NewNotifications counts system-generated notifications created during this sync
 	// (e.g. PR conflict detected, review status changed).
 	NewNotifications int
+}
+
+// Item is a single timestamped artifact returned by CollectItems.
+// Body is a fully rendered text block including a header line with the timestamp and source type.
+type Item struct {
+	CreatedAt time.Time
+	Body      string
 }
 
 // Provider is the interface every data-source plugin must satisfy.
@@ -38,7 +44,7 @@ type Provider interface {
 	// Reload performs a full sync: discovers new top-level items and refreshes existing ones.
 	Reload(ctx context.Context, contextID string) (Stats, error)
 
-	// WriteContext appends a human-readable section for contextID to w.
+	// CollectItems returns all timestamped artifacts for contextID ready to be globally sorted.
 	// Only items on or after startAt are included; pass a zero time for no filter.
-	WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, activeOnly bool) error
+	CollectItems(ctx context.Context, contextID string, startAt time.Time, activeOnly bool) ([]Item, error)
 }
