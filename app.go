@@ -750,6 +750,12 @@ func (a *App) ListContextLogs(contextID string) ([]contextlog.ContextLog, error)
 	return a.cliRunner.ListContextLogs(a.ctx, contextID)
 }
 
+// ListAllLogs returns log entries across all contexts, optionally filtered by trigger.
+// Pass empty string for trigger to return all triggers. limit<=0 defaults to 100.
+func (a *App) ListAllLogs(trigger string, limit int) ([]contextlog.LogEntry, error) {
+	return a.cliRunner.ListAllLogs(a.ctx, trigger, limit)
+}
+
 // CreateContextLog adds a manual (user-authored) log entry and refreshes the consolidated log.
 func (a *App) CreateContextLog(contextID, summaryMd string) (*contextlog.ContextLog, error) {
 	return a.cliRunner.CreateContextLog(a.ctx, contextID, summaryMd)
