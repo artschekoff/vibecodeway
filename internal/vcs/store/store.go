@@ -10,6 +10,7 @@ type Store struct {
 	Branches       *BranchRepo
 	PullRequests   *PRRepo
 	ReviewRequests *ReviewRequestRepo
+	Workspaces     *WorkspaceRepo
 }
 
 // NewStore constructs a Store backed by the provided *sql.DB.
@@ -21,5 +22,6 @@ func NewStore(db *sql.DB) *Store {
 		Branches:       NewBranchRepo(db),
 		PullRequests:   NewPRRepo(db),
 		ReviewRequests: NewReviewRequestRepo(db),
+		Workspaces:     NewWorkspaceRepo(db),
 	}
 }
