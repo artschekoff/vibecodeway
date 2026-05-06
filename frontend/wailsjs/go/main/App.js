@@ -186,6 +186,10 @@ export function GetWorkflowSummary(arg1) {
   return window['go']['main']['App']['GetWorkflowSummary'](arg1);
 }
 
+export function HasSlackPassphrase() {
+  return window['go']['main']['App']['HasSlackPassphrase']();
+}
+
 export function InitializeConsolidatedLog(arg1) {
   return window['go']['main']['App']['InitializeConsolidatedLog'](arg1);
 }
@@ -404,10 +408,6 @@ export function SetSlackConfig(arg1, arg2, arg3) {
 
 export function SetSlackPassphrase(arg1) {
   return window['go']['main']['App']['SetSlackPassphrase'](arg1);
-}
-
-export function HasSlackPassphrase() {
-  return window['go']['main']['App']['HasSlackPassphrase']();
 }
 
 export function SetTrackedRepoPath(arg1, arg2) {

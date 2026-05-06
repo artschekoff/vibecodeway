@@ -102,6 +102,8 @@ export function GetWorkflowProposals(arg1:string):Promise<Array<store.WorkflowPr
 
 export function GetWorkflowSummary(arg1:string):Promise<main.WorkflowSummary>;
 
+export function HasSlackPassphrase():Promise<boolean>;
+
 export function InitializeConsolidatedLog(arg1:string):Promise<contextlog.ConsolidatedLog>;
 
 export function ListAllContexts():Promise<Array<store.Context>>;
@@ -211,8 +213,6 @@ export function SetOrganizationsOrder(arg1:Array<string>):Promise<void>;
 export function SetSlackConfig(arg1:string,arg2:string,arg3:string):Promise<slackstore.SlackProvider>;
 
 export function SetSlackPassphrase(arg1:string):Promise<void>;
-
-export function HasSlackPassphrase():Promise<boolean>;
 
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
