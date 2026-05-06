@@ -905,19 +905,35 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                   <span className="detail-section-count">{issues.length}</span>
                 </div>
                 <div className="issue-list">
-                  {issues.map((issue) => (
-                    <IssueCard
-                      key={issue.id}
-                      issue={issue}
-                      onDeleteIssue={handleDeleteIssue}
-                      onDeleteComment={handleDeleteComment}
-                      onToggleIssue={(id) => void handleToggleIssue(id)}
-                      onToggleComment={(id) => void handleToggleComment(id)}
-                      onMarkIssueViewed={async (iid) => { await MarkIssueViewed(iid); load(true); void loadBreakdown(); }}
-                      onMarkCommentViewed={async (cid) => { await MarkCommentViewed(cid); load(true); void loadBreakdown(); }}
-                      jiraBaseUrl={detail?.jira?.baseUrl || jiraInstanceUrl}
-                    />
-                  ))}
+                  {(() => {
+                    const issueKeys = new Set(issues.map((i) => i.jiraKey));
+                    const parents = issues.filter((i) => !i.parentKey || !issueKeys.has(i.parentKey));
+                    const subtasksByParent = new Map<string, typeof issues>();
+                    for (const i of issues) {
+                      if (i.parentKey && issueKeys.has(i.parentKey)) {
+                        const list = subtasksByParent.get(i.parentKey) ?? [];
+                        list.push(i);
+                        subtasksByParent.set(i.parentKey, list);
+                      }
+                    }
+                    const rows: React.ReactNode[] = [];
+                    const baseProps = {
+                      onDeleteIssue: handleDeleteIssue,
+                      onDeleteComment: handleDeleteComment,
+                      onToggleIssue: (id: string) => void handleToggleIssue(id),
+                      onToggleComment: (id: string) => void handleToggleComment(id),
+                      onMarkIssueViewed: async (iid: string) => { await MarkIssueViewed(iid); load(true); void loadBreakdown(); },
+                      onMarkCommentViewed: async (cid: string) => { await MarkCommentViewed(cid); load(true); void loadBreakdown(); },
+                      jiraBaseUrl: detail?.jira?.baseUrl || jiraInstanceUrl,
+                    };
+                    for (const issue of parents) {
+                      rows.push(<IssueCard key={issue.id} issue={issue} {...baseProps} />);
+                      for (const sub of subtasksByParent.get(issue.jiraKey) ?? []) {
+                        rows.push(<IssueCard key={sub.id} issue={sub} isSubtask {...baseProps} />);
+                      }
+                    }
+                    return rows;
+                  })()}
                 </div>
               </section>
             )}

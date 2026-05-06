@@ -32,6 +32,7 @@ function ActiveToggle({ isActive, onToggle }: { isActive: boolean; onToggle: (e:
 
 interface Props {
   issue: Issue;
+  isSubtask?: boolean;
   onDeleteIssue?: (id: string) => void;
   onDeleteComment?: (id: string) => void;
   onToggleIssue?: (id: string) => void;
@@ -41,7 +42,7 @@ interface Props {
   jiraBaseUrl?: string;
 }
 
-export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl }: Props) {
+export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmIssue, setConfirmIssue] = useState(false);
@@ -79,7 +80,7 @@ export default function IssueCard({ issue, onDeleteIssue, onDeleteComment, onTog
   const jiraLink = jiraBaseUrl && issue.jiraKey ? `${jiraBaseUrl}/browse/${issue.jiraKey}` : null;
 
   return (
-    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}${isUnread || hasUnreadComments ? " item--unread-parent" : ""}`}>
+    <div className={`issue-card${isInactive ? " issue-card--inactive" : ""}${isUnread || hasUnreadComments ? " item--unread-parent" : ""}${isSubtask ? " issue-card--subtask" : ""}`}>
       <div className={`issue-card-header${isUnread ? " item--unread" : ""}`} onClick={() => setExpanded(!expanded)}>
         {onToggleIssue && (
           <ActiveToggle isActive={issue.isActive} onToggle={(e) => { e.stopPropagation(); onToggleIssue(issue.id); }} />

@@ -564,7 +564,7 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 		}
 		if _, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
-			detail.IssueType, detail.Description, detail.Updated,
+			detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
 		); err != nil {
 			svc.logger.Warn("failed to upsert issue", zap.String("key", key), zap.Error(err))
 			return nil

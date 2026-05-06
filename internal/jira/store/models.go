@@ -21,6 +21,7 @@ type Issue struct {
 	IssueType   string    `json:"issueType"`
 	Description string    `json:"description"`
 	JiraUpdated string    `json:"jiraUpdated"`
+	ParentKey   string    `json:"parentKey"`
 	CreatedAt   string    `json:"createdAt"`
 	IsActive    bool      `json:"isActive"`
 	ViewedAt       *string   `json:"viewedAt"`

@@ -71,6 +71,7 @@ export interface Issue {
   issueType: string;
   description: string;
   jiraUpdated: string;
+  parentKey: string;
   createdAt: string;
   isActive: boolean;
   viewedAt?: string;

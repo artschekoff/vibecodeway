@@ -87,7 +87,7 @@ func TestUpsertAndGetIssues(t *testing.T) {
 	c, err := s.CreateContext(ctx, "test-ctx")
 	require.NoError(t, err)
 
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Fix login", "Open", "alice", "Bug", "desc", "")
+	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Fix login", "Open", "alice", "Bug", "desc", "", "")
 	require.NoError(t, err)
 	assert.NotEmpty(t, issueID)
 
@@ -105,10 +105,10 @@ func TestUpsertIssueUpdatesOnDuplicate(t *testing.T) {
 	c, err := s.CreateContext(ctx, "test-ctx")
 	require.NoError(t, err)
 
-	id1, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "original", "Open", "alice", "Bug", "", "")
+	id1, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "original", "Open", "alice", "Bug", "", "", "")
 	require.NoError(t, err)
 
-	id2, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "updated", "Closed", "bob", "Story", "new desc", "2024-06-01T12:00:00Z")
+	id2, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "updated", "Closed", "bob", "Story", "new desc", "2024-06-01T12:00:00Z", "")
 	require.NoError(t, err)
 	assert.Equal(t, id1, id2, "same ID on duplicate upsert")
 
@@ -127,7 +127,7 @@ func TestUpsertAndGetComments(t *testing.T) {
 
 	c, err := s.CreateContext(ctx, "test-ctx")
 	require.NoError(t, err)
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "alice", "Bug", "", "")
+	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "alice", "Bug", "", "", "")
 	require.NoError(t, err)
 
 	inserted, err := repo.UpsertComment(ctx, issueID, "jira-cmt-1", "bob", "looks good", "2024-01-01T00:00:00Z")
@@ -152,7 +152,7 @@ func TestIssueActiveByDefault(t *testing.T) {
 
 	c, err := s.CreateContext(ctx, "test-ctx")
 	require.NoError(t, err)
-	_, err = repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	_, err = repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
 
 	issues, err := repo.GetIssuesByContext(ctx, c.ID, false)
@@ -167,7 +167,7 @@ func TestToggleIssueActive(t *testing.T) {
 
 	c, err := s.CreateContext(ctx, "test-ctx")
 	require.NoError(t, err)
-	id, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	id, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
 
 	issue, err := repo.ToggleIssueActive(ctx, id)
@@ -191,7 +191,7 @@ func TestCommentActiveByDefault(t *testing.T) {
 
 	c, err := s.CreateContext(ctx, "test-ctx")
 	require.NoError(t, err)
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
 	_, err = repo.UpsertComment(ctx, issueID, "cmt-1", "alice", "body", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestToggleCommentActive(t *testing.T) {
 
 	c, err := s.CreateContext(ctx, "test-ctx")
 	require.NoError(t, err)
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "")
+	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
 	_, err = repo.UpsertComment(ctx, issueID, "cmt-1", "alice", "body", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
@@ -239,9 +239,9 @@ func TestGetCommentsByIssues(t *testing.T) {
 	c, err := s.CreateContext(ctx, "ctx1")
 	require.NoError(t, err)
 
-	issue1, err := repo.UpsertIssue(ctx, c.ID, "PROJ-1", "issue 1", "open", "", "task", "", "2024-01-01T00:00:00Z")
+	issue1, err := repo.UpsertIssue(ctx, c.ID, "PROJ-1", "issue 1", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
 	require.NoError(t, err)
-	issue2, err := repo.UpsertIssue(ctx, c.ID, "PROJ-2", "issue 2", "open", "", "task", "", "2024-01-01T00:00:00Z")
+	issue2, err := repo.UpsertIssue(ctx, c.ID, "PROJ-2", "issue 2", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
 	require.NoError(t, err)
 
 	_, err = repo.UpsertComment(ctx, issue1, "jira-1", "alice", "first comment", "2024-01-01T00:00:00Z")
@@ -275,11 +275,11 @@ func TestFindContextsByJiraKeys(t *testing.T) {
 	c2, err := s.CreateContext(ctx, "ctx-two")
 	require.NoError(t, err)
 
-	_, err = repo.UpsertIssue(ctx, c1.ID, "ALPHA-1", "Alpha one", "Open", "", "Bug", "", "")
+	_, err = repo.UpsertIssue(ctx, c1.ID, "ALPHA-1", "Alpha one", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
-	_, err = repo.UpsertIssue(ctx, c1.ID, "ALPHA-2", "Alpha two", "Open", "", "Bug", "", "")
+	_, err = repo.UpsertIssue(ctx, c1.ID, "ALPHA-2", "Alpha two", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
-	_, err = repo.UpsertIssue(ctx, c2.ID, "BETA-1", "Beta one", "Open", "", "Story", "", "")
+	_, err = repo.UpsertIssue(ctx, c2.ID, "BETA-1", "Beta one", "Open", "", "Story", "", "", "")
 	require.NoError(t, err)
 
 	t.Run("finds keys across contexts", func(t *testing.T) {
@@ -292,9 +292,9 @@ func TestFindContextsByJiraKeys(t *testing.T) {
 
 	t.Run("same key in multiple contexts returns all context IDs", func(t *testing.T) {
 		// SHARED-1 exists in both c1 and c2.
-		_, err := repo.UpsertIssue(ctx, c1.ID, "SHARED-1", "Shared issue", "Open", "", "Bug", "", "")
+		_, err := repo.UpsertIssue(ctx, c1.ID, "SHARED-1", "Shared issue", "Open", "", "Bug", "", "", "")
 		require.NoError(t, err)
-		_, err = repo.UpsertIssue(ctx, c2.ID, "SHARED-1", "Shared issue", "Open", "", "Bug", "", "")
+		_, err = repo.UpsertIssue(ctx, c2.ID, "SHARED-1", "Shared issue", "Open", "", "Bug", "", "", "")
 		require.NoError(t, err)
 
 		got, err := repo.FindContextsByJiraKeys(ctx, []string{"SHARED-1"})

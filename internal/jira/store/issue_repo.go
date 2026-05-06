@@ -16,7 +16,7 @@ import (
 func (r *Repo) GetIssuesByContext(ctx context.Context, contextID string, activeOnly bool) ([]Issue, error) {
 	q := `
 		SELECT id, context_id, jira_key, summary, status, assignee, issue_type,
-		       description, jira_updated, created_at, is_active, viewed_at, ai_processed_at
+		       description, jira_updated, parent_key, created_at, is_active, viewed_at, ai_processed_at
 		FROM jira_issues
 		WHERE context_id = ?`
 	if activeOnly {
@@ -34,7 +34,7 @@ func (r *Repo) GetIssuesByContext(ctx context.Context, contextID string, activeO
 		var i Issue
 		if err := rows.Scan(
 			&i.ID, &i.ContextID, &i.JiraKey, &i.Summary, &i.Status,
-			&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
+			&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.ParentKey, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning issue: %w", err)
 		}
@@ -57,11 +57,11 @@ func (r *Repo) ToggleIssueActive(ctx context.Context, id string) (*Issue, error)
 	var i Issue
 	err = r.db.QueryRowContext(ctx, `
 		SELECT id, context_id, jira_key, summary, status, assignee, issue_type,
-		       description, jira_updated, created_at, is_active, viewed_at, ai_processed_at
+		       description, jira_updated, parent_key, created_at, is_active, viewed_at, ai_processed_at
 		FROM jira_issues WHERE id = ?
 	`, id).Scan(
 		&i.ID, &i.ContextID, &i.JiraKey, &i.Summary, &i.Status,
-		&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
+		&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.ParentKey, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -119,7 +119,7 @@ func (r *Repo) DeleteIssue(ctx context.Context, id string) error {
 
 // UpsertIssue inserts or updates an issue (dedup on context_id + jira_key).
 // Returns the internal ID of the issue (new or existing).
-func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summary, status, assignee, issueType, description, jiraUpdated string) (string, error) {
+func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summary, status, assignee, issueType, description, jiraUpdated, parentKey string) (string, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing string
@@ -131,9 +131,9 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 	if err == nil {
 		_, err = r.db.ExecContext(ctx, `
 			UPDATE jira_issues SET summary = ?, status = ?, assignee = ?,
-			issue_type = ?, description = ?, jira_updated = ?
+			issue_type = ?, description = ?, jira_updated = ?, parent_key = ?
 			WHERE id = ?
-		`, summary, status, assignee, issueType, description, jiraUpdated, existing)
+		`, summary, status, assignee, issueType, description, jiraUpdated, parentKey, existing)
 		if err != nil {
 			return "", fmt.Errorf("updating issue: %w", err)
 		}
@@ -147,9 +147,9 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 	id := uuid.New().String()
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO jira_issues
-			(id, context_id, jira_key, summary, status, assignee, issue_type, description, jira_updated, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, contextID, jiraKey, summary, status, assignee, issueType, description, jiraUpdated, now)
+			(id, context_id, jira_key, summary, status, assignee, issue_type, description, jira_updated, parent_key, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, contextID, jiraKey, summary, status, assignee, issueType, description, jiraUpdated, parentKey, now)
 	if err != nil {
 		return "", fmt.Errorf("inserting issue: %w", err)
 	}

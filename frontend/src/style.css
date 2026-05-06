@@ -717,6 +717,22 @@ select {
   overflow: hidden;
 }
 
+.issue-card--subtask {
+  margin-left: 24px;
+  border-left: 2px solid var(--accent, #4c9aff);
+  position: relative;
+}
+
+.issue-card--subtask::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  width: 20px;
+  height: 1px;
+  background: var(--border);
+}
+
 .issue-card-header {
   display: flex;
   align-items: center;
@@ -3021,6 +3037,12 @@ select {
 
 .log-file-picker-item:hover {
   border-color: var(--accent);
+}
+
+.log-file-picker-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
 }
 
 .log-file-chips {
