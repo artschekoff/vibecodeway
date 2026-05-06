@@ -74,6 +74,7 @@ type CommentData struct {
 type AuthResult struct {
 	Username  string
 	AvatarURL string
+	Token     string
 }
 
 // DeviceCodeInfo holds the information returned when starting a device-code OAuth flow.
@@ -117,6 +118,10 @@ type VCSRunner interface {
 
 	// GetAuthUser returns the currently authenticated username, or an error if not authenticated.
 	GetAuthUser(ctx context.Context) (string, error)
+
+	// SetToken stores the OAuth token on the runner so it is used for all subsequent API calls.
+	// This avoids depending on the gh CLI keychain for authentication.
+	SetToken(token string)
 
 	// GetPRByNumber fetches a single PR by its number from the VCS platform.
 	// Returns the PR metadata including the head branch name.

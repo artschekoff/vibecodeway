@@ -10,6 +10,7 @@ import {
   AttachLogFile,
   DetachLogFile,
   ListUploadedFiles,
+  PickAndExtractFiles,
 } from "../../wailsjs/go/main/App";
 import type { ContextLog, UploadedFile } from "../types";
 
@@ -33,6 +34,7 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
 
   const [contextFiles, setContextFiles] = useState<UploadedFile[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   const reload = async () => {
     setLoading(true);
@@ -149,6 +151,26 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
     }
   };
 
+  const handleUploadFiles = async () => {
+    setUploadingFiles(true);
+    try {
+      const result = await PickAndExtractFiles(contextId);
+      if (result?.files?.length) {
+        const refreshed = await ListUploadedFiles(contextId);
+        setContextFiles(refreshed ?? []);
+        setSelectedFileIds((prev) => {
+          const next = new Set(prev);
+          for (const f of result.files) next.add(f.id);
+          return next;
+        });
+      }
+    } catch {
+      // best-effort
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
   const toggleFile = (id: string, checked: boolean) => {
     setSelectedFileIds((prev) => {
       const next = new Set(prev);
@@ -199,20 +221,24 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
           />
           <div className="log-file-picker">
             <span className="log-file-picker-label">Attach files:</span>
-            {contextFiles.length === 0 ? (
-              <span className="log-file-picker-empty">No uploaded files in this context</span>
-            ) : (
-              contextFiles.map((f) => (
-                <label key={f.id} className="log-file-picker-item">
-                  <input
-                    type="checkbox"
-                    checked={selectedFileIds.has(f.id)}
-                    onChange={(e) => toggleFile(f.id, e.target.checked)}
-                  />
-                  <span>{f.originalName}</span>
-                </label>
-              ))
-            )}
+            {contextFiles.map((f) => (
+              <label key={f.id} className="log-file-picker-item">
+                <input
+                  type="checkbox"
+                  checked={selectedFileIds.has(f.id)}
+                  onChange={(e) => toggleFile(f.id, e.target.checked)}
+                />
+                <span>{f.originalName}</span>
+              </label>
+            ))}
+            <button
+              type="button"
+              className="log-file-upload-btn"
+              onClick={() => void handleUploadFiles()}
+              disabled={uploadingFiles}
+            >
+              {uploadingFiles ? "Uploading…" : "+ Upload files"}
+            </button>
           </div>
           <div className="log-entry-actions">
             <button className="btn-primary" onClick={() => void handleAdd()} disabled={!addDraft.trim()}>
@@ -271,20 +297,24 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
                 />
                 <div className="log-file-picker">
                   <span className="log-file-picker-label">Attach files:</span>
-                  {contextFiles.length === 0 ? (
-                    <span className="log-file-picker-empty">No uploaded files in this context</span>
-                  ) : (
-                    contextFiles.map((f) => (
-                      <label key={f.id} className="log-file-picker-item">
-                        <input
-                          type="checkbox"
-                          checked={selectedFileIds.has(f.id)}
-                          onChange={(e) => toggleFile(f.id, e.target.checked)}
-                        />
-                        <span>{f.originalName}</span>
-                      </label>
-                    ))
-                  )}
+                  {contextFiles.map((f) => (
+                    <label key={f.id} className="log-file-picker-item">
+                      <input
+                        type="checkbox"
+                        checked={selectedFileIds.has(f.id)}
+                        onChange={(e) => toggleFile(f.id, e.target.checked)}
+                      />
+                      <span>{f.originalName}</span>
+                    </label>
+                  ))}
+                  <button
+                    type="button"
+                    className="log-file-upload-btn"
+                    onClick={() => void handleUploadFiles()}
+                    disabled={uploadingFiles}
+                  >
+                    {uploadingFiles ? "Uploading…" : "+ Upload files"}
+                  </button>
                 </div>
                 <div className="log-entry-actions">
                   <button className="btn-primary" onClick={() => void handleSaveEdit()}>

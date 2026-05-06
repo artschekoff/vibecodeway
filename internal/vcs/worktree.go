@@ -36,9 +36,10 @@ func GitWorktreeAdd(baseDir, worktreePath, branch string) error {
 	return nil
 }
 
-// GitWorktreeRemove removes a worktree, forcing removal if it has uncommitted changes.
-func GitWorktreeRemove(worktreePath string) error {
-	cmd := exec.Command("git", "worktree", "remove", "--force", worktreePath)
+// GitWorktreeRemove removes a worktree from the repo rooted at baseDir, forcing
+// removal even if it has uncommitted changes.
+func GitWorktreeRemove(baseDir, worktreePath string) error {
+	cmd := exec.Command("git", "-C", baseDir, "worktree", "remove", "--force", worktreePath)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git worktree remove %s: %w\n%s", worktreePath, err, out)

@@ -49,6 +49,7 @@ func (m *mockRunner) CompleteDeviceAuth(_ context.Context, _ string, _ int) (vcs
 	return vcs.AuthResult{}, nil
 }
 func (m *mockRunner) GetAuthUser(_ context.Context) (string, error) { return "me", nil }
+func (m *mockRunner) SetToken(_ string)                              {}
 func (m *mockRunner) GetPRByNumber(_ context.Context, _, _ string, _ int) (*vcs.PRData, error) {
 	return nil, nil
 }

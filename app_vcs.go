@@ -49,7 +49,7 @@ func (a *App) GetVCSAuth(platform string) (*vcsstore.VCSAuth, error) {
 	// Bootstrap from gh CLI when the DB record is missing.
 	if vcs.Platform(platform) == vcs.PlatformGitHub {
 		if username, ghErr := a.vcsSvc.GetAuthUser(a.ctx, vcs.PlatformGitHub); ghErr == nil && username != "" {
-			if _, saveErr := a.vcsStore.Auth.UpsertAuth(a.ctx, platform, username, ""); saveErr != nil {
+			if _, saveErr := a.vcsStore.Auth.UpsertAuth(a.ctx, platform, username, "", ""); saveErr != nil {
 				a.logger.Sugar().Warnf("GetVCSAuth: bootstrap save failed: %v", saveErr)
 			}
 			return &vcsstore.VCSAuth{Platform: platform, Username: username}, nil
@@ -482,8 +482,13 @@ func (a *App) DeleteWorkspace(workspaceID string) error {
 	if err != nil {
 		return fmt.Errorf("workspace not found: %w", err)
 	}
-	if rmErr := vcs.GitWorktreeRemove(w.WorktreePath); rmErr != nil {
-		a.logger.Sugar().Warnf("DeleteWorkspace: git worktree remove failed (continuing): %v", rmErr)
+	repoPath, err := a.vcsStore.RepoPaths.Get(a.ctx, w.RepoPathID)
+	if err != nil {
+		a.logger.Sugar().Warnf("DeleteWorkspace: repo path not found (continuing): %v", err)
+	} else {
+		if rmErr := vcs.GitWorktreeRemove(repoPath.Path, w.WorktreePath); rmErr != nil {
+			a.logger.Sugar().Warnf("DeleteWorkspace: git worktree remove failed (continuing): %v", rmErr)
+		}
 	}
 	return a.vcsStore.Workspaces.Delete(a.ctx, workspaceID)
 }

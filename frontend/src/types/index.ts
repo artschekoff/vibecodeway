@@ -546,6 +546,7 @@ export interface Tab {
   orgId?: string;      // present when type === "org"; also on type === "context" to link back to parent org
   orgName?: string;    // org display name; stored on context tabs for fallback org-tab creation
   contextId?: string;  // present when type === "context"
+  contextKey?: string; // raw context key without org prefix; used for display in TabItem
   title: string;
   pinned: boolean;
 }

@@ -243,6 +243,73 @@ interface ContextDetailProps {
   tabId: string;
 }
 
+function WorkspaceMenu({
+  workspace,
+  checkoutLoading,
+  onCheckout,
+  onMarkDone,
+  onDelete,
+}: {
+  workspace: import("../types").VCSWorkspace;
+  checkoutLoading: boolean;
+  onCheckout: () => void;
+  onMarkDone: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="workspace-menu" ref={ref}>
+      <button
+        type="button"
+        className="workspace-menu-trigger"
+        onClick={() => setOpen((v) => !v)}
+        disabled={checkoutLoading}
+        title="Workspace actions"
+      >
+        <span className={`workspace-status-badge workspace-status-badge--${workspace.status}`}>
+          {workspace.status === "should_delete" ? "done" : "active"}
+        </span>
+        <ChevronDown size={10} />
+      </button>
+      {open && (
+        <div className="workspace-menu-dropdown">
+          <button
+            className="workspace-menu-item"
+            onClick={() => { onCheckout(); setOpen(false); }}
+          >
+            Open workspace
+          </button>
+          {workspace.status === "active" && (
+            <button
+              className="workspace-menu-item"
+              onClick={() => { onMarkDone(workspace.id); setOpen(false); }}
+            >
+              Mark done
+            </button>
+          )}
+          <div className="workspace-menu-divider" />
+          <button
+            className="workspace-menu-item workspace-menu-item--danger"
+            onClick={() => { onDelete(workspace.id); setOpen(false); }}
+          >
+            Delete workspace
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextDetailProps) {
   const id = contextId;
   const { closeTab, navigateBack, openContextTab } = useTabContext();
@@ -1095,43 +1162,24 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                             const workspace = workspaces.find(
                               (w) => w.branch === b.branch && w.repoId === b.repoId
                             );
-                            return (
-                              <>
-                                <button
-                                  type="button"
-                                  className="vcs-checkout-btn"
-                                  title={workspace ? `Open workspace for ${b.branch}` : `Checkout ${b.branch} in workspace`}
-                                  disabled={checkoutLoading}
-                                  onClick={() => void handleCheckout(b.branch, b.repoId)}
-                                >
-                                  {workspace ? "Open workspace" : "Checkout"}
-                                </button>
-                                {workspace && (
-                                  <>
-                                    <span className={`workspace-status-badge workspace-status-badge--${workspace.status}`}>
-                                      {workspace.status === "should_delete" ? "done" : "active"}
-                                    </span>
-                                    {workspace.status === "active" && (
-                                      <button
-                                        type="button"
-                                        className="vcs-checkout-btn"
-                                        title="Mark workspace as done (ready to delete)"
-                                        onClick={() => void handleMarkWorkspaceDone(workspace.id)}
-                                      >
-                                        Mark done
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      className="vcs-checkout-btn vcs-checkout-btn--danger"
-                                      title="Delete workspace"
-                                      onClick={() => void handleDeleteWorkspace(workspace.id)}
-                                    >
-                                      Delete workspace
-                                    </button>
-                                  </>
-                                )}
-                              </>
+                            return workspace ? (
+                              <WorkspaceMenu
+                                workspace={workspace}
+                                checkoutLoading={checkoutLoading}
+                                onCheckout={() => void handleCheckout(b.branch, b.repoId)}
+                                onMarkDone={(id) => void handleMarkWorkspaceDone(id)}
+                                onDelete={(id) => void handleDeleteWorkspace(id)}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="vcs-checkout-btn"
+                                title={`Checkout ${b.branch} in workspace`}
+                                disabled={checkoutLoading}
+                                onClick={() => void handleCheckout(b.branch, b.repoId)}
+                              >
+                                Checkout
+                              </button>
                             );
                           })()}
                           {branchPRs.length > 0 && (

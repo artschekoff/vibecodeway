@@ -586,7 +586,13 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       const branches = await ListRepoBranches(vcsPlatform, trimmed);
       setRepoBranches(branches ?? []);
     } catch (e) {
-      setBranchPickerError(String(e));
+      const msg = String(e);
+      const friendly = msg.includes("404") || msg.includes("Not Found")
+        ? `Repository "${trimmed}" not found. Check the owner/repo name and that you have access.`
+        : msg.includes("401") || msg.includes("Unauthorized") || msg.includes("auth")
+        ? "GitHub authentication failed. Run `gh auth login` and try again."
+        : "Failed to load branches. Check your GitHub access and repo name.";
+      setBranchPickerError(friendly);
       loadedForRepo.current = "";
     } finally {
       setBranchPickerLoading(false);

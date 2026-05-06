@@ -118,16 +118,16 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
   const openContextTab = useCallback(
     (contextId: string, contextKey: string, orgName?: string, orgId?: string) => {
-      const title = orgName ? `${orgName} / ${contextKey}` : contextKey;
       focusOrOpen(
         (t) => t.type === "context" && t.contextId === contextId,
         () => ({
           id: newTabId(),
           type: "context" as const,
           contextId,
+          contextKey,
           orgId,
           orgName,
-          title,
+          title: contextKey,
           pinned: false,
         })
       );
@@ -137,15 +137,15 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
   const openNewContextTab = useCallback(
     (contextId: string, contextKey: string, orgName?: string, orgId?: string) => {
-      const title = orgName ? `${orgName} / ${contextKey}` : contextKey;
       setTabs((prev) => {
         const tab: Tab = {
           id: newTabId(),
           type: "context" as const,
           contextId,
+          contextKey,
           orgId,
           orgName,
-          title,
+          title: contextKey,
           pinned: false,
         };
         setActiveTabId(tab.id);
@@ -220,22 +220,28 @@ export function TabProvider({ children }: { children: ReactNode }) {
         const tab = prev.find((t) => t.id === tabId);
         if (!tab) return prev;
 
-        if (tab.type === "context" && tab.orgId) {
-          const orgTab = prev.find((t) => t.type === "org" && t.orgId === tab.orgId);
-          if (orgTab) {
-            setActiveTabId(orgTab.id);
-          } else {
-            const name = tab.orgName ?? tab.orgId;
-            const newOrgTab: Tab = {
-              id: newTabId(),
-              type: "org" as const,
-              orgId: tab.orgId,
-              orgName: tab.orgName,
-              title: name,
-              pinned: false,
-            };
-            setActiveTabId(newOrgTab.id);
-            return [...prev, newOrgTab];
+        if (tab.type === "context") {
+          const prevId = previousActiveTabIdRef.current;
+          const prevTab = prevId ? prev.find((t) => t.id === prevId && t.id !== tabId) : null;
+          if (prevTab) {
+            setActiveTabId(prevTab.id);
+          } else if (tab.orgId) {
+            const orgTab = prev.find((t) => t.type === "org" && t.orgId === tab.orgId);
+            if (orgTab) {
+              setActiveTabId(orgTab.id);
+            } else {
+              const name = tab.orgName ?? tab.orgId;
+              const newOrgTab: Tab = {
+                id: newTabId(),
+                type: "org" as const,
+                orgId: tab.orgId,
+                orgName: tab.orgName,
+                title: name,
+                pinned: false,
+              };
+              setActiveTabId(newOrgTab.id);
+              return [...prev, newOrgTab];
+            }
           }
         } else if (tab.type === "settings") {
           const prevId = previousActiveTabIdRef.current;
