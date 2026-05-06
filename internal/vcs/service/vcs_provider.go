@@ -307,7 +307,7 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 			activeNumbers = append(activeNumbers, pr.Number)
 			if err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
-				pr.ReviewStatus, pr.CreatedAt,
+				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt,
 			); err != nil {
 				p.logger.Warn("vcs: upsert review request failed",
 					zap.Int("pr", pr.Number), zap.Error(err))
