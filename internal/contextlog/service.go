@@ -268,6 +268,12 @@ func (s *Service) ListLogs(ctx context.Context, contextID string) ([]ContextLog,
 	return s.repo.ListLogs(ctx, contextID)
 }
 
+// ListAllLogs returns log entries across all contexts, optionally filtered by trigger.
+// Pass empty string for trigger to get all triggers. limit<=0 defaults to 100.
+func (s *Service) ListAllLogs(ctx context.Context, trigger string, limit int) ([]LogEntry, error) {
+	return s.repo.ListAll(ctx, trigger, limit)
+}
+
 // AttachFile links an uploaded file to a log entry.
 func (s *Service) AttachFile(ctx context.Context, logID, fileID string) error {
 	return s.repo.AttachFile(ctx, logID, fileID)
