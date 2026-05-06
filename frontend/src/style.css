@@ -5254,3 +5254,367 @@ select {
   border-color: var(--danger, #e05555);
   color: var(--danger, #e05555);
 }
+
+/* ── Workflow Status Manager ─────────────────────────────────────────────── */
+
+.settings-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.settings-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin-bottom: 8px;
+}
+
+.workflow-status-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.workflow-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.workflow-status-item:hover .workflow-status-actions {
+  opacity: 1;
+}
+
+.workflow-status-label {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.workflow-status-slug {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: ui-monospace, "SF Mono", monospace;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.workflow-status-system-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.workflow-status-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 4px 5px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  line-height: 1;
+}
+
+.icon-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.icon-btn--danger:hover {
+  background: rgba(224, 82, 82, 0.15);
+  color: var(--danger);
+}
+
+.workflow-status-input {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--accent);
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+  flex: 1;
+}
+
+.workflow-status-input--slug {
+  max-width: 160px;
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 12px;
+}
+
+.workflow-status-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.workflow-status-add-fields {
+  display: flex;
+  gap: 8px;
+}
+
+.workflow-status-add-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* btn with BEM modifier variants used in WorkflowStatusManager */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.btn--ghost:hover:not(:disabled) { background: var(--surface2); color: var(--text); }
+
+.workflow-status-add-btn {
+  gap: 5px;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+/* ── Org / generic modal card ────────────────────────────────────────────── */
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px 24px;
+  width: 380px;
+  max-width: 95vw;
+  box-shadow: var(--shadow);
+  animation: modal-in 0.15s ease;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.modal-close:hover { background: var(--surface2); color: var(--text); }
+
+.form-field {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input:disabled { opacity: 0.5; }
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Settings Logs Preview ─────────────────────────────────────── */
+
+.settings-logs-section {
+  margin-top: 2rem;
+}
+
+.settings-logs-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.settings-logs-filter-bar label {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.settings-logs-filter-bar select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.settings-logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.settings-logs-table th {
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border, #333);
+  white-space: nowrap;
+}
+
+.settings-logs-table td {
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--border-subtle, #222);
+  vertical-align: top;
+}
+
+.settings-logs-table tr:hover td {
+  background: var(--surface);
+}
+
+.settings-logs-cell-date {
+  white-space: nowrap;
+  color: var(--text-muted);
+  min-width: 9rem;
+}
+
+.settings-logs-cell-level {
+  white-space: nowrap;
+  min-width: 5.5rem;
+}
+
+.settings-logs-cell-context {
+  white-space: nowrap;
+  min-width: 7rem;
+  font-weight: 500;
+}
+
+.settings-logs-cell-org {
+  white-space: nowrap;
+  min-width: 7rem;
+  color: var(--text-muted);
+}
+
+.settings-logs-cell-message {
+  color: var(--text);
+  max-width: 30rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-logs-trigger {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  border: 1px solid var(--text-muted);
+  color: var(--text-muted);
+}
+
+.settings-logs-trigger--refresh,
+.settings-logs-trigger--reload {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.settings-logs-trigger--manual {
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.settings-logs-trigger--init {
+  border-color: #9C6;
+  color: #9C6;
+}
+
+.settings-logs-trigger--agent {
+  border-color: #6af;
+  color: #6af;
+}
+
+.settings-logs-empty {
+  text-align: center;
+  padding: 1.5rem 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
