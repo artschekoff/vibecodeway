@@ -497,8 +497,12 @@ func (h *handlers) handleContextSetStatus(ctx context.Context, req mcp.CallToolR
 	if status == "" {
 		return mcp.NewToolResultError("status is required"), nil
 	}
-	if !isValidWorkflowStatus(status) {
-		return mcp.NewToolResultError(fmt.Sprintf("invalid status %q — must be one of: %s", status, strings.Join(validWorkflowStatuses, ", "))), nil
+	valid, err := h.svc.IsValidWorkflowStatus(ctx, status)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("validating status: %v", err)), nil
+	}
+	if !valid {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid status %q — check available statuses in Settings", status)), nil
 	}
 
 	comment := strings.TrimSpace(req.GetString("comment", ""))
@@ -897,14 +901,3 @@ func splitAndTrim(s string) []string {
 	return out
 }
 
-// validWorkflowStatuses is the closed set of accepted status values for context_set_status.
-var validWorkflowStatuses = []string{"not_started", "in_progress", "scoping", "needs_attention", "ready"}
-
-func isValidWorkflowStatus(s string) bool {
-	for _, v := range validWorkflowStatuses {
-		if s == v {
-			return true
-		}
-	}
-	return false
-}

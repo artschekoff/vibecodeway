@@ -234,6 +234,11 @@ func (svc *ContextService) SetAgentProposal(ctx context.Context, contextID, stat
 	return svc.store.SetAIProposal(ctx, contextID, status, comment, nextStep, "")
 }
 
+// IsValidWorkflowStatus reports whether slug is a registered workflow status in the DB.
+func (svc *ContextService) IsValidWorkflowStatus(ctx context.Context, slug string) (bool, error) {
+	return svc.store.IsValidWorkflowStatus(ctx, slug)
+}
+
 // NewContextService creates a new ContextService.
 // Pass provider implementations as variadic arguments to enable cross-cutting operations
 // (Refresh, Reload, FormatContext). Each provider must have a unique Name().
