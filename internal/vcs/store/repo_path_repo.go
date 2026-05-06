@@ -53,6 +53,21 @@ func (r *RepoPathRepo) ListForRepo(ctx context.Context, repoID string) ([]VCSRep
 	return result, rows.Err()
 }
 
+// Get returns a single VCSRepoPath by ID.
+func (r *RepoPathRepo) Get(ctx context.Context, id string) (*VCSRepoPath, error) {
+	var p VCSRepoPath
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, repo_id, path, created_at FROM vcs_repo_paths WHERE id = ?`, id,
+	).Scan(&p.ID, &p.RepoID, &p.Path, &p.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get vcs_repo_path: %w", err)
+	}
+	return &p, nil
+}
+
 // Delete removes a path by ID. Returns ErrNotFound if no row was deleted.
 func (r *RepoPathRepo) Delete(ctx context.Context, id string) error {
 	res, err := r.db.ExecContext(ctx, `DELETE FROM vcs_repo_paths WHERE id = ?`, id)
