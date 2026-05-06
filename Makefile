@@ -59,7 +59,9 @@ db-truncate:
 	@echo "All tables truncated."
 
 db-reinit:
-	@rm -f ~/.context-consolidator/context_consolidator.db
+	@rm -f ~/.context-consolidator/context_consolidator.db \
+		~/.context-consolidator/context_consolidator.db-shm \
+		~/.context-consolidator/context_consolidator.db-wal
 	@echo "Database removed. Migrations will run automatically on next start."
 
 clean:

@@ -826,6 +826,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 placeholder="Search…"
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
               />
               {searchQuery && (
                 <button className="context-search-clear" onClick={() => handleSearchChange("")} title="Clear search">×</button>
@@ -1143,6 +1146,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         onChange={(e) => setAddOwnerRepo(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAddRepo(); } }}
                         autoFocus
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                       />
                       <button
                         className="btn-primary"
@@ -1282,6 +1288,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               onChange={(e) => setEditLabel(e.target.value)}
                               placeholder="e.g. API, Frontend, Infra"
                               autoFocus
+                              autoCorrect="off"
+                              autoCapitalize="none"
+                              spellCheck={false}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") { e.preventDefault(); void handleUpdateRepoMeta(repo.id); }
                                 if (e.key === "Escape") cancelEdit();
@@ -1294,6 +1303,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               value={editDescription}
                               onChange={(e) => setEditDescription(e.target.value)}
                               placeholder="Short description (optional)"
+                              autoCorrect="off"
+                              autoCapitalize="none"
+                              spellCheck={false}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") { e.preventDefault(); void handleUpdateRepoMeta(repo.id); }
                                 if (e.key === "Escape") cancelEdit();

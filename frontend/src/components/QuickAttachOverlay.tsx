@@ -54,7 +54,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     setLoading(true);
     try {
       const all = await ListAllContexts();
-      const active = all.filter((c) => c.status === "active");
+      const active = all.filter((c) => c.status === "active" && c.orgId);
       setContexts(active);
       if (active.length === 1) setSelectedId(active[0].id);
     } catch {
@@ -278,6 +278,9 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             disabled={attaching || creatingCtx}
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </div>
 
@@ -322,6 +325,9 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
                 if (e.key === "Escape") { setShowNewCtx(false); setNewCtxKey(""); setNewCtxError(""); }
               }}
               disabled={creatingCtx}
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
             />
             <button
               className="btn-primary"

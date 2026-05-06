@@ -6,7 +6,7 @@ import ContextDetail from "./pages/ContextDetail";
 import Settings from "./pages/Settings";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
-import { ListAllContexts } from "../wailsjs/go/main/App";
+import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
@@ -82,15 +82,19 @@ function AppShell() {
     };
   }, [showToast]);
 
-  // On mount: validate restored context tabs against live context list
+  // On mount: validate restored tabs against live DB to close stale references
   useEffect(() => {
     if (!isWailsContext()) return;
     void (async () => {
       try {
-        const all = await ListAllContexts();
-        const validIds = new Set((all ?? []).map((c) => c.id));
+        const [allContexts, allOrgs] = await Promise.all([ListAllContexts(), ListOrganizations()]);
+        const validContextIds = new Set((allContexts ?? []).map((c) => c.id));
+        const validOrgIds = new Set((allOrgs ?? []).map((o) => o.id));
         for (const tab of tabs) {
-          if (tab.type === "context" && tab.contextId && !validIds.has(tab.contextId)) {
+          if (tab.type === "context" && tab.contextId && !validContextIds.has(tab.contextId)) {
+            forceCloseTab(tab.id);
+          }
+          if (tab.type === "org" && tab.orgId && !validOrgIds.has(tab.orgId)) {
             forceCloseTab(tab.id);
           }
         }

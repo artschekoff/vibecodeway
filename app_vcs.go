@@ -39,12 +39,23 @@ func (a *App) VCSLoginComplete(platform, deviceCode string, interval int) (strin
 }
 
 // GetVCSAuth returns the stored auth info for a platform. Returns empty strings if not authenticated.
+// If no DB record exists for GitHub, falls back to querying the gh CLI so that existing gh auth
+// survives a db-reinit without requiring the user to go through the OAuth device flow again.
 func (a *App) GetVCSAuth(platform string) (*vcsstore.VCSAuth, error) {
 	auth, err := a.vcsStore.Auth.GetAuth(a.ctx, platform)
-	if err != nil {
-		return &vcsstore.VCSAuth{Platform: platform}, nil // not authenticated, not an error
+	if err == nil {
+		return auth, nil
 	}
-	return auth, nil
+	// Bootstrap from gh CLI when the DB record is missing.
+	if vcs.Platform(platform) == vcs.PlatformGitHub {
+		if username, ghErr := a.vcsSvc.GetAuthUser(a.ctx, vcs.PlatformGitHub); ghErr == nil && username != "" {
+			if _, saveErr := a.vcsStore.Auth.UpsertAuth(a.ctx, platform, username, ""); saveErr != nil {
+				a.logger.Sugar().Warnf("GetVCSAuth: bootstrap save failed: %v", saveErr)
+			}
+			return &vcsstore.VCSAuth{Platform: platform, Username: username}, nil
+		}
+	}
+	return &vcsstore.VCSAuth{Platform: platform}, nil // not authenticated, not an error
 }
 
 // GetSupportedPlatforms returns all known VCS platforms with their enabled status and labels.

@@ -751,6 +751,9 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
               onChange={(e) => setKey(e.target.value)}
               placeholder="e.g. sprint-42, auth-refactor"
               autoFocus
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
             />
             <div className="form-hint">A short human-readable name for this context</div>
           </div>

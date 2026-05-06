@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import ConfirmModal from "./ConfirmModal";
 import {
   ListContextLogs,
   CreateContextLog,
@@ -28,6 +29,7 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
 
   const [adding, setAdding] = useState(false);
   const [addDraft, setAddDraft] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [contextFiles, setContextFiles] = useState<UploadedFile[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
@@ -120,7 +122,6 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this context log entry? This action cannot be undone.")) return;
     try {
       await DeleteContextLog(id);
       await reload();
@@ -159,6 +160,17 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
 
   return (
     <div className="log-panel">
+      {confirmDeleteId && (
+        <ConfirmModal
+          message="Delete this log entry? This action cannot be undone."
+          onConfirm={() => {
+            const id = confirmDeleteId;
+            setConfirmDeleteId(null);
+            void handleDelete(id);
+          }}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
       {error && <div className="error-banner">{error}</div>}
 
       <div className="log-panel-toolbar">
@@ -185,10 +197,12 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
             rows={6}
             autoFocus
           />
-          {contextFiles.length > 0 && (
-            <div className="log-file-picker">
-              <span className="log-file-picker-label">Attach files:</span>
-              {contextFiles.map((f) => (
+          <div className="log-file-picker">
+            <span className="log-file-picker-label">Attach files:</span>
+            {contextFiles.length === 0 ? (
+              <span className="log-file-picker-empty">No uploaded files in this context</span>
+            ) : (
+              contextFiles.map((f) => (
                 <label key={f.id} className="log-file-picker-item">
                   <input
                     type="checkbox"
@@ -197,9 +211,9 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
                   />
                   <span>{f.originalName}</span>
                 </label>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
           <div className="log-entry-actions">
             <button className="btn-primary" onClick={() => void handleAdd()} disabled={!addDraft.trim()}>
               Save
@@ -238,7 +252,7 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
                   <button
                     className="btn-ghost"
                     style={{ color: "var(--danger)" }}
-                    onClick={() => void handleDelete(log.id)}
+                    onClick={() => setConfirmDeleteId(log.id)}
                     title="Delete"
                   >
                     ✕
@@ -255,10 +269,12 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
                   rows={8}
                   autoFocus
                 />
-                {contextFiles.length > 0 && (
-                  <div className="log-file-picker">
-                    <span className="log-file-picker-label">Attach files:</span>
-                    {contextFiles.map((f) => (
+                <div className="log-file-picker">
+                  <span className="log-file-picker-label">Attach files:</span>
+                  {contextFiles.length === 0 ? (
+                    <span className="log-file-picker-empty">No uploaded files in this context</span>
+                  ) : (
+                    contextFiles.map((f) => (
                       <label key={f.id} className="log-file-picker-item">
                         <input
                           type="checkbox"
@@ -267,9 +283,9 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
                         />
                         <span>{f.originalName}</span>
                       </label>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
                 <div className="log-entry-actions">
                   <button className="btn-primary" onClick={() => void handleSaveEdit()}>
                     Save
