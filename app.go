@@ -765,6 +765,16 @@ func (a *App) DeleteContextLog(id string) error {
 	return a.cliRunner.DeleteContextLog(a.ctx, id)
 }
 
+// AttachLogFile links an uploaded file to a log entry.
+func (a *App) AttachLogFile(logID, fileID string) error {
+	return a.cliRunner.AttachLogFile(a.ctx, logID, fileID)
+}
+
+// DetachLogFile removes the link between a log entry and an uploaded file.
+func (a *App) DetachLogFile(logID, fileID string) error {
+	return a.cliRunner.DetachLogFile(a.ctx, logID, fileID)
+}
+
 // --- Consolidated log ---
 
 // GetConsolidatedContextLog returns the consolidated log for a context (may be nil).

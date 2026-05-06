@@ -660,6 +660,16 @@ func (r *Runner) DeleteContextLog(ctx context.Context, id string) error {
 	return r.runNoOutput(ctx, []string{"log-delete", "--id", id})
 }
 
+// AttachLogFile links an uploaded file to a log entry.
+func (r *Runner) AttachLogFile(ctx context.Context, logID, fileID string) error {
+	return r.runNoOutput(ctx, []string{"log-attach-file", "--log-id", logID, "--file-id", fileID})
+}
+
+// DetachLogFile removes the link between a log entry and an uploaded file.
+func (r *Runner) DetachLogFile(ctx context.Context, logID, fileID string) error {
+	return r.runNoOutput(ctx, []string{"log-detach-file", "--log-id", logID, "--file-id", fileID})
+}
+
 // --- Consolidated log ---
 
 // GetConsolidatedContextLog returns the consolidated log.
