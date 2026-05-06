@@ -128,6 +128,8 @@ export function ListContextChat(arg1:string):Promise<Array<contextlog.ChatMessag
 
 export function ListContextLogs(arg1:string):Promise<Array<contextlog.ContextLog>>;
 
+export function ListAllLogs(arg1:string,arg2:number):Promise<Array<contextlog.LogEntry>>;
+
 export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 
 export function ListContexts():Promise<Array<store.Context>>;

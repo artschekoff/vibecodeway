@@ -2,7 +2,7 @@ export interface Context {
   id: string;
   key: string;
   status: string;
-  orgId?: string;
+  orgId: string;
   createdAt: string;
   updatedAt: string;
   issueCount?: number;
@@ -267,6 +267,11 @@ export interface ContextLog {
   editedAt?: string;
   createdAt: string;
   files?: AttachedFile[];
+}
+
+export interface LogEntry extends ContextLog {
+  contextKey: string;
+  orgName?: string;
 }
 
 export interface ConsolidatedLog {

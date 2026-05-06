@@ -238,6 +238,10 @@ export function ListContextLogs(arg1) {
   return window['go']['main']['App']['ListContextLogs'](arg1);
 }
 
+export function ListAllLogs(arg1, arg2) {
+  return window['go']['main']['App']['ListAllLogs'](arg1, arg2);
+}
+
 export function ListContextTexts(arg1) {
   return window['go']['main']['App']['ListContextTexts'](arg1);
 }
