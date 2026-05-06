@@ -63,6 +63,28 @@ func (a *App) GetWorkflowProposals(contextID string) ([]appstore.WorkflowProposa
 	return a.db.ListWorkflowProposals(context.Background(), contextID)
 }
 
+// ListWorkflowStatuses returns all available workflow status options.
+func (a *App) ListWorkflowStatuses() ([]appstore.WorkflowStatus, error) {
+	return a.db.ListWorkflowStatuses(context.Background())
+}
+
+// CreateWorkflowStatus adds a new custom workflow status.
+// slug must match [a-z][a-z0-9_]* and be unique.
+func (a *App) CreateWorkflowStatus(slug, label string) (*appstore.WorkflowStatus, error) {
+	return a.db.CreateWorkflowStatus(context.Background(), slug, label)
+}
+
+// UpdateWorkflowStatus renames the display label of a status (slug is immutable).
+func (a *App) UpdateWorkflowStatus(id, label string) (*appstore.WorkflowStatus, error) {
+	return a.db.UpdateWorkflowStatus(context.Background(), id, label)
+}
+
+// DeleteWorkflowStatus removes a custom status and nulls out affected context overrides.
+// Returns an error if the status is a built-in system status.
+func (a *App) DeleteWorkflowStatus(id string) error {
+	return a.db.DeleteWorkflowStatus(context.Background(), id)
+}
+
 // --- Open questions ---
 
 func (a *App) GetOpenQuestions(contextID string) ([]appstore.OpenQuestion, error) {
