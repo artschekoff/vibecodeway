@@ -5,6 +5,7 @@ import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
 import { useTabContext } from "../contexts/TabContext";
 import WorkflowStatusManager from "../components/WorkflowStatusManager";
+import LogsPreview from "../components/LogsPreview";
 
 const OPENAI_MODELS = [
   { id: "gpt-4.1",       label: "GPT-4.1 (recommended)" },
@@ -209,8 +210,7 @@ export default function SettingsPage() {
               <div className="hotkey-desc">
                 <div style={{ fontSize: 13, fontWeight: 500 }}>Quick Attach</div>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                  Выдели текст в любом приложении и нажми это сочетание — откроется выбор контекста,
-                  к которому прикрепить текст. Работает глобально, даже когда приложение свёрнуто.
+                  Select text in any app and press this shortcut — a context picker will open to attach the text to. Works globally, even when the app is minimized.
                 </div>
               </div>
             </div>
@@ -220,9 +220,9 @@ export default function SettingsPage() {
                 <kbd className="hotkey-kbd">↵</kbd>
               </div>
               <div className="hotkey-desc">
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Отправить сообщение в чате</div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Send message in chat</div>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                  В окне чата контекста — отправляет сообщение без перехода на новую строку.
+                  In the context chat window — sends the message without inserting a new line.
                 </div>
               </div>
             </div>
@@ -570,6 +570,10 @@ export default function SettingsPage() {
 
         <section className="settings-card">
           <WorkflowStatusManager />
+        </section>
+
+        <section className="settings-card">
+          <LogsPreview />
         </section>
       </div>
     </div>
