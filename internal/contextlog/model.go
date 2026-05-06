@@ -17,6 +17,14 @@ type ContextLog struct {
 	Files            []AttachedFile `json:"files,omitempty"`
 }
 
+// LogEntry is a ContextLog enriched with its context's key and organization name.
+// Returned by ListAll for cross-context log views.
+type LogEntry struct {
+	ContextLog
+	ContextKey string `json:"contextKey"`
+	OrgName    string `json:"orgName,omitempty"`
+}
+
 // AttachedFile is an uploaded file referenced by a log entry.
 type AttachedFile struct {
 	FileID        string `json:"fileId"`
