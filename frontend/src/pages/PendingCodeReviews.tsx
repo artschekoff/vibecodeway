@@ -11,9 +11,11 @@ import {
   DismissReviewRequest,
   PickRepoDirectory,
   SetTrackedRepoPath,
+  CheckoutBranch,
+  ListRepoLocalPaths,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
-import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo } from "../types";
+import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo, VCSRepoPath } from "../types";
 import Spinner from "../components/Spinner";
 
 function repoUrl(repo: VCSRepo): string {
@@ -22,7 +24,17 @@ function repoUrl(repo: VCSRepo): string {
   return "";
 }
 
-function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: (id: string) => void }) {
+function ReviewCard({
+  review,
+  onDismiss,
+  onCheckout,
+  checkoutLoading,
+}: {
+  review: ReviewRequest;
+  onDismiss?: (id: string) => void;
+  onCheckout?: (branch: string, repoId: string) => void;
+  checkoutLoading?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const isWaiting = !!review.reviewedAt;
 
@@ -56,6 +68,16 @@ function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: 
               Open <ExternalLink size={11} />
             </button>
           )}
+          {review.headBranch && onCheckout && (
+            <button
+              className="vcs-checkout-btn"
+              title={`Checkout ${review.headBranch} in terminal`}
+              disabled={checkoutLoading}
+              onClick={() => onCheckout(review.headBranch!, review.repoId)}
+            >
+              Checkout
+            </button>
+          )}
           {isWaiting && onDismiss && (
             <button className="review-open-btn review-dismiss-btn" onClick={() => onDismiss(review.id)} title="Dismiss">
               <X size={11} />
@@ -85,6 +107,10 @@ export default function PendingCodeReviews() {
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
+  const [checkoutTarget, setCheckoutTarget] = useState<{ branch: string; repoId: string } | null>(null);
+  const [checkoutPaths, setCheckoutPaths] = useState<VCSRepoPath[]>([]);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
 
   const loadData = useCallback(async () => {
     try {
@@ -180,6 +206,43 @@ export default function PendingCodeReviews() {
     } catch (e) { setError(String(e)); }
   };
 
+  const handleCheckout = async (branch: string, repoId: string) => {
+    setCheckoutError("");
+    setCheckoutLoading(true);
+    try {
+      const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
+      if (paths.length === 0) {
+        setCheckoutError("No local path set for this repository. Click the folder icon to set one.");
+        return;
+      }
+      if (paths.length === 1) {
+        await CheckoutBranch(paths[0].path, branch);
+        return;
+      }
+      setCheckoutPaths(paths);
+      setCheckoutTarget({ branch, repoId });
+    } catch (e) {
+      setCheckoutError(String(e));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleCheckoutWithPath = async (localPath: string) => {
+    if (!checkoutTarget) return;
+    setCheckoutError("");
+    setCheckoutLoading(true);
+    try {
+      await CheckoutBranch(localPath, checkoutTarget.branch);
+      setCheckoutTarget(null);
+      setCheckoutPaths([]);
+    } catch (e) {
+      setCheckoutError(String(e));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   if (loading) return <div className="loading"><Spinner /> Loading…</div>;
 
   const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt).length, 0);
@@ -207,6 +270,7 @@ export default function PendingCodeReviews() {
 
       <div className="content">
         {error && <div className="error-banner">{error}</div>}
+        {checkoutError && <div className="error-banner">{checkoutError}</div>}
 
         {/* Tracked Repositories */}
         <div className="tracked-repos-bar">
@@ -323,7 +387,7 @@ export default function PendingCodeReviews() {
                 ) : (
                   <div className="pr-list">
                     {pending.map((review) => (
-                      <ReviewCard key={review.id} review={review} />
+                      <ReviewCard key={review.id} review={review} onCheckout={handleCheckout} checkoutLoading={checkoutLoading} />
                     ))}
                   </div>
                 )}
@@ -336,7 +400,7 @@ export default function PendingCodeReviews() {
                     </div>
                     <div className="pr-list">
                       {waiting.map((review) => (
-                        <ReviewCard key={review.id} review={review} onDismiss={handleDismiss} />
+                        <ReviewCard key={review.id} review={review} onDismiss={handleDismiss} onCheckout={handleCheckout} checkoutLoading={checkoutLoading} />
                       ))}
                     </div>
                   </>
@@ -346,6 +410,43 @@ export default function PendingCodeReviews() {
           })
         )}
       </div>
+
+      {checkoutTarget && checkoutPaths.length > 1 && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Select Local Path</h2>
+            <p className="confirm-msg">
+              Choose which local clone to use for checking out <strong>{checkoutTarget.branch}</strong>:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "12px 0" }}>
+              {checkoutPaths.map((p) => (
+                <button
+                  key={p.id}
+                  className="btn-secondary"
+                  style={{ textAlign: "left", padding: "8px 12px", fontSize: 12 }}
+                  disabled={checkoutLoading}
+                  onClick={() => void handleCheckoutWithPath(p.path)}
+                >
+                  {p.path}
+                </button>
+              ))}
+            </div>
+            {checkoutError && <div className="error-banner">{checkoutError}</div>}
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setCheckoutTarget(null);
+                  setCheckoutPaths([]);
+                  setCheckoutError("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
