@@ -9,6 +9,7 @@ import {
   SetJiraBaseURL,
   AddVCSBranch,
   AddSpecificPR,
+  CreateContextLog,
 } from "../../wailsjs/go/main/App";
 import type { Context } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
@@ -27,6 +28,10 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
   const [loading, setLoading] = useState(false);
   const [attaching, setAttaching] = useState(false);
   const [error, setError] = useState("");
+
+  type Destination = "text" | "log";
+  const [destination, setDestination] = useState<Destination>("text");
+  const [logDraft, setLogDraft] = useState("");
 
   // "+ New Context" inline form state
   const [showNewCtx, setShowNewCtx] = useState(false);
@@ -69,6 +74,8 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     setShowNewCtx(false);
     setNewCtxKey("");
     setNewCtxError("");
+    setDestination("text");
+    setLogDraft("");
     void loadContexts();
     return () => {
       if (focusTimerRef.current) {
@@ -110,12 +117,16 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
           await AddSpecificPR(contextID, kind.platform, kind.ownerRepo, kind.prNumber);
           break;
         default:
-          await QuickAttachText(contextID, text);
+          if (destination === "log") {
+            await CreateContextLog(contextID, logDraft.trim() || text);
+          } else {
+            await QuickAttachText(contextID, text);
+          }
       }
       DismissPicker().catch(() => {});
       onAttach(contextKey, contextID);
     },
-    [kind, text, onAttach],
+    [kind, text, destination, logDraft, onAttach],
   );
 
   const handleAttach = useCallback(async () => {
@@ -202,6 +213,7 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
     kind.type === "jira" ? "Add Issue" :
     kind.type === "vcs_branch" ? (kind.branch ? "Link Branch" : "Link Repo") :
     kind.type === "vcs_pr" ? "Add PR" :
+    destination === "log" ? "Add to Log" :
     "Attach";
 
   return (
@@ -220,6 +232,43 @@ export const QuickAttachOverlay = ({ visible, text, onAttach, onDismiss }: Props
         </h2>
 
         {renderPreview()}
+
+        {kind.type === "text" && (
+          <div className="quick-attach-destination">
+            <label className={`quick-attach-dest-option${destination === "text" ? " quick-attach-dest-option--selected" : ""}`}>
+              <input
+                type="radio"
+                name="destination"
+                value="text"
+                checked={destination === "text"}
+                onChange={() => { setDestination("text"); setLogDraft(""); }}
+              />
+              Add to Notes
+            </label>
+            <label className={`quick-attach-dest-option${destination === "log" ? " quick-attach-dest-option--selected" : ""}`}>
+              <input
+                type="radio"
+                name="destination"
+                value="log"
+                checked={destination === "log"}
+                onChange={() => { setDestination("log"); setLogDraft(text); }}
+              />
+              Add to Log
+            </label>
+          </div>
+        )}
+
+        {kind.type === "text" && destination === "log" && (
+          <div className="quick-attach-log-draft">
+            <textarea
+              className="chat-input"
+              value={logDraft}
+              onChange={(e) => setLogDraft(e.target.value)}
+              rows={5}
+              placeholder="Edit before saving as log entry…"
+            />
+          </div>
+        )}
 
         <div className="quick-attach-filter-row">
           <input
