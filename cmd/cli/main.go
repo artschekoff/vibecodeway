@@ -79,6 +79,7 @@ func main() {
 
 	// Context logs & consolidated log
 	root.AddCommand(newLogListCmd())
+	root.AddCommand(newLogListAllCmd())
 	root.AddCommand(newLogCreateCmd())
 	root.AddCommand(newLogUpdateCmd())
 	root.AddCommand(newLogDeleteCmd())

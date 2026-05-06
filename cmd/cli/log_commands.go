@@ -293,3 +293,29 @@ func newConsolidatedAnalyzeCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("context-id")
 	return cmd
 }
+
+func newLogListAllCmd() *cobra.Command {
+	var trigger string
+	var limit int
+	cmd := &cobra.Command{
+		Use:   "log-list-all",
+		Short: "List log entries across all contexts",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx := context.Background()
+			env, err := openServiceEnv()
+			if err != nil {
+				return err
+			}
+			defer env.store.Close() //nolint:errcheck
+
+			entries, err := env.contextLog.ListAllLogs(ctx, trigger, limit)
+			if err != nil {
+				return fmt.Errorf("listing all logs: %w", err)
+			}
+			return writeJSON(entries)
+		},
+	}
+	cmd.Flags().StringVar(&trigger, "trigger", "", "Filter by trigger: refresh|reload|manual|init|agent (empty = all)")
+	cmd.Flags().IntVar(&limit, "limit", 100, "Maximum number of entries to return")
+	return cmd
+}
