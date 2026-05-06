@@ -333,6 +333,17 @@ export interface VCSRepoPath {
   createdAt: string;
 }
 
+export interface VCSWorkspace {
+  id: string;
+  repoPathId: string;
+  repoId: string;
+  branch: string;
+  worktreePath: string;
+  status: "active" | "should_delete";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface VCSBranch {
   id: string;
   contextId: string;

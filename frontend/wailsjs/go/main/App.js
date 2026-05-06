@@ -62,6 +62,10 @@ export function CheckoutBranch(arg1, arg2) {
   return window['go']['main']['App']['CheckoutBranch'](arg1, arg2);
 }
 
+export function CheckoutInWorkspace(arg1, arg2) {
+  return window['go']['main']['App']['CheckoutInWorkspace'](arg1, arg2);
+}
+
 export function CommitPendingUploads(arg1, arg2) {
   return window['go']['main']['App']['CommitPendingUploads'](arg1, arg2);
 }
@@ -114,6 +118,10 @@ export function DeleteUploadedFile(arg1) {
   return window['go']['main']['App']['DeleteUploadedFile'](arg1);
 }
 
+export function DeleteWorkspace(arg1) {
+  return window['go']['main']['App']['DeleteWorkspace'](arg1);
+}
+
 export function DiscardPendingUpload(arg1) {
   return window['go']['main']['App']['DiscardPendingUpload'](arg1);
 }
@@ -128,6 +136,10 @@ export function DismissPicker() {
 
 export function DismissReviewRequest(arg1) {
   return window['go']['main']['App']['DismissReviewRequest'](arg1);
+}
+
+export function FindWorkspaceForBranch(arg1, arg2) {
+  return window['go']['main']['App']['FindWorkspaceForBranch'](arg1, arg2);
 }
 
 export function GetAISettings() {
@@ -198,6 +210,10 @@ export function ListAllContexts() {
   return window['go']['main']['App']['ListAllContexts']();
 }
 
+export function ListAllWorkspaces() {
+  return window['go']['main']['App']['ListAllWorkspaces']();
+}
+
 export function ListContextChat(arg1) {
   return window['go']['main']['App']['ListContextChat'](arg1);
 }
@@ -262,6 +278,10 @@ export function ListVCSRepos(arg1) {
   return window['go']['main']['App']['ListVCSRepos'](arg1);
 }
 
+export function ListWorkspaces(arg1) {
+  return window['go']['main']['App']['ListWorkspaces'](arg1);
+}
+
 export function LoadSlackContext(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['LoadSlackContext'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
@@ -294,8 +314,16 @@ export function MarkSlackThreadViewed(arg1) {
   return window['go']['main']['App']['MarkSlackThreadViewed'](arg1);
 }
 
+export function MarkWorkspaceShouldDelete(arg1) {
+  return window['go']['main']['App']['MarkWorkspaceShouldDelete'](arg1);
+}
+
 export function OpenAccessibilityPreferences() {
   return window['go']['main']['App']['OpenAccessibilityPreferences']();
+}
+
+export function OpenWorkspaceTerminal(arg1) {
+  return window['go']['main']['App']['OpenWorkspaceTerminal'](arg1);
 }
 
 export function PickAndExtractFiles(arg1) {
@@ -328,6 +356,10 @@ export function RefreshContext(arg1) {
 
 export function RefreshPendingReviews() {
   return window['go']['main']['App']['RefreshPendingReviews']();
+}
+
+export function RefreshWorkspacesForRepo(arg1) {
+  return window['go']['main']['App']['RefreshWorkspacesForRepo'](arg1);
 }
 
 export function ReloadAllContexts() {

@@ -40,6 +40,8 @@ export function CheckAccessibility():Promise<boolean>;
 
 export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
 
+export function CheckoutInWorkspace(arg1:string,arg2:string):Promise<void>;
+
 export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Array<store.ContextUploadedFile>>;
 
 export function CreateContext(arg1:string):Promise<store.Context>;
@@ -66,6 +68,8 @@ export function DeleteSlackThread(arg1:string):Promise<void>;
 
 export function DeleteUploadedFile(arg1:string):Promise<void>;
 
+export function DeleteWorkspace(arg1:string):Promise<void>;
+
 export function DiscardPendingUpload(arg1:string):Promise<void>;
 
 export function DismissOpenQuestion(arg1:string):Promise<void>;
@@ -73,6 +77,8 @@ export function DismissOpenQuestion(arg1:string):Promise<void>;
 export function DismissPicker():Promise<void>;
 
 export function DismissReviewRequest(arg1:string):Promise<void>;
+
+export function FindWorkspaceForBranch(arg1:string,arg2:string):Promise<vcsstore.VCSWorkspace>;
 
 export function GetAISettings():Promise<main.AISettingsResponse>;
 
@@ -108,6 +114,8 @@ export function InitializeConsolidatedLog(arg1:string):Promise<contextlog.Consol
 
 export function ListAllContexts():Promise<Array<store.Context>>;
 
+export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;
+
 export function ListContextChat(arg1:string):Promise<Array<contextlog.ChatMessage>>;
 
 export function ListContextLogs(arg1:string):Promise<Array<contextlog.ContextLog>>;
@@ -140,6 +148,8 @@ export function ListVCSBranches(arg1:string):Promise<Array<vcsstore.ContextVCSBr
 
 export function ListVCSRepos(arg1:string):Promise<Array<vcsstore.VCSRepo>>;
 
+export function ListWorkspaces(arg1:string):Promise<Array<vcsstore.VCSWorkspace>>;
+
 export function LoadSlackContext(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string):Promise<void>;
 
 export function MarkCommentViewed(arg1:string):Promise<void>;
@@ -156,7 +166,11 @@ export function MarkSlackDMConfigViewed(arg1:string):Promise<void>;
 
 export function MarkSlackThreadViewed(arg1:string):Promise<void>;
 
+export function MarkWorkspaceShouldDelete(arg1:string):Promise<void>;
+
 export function OpenAccessibilityPreferences():Promise<void>;
+
+export function OpenWorkspaceTerminal(arg1:string):Promise<void>;
 
 export function PickAndExtractFiles(arg1:string):Promise<main.UploadBatchResult>;
 
@@ -173,6 +187,8 @@ export function RefreshAllContexts():Promise<Array<service.ReloadAllResult>>;
 export function RefreshContext(arg1:string):Promise<service.RefreshResult>;
 
 export function RefreshPendingReviews():Promise<void>;
+
+export function RefreshWorkspacesForRepo(arg1:string):Promise<void>;
 
 export function ReloadAllContexts():Promise<Array<service.ReloadAllResult>>;
 
