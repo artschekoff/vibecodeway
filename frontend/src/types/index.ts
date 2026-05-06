@@ -164,6 +164,7 @@ export interface SlackThread {
   workspace: string;
   channelId: string;
   threadTs: string;
+  parentThreadTs?: string;
   channelName: string;
   permalink: string;
   searchQuery: string;
@@ -400,6 +401,7 @@ export interface ReviewRequest {
   prAuthor: string;
   prUrl: string;
   reviewStatus: string;
+  headBranch?: string;
   requestedAt: string;
   fetchedAt: string;
   reviewedAt?: string;
