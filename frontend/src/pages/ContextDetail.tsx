@@ -32,6 +32,12 @@ import {
   RemoveVCSBranch,
   CheckoutBranch,
   ListRepoLocalPaths,
+  FindWorkspaceForBranch,
+  CheckoutInWorkspace,
+  OpenWorkspaceTerminal,
+  ListAllWorkspaces,
+  DeleteWorkspace,
+  MarkWorkspaceShouldDelete,
   // @ts-ignore
   AddContextRelation,
   // @ts-ignore
@@ -51,7 +57,7 @@ import {
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal, VCSRepoPath } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal, VCSRepoPath, VCSWorkspace } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -272,6 +278,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [checkoutPaths, setCheckoutPaths] = useState<VCSRepoPath[]>([]);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
+  const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
 
   const loadBreakdown = useCallback(async () => {
     if (!id) return;
@@ -307,6 +314,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       const d = await GetContextDetail(id);
       setDetail(d);
       void loadBreakdown();
+      const ws = (await ListAllWorkspaces() as VCSWorkspace[]) ?? [];
+      setWorkspaces(ws);
     } catch {
       // Wails bridge not available or load failed — fail silently
     } finally {
@@ -698,13 +707,19 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     setCheckoutError("");
     setCheckoutLoading(true);
     try {
+      const existing = await FindWorkspaceForBranch(repoId, branch) as VCSWorkspace | null;
+      if (existing) {
+        await OpenWorkspaceTerminal(existing.id);
+        return;
+      }
       const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
       if (paths.length === 0) {
         setCheckoutError("No local path set for this repository. Add one in the Repositories tab.");
         return;
       }
       if (paths.length === 1) {
-        await CheckoutBranch(paths[0].path, branch);
+        await CheckoutInWorkspace(paths[0].id, branch);
+        setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
         return;
       }
       setCheckoutPaths(paths);
@@ -716,18 +731,37 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }
   };
 
-  const handleCheckoutWithPath = async (localPath: string) => {
+  const handleCheckoutWithPath = async (pathId: string) => {
     if (!checkoutTarget) return;
     setCheckoutError("");
     setCheckoutLoading(true);
     try {
-      await CheckoutBranch(localPath, checkoutTarget.branch);
+      await CheckoutInWorkspace(pathId, checkoutTarget.branch);
+      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
       setCheckoutTarget(null);
       setCheckoutPaths([]);
     } catch (e) {
       setCheckoutError(String(e));
     } finally {
       setCheckoutLoading(false);
+    }
+  };
+
+  const handleDeleteWorkspace = async (workspaceId: string) => {
+    try {
+      await DeleteWorkspace(workspaceId);
+      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
+    } catch (e) {
+      showToast(String(e), "error");
+    }
+  };
+
+  const handleMarkWorkspaceDone = async (workspaceId: string) => {
+    try {
+      await MarkWorkspaceShouldDelete(workspaceId);
+      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
+    } catch (e) {
+      showToast(String(e), "error");
     }
   };
 
@@ -1041,17 +1075,49 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                               <GitBranch size={11} /> {b.branch}
                             </button>
                           )}
-                          {b.branch && (
-                            <button
-                              type="button"
-                              className="vcs-checkout-btn"
-                              title={`Checkout ${b.branch} in terminal`}
-                              disabled={checkoutLoading}
-                              onClick={() => void handleCheckout(b.branch, b.repoId)}
-                            >
-                              Checkout
-                            </button>
-                          )}
+                          {b.branch && (() => {
+                            const workspace = workspaces.find(
+                              (w) => w.branch === b.branch && w.repoId === b.repoId
+                            );
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  className="vcs-checkout-btn"
+                                  title={workspace ? `Open workspace for ${b.branch}` : `Checkout ${b.branch} in workspace`}
+                                  disabled={checkoutLoading}
+                                  onClick={() => void handleCheckout(b.branch, b.repoId)}
+                                >
+                                  {workspace ? "Open workspace" : "Checkout"}
+                                </button>
+                                {workspace && (
+                                  <>
+                                    <span className={`workspace-status-badge workspace-status-badge--${workspace.status}`}>
+                                      {workspace.status === "should_delete" ? "done" : "active"}
+                                    </span>
+                                    {workspace.status === "active" && (
+                                      <button
+                                        type="button"
+                                        className="vcs-checkout-btn"
+                                        title="Mark workspace as done (ready to delete)"
+                                        onClick={() => void handleMarkWorkspaceDone(workspace.id)}
+                                      >
+                                        Mark done
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="vcs-checkout-btn vcs-checkout-btn--danger"
+                                      title="Delete workspace"
+                                      onClick={() => void handleDeleteWorkspace(workspace.id)}
+                                    >
+                                      Delete workspace
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
                           {branchPRs.length > 0 && (
                             <span className="detail-section-count" style={{ marginLeft: "auto" }}>
                               {branchPRs.length}
@@ -1195,7 +1261,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                   className="btn-secondary"
                   style={{ textAlign: "left", padding: "8px 12px", fontSize: 12 }}
                   disabled={checkoutLoading}
-                  onClick={() => void handleCheckoutWithPath(p.path)}
+                  onClick={() => void handleCheckoutWithPath(p.id)}
                 >
                   {p.path}
                 </button>
