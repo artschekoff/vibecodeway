@@ -86,6 +86,10 @@ export function CreateOrganization(arg1) {
   return window['go']['main']['App']['CreateOrganization'](arg1);
 }
 
+export function CreateWorkflowStatus(arg1, arg2) {
+  return window['go']['main']['App']['CreateWorkflowStatus'](arg1, arg2);
+}
+
 export function DeleteContext(arg1) {
   return window['go']['main']['App']['DeleteContext'](arg1);
 }
@@ -120,6 +124,10 @@ export function DeleteSlackThread(arg1) {
 
 export function DeleteUploadedFile(arg1) {
   return window['go']['main']['App']['DeleteUploadedFile'](arg1);
+}
+
+export function DeleteWorkflowStatus(arg1) {
+  return window['go']['main']['App']['DeleteWorkflowStatus'](arg1);
 }
 
 export function DeleteWorkspace(arg1) {
@@ -284,6 +292,10 @@ export function ListVCSBranches(arg1) {
 
 export function ListVCSRepos(arg1) {
   return window['go']['main']['App']['ListVCSRepos'](arg1);
+}
+
+export function ListWorkflowStatuses() {
+  return window['go']['main']['App']['ListWorkflowStatuses']();
 }
 
 export function ListWorkspaces(arg1) {
@@ -520,6 +532,10 @@ export function UpdateVCSBranchLabel(arg1, arg2) {
 
 export function UpdateVCSRepoMeta(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateVCSRepoMeta'](arg1, arg2, arg3);
+}
+
+export function UpdateWorkflowStatus(arg1, arg2) {
+  return window['go']['main']['App']['UpdateWorkflowStatus'](arg1, arg2);
 }
 
 export function UpsertContextText(arg1, arg2, arg3, arg4) {

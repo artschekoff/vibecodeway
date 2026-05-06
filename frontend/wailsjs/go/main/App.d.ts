@@ -52,6 +52,8 @@ export function CreateContextLog(arg1:string,arg2:string):Promise<contextlog.Con
 
 export function CreateOrganization(arg1:string):Promise<store.Organization>;
 
+export function CreateWorkflowStatus(arg1:string,arg2:string):Promise<store.WorkflowStatus>;
+
 export function DeleteContext(arg1:string):Promise<void>;
 
 export function DeleteContextLog(arg1:string):Promise<void>;
@@ -69,6 +71,8 @@ export function DeleteSlackDMConfig(arg1:string):Promise<void>;
 export function DeleteSlackThread(arg1:string):Promise<void>;
 
 export function DeleteUploadedFile(arg1:string):Promise<void>;
+
+export function DeleteWorkflowStatus(arg1:string):Promise<void>;
 
 export function DeleteWorkspace(arg1:string):Promise<void>;
 
@@ -151,6 +155,8 @@ export function ListUploadedFiles(arg1:string):Promise<Array<store.ContextUpload
 export function ListVCSBranches(arg1:string):Promise<Array<vcsstore.ContextVCSBranch>>;
 
 export function ListVCSRepos(arg1:string):Promise<Array<vcsstore.VCSRepo>>;
+
+export function ListWorkflowStatuses():Promise<Array<store.WorkflowStatus>>;
 
 export function ListWorkspaces(arg1:string):Promise<Array<vcsstore.VCSWorkspace>>;
 
@@ -269,6 +275,8 @@ export function UpdateTrackedRepoMeta(arg1:string,arg2:string,arg3:string):Promi
 export function UpdateVCSBranchLabel(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateVCSRepoMeta(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function UpdateWorkflowStatus(arg1:string,arg2:string):Promise<store.WorkflowStatus>;
 
 export function UpsertContextText(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.ContextText>;
 

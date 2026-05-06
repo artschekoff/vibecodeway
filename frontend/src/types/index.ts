@@ -465,6 +465,14 @@ export interface RelationsPayload {
   removedRelationIds: string[];
 }
 
+export interface WorkflowStatus {
+  id: string;
+  slug: string;
+  label: string;
+  isSystem: boolean;
+  createdAt: string;
+}
+
 export interface WorkflowSummary {
   aiProposedStatus: string;
   aiProposedComment?: string;
