@@ -4,6 +4,7 @@ import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLog
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
 import { useTabContext } from "../contexts/TabContext";
+import WorkflowStatusManager from "../components/WorkflowStatusManager";
 
 const OPENAI_MODELS = [
   { id: "gpt-4.1",       label: "GPT-4.1 (recommended)" },
@@ -565,6 +566,10 @@ export default function SettingsPage() {
               You must unlock the app with that passphrase before saving a key for the first time.
             </div>
           </div>
+        </section>
+
+        <section className="settings-card">
+          <WorkflowStatusManager />
         </section>
       </div>
     </div>
