@@ -263,9 +263,19 @@ func (s *Service) DeleteLog(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListLogs returns all logs for contextID (newest first).
+// ListLogs returns all logs for contextID (newest first), with attached files populated.
 func (s *Service) ListLogs(ctx context.Context, contextID string) ([]ContextLog, error) {
 	return s.repo.ListLogs(ctx, contextID)
+}
+
+// AttachFile links an uploaded file to a log entry.
+func (s *Service) AttachFile(ctx context.Context, logID, fileID string) error {
+	return s.repo.AttachFile(ctx, logID, fileID)
+}
+
+// DetachFile removes the link between a log entry and an uploaded file.
+func (s *Service) DetachFile(ctx context.Context, logID, fileID string) error {
+	return s.repo.DetachFile(ctx, logID, fileID)
 }
 
 // --- Chat ---

@@ -90,7 +90,58 @@ func (r *Repo) DeleteLog(ctx context.Context, id string) error {
 	return nil
 }
 
+// AttachFile links an uploaded file to a log entry.
+// Returns nil if the link already exists (idempotent).
+func (r *Repo) AttachFile(ctx context.Context, logID, fileID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO context_log_files (id, log_id, file_id, created_at)
+		 VALUES (?, ?, ?, ?)`,
+		uuid.NewString(), logID, fileID, now,
+	)
+	if err != nil {
+		return fmt.Errorf("attaching file to log: %w", err)
+	}
+	return nil
+}
+
+// DetachFile removes the link between a log entry and an uploaded file.
+func (r *Repo) DetachFile(ctx context.Context, logID, fileID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"DELETE FROM context_log_files WHERE log_id = ? AND file_id = ?",
+		logID, fileID,
+	)
+	return err
+}
+
+// listLogFiles returns the uploaded files attached to a log entry.
+func (r *Repo) listLogFiles(ctx context.Context, logID string) ([]AttachedFile, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT uf.id, uf.original_name, uf.file_type, uf.extracted_text, clf.created_at
+		 FROM context_log_files clf
+		 JOIN context_uploaded_files uf ON uf.id = clf.file_id
+		 WHERE clf.log_id = ?
+		 ORDER BY clf.created_at ASC`,
+		logID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing log files: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var files []AttachedFile
+	for rows.Next() {
+		var f AttachedFile
+		if err := rows.Scan(&f.FileID, &f.OriginalName, &f.FileType, &f.ExtractedText, &f.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scanning log file: %w", err)
+		}
+		files = append(files, f)
+	}
+	return files, rows.Err()
+}
+
 // ListLogs returns all logs for contextID sorted from newest to oldest.
+// Each log's Files field is populated with its attached uploaded files.
 func (r *Repo) ListLogs(ctx context.Context, contextID string) ([]ContextLog, error) {
 	rows, err := r.db.QueryContext(ctx,
 		selectLogColumns+" FROM context_logs WHERE context_id = ? ORDER BY created_at DESC",
@@ -109,7 +160,18 @@ func (r *Repo) ListLogs(ctx context.Context, contextID string) ([]ContextLog, er
 		}
 		out = append(out, *log)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range out {
+		files, err := r.listLogFiles(ctx, out[i].ID)
+		if err != nil {
+			return nil, fmt.Errorf("loading files for log %s: %w", out[i].ID, err)
+		}
+		out[i].Files = files
+	}
+	return out, nil
 }
 
 // GetConsolidated returns the consolidated log for contextID or nil when absent.
