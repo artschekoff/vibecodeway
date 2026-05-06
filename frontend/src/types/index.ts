@@ -244,6 +244,14 @@ export interface UploadPreviewBatchResult {
   errors: string[];
 }
 
+export interface AttachedFile {
+  fileId: string;
+  originalName: string;
+  fileType: string;
+  extractedText: string;
+  createdAt: string;
+}
+
 export interface ContextLog {
   id: string;
   contextId: string;
@@ -257,6 +265,7 @@ export interface ContextLog {
   isManual: boolean;
   editedAt?: string;
   createdAt: string;
+  files?: AttachedFile[];
 }
 
 export interface ConsolidatedLog {

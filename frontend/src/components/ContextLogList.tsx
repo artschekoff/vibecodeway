@@ -6,8 +6,11 @@ import {
   UpdateContextLog,
   DeleteContextLog,
   AnalyzeContextChanges,
+  AttachLogFile,
+  DetachLogFile,
+  ListUploadedFiles,
 } from "../../wailsjs/go/main/App";
-import type { ContextLog } from "../types";
+import type { ContextLog, UploadedFile } from "../types";
 
 interface Props {
   contextId: string;
@@ -26,6 +29,9 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
   const [adding, setAdding] = useState(false);
   const [addDraft, setAddDraft] = useState("");
 
+  const [contextFiles, setContextFiles] = useState<UploadedFile[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+
   const reload = async () => {
     setLoading(true);
     try {
@@ -43,6 +49,15 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextId]);
 
+  const loadContextFiles = async () => {
+    try {
+      const files = await ListUploadedFiles(contextId);
+      setContextFiles(files ?? []);
+    } catch {
+      // best-effort
+    }
+  };
+
   const handleAnalyze = async () => {
     setAnalyzing(true);
     setError("");
@@ -57,22 +72,46 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
     }
   };
 
+  const handleStartAdd = async () => {
+    setAdding(true);
+    setSelectedFileIds(new Set());
+    await loadContextFiles();
+  };
+
+  const handleCancelAdd = () => {
+    setAdding(false);
+    setAddDraft("");
+    setSelectedFileIds(new Set());
+  };
+
   const handleStartEdit = (log: ContextLog) => {
     setEditingId(log.id);
     setEditDraft(log.summaryMd);
+    setSelectedFileIds(new Set((log.files ?? []).map((f) => f.fileId)));
+    void loadContextFiles();
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
     setEditDraft("");
+    setSelectedFileIds(new Set());
   };
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
     try {
       await UpdateContextLog(editingId, editDraft);
+      const log = logs.find((l) => l.id === editingId);
+      const prevIds = new Set((log?.files ?? []).map((f) => f.fileId));
+      for (const id of selectedFileIds) {
+        if (!prevIds.has(id)) await AttachLogFile(editingId, id);
+      }
+      for (const id of prevIds) {
+        if (!selectedFileIds.has(id)) await DetachLogFile(editingId, id);
+      }
       setEditingId(null);
       setEditDraft("");
+      setSelectedFileIds(new Set());
       await reload();
       onChanged?.();
     } catch (e) {
@@ -95,14 +134,27 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
     const text = addDraft.trim();
     if (!text) return;
     try {
-      await CreateContextLog(contextId, text);
+      const created = await CreateContextLog(contextId, text);
+      for (const fileId of selectedFileIds) {
+        await AttachLogFile(created.id, fileId);
+      }
       setAdding(false);
       setAddDraft("");
+      setSelectedFileIds(new Set());
       await reload();
       onChanged?.();
     } catch (e) {
       setError(String(e));
     }
+  };
+
+  const toggleFile = (id: string, checked: boolean) => {
+    setSelectedFileIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   };
 
   return (
@@ -118,7 +170,7 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
         >
           {analyzing ? "Analyzing…" : "Analyze"}
         </button>
-        <button className="btn-ghost" onClick={() => setAdding((v) => !v)}>
+        <button className="btn-ghost" onClick={() => { adding ? handleCancelAdd() : void handleStartAdd(); }}>
           {adding ? "Cancel" : "+ Manual entry"}
         </button>
       </div>
@@ -133,11 +185,26 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
             rows={6}
             autoFocus
           />
+          {contextFiles.length > 0 && (
+            <div className="log-file-picker">
+              <span className="log-file-picker-label">Attach files:</span>
+              {contextFiles.map((f) => (
+                <label key={f.id} className="log-file-picker-item">
+                  <input
+                    type="checkbox"
+                    checked={selectedFileIds.has(f.id)}
+                    onChange={(e) => toggleFile(f.id, e.target.checked)}
+                  />
+                  <span>{f.originalName}</span>
+                </label>
+              ))}
+            </div>
+          )}
           <div className="log-entry-actions">
             <button className="btn-primary" onClick={() => void handleAdd()} disabled={!addDraft.trim()}>
               Save
             </button>
-            <button className="btn-ghost" onClick={() => { setAdding(false); setAddDraft(""); }}>
+            <button className="btn-ghost" onClick={handleCancelAdd}>
               Cancel
             </button>
           </div>
@@ -188,6 +255,21 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
                   rows={8}
                   autoFocus
                 />
+                {contextFiles.length > 0 && (
+                  <div className="log-file-picker">
+                    <span className="log-file-picker-label">Attach files:</span>
+                    {contextFiles.map((f) => (
+                      <label key={f.id} className="log-file-picker-item">
+                        <input
+                          type="checkbox"
+                          checked={selectedFileIds.has(f.id)}
+                          onChange={(e) => toggleFile(f.id, e.target.checked)}
+                        />
+                        <span>{f.originalName}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <div className="log-entry-actions">
                   <button className="btn-primary" onClick={() => void handleSaveEdit()}>
                     Save
@@ -198,9 +280,20 @@ export default function ContextLogList({ contextId, onChanged }: Props) {
                 </div>
               </>
             ) : (
-              <div className="log-entry-body">
-                <ReactMarkdown>{log.summaryMd || "_(empty)_"}</ReactMarkdown>
-              </div>
+              <>
+                <div className="log-entry-body">
+                  <ReactMarkdown>{log.summaryMd || "_(empty)_"}</ReactMarkdown>
+                </div>
+                {log.files && log.files.length > 0 && (
+                  <div className="log-file-chips">
+                    {log.files.map((f) => (
+                      <span key={f.fileId} className="log-file-chip">
+                        📎 {f.originalName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         );

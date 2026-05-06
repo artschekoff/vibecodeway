@@ -30,6 +30,8 @@ export function AnswerOpenQuestion(arg1:string,arg2:string):Promise<void>;
 
 export function ApplyChatSuggestion(arg1:string):Promise<contextlog.ConsolidatedLog>;
 
+export function AttachLogFile(arg1:string,arg2:string):Promise<void>;
+
 export function AuthStatus():Promise<string>;
 
 export function CancelRefresh():Promise<void>;
@@ -69,6 +71,8 @@ export function DeleteSlackThread(arg1:string):Promise<void>;
 export function DeleteUploadedFile(arg1:string):Promise<void>;
 
 export function DeleteWorkspace(arg1:string):Promise<void>;
+
+export function DetachLogFile(arg1:string,arg2:string):Promise<void>;
 
 export function DiscardPendingUpload(arg1:string):Promise<void>;
 

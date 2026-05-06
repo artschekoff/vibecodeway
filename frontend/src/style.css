@@ -2989,6 +2989,59 @@ select {
   gap: 8px;
 }
 
+.log-file-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.log-file-picker-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 4px;
+}
+
+.log-file-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  transition: border-color 0.15s;
+}
+
+.log-file-picker-item:hover {
+  border-color: var(--accent);
+}
+
+.log-file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.log-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-2, rgba(255,255,255,0.04));
+}
+
 /* === Consolidated === */
 
 .consolidated-panel {
@@ -3258,6 +3311,44 @@ select {
   color: var(--accent);
 }
 
+.quick-attach-destination {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.quick-attach-dest-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.quick-attach-dest-option--selected {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.quick-attach-dest-option input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+.quick-attach-log-draft {
+  padding: 4px 0 8px;
+}
+
+.quick-attach-log-draft .chat-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+  resize: vertical;
+}
 
 /* ── VCS / PR styles ─────────────────────────────────────── */
 

@@ -42,6 +42,10 @@ export function ApplyChatSuggestion(arg1) {
   return window['go']['main']['App']['ApplyChatSuggestion'](arg1);
 }
 
+export function AttachLogFile(arg1, arg2) {
+  return window['go']['main']['App']['AttachLogFile'](arg1, arg2);
+}
+
 export function AuthStatus() {
   return window['go']['main']['App']['AuthStatus']();
 }
@@ -120,6 +124,10 @@ export function DeleteUploadedFile(arg1) {
 
 export function DeleteWorkspace(arg1) {
   return window['go']['main']['App']['DeleteWorkspace'](arg1);
+}
+
+export function DetachLogFile(arg1, arg2) {
+  return window['go']['main']['App']['DetachLogFile'](arg1, arg2);
 }
 
 export function DiscardPendingUpload(arg1) {
