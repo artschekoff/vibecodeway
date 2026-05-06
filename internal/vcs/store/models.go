@@ -99,6 +99,7 @@ type ReviewRequest struct {
 	PRAuthor     string  `json:"prAuthor"`
 	PRURL        string  `json:"prUrl"`
 	ReviewStatus string  `json:"reviewStatus"`
+	HeadBranch   string  `json:"headBranch"`
 	RequestedAt  string  `json:"requestedAt"`
 	FetchedAt    string  `json:"fetchedAt"`
 	// ReviewedAt is set when the item disappears from GitHub's review-requested list
