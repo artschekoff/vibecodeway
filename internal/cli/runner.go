@@ -635,6 +635,20 @@ func (r *Runner) ListContextLogs(ctx context.Context, contextID string) ([]conte
 	return unmarshalSlice[contextlog.ContextLog](out, "log-list")
 }
 
+// ListAllLogs returns log entries across all contexts, optionally filtered by trigger.
+// Pass empty string for trigger to return all triggers.
+func (r *Runner) ListAllLogs(ctx context.Context, trigger string, limit int) ([]contextlog.LogEntry, error) {
+	args := []string{"log-list-all", "--limit", fmt.Sprintf("%d", limit)}
+	if trigger != "" {
+		args = append(args, "--trigger", trigger)
+	}
+	out, err := r.run(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalSlice[contextlog.LogEntry](out, "log-list-all")
+}
+
 // CreateContextLog creates a manual log entry.
 func (r *Runner) CreateContextLog(ctx context.Context, contextID, summaryMd string) (*contextlog.ContextLog, error) {
 	out, err := r.run(ctx, []string{"log-create",
