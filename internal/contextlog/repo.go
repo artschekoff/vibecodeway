@@ -387,6 +387,52 @@ func scanChatRows(rows *sql.Rows) ([]ChatMessage, error) {
 	return out, rows.Err()
 }
 
+// ListAll returns log entries across all contexts, optionally filtered by trigger.
+// Pass an empty string for trigger to return all triggers. Results are newest-first.
+// limit<=0 defaults to 100.
+func (r *Repo) ListAll(ctx context.Context, trigger string, limit int) ([]LogEntry, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			cl.id, cl.context_id, cl.trigger, cl.source, cl.model,
+			cl.prompt_tokens, cl.completion_tokens, cl.diff_json,
+			cl.summary_md, cl.is_manual, COALESCE(cl.edited_at, ''), cl.created_at,
+			c.key AS context_key,
+			COALESCE(o.name, '') AS org_name
+		FROM context_logs cl
+		JOIN contexts c ON c.id = cl.context_id
+		LEFT JOIN organizations o ON o.id = c.org_id
+		WHERE (? = '' OR cl.trigger = ?)
+		ORDER BY cl.created_at DESC, cl.rowid DESC
+		LIMIT ?`,
+		trigger, trigger, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing all logs: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []LogEntry
+	for rows.Next() {
+		var e LogEntry
+		var isManual int
+		err := rows.Scan(
+			&e.ID, &e.ContextID, &e.Trigger, &e.Source, &e.Model,
+			&e.PromptTokens, &e.CompletionTokens, &e.DiffJSON,
+			&e.SummaryMd, &isManual, &e.EditedAt, &e.CreatedAt,
+			&e.ContextKey, &e.OrgName,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scanning log entry: %w", err)
+		}
+		e.IsManual = isManual != 0
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1
