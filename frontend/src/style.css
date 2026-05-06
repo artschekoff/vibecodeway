@@ -1981,6 +1981,24 @@ select {
   animation: expand-fade-in 0.2s ease;
 }
 
+.slack-thread-replies {
+  padding-left: 28px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.slack-thread-row--reply {
+  background: var(--surface2);
+}
+
+.slack-thread-row--reply .slack-thread-row-header {
+  padding-left: 12px;
+}
+
+.slack-thread-row--reply .slack-tree-connector {
+  color: var(--text-muted);
+}
+
 /* Action buttons container (mark viewed + delete), right-aligned */
 .card-actions {
   display: flex;

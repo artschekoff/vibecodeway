@@ -838,7 +838,7 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 		if err != nil {
 			return fmt.Errorf("upserting channel %q: %w", ch.ChannelName, err)
 		}
-		// Store each message as its own slack_thread record so users can manage
+		// Store each message (and its replies) as its own slack_thread record so users can manage
 		// individual messages (delete, enable/disable) without a separate Refresh.
 		// Iterate in reverse so oldest messages get the earliest created_at timestamps.
 		for i := len(ch.Messages) - 1; i >= 0; i-- {
@@ -846,17 +846,33 @@ func (svc *ContextService) AddSlackChannels(ctx context.Context, contextID, work
 			if msg.RawTS == "" {
 				continue
 			}
-			content := formatSingleMessage(msg)
 			if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 				SlackChannelID: slackCh.ID,
 				Workspace:      workspace,
 				ChannelID:      ch.ChannelID,
 				ThreadTS:       msg.RawTS,
 				ChannelName:    ch.ChannelName,
-				Content:        content,
+				Content:        formatSingleMessage(msg),
 			}); err != nil {
 				svc.logger.Warn("add channels: upsert message thread failed",
 					zap.String("channel", ch.ChannelName), zap.String("ts", msg.RawTS), zap.Error(err))
+			}
+			for _, reply := range msg.Replies {
+				if reply.RawTS == "" {
+					continue
+				}
+				if _, err := svc.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+					SlackChannelID: slackCh.ID,
+					Workspace:      workspace,
+					ChannelID:      ch.ChannelID,
+					ThreadTS:       reply.RawTS,
+					ParentThreadTS: msg.RawTS,
+					ChannelName:    ch.ChannelName,
+					Content:        formatSingleMessage(reply),
+				}); err != nil {
+					svc.logger.Warn("add channels: upsert reply thread failed",
+						zap.String("channel", ch.ChannelName), zap.String("ts", reply.RawTS), zap.Error(err))
+				}
 			}
 		}
 	}

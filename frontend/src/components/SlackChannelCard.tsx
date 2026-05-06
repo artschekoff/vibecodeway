@@ -43,6 +43,8 @@ interface SlackThread {
   workspace: string;
   channelId: string;
   channelName: string;
+  threadTs: string;
+  parentThreadTs?: string;
   permalink: string;
   searchQuery: string;
   content: string;
@@ -61,11 +63,19 @@ interface Props {
   onMarkThreadViewed?: (id: string) => void;
 }
 
-function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: SlackThread; onDelete?: (id: string) => void; onToggle?: (id: string) => void; onMarkViewed?: (id: string) => void }) {
+function ThreadRow({ thread, replies, onDelete, onToggle, onMarkViewed, isReply }: {
+  thread: SlackThread;
+  replies?: SlackThread[];
+  onDelete?: (id: string) => void;
+  onToggle?: (id: string) => void;
+  onMarkViewed?: (id: string) => void;
+  isReply?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isInactive = !thread.isActive;
   const isUnread = !thread.viewedAt;
+  const hasReplies = (replies?.length ?? 0) > 0;
 
   const preview = thread.content
     ? thread.content.slice(0, 120).replace(/\n+/g, " ").trim() + (thread.content.length > 120 ? "…" : "")
@@ -77,7 +87,7 @@ function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: Slack
   };
 
   return (
-    <div className={`slack-thread-row${isInactive ? " slack-thread-row--inactive" : ""}${isUnread ? " item--unread" : ""}`}>
+    <div className={`slack-thread-row${isInactive ? " slack-thread-row--inactive" : ""}${isUnread ? " item--unread" : ""}${isReply ? " slack-thread-row--reply" : ""}`}>
       <div
         className={`slack-thread-row-header${expanded ? " slack-thread-row-header--open" : ""}`}
         onClick={() => setExpanded(!expanded)}
@@ -100,7 +110,7 @@ function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: Slack
           {isUnread && onMarkViewed && (
             <button className="mark-viewed-btn" onClick={(e) => { e.stopPropagation(); onMarkViewed(thread.id); }} title="Mark as viewed"><Check size={13} /></button>
           )}
-          {thread.content && (
+          {(thread.content || hasReplies) && (
             <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
           )}
           {onDelete && (
@@ -115,10 +125,28 @@ function ThreadRow({ thread, onDelete, onToggle, onMarkViewed }: { thread: Slack
         </div>
       </div>
 
-      {expanded && thread.content && (
-        <div className="slack-thread-row-body">
-          <pre className="slack-thread-content">{thread.content}</pre>
-        </div>
+      {expanded && (
+        <>
+          {thread.content && (
+            <div className="slack-thread-row-body">
+              <pre className="slack-thread-content">{thread.content}</pre>
+            </div>
+          )}
+          {hasReplies && (
+            <div className="slack-thread-replies">
+              {replies!.map((r) => (
+                <ThreadRow
+                  key={r.id}
+                  thread={r}
+                  isReply
+                  onDelete={onDelete}
+                  onToggle={onToggle}
+                  onMarkViewed={onMarkViewed}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {confirmDelete && (
@@ -138,6 +166,14 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isInactive = !channel.isActive;
   const hasUnreadThreads = threads.some((t) => !t.viewedAt);
+
+  const topLevelThreads = threads.filter((t) => !t.parentThreadTs);
+  const repliesByParentTs = threads.reduce<Record<string, SlackThread[]>>((acc, t) => {
+    if (t.parentThreadTs) {
+      (acc[t.parentThreadTs] ??= []).push(t);
+    }
+    return acc;
+  }, {});
   const slackChannelLink = channel.workspace && channel.channelId
     ? `https://app.slack.com/client/${channel.workspace}/${channel.channelId}`
     : null;
@@ -174,16 +210,16 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
         )}
         <div className="issue-meta">
           <span className="channel-result-workspace">{channel.workspace}</span>
-          {threads.length > 0 ? (
+          {topLevelThreads.length > 0 ? (
             <span className="status-badge">
-              {threads.length} thread{threads.length !== 1 ? "s" : ""}
+              {topLevelThreads.length} message{topLevelThreads.length !== 1 ? "s" : ""}
             </span>
           ) : (
             <span className="status-badge" style={{ color: "var(--text-muted)", borderColor: "transparent", background: "transparent" }}>
-              No threads yet
+              No messages yet
             </span>
           )}
-          {threads.length > 0 && (
+          {topLevelThreads.length > 0 && (
             <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
           )}
           {onDeleteChannel && (
@@ -198,10 +234,17 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
         </div>
       </div>
 
-      {expanded && threads.length > 0 && (
+      {expanded && topLevelThreads.length > 0 && (
         <div className="issue-body slack-channel-threads">
-          {threads.map((t) => (
-            <ThreadRow key={t.id} thread={t} onDelete={onDeleteThread} onToggle={onToggleThread} onMarkViewed={onMarkThreadViewed} />
+          {topLevelThreads.map((t) => (
+            <ThreadRow
+              key={t.id}
+              thread={t}
+              replies={repliesByParentTs[t.threadTs]}
+              onDelete={onDeleteThread}
+              onToggle={onToggleThread}
+              onMarkViewed={onMarkThreadViewed}
+            />
           ))}
         </div>
       )}

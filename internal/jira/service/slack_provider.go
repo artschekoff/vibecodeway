@@ -194,20 +194,38 @@ func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID st
 				zap.String("channel", ch.ChannelName))
 			continue
 		}
-		content := formatSingleMessage(msg)
 		if _, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 			SlackChannelID: ch.ID,
 			Workspace:      ch.Workspace,
 			ChannelID:      ch.ChannelID,
 			ThreadTS:       msg.RawTS,
 			ChannelName:    ch.ChannelName,
-			Content:        content,
+			Content:        formatSingleMessage(msg),
 		}); upsertErr != nil {
 			p.logger.Warn("slack refresh: upsert message thread failed",
 				zap.String("channel", ch.ChannelName), zap.String("ts", msg.RawTS), zap.Error(upsertErr))
 			continue
 		}
 		upserted++
+		for _, reply := range msg.Replies {
+			if reply.RawTS == "" {
+				continue
+			}
+			if _, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+				SlackChannelID: ch.ID,
+				Workspace:      ch.Workspace,
+				ChannelID:      ch.ChannelID,
+				ThreadTS:       reply.RawTS,
+				ParentThreadTS: msg.RawTS,
+				ChannelName:    ch.ChannelName,
+				Content:        formatSingleMessage(reply),
+			}); upsertErr != nil {
+				p.logger.Warn("slack refresh: upsert reply thread failed",
+					zap.String("channel", ch.ChannelName), zap.String("ts", reply.RawTS), zap.Error(upsertErr))
+			} else {
+				upserted++
+			}
+		}
 	}
 
 	if upserted == 0 {
@@ -222,12 +240,16 @@ func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID st
 	stats.ItemsRefreshed += upserted
 }
 
-// formatSingleMessage renders one Slack message and its thread replies as plain text.
-// The first line is "[timestamp] user: text"; multi-line text is indented;
-// replies are nested with 2-space indent per level.
+// formatSingleMessage renders one Slack message as plain text (no replies).
+// The first line is "[timestamp] user: text"; multi-line text is indented.
+// Replies are stored as separate slack_thread records and not included here.
 func formatSingleMessage(m slackstore.SlackMessage) string {
 	var sb strings.Builder
-	writeFormattedMessage(&sb, m, "")
+	lines := strings.Split(m.Text, "\n")
+	fmt.Fprintf(&sb, "[%s] %s: %s\n", m.Timestamp, m.DisplayUser(), lines[0])
+	for _, line := range lines[1:] {
+		fmt.Fprintf(&sb, "  %s\n", line)
+	}
 	return sb.String()
 }
 

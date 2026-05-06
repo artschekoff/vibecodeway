@@ -18,6 +18,7 @@ type SlackThread struct {
 	Workspace      string  `json:"workspace"`
 	ChannelID      string  `json:"channelId"`
 	ThreadTS       string  `json:"threadTs"`
+	ParentThreadTS string  `json:"parentThreadTs,omitempty"`
 	ChannelName    string  `json:"channelName"`
 	Permalink      string  `json:"permalink"`
 	SearchQuery    string  `json:"searchQuery"`
@@ -34,6 +35,7 @@ type UpsertSlackThreadArgs struct {
 	Workspace      string
 	ChannelID      string
 	ThreadTS       string
+	ParentThreadTS string // empty for top-level messages; set to parent's RawTS for replies
 	ChannelName    string
 	Permalink      string
 	SearchQuery    string

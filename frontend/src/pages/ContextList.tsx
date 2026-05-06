@@ -414,7 +414,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       }
       for (const group of slackGroups) {
         progress.next(`Adding ${group.channels.map((ch) => `#${ch.channelName}`).join(", ")} from ${group.workspace}`);
-        try { await AddSlackChannels(ctx.id, group.workspace, group.channels); } catch { /* best-effort */ }
+        try { await AddSlackChannels(ctx.id, group.workspace, group.channels as any); } catch { /* best-effort */ }
       }
       if (dmConfigs.length > 0 && !(await ensurePassphrase())) {
         // user cancelled passphrase — skip DM upserts
@@ -511,7 +511,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       for (const id of removedChannelIds) { try { await RemoveSlackChannel(id); } catch { /* best-effort */ } }
       for (const group of slackGroups) {
         progress.next(`Adding ${group.channels.map((ch) => `#${ch.channelName}`).join(", ")} from ${group.workspace}`);
-        try { await AddSlackChannels(editTarget.id, group.workspace, group.channels); } catch { /* best-effort */ }
+        try { await AddSlackChannels(editTarget.id, group.workspace, group.channels as any); } catch { /* best-effort */ }
       }
       for (const id of removedDMConfigIds) { try { await DeleteSlackDMConfig(id); } catch { /* best-effort */ } }
       if (dmConfigs.length > 0 && !(await ensurePassphrase())) {

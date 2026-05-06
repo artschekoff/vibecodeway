@@ -493,7 +493,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       for (const group of slackGroups) {
         const names = group.channels.map((ch) => `#${ch.channelName}`).join(", ");
         progress.next(`Adding ${names} from ${group.workspace}`);
-        try { await AddSlackChannels(id, group.workspace, group.channels); } catch { /* best-effort */ }
+        try { await AddSlackChannels(id, group.workspace, group.channels as any); } catch { /* best-effort */ }
       }
       for (const dmId of removedDMConfigIds) {
         try { await DeleteSlackDMConfig(dmId); } catch { /* best-effort */ }
@@ -920,9 +920,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     />
                   ))}
 
-                  {/* Orphan threads (no matching configured channel) */}
+                  {/* Orphan threads (no matching configured channel, top-level only) */}
                   {slackThreads
-                    .filter((t) => !slackChannels.some((ch) => ch.channelId === t.channelId))
+                    .filter((t) => !t.parentThreadTs && !slackChannels.some((ch) => ch.channelId === t.channelId))
                     .map((t) => (
                       <SlackChannelCard
                         key={t.id}
