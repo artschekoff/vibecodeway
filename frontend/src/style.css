@@ -3045,6 +3045,27 @@ select {
   font-style: italic;
 }
 
+.log-file-upload-btn {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.log-file-upload-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.log-file-upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .log-file-chips {
   display: flex;
   flex-wrap: wrap;
@@ -3306,6 +3327,13 @@ select {
   gap: 6px;
   flex-wrap: wrap;
   padding: 6px 0 2px;
+}
+
+.quick-attach-new-ctx-org {
+  width: 100%;
+  font-size: 12px;
+  padding: 4px 8px;
+  margin-bottom: 2px;
 }
 
 .quick-attach-new-ctx-input {
@@ -4984,6 +5012,16 @@ select {
   background: var(--bg);
   color: var(--text);
   border-color: var(--border);
+  border-top-color: var(--accent);
+}
+
+.tab-item--org {
+  border-top-color: var(--accent);
+  opacity: 0.75;
+}
+
+.tab-item--org.tab-item--active {
+  opacity: 1;
 }
 
 .tab-item__title {
@@ -5253,6 +5291,78 @@ select {
   background: rgba(224, 85, 85, 0.1);
   border-color: var(--danger, #e05555);
   color: var(--danger, #e05555);
+}
+
+/* ── Workspace actions dropdown ──────────────────────────────────────────── */
+.workspace-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.workspace-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 5px;
+  transition: border-color 0.15s;
+}
+
+.workspace-menu-trigger:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.workspace-menu-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.workspace-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+  padding: 4px 0;
+  z-index: 100;
+  animation: expand-fade-in 0.15s ease;
+}
+
+.workspace-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.workspace-menu-item:hover {
+  background: var(--surface2);
+}
+
+.workspace-menu-item--danger {
+  color: var(--danger, #e05555);
+}
+
+.workspace-menu-item--danger:hover {
+  background: rgba(224, 85, 85, 0.08);
+}
+
+.workspace-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 0;
 }
 
 /* ── Workflow Status Manager ─────────────────────────────────────────────── */

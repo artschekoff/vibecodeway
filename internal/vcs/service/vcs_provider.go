@@ -337,8 +337,8 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 }
 
 // VCSAuth stores the GitHub auth result. Delegates to the auth store.
-func (p *VCSProvider) SaveAuth(ctx context.Context, platform vcs.Platform, username, avatarURL string) error {
-	_, err := p.store.Auth.UpsertAuth(ctx, string(platform), username, avatarURL)
+func (p *VCSProvider) SaveAuth(ctx context.Context, platform vcs.Platform, username, avatarURL, token string) error {
+	_, err := p.store.Auth.UpsertAuth(ctx, string(platform), username, avatarURL, token)
 	return err
 }
 
@@ -379,7 +379,8 @@ func (p *VCSProvider) LoginComplete(ctx context.Context, platform vcs.Platform, 
 	if err != nil {
 		return vcs.AuthResult{}, err
 	}
-	if err := p.SaveAuth(ctx, platform, result.Username, result.AvatarURL); err != nil {
+	runner.SetToken(result.Token)
+	if err := p.SaveAuth(ctx, platform, result.Username, result.AvatarURL, result.Token); err != nil {
 		p.logger.Warn("vcs: save auth failed", zap.Error(err))
 	}
 	return result, nil

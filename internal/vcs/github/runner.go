@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/vcs"
@@ -37,16 +38,27 @@ type Runner struct {
 	timeout    time.Duration
 	httpClient *http.Client
 	logger     *zap.Logger
+
+	mu    sync.RWMutex
+	token string // OAuth token; when set, passed as GH_TOKEN to all gh CLI invocations
 }
 
 // NewRunner creates a Runner that resolves the gh binary from PATH and known dirs.
 func NewRunner(logger *zap.Logger) *Runner {
 	return &Runner{
-		binPath: resolveBinPath("gh", knownExtraDirs),
-		timeout: 60 * time.Second,
+		binPath:    resolveBinPath("gh", knownExtraDirs),
+		timeout:    60 * time.Second,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
-		logger:  logger,
+		logger:     logger,
 	}
+}
+
+// SetToken stores the OAuth token so it is injected as GH_TOKEN into every gh CLI call,
+// removing the dependency on gh's own keychain.
+func (r *Runner) SetToken(token string) {
+	r.mu.Lock()
+	r.token = token
+	r.mu.Unlock()
 }
 
 // Platform implements vcs.VCSRunner.
@@ -142,15 +154,22 @@ func (r *Runner) CompleteDeviceAuth(ctx context.Context, deviceCode string, inte
 
 		r.logger.Info("github device auth: user resolved", zap.String("username", username))
 
-		// Best-effort: persist token so subsequent gh CLI commands work too.
-		// Uses a dedicated timeout so a slow/hanging keychain on macOS never blocks the flow.
-		persistCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		if err := r.persistToken(persistCtx, token); err != nil {
-			r.logger.Warn("gh auth login --with-token failed, token not persisted for gh CLI", zap.Error(err))
-		}
-		cancel()
+		// Immediately set the token on the runner so subsequent gh CLI calls work
+		// without waiting for keychain persistence.
+		r.SetToken(token)
 
-		return vcs.AuthResult{Username: username}, nil
+		// Best-effort: persist token into gh CLI's keychain in the background.
+		// This is not required for the app to work (we use GH_TOKEN env var instead),
+		// but keeps the gh CLI usable in the terminal after connecting via the app.
+		go func() {
+			persistCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := r.persistToken(persistCtx, token); err != nil {
+				r.logger.Warn("gh auth login --with-token failed (non-fatal)", zap.Error(err))
+			}
+		}()
+
+		return vcs.AuthResult{Username: username, Token: token}, nil
 	}
 }
 
@@ -602,14 +621,40 @@ func (r *Runner) apiPaginated(ctx context.Context, endpoint string) ([]byte, err
 }
 
 // run executes gh with the given args and returns stdout.
+// When a stored token is set and the call fails with a 404/403 (e.g. org SSO not authorized),
+// it retries once without the token so gh falls back to its native keychain auth.
 func (r *Runner) run(ctx context.Context, args []string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
+	r.mu.RLock()
+	tok := r.token
+	r.mu.RUnlock()
+
+	out, err := r.exec(ctx, args, tok)
+	if err != nil && tok != "" && isAccessError(err) {
+		// Stored token may lack org SSO authorization — retry with gh's native keychain.
+		out, err = r.exec(ctx, args, "")
+	}
+	return out, err
+}
+
+func isAccessError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "404") || strings.Contains(msg, "Not Found") ||
+		strings.Contains(msg, "403") || strings.Contains(msg, "Forbidden") ||
+		strings.Contains(msg, "401") || strings.Contains(msg, "Unauthorized")
+}
+
+func (r *Runner) exec(ctx context.Context, args []string, tok string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, r.binPath, args...) //nolint:gosec
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+
+	if tok != "" {
+		cmd.Env = append(os.Environ(), "GH_TOKEN="+tok)
+	}
 
 	if err := cmd.Run(); err != nil {
 		errMsg := strings.TrimSpace(stderr.String())

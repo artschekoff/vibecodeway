@@ -23,9 +23,9 @@ func NewAuthRepo(db *sql.DB) *AuthRepo { return &AuthRepo{db: db} }
 func (r *AuthRepo) GetAuth(ctx context.Context, platform string) (*VCSAuth, error) {
 	var a VCSAuth
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, platform, username, avatar_url, updated_at FROM vcs_auth WHERE platform = ?`,
+		`SELECT id, platform, username, avatar_url, token, updated_at FROM vcs_auth WHERE platform = ?`,
 		platform,
-	).Scan(&a.ID, &a.Platform, &a.Username, &a.AvatarURL, &a.UpdatedAt)
+	).Scan(&a.ID, &a.Platform, &a.Username, &a.AvatarURL, &a.Token, &a.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -36,7 +36,8 @@ func (r *AuthRepo) GetAuth(ctx context.Context, platform string) (*VCSAuth, erro
 }
 
 // UpsertAuth creates or updates the auth row for a platform.
-func (r *AuthRepo) UpsertAuth(ctx context.Context, platform, username, avatarURL string) (*VCSAuth, error) {
+// token may be empty to preserve the existing stored token (on update) or store no token (on insert).
+func (r *AuthRepo) UpsertAuth(ctx context.Context, platform, username, avatarURL, token string) (*VCSAuth, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing VCSAuth
@@ -45,10 +46,17 @@ func (r *AuthRepo) UpsertAuth(ctx context.Context, platform, username, avatarURL
 	).Scan(&existing.ID)
 
 	if err == nil {
-		_, err = r.db.ExecContext(ctx,
-			`UPDATE vcs_auth SET username = ?, avatar_url = ?, updated_at = ? WHERE platform = ?`,
-			username, avatarURL, now, platform,
-		)
+		if token != "" {
+			_, err = r.db.ExecContext(ctx,
+				`UPDATE vcs_auth SET username = ?, avatar_url = ?, token = ?, updated_at = ? WHERE platform = ?`,
+				username, avatarURL, token, now, platform,
+			)
+		} else {
+			_, err = r.db.ExecContext(ctx,
+				`UPDATE vcs_auth SET username = ?, avatar_url = ?, updated_at = ? WHERE platform = ?`,
+				username, avatarURL, now, platform,
+			)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("update vcs auth: %w", err)
 		}
@@ -60,8 +68,8 @@ func (r *AuthRepo) UpsertAuth(ctx context.Context, platform, username, avatarURL
 
 	id := uuid.New().String()
 	_, err = r.db.ExecContext(ctx,
-		`INSERT INTO vcs_auth (id, platform, username, avatar_url, updated_at) VALUES (?, ?, ?, ?, ?)`,
-		id, platform, username, avatarURL, now,
+		`INSERT INTO vcs_auth (id, platform, username, avatar_url, token, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, platform, username, avatarURL, token, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert vcs auth: %w", err)
@@ -81,7 +89,7 @@ func (r *AuthRepo) DeleteAuth(ctx context.Context, platform string) error {
 // ListAuth returns all stored auth rows.
 func (r *AuthRepo) ListAuth(ctx context.Context) ([]VCSAuth, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, platform, username, avatar_url, updated_at FROM vcs_auth ORDER BY platform`,
+		`SELECT id, platform, username, avatar_url, token, updated_at FROM vcs_auth ORDER BY platform`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list vcs auth: %w", err)
@@ -91,7 +99,7 @@ func (r *AuthRepo) ListAuth(ctx context.Context) ([]VCSAuth, error) {
 	var result []VCSAuth
 	for rows.Next() {
 		var a VCSAuth
-		if err := rows.Scan(&a.ID, &a.Platform, &a.Username, &a.AvatarURL, &a.UpdatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Platform, &a.Username, &a.AvatarURL, &a.Token, &a.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan vcs auth: %w", err)
 		}
 		result = append(result, a)

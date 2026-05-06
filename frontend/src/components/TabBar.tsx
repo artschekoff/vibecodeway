@@ -1,21 +1,30 @@
+import { useMemo } from "react";
 import { X, Pin } from "lucide-react";
 import { useTabContext } from "../contexts/TabContext";
 import type { Tab } from "../types";
 
 function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
-  const { setActiveTab, closeTab, pinTab, unpinTab } = useTabContext();
+  const { tabs, setActiveTab, closeTab, pinTab, unpinTab } = useTabContext();
+
+  const displayTitle = useMemo(() => {
+    if (tab.type !== "context") return tab.title;
+    const orgName = tab.orgName
+      ?? tabs.find((t) => t.type === "org" && t.orgId === tab.orgId)?.title;
+    const key = tab.contextKey ?? tab.title;
+    return orgName ? `${orgName} / ${key}` : key;
+  }, [tab, tabs]);
 
   return (
     <div
-      className={`tab-item${isActive ? " tab-item--active" : ""}${tab.pinned ? " tab-item--pinned" : ""}`}
+      className={`tab-item${isActive ? " tab-item--active" : ""}${tab.type === "org" ? " tab-item--org" : ""}${tab.pinned ? " tab-item--pinned" : ""}`}
       onClick={() => setActiveTab(tab.id)}
       onContextMenu={(e) => {
         e.preventDefault();
         tab.pinned ? unpinTab(tab.id) : pinTab(tab.id);
       }}
-      title={tab.pinned ? `${tab.title} (pinned — right-click to unpin)` : `${tab.title} (right-click to pin)`}
+      title={tab.pinned ? `${displayTitle} (pinned — right-click to unpin)` : `${displayTitle} (right-click to pin)`}
     >
-      <span className="tab-item__title">{tab.title}</span>
+      <span className="tab-item__title">{displayTitle}</span>
       {tab.pinned ? (
         <button
           className="tab-item__action"

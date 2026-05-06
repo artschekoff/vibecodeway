@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   ListAllContexts,
+  ListOrganizations,
   DismissPicker,
   QuickAttachText,
   CreateContext,
@@ -11,7 +12,7 @@ import {
   AddSpecificPR,
   CreateContextLog,
 } from "../../wailsjs/go/main/App";
-import type { Context } from "../types";
+import type { Context, Organization } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
 
 interface Props {
@@ -37,6 +38,8 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
   // "+ New Context" inline form state
   const [showNewCtx, setShowNewCtx] = useState(false);
   const [newCtxKey, setNewCtxKey] = useState("");
+  const [newCtxOrgId, setNewCtxOrgId] = useState("");
+  const [orgs, setOrgs] = useState<Organization[]>([]);
   const [creatingCtx, setCreatingCtx] = useState(false);
   const [newCtxError, setNewCtxError] = useState("");
 
@@ -54,9 +57,10 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
   const loadContexts = useCallback(async () => {
     setLoading(true);
     try {
-      const all = await ListAllContexts();
+      const [all, allOrgs] = await Promise.all([ListAllContexts(), ListOrganizations()]);
       const active = all.filter((c) => c.status === "active" && (!orgId || c.orgId === orgId));
       setContexts(active);
+      setOrgs(allOrgs ?? []);
       if (active.length === 1) setSelectedId(active[0].id);
     } catch {
       setError("Failed to load contexts.");
@@ -74,6 +78,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
     setAttaching(false);
     setShowNewCtx(false);
     setNewCtxKey("");
+    setNewCtxOrgId("");
     setNewCtxError("");
     setDestination("text");
     setLogDraft("");
@@ -153,14 +158,20 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
       setNewCtxError("Context name is required.");
       return;
     }
+    const resolvedOrgId = orgId ?? newCtxOrgId;
+    if (!resolvedOrgId) {
+      setNewCtxError("Select an organization.");
+      return;
+    }
     setCreatingCtx(true);
     setNewCtxError("");
     try {
-      const ctx = await CreateContext(key, orgId ?? "");
+      const ctx = await CreateContext(key, resolvedOrgId);
       setContexts((prev) => [...prev, ctx]);
       setSelectedId(ctx.id);
       setShowNewCtx(false);
       setNewCtxKey("");
+      setNewCtxOrgId("");
       // Attach immediately after creating.
       await attachTo(ctx.id, ctx.key);
     } catch (e) {
@@ -168,7 +179,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
     } finally {
       setCreatingCtx(false);
     }
-  }, [newCtxKey, orgId, attachTo]);
+  }, [newCtxKey, orgId, newCtxOrgId, attachTo]);
 
   if (!visible) return null;
 
@@ -315,6 +326,19 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
         {/* "+ New Context" form */}
         {showNewCtx ? (
           <div className="quick-attach-new-ctx">
+            {!orgId && orgs.length > 0 && (
+              <select
+                className="field-input quick-attach-new-ctx-org"
+                value={newCtxOrgId}
+                onChange={(e) => setNewCtxOrgId(e.target.value)}
+                disabled={creatingCtx}
+              >
+                <option value="">Select organization…</option>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            )}
             <input
               ref={newCtxInputRef}
               className="field-input quick-attach-new-ctx-input"
@@ -323,7 +347,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
               onChange={(e) => setNewCtxKey(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") { e.preventDefault(); void handleCreateAndAttach(); }
-                if (e.key === "Escape") { setShowNewCtx(false); setNewCtxKey(""); setNewCtxError(""); }
+                if (e.key === "Escape") { setShowNewCtx(false); setNewCtxKey(""); setNewCtxOrgId(""); setNewCtxError(""); }
               }}
               disabled={creatingCtx}
               autoCorrect="off"
@@ -341,7 +365,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
             <button
               className="btn-secondary"
               style={{ fontSize: 12, padding: "3px 8px" }}
-              onClick={() => { setShowNewCtx(false); setNewCtxKey(""); setNewCtxError(""); }}
+              onClick={() => { setShowNewCtx(false); setNewCtxKey(""); setNewCtxOrgId(""); setNewCtxError(""); }}
               disabled={creatingCtx}
             >
               Cancel

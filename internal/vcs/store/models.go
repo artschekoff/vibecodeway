@@ -7,6 +7,7 @@ type VCSAuth struct {
 	Platform  string `json:"platform"`
 	Username  string `json:"username"`
 	AvatarURL string `json:"avatarUrl"`
+	Token     string `json:"-"` // never serialized to the frontend
 	UpdatedAt string `json:"updatedAt"`
 }
 
