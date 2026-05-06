@@ -605,7 +605,38 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 		buf.WriteString("\n")
 	}
 
+	// Logs section — always last, only when no filter is active.
+	if filter == "" {
+		if cl := h.svc.ContextLog(); cl != nil {
+			logs, err := cl.ListLogs(ctx, detail.Context.ID)
+			if err == nil && len(logs) > 0 {
+				fmt.Fprintf(&buf, "\n--- LOGS (%d %s) ---\n\n", len(logs), pluralWord(len(logs), "entry", "entries"))
+				for _, l := range logs {
+					fmt.Fprintf(&buf, "[%s · %s]\n", jiraservice.FormatDateTime(l.CreatedAt), strings.ToUpper(l.Trigger))
+					fmt.Fprint(&buf, l.SummaryMd)
+					fmt.Fprint(&buf, "\n")
+					if len(l.Files) > 0 {
+						fmt.Fprint(&buf, "\nReferenced files:\n")
+						for _, f := range l.Files {
+							fmt.Fprintf(&buf, "### %s (%s)\n\n", f.OriginalName, f.FileType)
+							fmt.Fprint(&buf, f.ExtractedText)
+							fmt.Fprint(&buf, "\n\n")
+						}
+					}
+					fmt.Fprint(&buf, "\n")
+				}
+			}
+		}
+	}
+
 	return mcp.NewToolResultText(buf.String()), nil
+}
+
+func pluralWord(n int, singular, pluralForm string) string {
+	if n == 1 {
+		return singular
+	}
+	return pluralForm
 }
 
 func (h *handlers) handleContextAddText(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"strings"
 	"time"
 
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
@@ -131,23 +131,20 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 	return stats, nil
 }
 
-// WriteContext appends Jira issues and their comments for contextID to w.
-// When activeOnly is true only active issues and comments are included.
-func (p *JiraProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, activeOnly bool) error {
+// CollectItems returns one Item per Jira issue for global sorting.
+func (p *JiraProvider) CollectItems(ctx context.Context, contextID string, startAt time.Time, activeOnly bool) ([]provider.Item, error) {
 	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, activeOnly)
 	if err != nil {
-		return fmt.Errorf("loading issues: %w", err)
+		return nil, fmt.Errorf("loading issues: %w", err)
 	}
-
 	for i, issue := range issues {
 		comments, err := p.jiraRepo.GetCommentsByIssue(ctx, issue.ID, activeOnly)
 		if err != nil {
-			return fmt.Errorf("loading comments for %s: %w", issue.JiraKey, err)
+			return nil, fmt.Errorf("loading comments for %s: %w", issue.JiraKey, err)
 		}
 		issues[i].Comments = comments
 	}
-	writeJiraSection(w, issues, startAt)
-	return nil
+	return buildJiraItems(issues, startAt), nil
 }
 
 // syncComments fetches and deduplicates comments for all given issues.
@@ -156,56 +153,47 @@ func (p *JiraProvider) syncComments(ctx context.Context, issues []jirastore.Issu
 	return syncIssueComments(ctx, p.jira, p.jiraRepo, issues, p.logger)
 }
 
-// writeJiraSection renders Jira issues as human-readable text into w.
-// When startAt is non-zero, an issue is included only if its updated timestamp or
-// at least one comment is on or after startAt.
-func writeJiraSection(w io.Writer, issues []jirastore.Issue, startAt time.Time) {
-	filtered := make([]jirastore.Issue, 0, len(issues))
+func buildJiraItems(issues []jirastore.Issue, startAt time.Time) []provider.Item {
+	var items []provider.Item
 	for _, issue := range issues {
-		if startAt.IsZero() {
-			filtered = append(filtered, issue)
-			continue
-		}
-		// Treat unparseable timestamps as "include" to avoid silent data loss.
-		t := ParseTime(issue.JiraUpdated)
-		if t.IsZero() || !t.Before(startAt) {
-			filtered = append(filtered, issue)
-			continue
-		}
-		for _, c := range issue.Comments {
-			ct := ParseTime(c.JiraCreated)
-			if ct.IsZero() || !ct.Before(startAt) {
-				filtered = append(filtered, issue)
-				break
+		// Apply startAt filter: include if issue or any comment is on/after startAt.
+		if !startAt.IsZero() {
+			t := ParseTime(issue.JiraUpdated)
+			inWindow := t.IsZero() || !t.Before(startAt)
+			if !inWindow {
+				for _, c := range issue.Comments {
+					ct := ParseTime(c.JiraCreated)
+					if ct.IsZero() || !ct.Before(startAt) {
+						inWindow = true
+						break
+					}
+				}
+			}
+			if !inWindow {
+				continue
 			}
 		}
-	}
 
-	_, _ = fmt.Fprintf(w, "--- JIRA (%d issue%s) ---\n\n", len(filtered), plural(len(filtered)))
+		ts := ParseTime(issue.JiraUpdated)
+		if ts.IsZero() {
+			ts = ParseTime(issue.CreatedAt)
+		}
 
-	if len(filtered) == 0 {
-		_, _ = fmt.Fprint(w, "No Jira issues match the given criteria.\n\n")
-		return
-	}
-
-	for _, issue := range filtered {
-		_, _ = fmt.Fprintf(w, "[%s] %s\n", issue.JiraKey, issue.Summary)
-		_, _ = fmt.Fprintf(w, "Status: %s", issue.Status)
+		var buf strings.Builder
+		fmt.Fprintf(&buf, "[%s · JIRA] [%s] %s\n", FormatDateTime(issue.JiraUpdated), issue.JiraKey, issue.Summary)
+		fmt.Fprintf(&buf, "Status: %s", issue.Status)
 		if issue.Assignee != "" {
-			_, _ = fmt.Fprintf(w, " | Assignee: %s", issue.Assignee)
+			fmt.Fprintf(&buf, " | Assignee: %s", issue.Assignee)
 		}
 		if issue.IssueType != "" {
-			_, _ = fmt.Fprintf(w, " | Type: %s", issue.IssueType)
+			fmt.Fprintf(&buf, " | Type: %s", issue.IssueType)
 		}
-		if issue.JiraUpdated != "" {
-			_, _ = fmt.Fprintf(w, " | Updated: %s", formatDateStr(issue.JiraUpdated))
-		}
-		_, _ = fmt.Fprint(w, "\n")
+		fmt.Fprint(&buf, "\n")
 
 		if issue.Description != "" {
-			_, _ = fmt.Fprint(w, "\nDescription:\n")
-			_, _ = fmt.Fprint(w, indent(issue.Description, "  "))
-			_, _ = fmt.Fprint(w, "\n")
+			fmt.Fprint(&buf, "\nDescription:\n")
+			fmt.Fprint(&buf, indent(issue.Description, "  "))
+			fmt.Fprint(&buf, "\n")
 		}
 
 		comments := issue.Comments
@@ -218,20 +206,21 @@ func writeJiraSection(w io.Writer, issues []jirastore.Issue, startAt time.Time) 
 			}
 			comments = fc
 		}
-
 		if len(comments) > 0 {
-			_, _ = fmt.Fprintf(w, "\nComments (%d):\n", len(comments))
+			fmt.Fprintf(&buf, "\nComments (%d):\n", len(comments))
 			for _, c := range comments {
 				author := c.Author
 				if author == "" {
 					author = "Unknown"
 				}
-				_, _ = fmt.Fprintf(w, "  [%s] %s:\n", formatDateStr(c.JiraCreated), author)
-				_, _ = fmt.Fprint(w, indent(c.Body, "    "))
-				_, _ = fmt.Fprint(w, "\n")
+				fmt.Fprintf(&buf, "  [%s] %s:\n", FormatDateTime(c.JiraCreated), author)
+				fmt.Fprint(&buf, indent(c.Body, "    "))
+				fmt.Fprint(&buf, "\n")
 			}
 		}
+		fmt.Fprint(&buf, "\n")
 
-		_, _ = fmt.Fprint(w, "\n")
+		items = append(items, provider.Item{CreatedAt: ts, Body: buf.String()})
 	}
+	return items
 }

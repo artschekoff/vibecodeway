@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -599,24 +598,22 @@ func TestReloadAllContexts_SeparatesDMsFromThreads(t *testing.T) {
 	assert.Equal(t, 1, results[0].DMsRefreshed, "should count only DM configs")
 }
 
-// --- writeSlackSection DM output ---
+// --- buildSlackItems DM output ---
 
-func TestWriteSlackSection_DMsWrittenWithoutThreads(t *testing.T) {
+func TestBuildSlackItems_DMsWrittenWithoutThreads(t *testing.T) {
 	dmConfigs := []slackstore.SlackDMConfig{
 		{ID: "dm1", Workspace: "acme", StartFrom: "2024-01-01", Content: "# DM with alice\n\n[2024-01-01] alice: hello"},
 	}
 
-	var buf bytes.Buffer
-	writeSlackSection(&buf, nil, nil, dmConfigs, time.Time{})
-	output := buf.String()
+	items := buildSlackItems(nil, dmConfigs, time.Time{})
+	require.Len(t, items, 1)
+	output := items[0].Body
 
-	assert.Contains(t, output, "1 DM config)", "header should count DM configs")
 	assert.Contains(t, output, "DMs (acme) since 2024-01-01", "DM label should be present")
 	assert.Contains(t, output, "# DM with alice", "DM content should be present")
-	assert.NotContains(t, output, "No Slack threads match", "should not show empty-threads message when DMs exist")
 }
 
-func TestWriteSlackSection_DMsWrittenAlongsideThreads(t *testing.T) {
+func TestBuildSlackItems_DMsWrittenAlongsideThreads(t *testing.T) {
 	threads := []slackstore.SlackThread{
 		{ID: "t1", Workspace: "acme", ChannelID: "C1", ChannelName: "general", Content: "thread content"},
 	}
@@ -624,12 +621,12 @@ func TestWriteSlackSection_DMsWrittenAlongsideThreads(t *testing.T) {
 		{ID: "dm1", Workspace: "acme", Content: "dm content"},
 	}
 
-	var buf bytes.Buffer
-	writeSlackSection(&buf, nil, threads, dmConfigs, time.Time{})
-	output := buf.String()
+	items := buildSlackItems(threads, dmConfigs, time.Time{})
+	require.Len(t, items, 2)
 
-	assert.Contains(t, output, "thread content")
-	assert.Contains(t, output, "dm content")
+	combined := items[0].Body + items[1].Body
+	assert.Contains(t, combined, "thread content")
+	assert.Contains(t, combined, "dm content")
 }
 
 // --- formatDMContent ---

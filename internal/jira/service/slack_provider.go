@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -300,90 +299,65 @@ func parseChannelMessages(raw, channelID string) []slackstore.SlackMessage {
 	return nil
 }
 
-// WriteContext appends active Slack channels, threads, and DM configs for contextID to w.
-func (p *SlackProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, startAt time.Time, _ bool) error {
-	channels, err := p.slackRepo.ListSlackChannels(ctx, contextID, true)
-	if err != nil {
-		return fmt.Errorf("loading channels: %w", err)
-	}
+// CollectItems returns one Item per Slack thread and DM config for global sorting.
+func (p *SlackProvider) CollectItems(ctx context.Context, contextID string, startAt time.Time, _ bool) ([]provider.Item, error) {
 	threads, err := p.slackRepo.ListSlackThreads(ctx, contextID, true)
 	if err != nil {
-		return fmt.Errorf("loading threads: %w", err)
+		return nil, fmt.Errorf("loading threads: %w", err)
 	}
 	dmConfigs, err := p.slackRepo.ListSlackDMConfigs(ctx, contextID, true)
 	if err != nil {
-		return fmt.Errorf("loading dm configs: %w", err)
+		return nil, fmt.Errorf("loading dm configs: %w", err)
 	}
-	writeSlackSection(w, channels, threads, dmConfigs, startAt)
-	return nil
+	return buildSlackItems(threads, dmConfigs, startAt), nil
 }
 
-// writeSlackSection renders Slack channels, threads and DM configs as human-readable text into w.
-// Threads older than startAt are skipped when startAt is non-zero.
-func writeSlackSection(w io.Writer, channels []slackstore.SlackChannel, threads []slackstore.SlackThread, dmConfigs []slackstore.SlackDMConfig, startAt time.Time) {
-	filtered := make([]slackstore.SlackThread, 0, len(threads))
+func buildSlackItems(threads []slackstore.SlackThread, dmConfigs []slackstore.SlackDMConfig, startAt time.Time) []provider.Item {
+	var items []provider.Item
+
 	for _, t := range threads {
+		ts := ParseTime(t.CreatedAt)
 		if !startAt.IsZero() {
 			// Treat unparseable timestamps as "include" to avoid silent data loss.
-			ct := ParseTime(t.CreatedAt)
-			if !ct.IsZero() && ct.Before(startAt) {
+			if !ts.IsZero() && ts.Before(startAt) {
 				continue
 			}
 		}
-		filtered = append(filtered, t)
-	}
-
-	_, _ = fmt.Fprintf(w, "--- SLACK (%d channel%s, %d thread%s, %d DM config%s) ---\n\n",
-		len(channels), plural(len(channels)),
-		len(filtered), plural(len(filtered)),
-		len(dmConfigs), plural(len(dmConfigs)),
-	)
-
-	if len(channels) > 0 {
-		_, _ = fmt.Fprint(w, "Monitored channels: ")
-		names := make([]string, len(channels))
-		for i, ch := range channels {
-			names[i] = fmt.Sprintf("#%s (%s)", ch.ChannelName, ch.Workspace)
+		if t.Content == "" {
+			continue
 		}
-		_, _ = fmt.Fprint(w, strings.Join(names, ", "))
-		_, _ = fmt.Fprint(w, "\n\n")
-	}
-
-	if len(filtered) == 0 && len(dmConfigs) == 0 {
-		_, _ = fmt.Fprint(w, "No Slack threads match the given criteria.\n\n")
-		return
-	}
-
-	for _, t := range filtered {
 		chanLabel := t.ChannelName
 		if chanLabel == "" {
 			chanLabel = t.ChannelID
 		}
-		_, _ = fmt.Fprintf(w, "#%s (%s)", chanLabel, t.Workspace)
+		var buf strings.Builder
+		fmt.Fprintf(&buf, "[%s · SLACK] #%s (%s)", FormatDateTime(t.CreatedAt), chanLabel, t.Workspace)
 		if t.Permalink != "" {
-			_, _ = fmt.Fprintf(w, " — %s", t.Permalink)
+			fmt.Fprintf(&buf, " — %s", t.Permalink)
 		}
-		_, _ = fmt.Fprint(w, "\n")
-
-		if t.Content != "" {
-			_, _ = fmt.Fprint(w, t.Content)
-		} else {
-			_, _ = fmt.Fprint(w, "(no content — run Refresh to load)")
-		}
-		_, _ = fmt.Fprint(w, "\n\n")
+		fmt.Fprint(&buf, "\n")
+		fmt.Fprint(&buf, t.Content)
+		fmt.Fprint(&buf, "\n\n")
+		items = append(items, provider.Item{CreatedAt: ts, Body: buf.String()})
 	}
 
 	for _, dm := range dmConfigs {
+		if dm.Content == "" {
+			continue
+		}
+		ts := ParseTime(dm.CreatedAt)
+		if !startAt.IsZero() && !ts.IsZero() && ts.Before(startAt) {
+			continue
+		}
 		label := fmt.Sprintf("DMs (%s)", dm.Workspace)
 		if dm.StartFrom != "" {
 			label += fmt.Sprintf(" since %s", dm.StartFrom)
 		}
-		_, _ = fmt.Fprintf(w, "%s\n", label)
-		if dm.Content != "" {
-			_, _ = fmt.Fprint(w, dm.Content)
-		} else {
-			_, _ = fmt.Fprint(w, "(no content — run Refresh to load)")
-		}
-		_, _ = fmt.Fprint(w, "\n\n")
+		var buf strings.Builder
+		fmt.Fprintf(&buf, "[%s · SLACK] %s\n", FormatDateTime(dm.CreatedAt), label)
+		fmt.Fprint(&buf, dm.Content)
+		fmt.Fprint(&buf, "\n\n")
+		items = append(items, provider.Item{CreatedAt: ts, Body: buf.String()})
 	}
+	return items
 }

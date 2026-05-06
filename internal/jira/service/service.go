@@ -1029,18 +1029,31 @@ func (svc *ContextService) recordContextChange(ctx context.Context, contextID, t
 	}
 }
 
-// FormatContext writes a human-readable summary of all provider data for contextID to w.
+// FormatContext collects all provider artifacts for contextID, sorts them globally
+// newest-first, and writes them to w.
 // filter limits output to a specific provider name (e.g. "jira", "slack"); empty = all providers.
 // Only items on or after startAt are included; pass a zero time for no filter.
 func (svc *ContextService) FormatContext(ctx context.Context, w io.Writer, contextID string, filter string, startAt time.Time, activeOnly bool) error {
+	var all []provider.Item
 	for _, p := range svc.providers {
 		if filter != "" && filter != p.Name() {
 			continue
 		}
-		if err := p.WriteContext(ctx, w, contextID, startAt, activeOnly); err != nil {
+		items, err := p.CollectItems(ctx, contextID, startAt, activeOnly)
+		if err != nil {
 			svc.logger.Warn("format context: provider failed",
 				zap.String("provider", p.Name()), zap.String("contextID", contextID), zap.Error(err))
+			continue
 		}
+		all = append(all, items...)
+	}
+
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].CreatedAt.After(all[j].CreatedAt)
+	})
+
+	for _, item := range all {
+		_, _ = fmt.Fprint(w, item.Body)
 	}
 	return nil
 }

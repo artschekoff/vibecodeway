@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"io"
 	"testing"
 	"time"
 
@@ -32,8 +31,8 @@ func (p *slowProvider) Reload(_ context.Context, _ string) (provider.Stats, erro
 func (p *slowProvider) Refresh(_ context.Context, _ string) (provider.Stats, error) {
 	return provider.Stats{}, nil
 }
-func (p *slowProvider) WriteContext(_ context.Context, _ io.Writer, _ string, _ time.Time, _ bool) error {
-	return nil
+func (p *slowProvider) CollectItems(_ context.Context, _ string, _ time.Time, _ bool) ([]provider.Item, error) {
+	return nil, nil
 }
 
 // TestReloadAllContexts_ProvidersRunConcurrently verifies that providers are fanned out

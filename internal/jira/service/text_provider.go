@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"io"
+	"strings"
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/provider"
@@ -54,38 +54,40 @@ func (p *TextProvider) Reload(_ context.Context, _ string) (provider.Stats, erro
 	return provider.Stats{}, nil
 }
 
-// WriteContext appends active texts and uploaded documents for the context to w.
+// CollectItems returns one Item per text entry and uploaded file for global sorting.
 // startAt is ignored because texts are not time-stamped data.
-func (p *TextProvider) WriteContext(ctx context.Context, w io.Writer, contextID string, _ time.Time, _ bool) error {
+func (p *TextProvider) CollectItems(ctx context.Context, contextID string, _ time.Time, _ bool) ([]provider.Item, error) {
 	texts, err := p.store.ListContextTexts(ctx, contextID, true)
 	if err != nil {
-		return fmt.Errorf("loading context texts: %w", err)
+		return nil, fmt.Errorf("loading context texts: %w", err)
 	}
-
-	if len(texts) > 0 {
-		_, _ = fmt.Fprintf(w, "--- TEXTS (%d text%s) ---\n\n", len(texts), plural(len(texts)))
-		for _, t := range texts {
-			if t.Name != "" {
-				_, _ = fmt.Fprintf(w, "### %s\n\n", t.Name)
-			}
-			_, _ = fmt.Fprint(w, t.Content)
-			_, _ = fmt.Fprint(w, "\n\n")
-		}
-	}
-
 	uploaded, err := p.store.ListUploadedFiles(ctx, contextID, true)
 	if err != nil {
-		return fmt.Errorf("loading uploaded files: %w", err)
+		return nil, fmt.Errorf("loading uploaded files: %w", err)
 	}
 
-	if len(uploaded) > 0 {
-		_, _ = fmt.Fprintf(w, "--- UPLOADED FILES (%d file%s) ---\n\n", len(uploaded), plural(len(uploaded)))
-		for _, f := range uploaded {
-			_, _ = fmt.Fprintf(w, "### %s (%s)\n\n", f.OriginalName, f.FileType)
-			_, _ = fmt.Fprint(w, f.ExtractedText)
-			_, _ = fmt.Fprint(w, "\n\n")
+	var items []provider.Item
+
+	for _, t := range texts {
+		ts := ParseTime(t.CreatedAt)
+		name := t.Name
+		if name == "" {
+			name = "(untitled)"
 		}
+		var buf strings.Builder
+		fmt.Fprintf(&buf, "[%s · TEXT] %s\n\n", FormatDateTime(t.CreatedAt), name)
+		fmt.Fprint(&buf, t.Content)
+		fmt.Fprint(&buf, "\n\n")
+		items = append(items, provider.Item{CreatedAt: ts, Body: buf.String()})
 	}
 
-	return nil
+	for _, f := range uploaded {
+		ts := ParseTime(f.CreatedAt)
+		var buf strings.Builder
+		fmt.Fprintf(&buf, "[%s · FILE] %s (%s)\n\n", FormatDateTime(f.CreatedAt), f.OriginalName, f.FileType)
+		fmt.Fprint(&buf, f.ExtractedText)
+		fmt.Fprint(&buf, "\n\n")
+		items = append(items, provider.Item{CreatedAt: ts, Body: buf.String()})
+	}
+	return items, nil
 }
