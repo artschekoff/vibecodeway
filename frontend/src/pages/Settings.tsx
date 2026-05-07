@@ -5,7 +5,6 @@ import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
 import { useTabContext } from "../contexts/TabContext";
 import WorkflowStatusManager from "../components/WorkflowStatusManager";
-import LogsPreview from "../components/LogsPreview";
 
 const OPENAI_MODELS = [
   { id: "gpt-4.1",       label: "GPT-4.1 (recommended)" },
@@ -572,9 +571,6 @@ export default function SettingsPage() {
           <WorkflowStatusManager />
         </section>
 
-        <section className="settings-card">
-          <LogsPreview />
-        </section>
       </div>
     </div>
   );

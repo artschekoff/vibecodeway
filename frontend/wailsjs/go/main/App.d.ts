@@ -44,6 +44,8 @@ export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
 
 export function CheckoutInWorkspace(arg1:string,arg2:string):Promise<void>;
 
+export function ClearAppLogs():Promise<void>;
+
 export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Array<store.ContextUploadedFile>>;
 
 export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
@@ -89,6 +91,8 @@ export function DismissReviewRequest(arg1:string):Promise<void>;
 export function FindWorkspaceForBranch(arg1:string,arg2:string):Promise<vcsstore.VCSWorkspace>;
 
 export function GetAISettings():Promise<main.AISettingsResponse>;
+
+export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
 

@@ -274,6 +274,16 @@ export interface LogEntry extends ContextLog {
   orgName?: string;
 }
 
+export interface AppLogEntry {
+  id: number;
+  level: string;
+  ts: number;
+  caller: string;
+  msg: string;
+  error?: string;
+  createdAt: string;
+}
+
 export interface ConsolidatedLog {
   contextId: string;
   contentMd: string;
@@ -539,7 +549,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings";
+export type TabType = "org" | "context" | "settings" | "logs";
 
 export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)

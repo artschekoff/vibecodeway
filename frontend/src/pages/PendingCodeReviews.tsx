@@ -12,16 +12,13 @@ import {
   PickRepoDirectory,
   SetTrackedRepoPath,
   CheckoutBranch,
-  ListRepoLocalPaths,
-  FindWorkspaceForBranch,
-  CheckoutInWorkspace,
-  OpenWorkspaceTerminal,
   ListAllWorkspaces,
   DeleteWorkspace,
   MarkWorkspaceShouldDelete,
 } from "../../wailsjs/go/main/App";
+import { useCheckout } from "../lib/useCheckout";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
-import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo, VCSRepoPath, VCSWorkspace } from "../types";
+import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo, VCSWorkspace } from "../types";
 import Spinner from "../components/Spinner";
 
 function repoUrl(repo: VCSRepo): string {
@@ -104,7 +101,7 @@ function ReviewCard({
                       Mark done
                     </button>
                   )}
-                  {onDeleteWorkspace && (
+                  {workspace.status === "should_delete" && onDeleteWorkspace && (
                     <button
                       className="vcs-checkout-btn vcs-checkout-btn--danger"
                       title="Delete workspace"
@@ -146,10 +143,18 @@ export default function PendingCodeReviews() {
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
-  const [checkoutTarget, setCheckoutTarget] = useState<{ branch: string; repoId: string } | null>(null);
-  const [checkoutPaths, setCheckoutPaths] = useState<VCSRepoPath[]>([]);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState("");
+  const {
+    checkout: handleCheckout,
+    checkoutWithPath: handleCheckoutWithPath,
+    dismissCheckoutModal,
+    checkoutTarget,
+    checkoutPaths,
+    checkoutLoading,
+    checkoutError,
+  } = useCheckout(
+    (ws) => setWorkspaces(ws),
+    "No local path set for this repository. Click the folder icon to set one."
+  );
   const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
 
   const loadData = useCallback(async () => {
@@ -246,50 +251,6 @@ export default function PendingCodeReviews() {
       await SetTrackedRepoPath(repoId, path);
       await loadData();
     } catch (e) { setError(String(e)); }
-  };
-
-  const handleCheckout = async (branch: string, repoId: string) => {
-    setCheckoutError("");
-    setCheckoutLoading(true);
-    try {
-      const existing = await FindWorkspaceForBranch(repoId, branch) as VCSWorkspace | null;
-      if (existing) {
-        await OpenWorkspaceTerminal(existing.id);
-        return;
-      }
-      const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
-      if (paths.length === 0) {
-        setCheckoutError("No local path set for this repository. Click the folder icon to set one.");
-        return;
-      }
-      if (paths.length === 1) {
-        await CheckoutInWorkspace(paths[0].id, branch);
-        setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
-        return;
-      }
-      setCheckoutPaths(paths);
-      setCheckoutTarget({ branch, repoId });
-    } catch (e) {
-      setCheckoutError(String(e));
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
-
-  const handleCheckoutWithPath = async (pathId: string) => {
-    if (!checkoutTarget) return;
-    setCheckoutError("");
-    setCheckoutLoading(true);
-    try {
-      await CheckoutInWorkspace(pathId, checkoutTarget.branch);
-      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
-      setCheckoutTarget(null);
-      setCheckoutPaths([]);
-    } catch (e) {
-      setCheckoutError(String(e));
-    } finally {
-      setCheckoutLoading(false);
-    }
   };
 
   const handleDeleteWorkspace = async (workspaceId: string) => {
@@ -502,11 +463,7 @@ export default function PendingCodeReviews() {
             <div className="modal-footer">
               <button
                 className="btn-secondary"
-                onClick={() => {
-                  setCheckoutTarget(null);
-                  setCheckoutPaths([]);
-                  setCheckoutError("");
-                }}
+                onClick={dismissCheckoutModal}
               >
                 Cancel
               </button>

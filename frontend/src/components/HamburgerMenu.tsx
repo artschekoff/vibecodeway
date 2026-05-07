@@ -13,8 +13,10 @@ export default function HamburgerMenu() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [showNewOrg, setShowNewOrg] = useState(false);
   const [editOrg, setEditOrg] = useState<Organization | null>(null);
+  const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<string | null>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { openOrgTab, openSettingsTab, tabs, closeTab } = useTabContext();
+  const { openOrgTab, openSettingsTab, openLogsTab, tabs, closeTab } = useTabContext();
 
   const loadOrgs = useCallback(async () => {
     try {
@@ -47,15 +49,22 @@ export default function HamburgerMenu() {
     setOpen(false);
   };
 
+  const requestDeleteOrg = (orgId: string) => {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    setConfirmDeleteOrgId(orgId);
+    confirmTimerRef.current = setTimeout(() => setConfirmDeleteOrgId(null), 3000);
+  };
+
   const handleDelete = async (org: Organization) => {
-    if (!confirm(`Delete organization "${org.name}"? Contexts will be unassigned.`)) return;
+    setConfirmDeleteOrgId(null);
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     try {
       await DeleteOrganization(org.id);
       const openTab = tabs.find((t) => t.type === "org" && t.orgId === org.id);
       if (openTab) closeTab(openTab.id);
       await loadOrgs();
-    } catch (err) {
-      alert(`Failed to delete organization: ${err instanceof Error ? err.message : String(err)}`);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -111,11 +120,19 @@ export default function HamburgerMenu() {
                     <Pencil size={12} />
                   </button>
                   <button
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", padding: "2px" }}
-                    title="Delete"
-                    onClick={() => void handleDelete(org)}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: confirmDeleteOrgId === org.id ? "var(--danger)" : "var(--text-muted)",
+                      display: "flex", alignItems: "center", padding: "2px",
+                      fontSize: confirmDeleteOrgId === org.id ? 10 : undefined,
+                    }}
+                    title={confirmDeleteOrgId === org.id ? "Confirm delete" : "Delete"}
+                    onClick={() => {
+                      if (confirmDeleteOrgId === org.id) void handleDelete(org);
+                      else requestDeleteOrg(org.id);
+                    }}
                   >
-                    <Trash2 size={12} />
+                    {confirmDeleteOrgId === org.id ? "Confirm" : <Trash2 size={12} />}
                   </button>
                 </div>
               </div>
@@ -134,6 +151,12 @@ export default function HamburgerMenu() {
               onClick={() => { openSettingsTab(); setOpen(false); }}
             >
               Hotkeys
+            </button>
+            <button
+              className="app-menu-item"
+              onClick={() => { openLogsTab(); setOpen(false); }}
+            >
+              App Logs
             </button>
           </div>
         )}
