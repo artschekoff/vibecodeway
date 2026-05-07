@@ -1148,10 +1148,15 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           {b.label && (
                             <span className="vcs-label-badge" title="Repo label">{b.label}</span>
                           )}
-                          {b.branch && (
-                            <span className="vcs-branch-chip">
+                          {b.branch && repoUrl && (
+                            <button
+                              type="button"
+                              className="vcs-branch-chip vcs-branch-chip--link"
+                              onClick={() => BrowserOpenURL(repoUrl)}
+                              title={`Open ${repoLabel} on GitHub`}
+                            >
                               <GitBranch size={11} /> {b.branch}
-                            </span>
+                            </button>
                           )}
                           {b.branch && (() => {
                             const workspace = workspaces.find(
