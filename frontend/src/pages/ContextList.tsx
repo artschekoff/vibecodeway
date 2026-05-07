@@ -55,6 +55,8 @@ import {
   AddRepoLocalPath,
   RemoveRepoLocalPath,
   DismissReviewRequest,
+  CheckoutInWorkspace,
+  FindWorkspaceForBranch,
   ListWorkspaces,
   RefreshWorkspacesForRepo,
   DeleteWorkspace,
@@ -91,7 +93,17 @@ function repoUrl(repo: VCSRepo): string {
   return "";
 }
 
-function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: (id: string) => void }) {
+function ReviewCard({
+  review,
+  onDismiss,
+  onCheckout,
+  checkoutLoading,
+}: {
+  review: ReviewRequest;
+  onDismiss?: (id: string) => void;
+  onCheckout?: () => void;
+  checkoutLoading?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const isWaiting = !!review.reviewedAt;
 
@@ -126,6 +138,16 @@ function ReviewCard({ review, onDismiss }: { review: ReviewRequest; onDismiss?: 
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
         <div className="review-card-btns">
+          {review.headBranch && onCheckout && (
+            <button
+              className="review-open-btn"
+              onClick={onCheckout}
+              disabled={checkoutLoading}
+              title={`Checkout ${review.headBranch} in workspace`}
+            >
+              <GitBranch size={11} /> Checkout
+            </button>
+          )}
           {review.prUrl && (
             <button className="review-open-btn" onClick={handleCopy} title="Copy PR link">
               {copied ? <Check size={11} /> : <Copy size={11} />}
@@ -253,8 +275,15 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [repoWorkspaces, setRepoWorkspaces] = useState<Record<string, VCSWorkspace[]>>({});
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editOnCheckoutCommand, setEditOnCheckoutCommand] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
+
+  // ── Code Reviews checkout ──
+  const [reviewCheckoutTarget, setReviewCheckoutTarget] = useState<{ branch: string; repoId: string } | null>(null);
+  const [reviewCheckoutPaths, setReviewCheckoutPaths] = useState<VCSRepoPath[]>([]);
+  const [reviewCheckoutLoading, setReviewCheckoutLoading] = useState(false);
+  const [reviewCheckoutError, setReviewCheckoutError] = useState("");
 
   // ── DnD ──
   const isDraggingEnabled = !matchedIDs; // disable while searching
@@ -717,7 +746,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     setEditSaving(true);
     setEditError("");
     try {
-      await UpdateTrackedRepoMeta(repoId, editLabel.trim(), editDescription.trim());
+      await UpdateTrackedRepoMeta(repoId, editLabel.trim(), editDescription.trim(), editOnCheckoutCommand.trim());
       setEditingRepoId(null);
       await loadReviews();
     } catch (e) {
@@ -731,12 +760,56 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     setEditingRepoId(repo.id);
     setEditLabel(repo.label ?? "");
     setEditDescription(repo.description ?? "");
+    setEditOnCheckoutCommand(repo.onCheckoutCommand ?? "");
     setEditError("");
   };
 
   const cancelEdit = () => {
     setEditingRepoId(null);
     setEditError("");
+  };
+
+  const handleReviewCheckout = async (branch: string, repoId: string) => {
+    setReviewCheckoutError("");
+    setReviewCheckoutLoading(true);
+    try {
+      const existing = await FindWorkspaceForBranch(repoId, branch) as VCSWorkspace | null;
+      if (existing) {
+        setReviewCheckoutLoading(false);
+        return;
+      }
+      const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
+      if (paths.length === 0) {
+        setReviewCheckoutError("No local path set for this repository. Add one in the Repositories tab.");
+        return;
+      }
+      if (paths.length === 1) {
+        await CheckoutInWorkspace(paths[0].id, branch);
+        setReviewCheckoutLoading(false);
+        return;
+      }
+      setReviewCheckoutPaths(paths);
+      setReviewCheckoutTarget({ branch, repoId });
+    } catch (e) {
+      setReviewCheckoutError(String(e));
+    } finally {
+      setReviewCheckoutLoading(false);
+    }
+  };
+
+  const handleReviewCheckoutWithPath = async (pathId: string) => {
+    if (!reviewCheckoutTarget) return;
+    setReviewCheckoutError("");
+    setReviewCheckoutLoading(true);
+    try {
+      await CheckoutInWorkspace(pathId, reviewCheckoutTarget.branch);
+      setReviewCheckoutTarget(null);
+      setReviewCheckoutPaths([]);
+    } catch (e) {
+      setReviewCheckoutError(String(e));
+    } finally {
+      setReviewCheckoutLoading(false);
+    }
   };
 
   // ── Formatters ──
@@ -1092,7 +1165,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                       <div className="detail-section-empty">No pending reviews in this repo.</div>
                     ) : (
                       <div className="pr-list">
-                        {pending.map((review) => <ReviewCard key={review.id} review={review} />)}
+                        {pending.map((review) => (
+                          <ReviewCard
+                            key={review.id}
+                            review={review}
+                            checkoutLoading={reviewCheckoutLoading}
+                            onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                          />
+                        ))}
                       </div>
                     )}
                     {waiting.length > 0 && (
@@ -1103,7 +1183,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         </div>
                         <div className="pr-list">
                           {waiting.map((review) => (
-                            <ReviewCard key={review.id} review={review} onDismiss={handleDismissReview} />
+                            <ReviewCard
+                              key={review.id}
+                              review={review}
+                              onDismiss={handleDismissReview}
+                              checkoutLoading={reviewCheckoutLoading}
+                              onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                            />
                           ))}
                         </div>
                       </>
@@ -1111,6 +1197,43 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   </section>
                 );
               })
+            )}
+
+            {/* Checkout error */}
+            {reviewCheckoutError && (
+              <div className="checkout-error" style={{ margin: "8px 16px", fontSize: 12, color: "var(--danger)" }}>
+                {reviewCheckoutError}
+                <button style={{ marginLeft: 8, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }} onClick={() => setReviewCheckoutError("")}>
+                  <X size={11} />
+                </button>
+              </div>
+            )}
+
+            {/* Path picker when multiple local paths exist */}
+            {reviewCheckoutTarget && reviewCheckoutPaths.length > 1 && (
+              <div className="checkout-path-picker" style={{ margin: "8px 16px", fontSize: 12 }}>
+                <span style={{ color: "var(--text-muted)" }}>Select local path for checkout:</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+                  {reviewCheckoutPaths.map((p) => (
+                    <button
+                      key={p.id}
+                      className="btn-secondary"
+                      style={{ textAlign: "left", fontSize: 11 }}
+                      disabled={reviewCheckoutLoading}
+                      onClick={() => void handleReviewCheckoutWithPath(p.id)}
+                    >
+                      {p.path}
+                    </button>
+                  ))}
+                  <button
+                    className="btn-ghost"
+                    style={{ fontSize: 11, color: "var(--text-muted)" }}
+                    onClick={() => { setReviewCheckoutTarget(null); setReviewCheckoutPaths([]); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
           </>
         )}
@@ -1302,6 +1425,21 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               value={editDescription}
                               onChange={(e) => setEditDescription(e.target.value)}
                               placeholder="Short description (optional)"
+                              autoCorrect="off"
+                              autoCapitalize="none"
+                              spellCheck={false}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); void handleUpdateRepoMeta(repo.id); }
+                                if (e.key === "Escape") cancelEdit();
+                              }}
+                            />
+                          </div>
+                          <div className="repo-card-edit-row">
+                            <label>On checkout</label>
+                            <input
+                              value={editOnCheckoutCommand}
+                              onChange={(e) => setEditOnCheckoutCommand(e.target.value)}
+                              placeholder="Command to run after checkout (e.g. code .)"
                               autoCorrect="off"
                               autoCapitalize="none"
                               spellCheck={false}

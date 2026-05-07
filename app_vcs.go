@@ -237,9 +237,9 @@ func (a *App) ListTrackedRepos(platform string) ([]vcsstore.VCSRepo, error) {
 	return a.vcsStore.Repos.ListRepos(a.ctx, platform)
 }
 
-// UpdateTrackedRepoMeta updates the human-readable label and description for a tracked repo.
-func (a *App) UpdateTrackedRepoMeta(repoID, label, description string) error {
-	return a.vcsStore.Repos.UpdateRepoMeta(a.ctx, repoID, label, description)
+// UpdateTrackedRepoMeta updates the label, description, and on-checkout command for a tracked repo.
+func (a *App) UpdateTrackedRepoMeta(repoID, label, description, onCheckoutCommand string) error {
+	return a.vcsStore.Repos.UpdateRepoMeta(a.ctx, repoID, label, description, onCheckoutCommand)
 }
 
 // --- Pending Code Reviews ---
@@ -344,6 +344,15 @@ func (a *App) openTerminalAt(path string) error {
 	return nil
 }
 
+// runOnCheckoutCommand executes command in workDir via sh -c. Fire-and-forget.
+func (a *App) runOnCheckoutCommand(command, workDir string) {
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Dir = workDir
+	if err := cmd.Start(); err != nil {
+		a.logger.Sugar().Warnf("on_checkout_command failed to start: cmd=%q workDir=%q err=%v", command, workDir, err)
+	}
+}
+
 // ensureWorktreesIgnored appends ".worktrees" to baseDir/.gitignore if not already present.
 func ensureWorktreesIgnored(baseDir string) error {
 	gitignorePath := filepath.Join(baseDir, ".gitignore")
@@ -403,6 +412,10 @@ func (a *App) CheckoutInWorkspace(repoPathID, branch string) error {
 	}
 	if err := a.vcsStore.Workspaces.Create(a.ctx, w); err != nil {
 		return fmt.Errorf("storing workspace record: %w", err)
+	}
+	repo, err := a.vcsStore.Repos.GetRepo(a.ctx, repoPath.RepoID)
+	if err == nil && repo.OnCheckoutCommand != "" {
+		a.runOnCheckoutCommand(repo.OnCheckoutCommand, worktreePath)
 	}
 	return a.openTerminalAt(worktreePath)
 }

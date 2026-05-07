@@ -22,8 +22,8 @@ func NewRepoRepo(db *sql.DB) *RepoRepo { return &RepoRepo{db: db} }
 func (r *RepoRepo) GetRepo(ctx context.Context, id string) (*VCSRepo, error) {
 	var repo VCSRepo
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, platform, owner, name, local_path, label, description, created_at FROM vcs_repos WHERE id = ?`, id,
-	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.CreatedAt)
+		`SELECT id, platform, owner, name, local_path, label, description, on_checkout_command, created_at FROM vcs_repos WHERE id = ?`, id,
+	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.OnCheckoutCommand, &repo.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -37,9 +37,9 @@ func (r *RepoRepo) GetRepo(ctx context.Context, id string) (*VCSRepo, error) {
 func (r *RepoRepo) EnsureRepo(ctx context.Context, platform, owner, name string) (*VCSRepo, error) {
 	var repo VCSRepo
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, platform, owner, name, local_path, label, description, created_at FROM vcs_repos WHERE platform = ? AND owner = ? AND name = ?`,
+		`SELECT id, platform, owner, name, local_path, label, description, on_checkout_command, created_at FROM vcs_repos WHERE platform = ? AND owner = ? AND name = ?`,
 		platform, owner, name,
-	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.CreatedAt)
+	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.OnCheckoutCommand, &repo.CreatedAt)
 	if err == nil {
 		return &repo, nil
 	}
@@ -61,7 +61,7 @@ func (r *RepoRepo) EnsureRepo(ctx context.Context, platform, owner, name string)
 
 // ListRepos returns all tracked repos, optionally filtered by platform.
 func (r *RepoRepo) ListRepos(ctx context.Context, platform string) ([]VCSRepo, error) {
-	q := `SELECT id, platform, owner, name, local_path, label, description, created_at FROM vcs_repos`
+	q := `SELECT id, platform, owner, name, local_path, label, description, on_checkout_command, created_at FROM vcs_repos`
 	var args []any
 	if platform != "" {
 		q += " WHERE platform = ?"
@@ -78,7 +78,7 @@ func (r *RepoRepo) ListRepos(ctx context.Context, platform string) ([]VCSRepo, e
 	var result []VCSRepo
 	for rows.Next() {
 		var repo VCSRepo
-		if err := rows.Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.CreatedAt); err != nil {
+		if err := rows.Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.OnCheckoutCommand, &repo.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan vcs repo: %w", err)
 		}
 		result = append(result, repo)
@@ -110,10 +110,10 @@ func (r *RepoRepo) DeleteRepo(ctx context.Context, id string) error {
 	return nil
 }
 
-// UpdateRepoMeta updates the human-readable label and description for a tracked repo.
-func (r *RepoRepo) UpdateRepoMeta(ctx context.Context, id, label, description string) error {
+// UpdateRepoMeta updates the label, description, and on-checkout command for a tracked repo.
+func (r *RepoRepo) UpdateRepoMeta(ctx context.Context, id, label, description, onCheckoutCommand string) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE vcs_repos SET label = ?, description = ? WHERE id = ?`, label, description, id,
+		`UPDATE vcs_repos SET label = ?, description = ?, on_checkout_command = ? WHERE id = ?`, label, description, onCheckoutCommand, id,
 	)
 	if err != nil {
 		return fmt.Errorf("update vcs repo meta: %w", err)

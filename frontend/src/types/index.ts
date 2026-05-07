@@ -338,6 +338,7 @@ export interface VCSRepo {
   localPath: string;
   label: string;
   description: string;
+  onCheckoutCommand: string;
   createdAt: string;
 }
 

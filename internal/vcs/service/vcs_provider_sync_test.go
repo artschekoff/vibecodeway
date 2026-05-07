@@ -67,14 +67,15 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS vcs_repos (
-			id          TEXT PRIMARY KEY,
-			platform    TEXT NOT NULL,
-			owner       TEXT NOT NULL,
-			name        TEXT NOT NULL,
-			local_path  TEXT NOT NULL DEFAULT '',
-			label       TEXT NOT NULL DEFAULT '',
-			description TEXT NOT NULL DEFAULT '',
-			created_at  TEXT NOT NULL,
+			id                   TEXT PRIMARY KEY,
+			platform             TEXT NOT NULL,
+			owner                TEXT NOT NULL,
+			name                 TEXT NOT NULL,
+			local_path           TEXT NOT NULL DEFAULT '',
+			label                TEXT NOT NULL DEFAULT '',
+			description          TEXT NOT NULL DEFAULT '',
+			on_checkout_command  TEXT NOT NULL DEFAULT '',
+			created_at           TEXT NOT NULL,
 			UNIQUE (platform, owner, name)
 		);
 		CREATE TABLE IF NOT EXISTS vcs_review_requests (

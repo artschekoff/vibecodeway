@@ -102,7 +102,11 @@ func (a *App) AnswerOpenQuestion(questionID, answer string) error {
 // --- VCS Repo Meta ---
 
 func (a *App) UpdateVCSRepoMeta(repoID, label, description string) error {
-	return a.vcsStore.Repos.UpdateRepoMeta(context.Background(), repoID, label, description)
+	repo, err := a.vcsStore.Repos.GetRepo(context.Background(), repoID)
+	if err != nil {
+		return err
+	}
+	return a.vcsStore.Repos.UpdateRepoMeta(context.Background(), repoID, label, description, repo.OnCheckoutCommand)
 }
 
 func (a *App) ListVCSRepos(platform string) ([]vcsstore.VCSRepo, error) {
