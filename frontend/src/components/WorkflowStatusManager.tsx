@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pencil, Trash2, Check, X, Plus } from "lucide-react";
 import {
   ListWorkflowStatuses,
@@ -22,6 +22,8 @@ export default function WorkflowStatusManager() {
   const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adding, setAdding] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newSlug, setNewSlug] = useState("");
@@ -43,8 +45,15 @@ export default function WorkflowStatusManager() {
     }
   }
 
+  function requestDelete(id: string) {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    setConfirmDeleteId(id);
+    confirmTimerRef.current = setTimeout(() => setConfirmDeleteId(null), 3000);
+  }
+
   async function handleDelete(id: string) {
-    if (!confirm("Delete this status? Contexts using it will have their status cleared.")) return;
+    setConfirmDeleteId(null);
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     try {
       await DeleteWorkflowStatus(id);
       setStatuses((prev) => prev.filter((s) => s.id !== id));
@@ -117,11 +126,15 @@ export default function WorkflowStatusManager() {
                   </button>
                   {!st.isSystem && (
                     <button
-                      className="icon-btn icon-btn--danger"
-                      onClick={() => handleDelete(st.id)}
-                      title="Delete"
+                      className={confirmDeleteId === st.id ? "icon-btn icon-btn--danger" : "icon-btn"}
+                      onClick={() => {
+                        if (confirmDeleteId === st.id) void handleDelete(st.id);
+                        else requestDelete(st.id);
+                      }}
+                      title={confirmDeleteId === st.id ? "Confirm delete" : "Delete"}
+                      style={confirmDeleteId === st.id ? { fontSize: 10, width: "auto", padding: "2px 6px" } : undefined}
                     >
-                      <Trash2 size={14} />
+                      {confirmDeleteId === st.id ? "Confirm" : <Trash2 size={14} />}
                     </button>
                   )}
                 </div>

@@ -31,10 +31,6 @@ import {
   AddVCSBranch,
   RemoveVCSBranch,
   CheckoutBranch,
-  ListRepoLocalPaths,
-  FindWorkspaceForBranch,
-  CheckoutInWorkspace,
-  OpenWorkspaceTerminal,
   ListAllWorkspaces,
   DeleteWorkspace,
   MarkWorkspaceShouldDelete,
@@ -56,8 +52,9 @@ import {
   GetJiraInstanceURL,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal, VCSRepoPath, VCSWorkspace } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal, VCSWorkspace } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -246,22 +243,26 @@ interface ContextDetailProps {
 function WorkspaceMenu({
   workspace,
   checkoutLoading,
-  onCheckout,
   onMarkDone,
   onDelete,
+  onCheckout,
 }: {
   workspace: import("../types").VCSWorkspace;
   checkoutLoading: boolean;
-  onCheckout: () => void;
   onMarkDone: (id: string) => void;
   onDelete: (id: string) => void;
+  onCheckout: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setConfirmDelete(false);
+      }
     };
     if (open) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -272,7 +273,7 @@ function WorkspaceMenu({
       <button
         type="button"
         className="workspace-menu-trigger"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); setConfirmDelete(false); }}
         disabled={checkoutLoading}
         title="Workspace actions"
       >
@@ -292,18 +293,36 @@ function WorkspaceMenu({
           {workspace.status === "active" && (
             <button
               className="workspace-menu-item"
-              onClick={() => { onMarkDone(workspace.id); setOpen(false); }}
+              onClick={() => { onMarkDone(workspace.id); setConfirmDelete(false); }}
             >
-              Mark done
+              Done
             </button>
           )}
           <div className="workspace-menu-divider" />
-          <button
-            className="workspace-menu-item workspace-menu-item--danger"
-            onClick={() => { onDelete(workspace.id); setOpen(false); }}
-          >
-            Delete workspace
-          </button>
+          {confirmDelete ? (
+            <div className="workspace-menu-confirm">
+              <span>Really delete?</span>
+              <button
+                className="workspace-menu-item workspace-menu-item--danger"
+                onClick={() => { onDelete(workspace.id); setOpen(false); setConfirmDelete(false); }}
+              >
+                Yes, delete
+              </button>
+              <button
+                className="workspace-menu-item"
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              className="workspace-menu-item workspace-menu-item--danger"
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete workspace
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -341,11 +360,20 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [showProposalHistory, setShowProposalHistory] = useState(false);
   const [workflowError, setWorkflowError] = useState("");
   const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
-  const [checkoutTarget, setCheckoutTarget] = useState<{ branch: string; repoId: string } | null>(null);
-  const [checkoutPaths, setCheckoutPaths] = useState<VCSRepoPath[]>([]);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState("");
   const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
+  const {
+    checkout: handleCheckout,
+    checkoutWithPath: handleCheckoutWithPath,
+    dismissCheckoutModal,
+    checkoutTarget,
+    checkoutPaths,
+    checkoutLoading,
+    checkoutError,
+    setCheckoutError,
+  } = useCheckout(
+    (ws) => setWorkspaces(ws),
+    "No local path set for this repository. Add one in the Repositories tab."
+  );
 
   const loadBreakdown = useCallback(async () => {
     if (!id) return;
@@ -770,50 +798,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }
   };
 
-  const handleCheckout = async (branch: string, repoId: string) => {
-    setCheckoutError("");
-    setCheckoutLoading(true);
-    try {
-      const existing = await FindWorkspaceForBranch(repoId, branch) as VCSWorkspace | null;
-      if (existing) {
-        await OpenWorkspaceTerminal(existing.id);
-        return;
-      }
-      const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
-      if (paths.length === 0) {
-        setCheckoutError("No local path set for this repository. Add one in the Repositories tab.");
-        return;
-      }
-      if (paths.length === 1) {
-        await CheckoutInWorkspace(paths[0].id, branch);
-        setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
-        return;
-      }
-      setCheckoutPaths(paths);
-      setCheckoutTarget({ branch, repoId });
-    } catch (e) {
-      setCheckoutError(String(e));
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
-
-  const handleCheckoutWithPath = async (pathId: string) => {
-    if (!checkoutTarget) return;
-    setCheckoutError("");
-    setCheckoutLoading(true);
-    try {
-      await CheckoutInWorkspace(pathId, checkoutTarget.branch);
-      setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
-      setCheckoutTarget(null);
-      setCheckoutPaths([]);
-    } catch (e) {
-      setCheckoutError(String(e));
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
-
   const handleDeleteWorkspace = async (workspaceId: string) => {
     try {
       await DeleteWorkspace(workspaceId);
@@ -1151,11 +1135,11 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           {b.branch && repoUrl && (
                             <button
                               type="button"
-                              className="vcs-branch-chip vcs-branch-chip--link"
+                              className="vcs-repo-icon-link"
                               onClick={() => BrowserOpenURL(repoUrl)}
                               title={`Open ${repoLabel} on GitHub`}
                             >
-                              <GitBranch size={11} /> {b.branch}
+                              <ExternalLink size={12} />
                             </button>
                           )}
                           {b.branch && (() => {
@@ -1335,7 +1319,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             <div className="modal-footer">
               <button
                 className="btn-secondary"
-                onClick={() => { setCheckoutTarget(null); setCheckoutPaths([]); setCheckoutError(""); }}
+                onClick={dismissCheckoutModal}
               >
                 Cancel
               </button>

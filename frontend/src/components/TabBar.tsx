@@ -3,7 +3,33 @@ import { X, Pin } from "lucide-react";
 import { useTabContext } from "../contexts/TabContext";
 import type { Tab } from "../types";
 
-function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
+const ORG_COLORS = [
+  "#7C9CF5",
+  "#82D9A0",
+  "#F5C97C",
+  "#E07878",
+  "#B49CF5",
+  "#7CD4E7",
+  "#F5A07C",
+  "#C9E882",
+];
+
+function useOrgColorMap(tabs: Tab[]): Map<string, string> {
+  return useMemo(() => {
+    const map = new Map<string, string>();
+    let idx = 0;
+    for (const t of tabs) {
+      const orgId = t.type === "org" ? t.orgId : t.type === "context" ? t.orgId : undefined;
+      if (orgId && !map.has(orgId)) {
+        map.set(orgId, ORG_COLORS[idx % ORG_COLORS.length]);
+        idx++;
+      }
+    }
+    return map;
+  }, [tabs]);
+}
+
+function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; orgColor?: string }) {
   const { tabs, setActiveTab, closeTab, pinTab, unpinTab } = useTabContext();
 
   const displayTitle = useMemo(() => {
@@ -14,9 +40,16 @@ function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
     return orgName ? `${orgName} / ${key}` : key;
   }, [tab, tabs]);
 
+  const isOrg = tab.type === "org";
+
+  const style: React.CSSProperties = orgColor
+    ? ({ "--tab-org-color": orgColor } as React.CSSProperties)
+    : {};
+
   return (
     <div
-      className={`tab-item${isActive ? " tab-item--active" : ""}${tab.type === "org" ? " tab-item--org" : ""}${tab.pinned ? " tab-item--pinned" : ""}`}
+      className={`tab-item${isActive ? " tab-item--active" : ""}${isOrg ? " tab-item--org" : ""}${tab.pinned ? " tab-item--pinned" : ""}${orgColor ? " tab-item--colored" : ""}`}
+      style={style}
       onClick={() => setActiveTab(tab.id)}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -24,7 +57,7 @@ function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
       }}
       title={tab.pinned ? `${displayTitle} (pinned — right-click to unpin)` : `${displayTitle} (right-click to pin)`}
     >
-      <span className="tab-item__title">{displayTitle}</span>
+      <span className={`tab-item__title${isOrg ? " tab-item__title--org" : ""}`}>{displayTitle}</span>
       {tab.pinned ? (
         <button
           className="tab-item__action"
@@ -48,14 +81,19 @@ function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
 
 export default function TabBar() {
   const { tabs, activeTabId } = useTabContext();
+  const orgColorMap = useOrgColorMap(tabs);
 
   if (tabs.length === 0) return null;
 
   return (
     <div className="tab-bar">
-      {tabs.map((tab) => (
-        <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} />
-      ))}
+      {tabs.map((tab) => {
+        const orgId = tab.type === "org" ? tab.orgId : tab.type === "context" ? tab.orgId : undefined;
+        const orgColor = orgId ? orgColorMap.get(orgId) : undefined;
+        return (
+          <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} orgColor={orgColor} />
+        );
+      })}
     </div>
   );
 }

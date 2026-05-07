@@ -70,6 +70,10 @@ export function CheckoutInWorkspace(arg1, arg2) {
   return window['go']['main']['App']['CheckoutInWorkspace'](arg1, arg2);
 }
 
+export function ClearAppLogs() {
+  return window['go']['main']['App']['ClearAppLogs']();
+}
+
 export function CommitPendingUploads(arg1, arg2) {
   return window['go']['main']['App']['CommitPendingUploads'](arg1, arg2);
 }
@@ -160,6 +164,10 @@ export function FindWorkspaceForBranch(arg1, arg2) {
 
 export function GetAISettings() {
   return window['go']['main']['App']['GetAISettings']();
+}
+
+export function GetAppLogs(arg1) {
+  return window['go']['main']['App']['GetAppLogs'](arg1);
 }
 
 export function GetAppSettings() {

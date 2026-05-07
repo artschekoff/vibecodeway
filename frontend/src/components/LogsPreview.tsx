@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ListAllLogs } from "../../wailsjs/go/main/App";
-import type { LogEntry } from "../types";
+import { ListAllLogs, GetAppLogs } from "../../wailsjs/go/main/App";
+import type { LogEntry, AppLogEntry } from "../types";
 
 const TRIGGERS = [
   { value: "", label: "All" },
@@ -27,7 +27,21 @@ function formatDate(iso: string): string {
   }
 }
 
-export default function LogsPreview() {
+function formatTs(ts: number): string {
+  try {
+    return new Date(ts * 1000).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return String(ts);
+  }
+}
+
+function ContextLogsTab() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [trigger, setTrigger] = useState("");
   const [loading, setLoading] = useState(true);
@@ -40,9 +54,7 @@ export default function LogsPreview() {
   }, [trigger]);
 
   return (
-    <div className="settings-logs-section">
-      <div className="detail-section-header">Logs</div>
-
+    <>
       <div className="settings-logs-filter-bar">
         <label htmlFor="logs-level-filter">Level</label>
         <select
@@ -96,6 +108,90 @@ export default function LogsPreview() {
           </tbody>
         </table>
       )}
+    </>
+  );
+}
+
+function AppErrorsTab() {
+  const [entries, setEntries] = useState<AppLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    GetAppLogs(LIMIT)
+      .then((data) => setEntries(data ?? []))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <>
+      {loading ? (
+        <div className="settings-logs-empty">Loading…</div>
+      ) : entries.length === 0 ? (
+        <div className="settings-logs-empty">No app errors found.</div>
+      ) : (
+        <table className="settings-logs-table">
+          <thead>
+            <tr>
+              <th className="settings-logs-cell-date">Date</th>
+              <th className="settings-logs-cell-level">Level</th>
+              <th className="settings-logs-cell-context">Caller</th>
+              <th className="settings-logs-cell-message">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, i) => (
+              <tr key={i}>
+                <td className="settings-logs-cell-date">{formatTs(e.ts)}</td>
+                <td className="settings-logs-cell-level">
+                  <span className={`settings-logs-trigger settings-logs-trigger--${e.level}`}>
+                    {e.level}
+                  </span>
+                </td>
+                <td className="settings-logs-cell-context">{e.caller}</td>
+                <td
+                  className="settings-logs-cell-message"
+                  title={e.error ? `${e.msg}\n${e.error}` : e.msg}
+                >
+                  {e.msg}
+                  {e.error && (
+                    <span className="app-log-error-detail"> — {e.error}</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+type Tab = "context" | "app";
+
+export default function LogsPreview() {
+  const [tab, setTab] = useState<Tab>("app");
+
+  return (
+    <div className="settings-logs-section">
+      <div className="detail-section-header">Logs</div>
+
+      <div className="settings-logs-tabs">
+        <button
+          className={`settings-logs-tab${tab === "app" ? " settings-logs-tab--active" : ""}`}
+          onClick={() => setTab("app")}
+        >
+          App Errors
+        </button>
+        <button
+          className={`settings-logs-tab${tab === "context" ? " settings-logs-tab--active" : ""}`}
+          onClick={() => setTab("context")}
+        >
+          Context Logs
+        </button>
+      </div>
+
+      {tab === "context" ? <ContextLogsTab /> : <AppErrorsTab />}
     </div>
   );
 }

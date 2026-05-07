@@ -53,6 +53,23 @@ func (r *RepoPathRepo) ListForRepo(ctx context.Context, repoID string) ([]VCSRep
 	return result, rows.Err()
 }
 
+// Upsert inserts a path for the given repo if it doesn't already exist.
+// Returns the existing or newly created VCSRepoPath.
+func (r *RepoPathRepo) Upsert(ctx context.Context, repoID, path string) (*VCSRepoPath, error) {
+	var p VCSRepoPath
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, repo_id, path, created_at FROM vcs_repo_paths WHERE repo_id = ? AND path = ?`,
+		repoID, path,
+	).Scan(&p.ID, &p.RepoID, &p.Path, &p.CreatedAt)
+	if err == nil {
+		return &p, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, fmt.Errorf("check vcs_repo_path: %w", err)
+	}
+	return r.Add(ctx, repoID, path)
+}
+
 // Get returns a single VCSRepoPath by ID.
 func (r *RepoPathRepo) Get(ctx context.Context, id string) (*VCSRepoPath, error) {
 	var p VCSRepoPath

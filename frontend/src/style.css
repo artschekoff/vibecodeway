@@ -3683,6 +3683,25 @@ select {
   background: rgba(88, 166, 255, 0.08);
 }
 
+.vcs-repo-icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-muted, #8b949e);
+  opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.vcs-repo-icon-link:hover {
+  opacity: 1;
+  color: var(--accent, #58a6ff);
+}
+
 /* PR repo group (grouped by tracked branch) */
 .pr-repo-group {
   border-bottom: 1px solid var(--border);
@@ -5015,13 +5034,37 @@ select {
   border-top-color: var(--accent);
 }
 
+.tab-item--colored {
+  border-top-color: var(--tab-org-color, var(--accent));
+}
+
+.tab-item--colored.tab-item--active {
+  border-top-color: var(--tab-org-color, var(--accent));
+}
+
 .tab-item--org {
-  border-top-color: var(--accent);
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 .tab-item--org.tab-item--active {
   opacity: 1;
+}
+
+.tab-item--org.tab-item--colored {
+  background: color-mix(in srgb, var(--tab-org-color) 14%, var(--surface));
+  opacity: 1;
+}
+
+.tab-item--org.tab-item--colored:hover {
+  background: color-mix(in srgb, var(--tab-org-color) 20%, var(--surface2));
+}
+
+.tab-item--org.tab-item--colored.tab-item--active {
+  background: color-mix(in srgb, var(--tab-org-color) 18%, var(--bg));
+}
+
+.tab-item__title--org {
+  font-weight: 600;
 }
 
 .tab-item__title {
@@ -5040,9 +5083,9 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
   color: var(--text-muted);
   background: transparent;
   border: none;
@@ -5214,6 +5257,19 @@ select {
   white-space: nowrap;
 }
 
+.workspace-folder--btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.workspace-folder--btn:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 .workspace-branch {
   flex: 1;
   overflow: hidden;
@@ -5245,20 +5301,6 @@ select {
   background: rgba(224, 85, 85, 0.1);
 }
 
-.repo-path-refresh {
-  padding: 2px 4px;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  opacity: 0.6;
-  margin-left: auto;
-}
-
-.repo-path-refresh:hover {
-  opacity: 1;
-  color: var(--text-primary);
-}
 
 /* ── Workspace status badges ── */
 .workspace-status-badge {
@@ -5363,6 +5405,19 @@ select {
   height: 1px;
   background: var(--border);
   margin: 3px 0;
+}
+
+.workspace-menu-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 2px;
+}
+
+.workspace-menu-confirm > span {
+  padding: 2px 12px;
+  font-size: 11px;
+  color: var(--text-muted, #8b949e);
 }
 
 /* ── Workflow Status Manager ─────────────────────────────────────────────── */
@@ -5686,10 +5741,7 @@ select {
 
 .settings-logs-cell-message {
   color: var(--text);
-  max-width: 30rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 
 .settings-logs-trigger {
@@ -5727,4 +5779,44 @@ select {
   padding: 1.5rem 0;
   color: var(--text-muted);
   font-size: 0.875rem;
+}
+
+.settings-logs-trigger--warn {
+  border-color: #fa0;
+  color: #fa0;
+}
+
+.settings-logs-trigger--error,
+.settings-logs-trigger--dpanic,
+.settings-logs-trigger--panic,
+.settings-logs-trigger--fatal {
+  border-color: #f55;
+  color: #f55;
+}
+
+.settings-logs-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.settings-logs-tab {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 12px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.settings-logs-tab--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.app-log-error-detail {
+  color: var(--text-muted);
+  font-size: 0.85em;
 }

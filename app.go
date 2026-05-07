@@ -24,6 +24,7 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/openquestions"
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
+	"github.com/artschekoff/context-consolidator/internal/applog"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
 	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
@@ -31,6 +32,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // PendingUpload holds extracted file data in memory before a context is created.
@@ -93,6 +95,7 @@ type App struct {
 	cliRunner     *cliclient.Runner
 	vcsStore      *vcsstore.Store
 	vcsSvc        *vcsservice.VCSProvider
+	appLogRepo    *appstore.AppLogRepo
 	cancelRefresh context.CancelFunc
 	cancelMu      sync.Mutex
 
@@ -128,6 +131,12 @@ func (a *App) startup(ctx context.Context) {
 		logger.Fatal("opening database", zap.Error(err))
 	}
 	a.db = s
+
+	a.appLogRepo = appstore.NewAppLogRepo(s.DB())
+	a.logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return zapcore.NewTee(core, applog.NewDBCore(ctx, a.appLogRepo))
+	}))
+	logger = a.logger
 
 	aRunner := acli.NewRunner(logger)
 	jiraClient := jira.NewClient(aRunner, logger)
@@ -1072,6 +1081,38 @@ func buildLogger() (*zap.Logger, error) {
 		return nil, fmt.Errorf("building logger: %w", err)
 	}
 	return logger, nil
+}
+
+// AppLogEntry represents a single structured log entry from the database.
+type AppLogEntry struct {
+	ID        int64   `json:"id"`
+	Level     string  `json:"level"`
+	Ts        float64 `json:"ts"`
+	Caller    string  `json:"caller"`
+	Msg       string  `json:"msg"`
+	Error     string  `json:"error,omitempty"`
+	CreatedAt string  `json:"createdAt"`
+}
+
+// GetAppLogs returns the last `limit` warn/error entries from the database.
+func (a *App) GetAppLogs(limit int) ([]AppLogEntry, error) {
+	rows, err := a.appLogRepo.List(a.ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]AppLogEntry, len(rows))
+	for i, r := range rows {
+		result[i] = AppLogEntry{
+			ID: r.ID, Level: r.Level, Ts: r.Ts,
+			Caller: r.Caller, Msg: r.Msg, Error: r.Error, CreatedAt: r.CreatedAt,
+		}
+	}
+	return result, nil
+}
+
+// ClearAppLogs deletes all app log entries from the database.
+func (a *App) ClearAppLogs() error {
+	return a.appLogRepo.Clear(a.ctx)
 }
 
 func logFilePath() string {

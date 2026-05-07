@@ -57,6 +57,7 @@ import {
   DismissReviewRequest,
   CheckoutInWorkspace,
   FindWorkspaceForBranch,
+  OpenWorkspaceTerminal,
   ListWorkspaces,
   RefreshWorkspacesForRepo,
   DeleteWorkspace,
@@ -273,6 +274,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [editingRepoId, setEditingRepoId] = useState<string | null>(null);
   const [repoPaths, setRepoPaths] = useState<Record<string, VCSRepoPath[]>>({});
   const [repoWorkspaces, setRepoWorkspaces] = useState<Record<string, VCSWorkspace[]>>({});
+  const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editOnCheckoutCommand, setEditOnCheckoutCommand] = useState("");
@@ -716,11 +718,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   };
 
   const handleRefreshWorkspaces = async (repoId: string) => {
+    setRefreshingRepoId(repoId);
     try {
       await RefreshWorkspacesForRepo(repoId);
       await loadWorkspacesForRepo(repoId);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setRefreshingRepoId(null);
     }
   };
 
@@ -775,6 +780,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     try {
       const existing = await FindWorkspaceForBranch(repoId, branch) as VCSWorkspace | null;
       if (existing) {
+        await OpenWorkspaceTerminal(existing.id);
         setReviewCheckoutLoading(false);
         return;
       }
@@ -1327,6 +1333,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                           >
                             <Folder size={12} /> Add path
                           </button>
+                          <button
+                            onClick={() => void handleRefreshWorkspaces(repo.id)}
+                            title="Refresh workspaces for all paths"
+                            disabled={refreshingRepoId === repo.id}
+                          >
+                            <RefreshCw size={12} />
+                          </button>
                           {!isEditing && (
                             <button onClick={() => startEdit(repo)} title="Edit label and description">
                               <Pencil size={12} /> Edit
@@ -1350,13 +1363,6 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                 <FolderOpen size={11} style={{ flexShrink: 0 }} />
                                 <span className="repo-path-value" title={p.path}>{p.path}</span>
                                 <button
-                                  className="repo-path-refresh"
-                                  title="Refresh workspaces"
-                                  onClick={() => void handleRefreshWorkspaces(repo.id)}
-                                >
-                                  <RefreshCw size={11} />
-                                </button>
-                                <button
                                   className="repo-path-remove"
                                   title="Remove path"
                                   onClick={() => void handleRemoveRepoPath(p.id)}
@@ -1367,9 +1373,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               {(repoWorkspaces[p.id] ?? []).map((w) => (
                                 <div key={w.id} className="workspace-row">
                                   <GitBranch size={10} style={{ flexShrink: 0 }} />
-                                  <span className="workspace-folder" title={w.worktreePath}>
+                                  <button
+                                    className="workspace-folder workspace-folder--btn"
+                                    title={`Open ${w.worktreePath}`}
+                                    onClick={() => void OpenWorkspaceTerminal(w.id).catch(() => {})}
+                                  >
                                     {w.worktreePath.split("/").pop()}
-                                  </span>
+                                  </button>
                                   <span className="workspace-branch">{w.branch}</span>
                                   <span className={`workspace-status-badge workspace-status-badge--${w.status}`}>
                                     {w.status === "should_delete" ? "done" : "active"}
@@ -1383,13 +1393,15 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                       <Check size={10} /> Done
                                     </button>
                                   )}
-                                  <button
-                                    className="workspace-action-btn workspace-action-btn--danger"
-                                    title="Delete workspace"
-                                    onClick={() => void handleDeleteWorkspace(w.id, repo.id)}
-                                  >
-                                    <Trash2 size={10} /> Delete
-                                  </button>
+                                  {w.status === "should_delete" && (
+                                    <button
+                                      className="workspace-action-btn workspace-action-btn--danger"
+                                      title="Delete workspace"
+                                      onClick={() => void handleDeleteWorkspace(w.id, repo.id)}
+                                    >
+                                      <Trash2 size={10} /> Delete
+                                    </button>
+                                  )}
                                 </div>
                               ))}
                             </div>

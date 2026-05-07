@@ -311,7 +311,15 @@ func (a *App) SetTrackedRepoPath(repoID, localPath string) error {
 			return fmt.Errorf("path does not exist: %w", err)
 		}
 	}
-	return a.vcsStore.Repos.UpdateLocalPath(a.ctx, repoID, localPath)
+	if err := a.vcsStore.Repos.UpdateLocalPath(a.ctx, repoID, localPath); err != nil {
+		return err
+	}
+	if localPath != "" {
+		if _, err := a.vcsStore.RepoPaths.Upsert(a.ctx, repoID, localPath); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CheckoutBranch switches to branch in localPath, then opens the configured terminal there.
@@ -344,12 +352,16 @@ func (a *App) openTerminalAt(path string) error {
 	return nil
 }
 
-// runOnCheckoutCommand executes command in workDir via sh -c. Fire-and-forget.
+// runOnCheckoutCommand executes command in workDir using the user's shell and waits for it to finish.
 func (a *App) runOnCheckoutCommand(command, workDir string) {
-	cmd := exec.Command("sh", "-c", command)
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "sh"
+	}
+	cmd := exec.Command(shell, "-c", command)
 	cmd.Dir = workDir
-	if err := cmd.Start(); err != nil {
-		a.logger.Sugar().Warnf("on_checkout_command failed to start: cmd=%q workDir=%q err=%v", command, workDir, err)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		a.logger.Sugar().Warnf("on_checkout_command failed: cmd=%q workDir=%q err=%v output=%s", command, workDir, err, out)
 	}
 }
 
@@ -420,11 +432,15 @@ func (a *App) CheckoutInWorkspace(repoPathID, branch string) error {
 	return a.openTerminalAt(worktreePath)
 }
 
-// OpenWorkspaceTerminal opens the configured terminal at the workspace's worktree path.
+// OpenWorkspaceTerminal runs on_checkout_command (if configured) and opens terminal at the workspace path.
 func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
 	w, err := a.vcsStore.Workspaces.Get(a.ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("workspace not found: %w", err)
+	}
+	repo, err := a.vcsStore.Repos.GetRepo(a.ctx, w.RepoID)
+	if err == nil && repo.OnCheckoutCommand != "" {
+		a.runOnCheckoutCommand(repo.OnCheckoutCommand, w.WorktreePath)
 	}
 	return a.openTerminalAt(w.WorktreePath)
 }
