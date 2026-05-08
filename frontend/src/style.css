@@ -5235,6 +5235,49 @@ select {
   flex-shrink: 0;
 }
 .repo-path-open:hover { color: var(--text); border-color: var(--text-muted); }
+.repo-path-open--danger { color: var(--danger); border-color: transparent; }
+.repo-path-open--danger:hover { color: var(--danger); border-color: var(--danger); }
+
+.repo-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.5;
+  padding: 6px 0 2px 20px;
+}
+
+.local-branch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 0 2px 20px;
+}
+.local-branch-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+}
+.local-branch-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.local-branch-badge--current {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface2));
+  color: var(--accent);
+}
+.local-branch-badge--gone {
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface2));
+  color: var(--danger);
+}
 
 .vcs-checkout-btn {
   background: none;

@@ -61,6 +61,9 @@ import {
   RefreshWorkspacesForRepo,
   DeleteWorkspace,
   MarkWorkspaceShouldDelete,
+  ListLocalBranches,
+  DeleteLocalBranch,
+  CheckoutLocalBranch,
   ListOrganizations,
   SetContextOrg,
   // @ts-ignore
@@ -73,7 +76,7 @@ import type {
   ContextText, Context, Issue, SlackChannel, SlackDMConfig,
   SlackSavePayload, TextFilesPayload, UploadedFile,
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
-  ContextRelation, RelationsPayload, Organization, VCSRepoPath, VCSWorkspace,
+  ContextRelation, RelationsPayload, Organization, VCSRepoPath, VCSWorkspace, LocalBranch,
 } from "../types";
 import { effectiveStatus, effectiveComment, effectiveNextStep } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
@@ -274,6 +277,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [editingRepoId, setEditingRepoId] = useState<string | null>(null);
   const [repoPaths, setRepoPaths] = useState<Record<string, VCSRepoPath[]>>({});
   const [repoWorkspaces, setRepoWorkspaces] = useState<Record<string, VCSWorkspace[]>>({});
+  const [localBranches, setLocalBranches] = useState<Record<string, LocalBranch[]>>({});
   const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -370,16 +374,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         if (r.status === "fulfilled") pathMap[r.value.id] = r.value.paths;
       }
       setRepoPaths(pathMap);
-      // Fetch workspaces for each path
+      // Fetch workspaces and local branches for each path
       const wsMap: Record<string, VCSWorkspace[]> = {};
+      const brMap: Record<string, LocalBranch[]> = {};
       for (const r of pathResults) {
         if (r.status === "fulfilled") {
           for (const p of r.value.paths) {
             wsMap[p.id] = (await ListWorkspaces(p.id) as VCSWorkspace[]) ?? [];
+            brMap[p.id] = await (ListLocalBranches(p.id) as Promise<LocalBranch[]>).catch(() => []);
           }
         }
       }
       setRepoWorkspaces(wsMap);
+      setLocalBranches(brMap);
     } catch {
       // best-effort
     }
@@ -714,13 +721,21 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
 
   const loadWorkspacesForRepo = async (repoId: string) => {
     const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
-    const result: Record<string, VCSWorkspace[]> = {};
+    const wsResult: Record<string, VCSWorkspace[]> = {};
+    const brResult: Record<string, LocalBranch[]> = {};
     await Promise.all(
       paths.map(async (p) => {
-        result[p.id] = (await ListWorkspaces(p.id) as VCSWorkspace[]) ?? [];
+        wsResult[p.id] = (await ListWorkspaces(p.id) as VCSWorkspace[]) ?? [];
+        brResult[p.id] = await (ListLocalBranches(p.id) as Promise<LocalBranch[]>).catch(() => []);
       })
     );
-    setRepoWorkspaces((prev) => ({ ...prev, ...result }));
+    setRepoWorkspaces((prev) => ({ ...prev, ...wsResult }));
+    setLocalBranches((prev) => ({ ...prev, ...brResult }));
+  };
+
+  const reloadLocalBranches = async (pathId: string) => {
+    const branches = await (ListLocalBranches(pathId) as Promise<LocalBranch[]>).catch(() => []);
+    setLocalBranches((prev) => ({ ...prev, [pathId]: branches }));
   };
 
   const handleRefreshWorkspaces = async (repoId: string) => {
@@ -747,6 +762,24 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const handleMarkWorkspaceDone = async (workspaceId: string, repoId: string) => {
     try {
       await MarkWorkspaceShouldDelete(workspaceId);
+      await loadWorkspacesForRepo(repoId);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleDeleteLocalBranch = async (pathId: string, branch: string) => {
+    try {
+      await DeleteLocalBranch(pathId, branch);
+      await reloadLocalBranches(pathId);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleCheckoutLocalBranch = async (pathId: string, branch: string, repoId: string) => {
+    try {
+      await CheckoutLocalBranch(pathId, branch);
       await loadWorkspacesForRepo(repoId);
     } catch (e) {
       setError(String(e));
@@ -1311,41 +1344,93 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                   <X size={11} />
                                 </button>
                               </div>
-                              {(repoWorkspaces[p.id] ?? []).map((w) => (
-                                <div key={w.id} className="workspace-row">
-                                  <GitBranch size={10} style={{ flexShrink: 0 }} />
-                                  <span className="workspace-folder">{w.worktreePath.split("/").pop()}</span>
-                                  <span className="workspace-branch">{w.branch}</span>
-                                  <span className={`workspace-status-badge workspace-status-badge--${w.status}`}>
-                                    {w.status === "should_delete" ? "done" : "active"}
-                                  </span>
-                                  <button
-                                    className="repo-path-open"
-                                    title={`Open ${w.worktreePath} in terminal`}
-                                    onClick={() => void OpenWorkspaceTerminal(w.id).catch(() => {})}
-                                  >
-                                    <ExternalLink size={11} /> Open
-                                  </button>
-                                  {w.status === "active" && (
+                              {(repoWorkspaces[p.id] ?? []).length > 0 && (
+                                <div className="repo-section-label">Workspaces</div>
+                              )}
+                              {(repoWorkspaces[p.id] ?? []).map((w) => {
+                                const branchUrl = url ? `${url}/tree/${encodeURIComponent(w.branch)}` : "";
+                                return (
+                                  <div key={w.id} className="workspace-row">
+                                    <GitBranch size={10} style={{ flexShrink: 0 }} />
+                                    <span className="workspace-folder">{w.worktreePath.split("/").pop()}</span>
+                                    <span className="workspace-branch">{w.branch}</span>
+                                    <span className={`workspace-status-badge workspace-status-badge--${w.status}`}>
+                                      {w.status === "should_delete" ? "done" : "active"}
+                                    </span>
+                                    {branchUrl && (
+                                      <button
+                                        className="repo-path-open"
+                                        title={`Open ${w.branch} on ${repo.platform}`}
+                                        onClick={() => BrowserOpenURL(branchUrl)}
+                                      >
+                                        <ExternalLink size={11} /> Open
+                                      </button>
+                                    )}
                                     <button
-                                      className="workspace-action-btn"
-                                      title="Mark as done (ready to delete)"
-                                      onClick={() => void handleMarkWorkspaceDone(w.id, repo.id)}
+                                      className="repo-path-open"
+                                      title={`Open ${w.worktreePath} in terminal`}
+                                      onClick={() => void OpenWorkspaceTerminal(w.id).catch(() => {})}
                                     >
-                                      <Check size={10} /> Done
+                                      <ExternalLink size={11} /> Checkout
                                     </button>
-                                  )}
-                                  {w.status === "should_delete" && (
+                                    {w.status === "active" && (
+                                      <button
+                                        className="workspace-action-btn"
+                                        title="Mark as done (ready to delete)"
+                                        onClick={() => void handleMarkWorkspaceDone(w.id, repo.id)}
+                                      >
+                                        <Check size={10} /> Done
+                                      </button>
+                                    )}
+                                    {w.status === "should_delete" && (
+                                      <button
+                                        className="workspace-action-btn workspace-action-btn--danger"
+                                        title="Delete workspace"
+                                        onClick={() => void handleDeleteWorkspace(w.id, repo.id)}
+                                      >
+                                        <Trash2 size={10} /> Delete
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {(localBranches[p.id] ?? []).length > 0 && (
+                                <div className="repo-section-label">Local branches</div>
+                              )}
+                              {(localBranches[p.id] ?? []).map((b) => {
+                                const branchUrl = url ? `${url}/tree/${encodeURIComponent(b.name)}` : "";
+                                return (
+                                  <div key={b.name} className="local-branch-row">
+                                    <GitBranch size={10} style={{ flexShrink: 0, opacity: 0.5 }} />
+                                    <span className="local-branch-name">{b.name}</span>
+                                    {b.isCurrent && <span className="local-branch-badge local-branch-badge--current">current</span>}
+                                    {b.isGone && <span className="local-branch-badge local-branch-badge--gone">gone</span>}
+                                    {branchUrl && (
+                                      <button
+                                        className="repo-path-open"
+                                        title={`Open ${b.name} on ${repo.platform}`}
+                                        onClick={() => BrowserOpenURL(branchUrl)}
+                                      >
+                                        <ExternalLink size={11} /> Open
+                                      </button>
+                                    )}
                                     <button
-                                      className="workspace-action-btn workspace-action-btn--danger"
-                                      title="Delete workspace"
-                                      onClick={() => void handleDeleteWorkspace(w.id, repo.id)}
+                                      className="repo-path-open"
+                                      title={`Checkout ${b.name}`}
+                                      onClick={() => void handleCheckoutLocalBranch(p.id, b.name, repo.id)}
                                     >
-                                      <Trash2 size={10} /> Delete
+                                      <ExternalLink size={11} /> Checkout
                                     </button>
-                                  )}
-                                </div>
-                              ))}
+                                    <button
+                                      className="repo-path-open repo-path-open--danger"
+                                      title={`Delete local branch ${b.name}`}
+                                      onClick={() => void handleDeleteLocalBranch(p.id, b.name)}
+                                    >
+                                      <X size={11} /> Remove
+                                    </button>
+                                  </div>
+                                );
+                              })}
                             </div>
                           ))}
                         </div>

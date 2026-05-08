@@ -454,6 +454,38 @@ func (a *App) OpenRepoPathTerminal(pathID string) error {
 	return a.openTerminalAt(rp.Path)
 }
 
+// ListLocalBranches returns all local git branches for the given repo path.
+func (a *App) ListLocalBranches(pathID string) ([]vcs.LocalBranch, error) {
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)
+	if err != nil {
+		return nil, fmt.Errorf("repo path not found: %w", err)
+	}
+	return vcs.GitListLocalBranches(rp.Path)
+}
+
+// DeleteLocalBranch force-deletes a local branch in the given repo path.
+func (a *App) DeleteLocalBranch(pathID, branch string) error {
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)
+	if err != nil {
+		return fmt.Errorf("repo path not found: %w", err)
+	}
+	return vcs.GitDeleteLocalBranch(rp.Path, branch)
+}
+
+// CheckoutLocalBranch checks out a local branch as a worktree (or opens the
+// existing workspace terminal if already checked out) and opens terminal.
+func (a *App) CheckoutLocalBranch(repoPathID, branch string) error {
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, repoPathID)
+	if err != nil {
+		return fmt.Errorf("repo path not found: %w", err)
+	}
+	existing, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, rp.RepoID, branch)
+	if err == nil && existing != nil {
+		return a.openTerminalAt(existing.WorktreePath)
+	}
+	return a.CheckoutInWorkspace(repoPathID, branch)
+}
+
 // ListWorkspaces returns all workspaces for a specific repo path.
 func (a *App) ListWorkspaces(repoPathID string) ([]vcsstore.VCSWorkspace, error) {
 	return a.vcsStore.Workspaces.ListByPath(a.ctx, repoPathID)

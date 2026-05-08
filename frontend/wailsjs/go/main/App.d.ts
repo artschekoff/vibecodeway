@@ -6,9 +6,9 @@ import {slackstore} from '../models';
 import {contextlog} from '../models';
 import {main} from '../models';
 import {service} from '../models';
+import {vcs} from '../models';
 import {jira} from '../models';
 import {jirastore} from '../models';
-import {vcs} from '../models';
 
 export function AddContextRelation(arg1:string,arg2:string,arg3:string):Promise<store.ContextRelation>;
 
@@ -44,6 +44,8 @@ export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
 
 export function CheckoutInWorkspace(arg1:string,arg2:string):Promise<void>;
 
+export function CheckoutLocalBranch(arg1:string,arg2:string):Promise<void>;
+
 export function ClearAppLogs():Promise<void>;
 
 export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Array<store.ContextUploadedFile>>;
@@ -65,6 +67,8 @@ export function DeleteContextText(arg1:string):Promise<void>;
 export function DeleteJiraComment(arg1:string):Promise<void>;
 
 export function DeleteJiraIssue(arg1:string):Promise<void>;
+
+export function DeleteLocalBranch(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteOrganization(arg1:string):Promise<void>;
 
@@ -139,6 +143,8 @@ export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 export function ListContexts():Promise<Array<store.Context>>;
 
 export function ListContextsByOrg(arg1:string):Promise<Array<store.Context>>;
+
+export function ListLocalBranches(arg1:string):Promise<Array<vcs.LocalBranch>>;
 
 export function ListOrganizations():Promise<Array<store.Organization>>;
 

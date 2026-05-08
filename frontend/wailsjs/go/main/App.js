@@ -70,6 +70,10 @@ export function CheckoutInWorkspace(arg1, arg2) {
   return window['go']['main']['App']['CheckoutInWorkspace'](arg1, arg2);
 }
 
+export function CheckoutLocalBranch(arg1, arg2) {
+  return window['go']['main']['App']['CheckoutLocalBranch'](arg1, arg2);
+}
+
 export function ClearAppLogs() {
   return window['go']['main']['App']['ClearAppLogs']();
 }
@@ -112,6 +116,10 @@ export function DeleteJiraComment(arg1) {
 
 export function DeleteJiraIssue(arg1) {
   return window['go']['main']['App']['DeleteJiraIssue'](arg1);
+}
+
+export function DeleteLocalBranch(arg1, arg2) {
+  return window['go']['main']['App']['DeleteLocalBranch'](arg1, arg2);
 }
 
 export function DeleteOrganization(arg1) {
@@ -260,6 +268,10 @@ export function ListContexts() {
 
 export function ListContextsByOrg(arg1) {
   return window['go']['main']['App']['ListContextsByOrg'](arg1);
+}
+
+export function ListLocalBranches(arg1) {
+  return window['go']['main']['App']['ListLocalBranches'](arg1);
 }
 
 export function ListOrganizations() {
