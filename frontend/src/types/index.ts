@@ -359,6 +359,12 @@ export interface VCSRepoPath {
   createdAt: string;
 }
 
+export interface LocalBranch {
+  name: string;
+  isCurrent: boolean;
+  isGone: boolean;
+}
+
 export interface VCSWorkspace {
   id: string;
   repoPathId: string;
