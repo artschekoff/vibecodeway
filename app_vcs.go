@@ -410,6 +410,29 @@ func (a *App) CheckoutInWorkspace(repoPathID, branch string) error {
 	if err := ensureWorktreesIgnored(baseDir); err != nil {
 		a.logger.Sugar().Warnf("CheckoutInWorkspace: .gitignore update failed: %v", err)
 	}
+
+	// If the branch is already checked out in a git worktree, reuse it.
+	if existing, err := vcs.GitWorktreeList(baseDir); err == nil {
+		for _, wt := range existing {
+			if wt.Branch == branch {
+				ws := &vcsstore.VCSWorkspace{
+					RepoPathID:   repoPathID,
+					RepoID:       repoPath.RepoID,
+					Branch:       branch,
+					WorktreePath: wt.Path,
+					Status:       "active",
+				}
+				// Best-effort: record the workspace if not already tracked.
+				_ = a.vcsStore.Workspaces.Create(a.ctx, ws)
+				repo, err := a.vcsStore.Repos.GetRepo(a.ctx, repoPath.RepoID)
+				if err == nil && repo.OnCheckoutCommand != "" {
+					a.runOnCheckoutCommand(repo.OnCheckoutCommand, wt.Path)
+				}
+				return a.openTerminalAt(wt.Path)
+			}
+		}
+	}
+
 	worktreeName := vcs.BranchToWorktreeName(branch)
 	worktreePath := filepath.Join(baseDir, ".worktrees", worktreeName)
 	if err := vcs.GitWorktreeAdd(baseDir, worktreePath, branch); err != nil {
