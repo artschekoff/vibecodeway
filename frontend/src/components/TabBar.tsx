@@ -4,14 +4,14 @@ import { useTabContext } from "../contexts/TabContext";
 import type { Tab } from "../types";
 
 const ORG_COLORS = [
-  "#7C9CF5",
-  "#82D9A0",
-  "#F5C97C",
-  "#E07878",
-  "#B49CF5",
-  "#7CD4E7",
-  "#F5A07C",
-  "#C9E882",
+  "#F5A040",  // amber
+  "#7CD4E7",  // cyan
+  "#82D9A0",  // green
+  "#B49CF5",  // purple
+  "#E07878",  // red
+  "#F5C97C",  // yellow
+  "#F57CA0",  // pink
+  "#C9E882",  // lime
 ];
 
 function useOrgColorMap(tabs: Tab[]): Map<string, string> {

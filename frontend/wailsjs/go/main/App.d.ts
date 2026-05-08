@@ -186,6 +186,8 @@ export function MarkWorkspaceShouldDelete(arg1:string):Promise<void>;
 
 export function OpenAccessibilityPreferences():Promise<void>;
 
+export function OpenRepoPathTerminal(arg1:string):Promise<void>;
+
 export function OpenWorkspaceTerminal(arg1:string):Promise<void>;
 
 export function PickAndExtractFiles(arg1:string):Promise<main.UploadBatchResult>;

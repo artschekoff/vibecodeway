@@ -445,6 +445,15 @@ func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
 	return a.openTerminalAt(w.WorktreePath)
 }
 
+// OpenRepoPathTerminal opens the configured terminal at the given repo local path.
+func (a *App) OpenRepoPathTerminal(pathID string) error {
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)
+	if err != nil {
+		return fmt.Errorf("repo path not found: %w", err)
+	}
+	return a.openTerminalAt(rp.Path)
+}
+
 // ListWorkspaces returns all workspaces for a specific repo path.
 func (a *App) ListWorkspaces(repoPathID string) ([]vcsstore.VCSWorkspace, error) {
 	return a.vcsStore.Workspaces.ListByPath(a.ctx, repoPathID)

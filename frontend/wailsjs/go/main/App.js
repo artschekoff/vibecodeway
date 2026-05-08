@@ -354,6 +354,10 @@ export function OpenAccessibilityPreferences() {
   return window['go']['main']['App']['OpenAccessibilityPreferences']();
 }
 
+export function OpenRepoPathTerminal(arg1) {
+  return window['go']['main']['App']['OpenRepoPathTerminal'](arg1);
+}
+
 export function OpenWorkspaceTerminal(arg1) {
   return window['go']['main']['App']['OpenWorkspaceTerminal'](arg1);
 }
