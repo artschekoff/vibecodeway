@@ -5051,16 +5051,18 @@ select {
 }
 
 .tab-item--org.tab-item--colored {
-  background: color-mix(in srgb, var(--tab-org-color) 14%, var(--surface));
+  background: color-mix(in srgb, var(--tab-org-color) 28%, var(--surface));
+  border-top-color: var(--tab-org-color);
   opacity: 1;
 }
 
 .tab-item--org.tab-item--colored:hover {
-  background: color-mix(in srgb, var(--tab-org-color) 20%, var(--surface2));
+  background: color-mix(in srgb, var(--tab-org-color) 36%, var(--surface2));
 }
 
 .tab-item--org.tab-item--colored.tab-item--active {
-  background: color-mix(in srgb, var(--tab-org-color) 18%, var(--bg));
+  background: color-mix(in srgb, var(--tab-org-color) 32%, var(--bg));
+  border-top-color: var(--tab-org-color);
 }
 
 .tab-item__title--org {
@@ -5093,6 +5095,7 @@ select {
   opacity: 0;
   transition: opacity 0.1s, background 0.1s;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .tab-item:hover .tab-item__action,
@@ -5217,6 +5220,21 @@ select {
   align-items: center;
 }
 .repo-path-remove:hover { color: var(--danger); }
+.repo-path-open {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.repo-path-open:hover { color: var(--text); border-color: var(--text-muted); }
 
 .vcs-checkout-btn {
   background: none;
