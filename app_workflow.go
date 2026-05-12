@@ -61,6 +61,12 @@ func (a *App) OverrideCurrentStep(contextID, description string) error {
 	return err
 }
 
+// GetEstimationHistory returns all estimation log entries for a context, newest first.
+// Returns an empty slice when no analyses have produced an estimate yet.
+func (a *App) GetEstimationHistory(contextID string) ([]appstore.EstimationLog, error) {
+	return a.db.GetEstimationHistory(context.Background(), contextID)
+}
+
 // AddUserEvent appends a user-authored event to the event log and marks the snapshot stale.
 // eventType must be one of: user_note, next_step_recommendation, open_question_answered,
 // requirement_confirmed, requirement_rejected, current_step_override.
