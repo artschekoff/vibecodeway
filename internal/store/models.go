@@ -215,6 +215,28 @@ type ContextSnapshot struct {
 	AnalyzedAt            *string `json:"analyzedAt,omitempty"`
 	IsStale               bool    `json:"isStale"`
 	Version               int     `json:"version"`
+
+	// AI-predicted effort remaining and completion date (updated on each AnalyzeContext run).
+	EstimatedHours          *float64 `json:"estimatedHours,omitempty"`
+	EstimatedCompletionDate *string  `json:"estimatedCompletionDate,omitempty"`
+	EstimationConfidence    string   `json:"estimationConfidence"` // "high" | "medium" | "low" | ""
+	EstimationBasis         string   `json:"estimationBasis"`
+}
+
+// EstimationLog records one change to a context's estimated effort.
+// trigger_type values: "initial" | "re-analysis" | "requirement_change"
+type EstimationLog struct {
+	ID                        string   `json:"id"`
+	ContextID                 string   `json:"contextId"`
+	RecordedAt                string   `json:"recordedAt"`
+	TriggerType               string   `json:"triggerType"`
+	TriggerDescription        string   `json:"triggerDescription"`
+	DeltaHours                *float64 `json:"deltaHours,omitempty"`
+	EstimatedHoursBefore      *float64 `json:"estimatedHoursBefore,omitempty"`
+	EstimatedHoursAfter       *float64 `json:"estimatedHoursAfter,omitempty"`
+	EstimatedCompletionBefore *string  `json:"estimatedCompletionBefore,omitempty"`
+	EstimatedCompletionAfter  *string  `json:"estimatedCompletionAfter,omitempty"`
+	EstimationBasis           string   `json:"estimationBasis"`
 }
 
 // AIPrompt is a user-editable prompt template stored in the database.

@@ -182,3 +182,38 @@ func TestSnapshotStatusDefaults(t *testing.T) {
 	assert.Equal(t, "not_started", c.SnapshotStatus)
 	assert.False(t, c.SnapshotIsStale)
 }
+
+func TestEstimationLogTableExists(t *testing.T) {
+	s := openTestStore(t)
+	assertTableExists(t, s, "estimation_log")
+}
+
+func TestContextSnapshotEstimationFields(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "est-ctx", org.ID)
+	require.NoError(t, err)
+
+	hours := 3.5
+	date := "2026-05-12T15:00:00Z"
+	sn := &ContextSnapshot{
+		ContextID:               c.ID,
+		EstimatedHours:          &hours,
+		EstimatedCompletionDate: &date,
+		EstimationConfidence:    "medium",
+		EstimationBasis:         "2 requirements identified",
+	}
+	require.NoError(t, s.UpsertSnapshot(ctx, sn))
+
+	got, err := s.GetSnapshot(ctx, c.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.EstimatedHours)
+	assert.InDelta(t, 3.5, *got.EstimatedHours, 0.001)
+	require.NotNil(t, got.EstimatedCompletionDate)
+	assert.Equal(t, date, *got.EstimatedCompletionDate)
+	assert.Equal(t, "medium", got.EstimationConfidence)
+	assert.Equal(t, "2 requirements identified", got.EstimationBasis)
+}
