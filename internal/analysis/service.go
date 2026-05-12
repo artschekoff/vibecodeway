@@ -88,13 +88,19 @@ Produce a JSON object with these exact fields. All sections are Markdown.
   "section_engineering": "## Technical entities\n...\n## Relevant modules\n...\n## Active branch and PRs\n...\n## Known issues\n...\n## Architectural constraints\n...",
   "ai_next_steps_short": "Concrete actions for the next ~1 day",
   "ai_next_steps_mid": "Goals for the next ~1 week",
-  "ai_next_steps_long": "Strategic direction for the next ~1 month"
+  "ai_next_steps_long": "Strategic direction for the next ~1 month",
+  "estimated_hours": 3.5,
+  "estimation_confidence": "high|medium|low",
+  "estimation_basis": "One sentence explaining the estimate (e.g. '3 requirements at ~1h each, 0.5h already done')"
 }
 
 Rules:
 - status "needs_attention" wins over all other statuses if there are open blockers or CI failures
 - status "scoping" if there are unresolved open questions with no blocker
 - Incorporate user-provided next-step hints when generating ai_next_steps_* fields
+- estimated_hours is the TOTAL remaining work hours from NOW (not elapsed, not total effort)
+- estimation_confidence: "high" if requirements are well-defined and scope is clear; "medium" if some uncertainty; "low" if many open questions
+- If there are no events yet, omit estimated_hours from the response
 - Return ONLY valid JSON, no markdown fences`
 
 	defaultHandoffPacketPrompt = `You are an expert business analyst extracting structured business requirements from project communication logs.
@@ -426,9 +432,12 @@ func parseSnapshotResponse(content string) (*appstore.ContextSnapshot, error) {
 		SectionOperational string `json:"section_operational"`
 		SectionNarrative   string `json:"section_narrative"`
 		SectionEngineering string `json:"section_engineering"`
-		AINextStepsShort   string `json:"ai_next_steps_short"`
-		AINextStepsMid     string `json:"ai_next_steps_mid"`
-		AINextStepsLong    string `json:"ai_next_steps_long"`
+		AINextStepsShort     string   `json:"ai_next_steps_short"`
+		AINextStepsMid       string   `json:"ai_next_steps_mid"`
+		AINextStepsLong      string   `json:"ai_next_steps_long"`
+		EstimatedHours       *float64 `json:"estimated_hours"`
+		EstimationConfidence string   `json:"estimation_confidence"`
+		EstimationBasis      string   `json:"estimation_basis"`
 	}
 	if err := json.Unmarshal([]byte(content), &raw); err != nil {
 		return nil, fmt.Errorf("parse snapshot response: %w (content: %.200s)", err, content)
@@ -455,6 +464,9 @@ func parseSnapshotResponse(content string) (*appstore.ContextSnapshot, error) {
 		AINextStepsShort:      raw.AINextStepsShort,
 		AINextStepsMid:        raw.AINextStepsMid,
 		AINextStepsLong:       raw.AINextStepsLong,
+		EstimatedHours:        raw.EstimatedHours,
+		EstimationConfidence:  raw.EstimationConfidence,
+		EstimationBasis:       raw.EstimationBasis,
 	}, nil
 }
 
