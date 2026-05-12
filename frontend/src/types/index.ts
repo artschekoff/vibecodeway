@@ -260,6 +260,24 @@ export interface ContextSnapshot {
   analyzedAt?: string;
   isStale: boolean;
   version: number;
+  estimatedHours?: number;
+  estimatedCompletionDate?: string;
+  estimationConfidence: string;   // "high" | "medium" | "low" | ""
+  estimationBasis: string;
+}
+
+export interface EstimationLog {
+  id: string;
+  contextId: string;
+  recordedAt: string;
+  triggerType: "initial" | "re-analysis" | "requirement_change" | string;
+  triggerDescription: string;
+  deltaHours?: number;
+  estimatedHoursBefore?: number;
+  estimatedHoursAfter?: number;
+  estimatedCompletionBefore?: string;
+  estimatedCompletionAfter?: string;
+  estimationBasis: string;
 }
 
 export interface ContextEvent {
