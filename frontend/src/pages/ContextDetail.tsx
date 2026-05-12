@@ -51,6 +51,7 @@ import {
   MarkBranchAllViewed,
   AnalyzeContext,
   GetContextSnapshot,
+  GetEstimationHistory,
   GenerateHandoffPacket,
   AddUserEvent,
   ListEvents,
@@ -59,7 +60,7 @@ import {
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -68,6 +69,7 @@ import SlackDMConfigCard from "../components/SlackDMConfigCard";
 import UploadedFileCard from "../components/UploadedFileCard";
 import ContextTextCard from "../components/ContextTextCard";
 import ContextForm from "../components/ContextForm";
+import EstimationPanel from "../components/EstimationPanel";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 
@@ -357,6 +359,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [breakdown, setBreakdown] = useState<UnviewedBreakdown | null>(null);
   const [markingAllViewed, setMarkingAllViewed] = useState(false);
   const [snapshot, setSnapshot] = useState<ContextSnapshot | null>(null);
+  const [estimationHistory, setEstimationHistory] = useState<EstimationLog[]>([]);
   const [events, setEvents] = useState<ContextEvent[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [snapshotError, setSnapshotError] = useState("");
@@ -400,6 +403,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     } catch {
       // snapshot not yet generated — that's fine
     }
+    GetEstimationHistory(id)
+      .then((h) => setEstimationHistory(h ?? []))
+      .catch(() => setEstimationHistory([]));
   }, [id]);
 
   const analyzeContext = async () => {
@@ -410,6 +416,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       setSnapshot(result);
       const evts = await ListEvents(id) as ContextEvent[];
       setEvents(evts ?? []);
+      GetEstimationHistory(id)
+        .then((h) => setEstimationHistory(h ?? []))
+        .catch(() => {});
     } catch (e) {
       setSnapshotError(String(e));
     } finally {
@@ -954,6 +963,12 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Engineering</summary>
                     <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionEngineering}</pre>
                   </details>
+                )}
+                {snapshot && (
+                  <div className="context-detail__estimation">
+                    <h3 className="context-detail__section-title">Time Estimate</h3>
+                    <EstimationPanel snapshot={snapshot} history={estimationHistory} />
+                  </div>
                 )}
                 {(snapshot.aiNextStepsShort || snapshot.aiNextStepsMid || snapshot.aiNextStepsLong) && (
                   <div style={{ marginTop: 4 }}>

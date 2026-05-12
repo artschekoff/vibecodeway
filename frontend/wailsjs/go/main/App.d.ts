@@ -93,6 +93,8 @@ export function GetContextDetail(arg1:string):Promise<service.ContextDetail>;
 
 export function GetContextSnapshot(arg1:string):Promise<store.ContextSnapshot>;
 
+export function GetEstimationHistory(arg1:string):Promise<Array<any>>;
+
 export function GetJiraInstanceURL():Promise<string>;
 
 export function GetLatestHandoffPacket(arg1:string):Promise<store.InferredRequirementsPacket>;

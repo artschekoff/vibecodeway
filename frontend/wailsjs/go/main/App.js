@@ -170,6 +170,10 @@ export function GetContextSnapshot(arg1) {
   return window['go']['main']['App']['GetContextSnapshot'](arg1);
 }
 
+export function GetEstimationHistory(arg1) {
+  return window['go']['main']['App']['GetEstimationHistory'](arg1);
+}
+
 export function GetJiraInstanceURL() {
   return window['go']['main']['App']['GetJiraInstanceURL']();
 }
