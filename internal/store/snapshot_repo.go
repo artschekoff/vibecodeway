@@ -11,7 +11,11 @@ import (
 // GetSnapshot returns the current snapshot for a context, or nil if none exists yet.
 func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnapshot, error) {
 	var sn ContextSnapshot
-	var isStaleInt, overriddenInt int
+	var (
+		isStaleInt, overriddenInt   int
+		estimatedHours              sql.NullFloat64
+		estimatedCompletionDate     sql.NullString
+	)
 	err := s.db.QueryRowContext(ctx, `
 		SELECT context_id,
 		       current_step_desc, current_step_confidence, current_step_from, current_step_overridden,
@@ -19,7 +23,9 @@ func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnap
 		       status,
 		       ai_next_steps_short, ai_next_steps_mid, ai_next_steps_long,
 		       user_next_steps_short, user_next_steps_mid, user_next_steps_long,
-		       last_analyzed_session_id, analyzed_at, is_stale, version
+		       last_analyzed_session_id, analyzed_at, is_stale, version,
+		       estimated_hours, estimated_completion_date,
+		       estimation_confidence, estimation_basis
 		FROM context_snapshots WHERE context_id = ?
 	`, contextID).Scan(
 		&sn.ContextID,
@@ -29,6 +35,8 @@ func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnap
 		&sn.AINextStepsShort, &sn.AINextStepsMid, &sn.AINextStepsLong,
 		&sn.UserNextStepsShort, &sn.UserNextStepsMid, &sn.UserNextStepsLong,
 		&sn.LastAnalyzedSessionID, &sn.AnalyzedAt, &isStaleInt, &sn.Version,
+		&estimatedHours, &estimatedCompletionDate,
+		&sn.EstimationConfidence, &sn.EstimationBasis,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -38,6 +46,13 @@ func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnap
 	}
 	sn.IsStale = isStaleInt == 1
 	sn.CurrentStepOverridden = overriddenInt == 1
+	if estimatedHours.Valid {
+		v := estimatedHours.Float64
+		sn.EstimatedHours = &v
+	}
+	if estimatedCompletionDate.Valid {
+		sn.EstimatedCompletionDate = &estimatedCompletionDate.String
+	}
 	return &sn, nil
 }
 
@@ -61,24 +76,30 @@ func (s *Store) UpsertSnapshot(ctx context.Context, sn *ContextSnapshot) error {
 		   status,
 		   ai_next_steps_short, ai_next_steps_mid, ai_next_steps_long,
 		   user_next_steps_short, user_next_steps_mid, user_next_steps_long,
-		   last_analyzed_session_id, analyzed_at, is_stale, version)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		   last_analyzed_session_id, analyzed_at, is_stale, version,
+		   estimated_hours, estimated_completion_date,
+		   estimation_confidence, estimation_basis)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(context_id) DO UPDATE SET
-		  current_step_desc        = excluded.current_step_desc,
-		  current_step_confidence  = excluded.current_step_confidence,
-		  current_step_from        = excluded.current_step_from,
-		  current_step_overridden  = excluded.current_step_overridden,
-		  section_operational      = excluded.section_operational,
-		  section_narrative        = excluded.section_narrative,
-		  section_engineering      = excluded.section_engineering,
-		  status                   = excluded.status,
-		  ai_next_steps_short      = excluded.ai_next_steps_short,
-		  ai_next_steps_mid        = excluded.ai_next_steps_mid,
-		  ai_next_steps_long       = excluded.ai_next_steps_long,
-		  last_analyzed_session_id = excluded.last_analyzed_session_id,
-		  analyzed_at              = excluded.analyzed_at,
-		  is_stale                 = excluded.is_stale,
-		  version                  = excluded.version
+		  current_step_desc         = excluded.current_step_desc,
+		  current_step_confidence   = excluded.current_step_confidence,
+		  current_step_from         = excluded.current_step_from,
+		  current_step_overridden   = excluded.current_step_overridden,
+		  section_operational       = excluded.section_operational,
+		  section_narrative         = excluded.section_narrative,
+		  section_engineering       = excluded.section_engineering,
+		  status                    = excluded.status,
+		  ai_next_steps_short       = excluded.ai_next_steps_short,
+		  ai_next_steps_mid         = excluded.ai_next_steps_mid,
+		  ai_next_steps_long        = excluded.ai_next_steps_long,
+		  last_analyzed_session_id  = excluded.last_analyzed_session_id,
+		  analyzed_at               = excluded.analyzed_at,
+		  is_stale                  = excluded.is_stale,
+		  version                   = excluded.version,
+		  estimated_hours           = excluded.estimated_hours,
+		  estimated_completion_date = excluded.estimated_completion_date,
+		  estimation_confidence     = excluded.estimation_confidence,
+		  estimation_basis          = excluded.estimation_basis
 	`,
 		sn.ContextID,
 		sn.CurrentStepDesc, sn.CurrentStepConfidence, sn.CurrentStepFrom, overriddenInt,
@@ -87,6 +108,8 @@ func (s *Store) UpsertSnapshot(ctx context.Context, sn *ContextSnapshot) error {
 		sn.AINextStepsShort, sn.AINextStepsMid, sn.AINextStepsLong,
 		sn.UserNextStepsShort, sn.UserNextStepsMid, sn.UserNextStepsLong,
 		sn.LastAnalyzedSessionID, sn.AnalyzedAt, isStaleInt, sn.Version,
+		sn.EstimatedHours, sn.EstimatedCompletionDate,
+		sn.EstimationConfidence, sn.EstimationBasis,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert snapshot: %w", err)
