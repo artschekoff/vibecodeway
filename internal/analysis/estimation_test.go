@@ -47,3 +47,15 @@ func TestParseSnapshotResponse_NoEstimation_ReturnsNilHours(t *testing.T) {
 	assert.Nil(t, sn.EstimatedHours)
 	assert.Empty(t, sn.EstimationConfidence)
 }
+
+func TestComputeCompletionDate(t *testing.T) {
+	base := "2026-05-12T10:00:00Z"
+	result := computeCompletionDate(base, 3.0)
+	assert.Equal(t, "2026-05-12T13:00:00Z", result)
+}
+
+func TestComputeCompletionDate_ZeroHours(t *testing.T) {
+	base := "2026-05-12T10:00:00Z"
+	result := computeCompletionDate(base, 0)
+	assert.Equal(t, "2026-05-12T10:00:00Z", result)
+}

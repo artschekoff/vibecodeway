@@ -135,6 +135,27 @@ func NewService(store *appstore.Store, jiraSvc *jiraservice.ContextService, ai *
 	return &Service{store: store, jiraSvc: jiraSvc, ai: ai, logger: logger}
 }
 
+// computeCompletionDate adds hours to an RFC3339 base time string and returns RFC3339.
+// Returns base unchanged if parsing fails or hours is 0.
+func computeCompletionDate(base string, hours float64) string {
+	if hours == 0 {
+		return base
+	}
+	t, err := time.Parse(time.RFC3339, base)
+	if err != nil {
+		return base
+	}
+	return t.Add(time.Duration(hours * float64(time.Hour))).UTC().Format(time.RFC3339)
+}
+
+// estimationTriggerType returns "initial" for the first estimate, "re-analysis" for subsequent ones.
+func estimationTriggerType(prev *appstore.ContextSnapshot) string {
+	if prev == nil || prev.EstimatedHours == nil {
+		return "initial"
+	}
+	return "re-analysis"
+}
+
 // AnalyzeContext runs a full analysis cycle for contextID:
 //  1. Determines the delta (new data since last analysis).
 //  2. Formats raw data into a text dump.
@@ -254,6 +275,59 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 	if err := s.store.UpsertSnapshot(ctx, newSnapshot); err != nil {
 		return nil, fmt.Errorf("upsert snapshot: %w", err)
 	}
+
+	// Log estimation change when hours were produced.
+	if newSnapshot.EstimatedHours != nil {
+		analyzedAt := ""
+		if newSnapshot.AnalyzedAt != nil {
+			analyzedAt = *newSnapshot.AnalyzedAt
+		}
+		completionDate := computeCompletionDate(analyzedAt, *newSnapshot.EstimatedHours)
+		newSnapshot.EstimatedCompletionDate = ptrStr(completionDate)
+
+		triggerType := estimationTriggerType(snapshot)
+		triggerDesc := ""
+		if triggerType == "re-analysis" && snapshot != nil && snapshot.EstimatedHours != nil {
+			delta := *newSnapshot.EstimatedHours - *snapshot.EstimatedHours
+			if delta > 0 {
+				triggerDesc = fmt.Sprintf("estimate increased by %.1fh", delta)
+			} else if delta < 0 {
+				triggerDesc = fmt.Sprintf("estimate decreased by %.1fh", -delta)
+			} else {
+				triggerDesc = "estimate unchanged"
+			}
+		}
+
+		entry := appstore.EstimationLog{
+			ContextID:           contextID,
+			TriggerType:         triggerType,
+			TriggerDescription:  triggerDesc,
+			EstimationBasis:     newSnapshot.EstimationBasis,
+			EstimatedHoursAfter: newSnapshot.EstimatedHours,
+		}
+		if newSnapshot.EstimatedCompletionDate != nil {
+			entry.EstimatedCompletionAfter = newSnapshot.EstimatedCompletionDate
+		}
+		if snapshot != nil && snapshot.EstimatedHours != nil {
+			entry.EstimatedHoursBefore = snapshot.EstimatedHours
+			if snapshot.EstimatedCompletionDate != nil {
+				entry.EstimatedCompletionBefore = snapshot.EstimatedCompletionDate
+			}
+			delta := *newSnapshot.EstimatedHours - *snapshot.EstimatedHours
+			entry.DeltaHours = &delta
+		}
+
+		if logErr := s.store.AppendEstimationLog(ctx, entry); logErr != nil {
+			s.logger.Warn("analysis: append estimation log failed",
+				zap.String("contextID", contextID), zap.Error(logErr))
+		}
+		// Persist the computed completion date.
+		if updateErr := s.store.UpsertSnapshot(ctx, newSnapshot); updateErr != nil {
+			s.logger.Warn("analysis: update snapshot completion date failed",
+				zap.String("contextID", contextID), zap.Error(updateErr))
+		}
+	}
+
 	return newSnapshot, nil
 }
 
@@ -528,6 +602,8 @@ func extractJSON(content string, startChar byte) string {
 	}
 	return strings.TrimSpace(content)
 }
+
+func ptrStr(s string) *string { return &s }
 
 // Ensure io.Writer is imported (used by FormatContext).
 var _ io.Writer = (*strings.Builder)(nil)
