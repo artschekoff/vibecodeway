@@ -150,10 +150,11 @@ func (s *Store) ListContextsByOrg(ctx context.Context, orgID string) ([]Context,
 		       EXISTS(SELECT 1 FROM context_vcs_branches WHERE context_id = c.id),
 		       (EXISTS(SELECT 1 FROM context_texts WHERE context_id = c.id)
 		        OR EXISTS(SELECT 1 FROM context_uploaded_files WHERE context_id = c.id)),
-		       c.ai_proposed_status, c.ai_proposed_comment, c.ai_proposed_next_step, c.ai_proposed_at,
-		       c.user_status_override, c.user_comment_override, c.user_next_step_override, c.user_override_updated_at
+		       COALESCE(sn.status, 'not_started'),
+		       COALESCE(sn.is_stale, 0)
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
+		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
 		WHERE c.org_id = ?
 		GROUP BY c.id
 		ORDER BY c.sort_order ASC NULLS LAST, c.updated_at DESC
