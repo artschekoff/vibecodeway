@@ -477,6 +477,20 @@ func (a *App) OpenRepoPathTerminal(pathID string) error {
 	return a.openTerminalAt(rp.Path)
 }
 
+// FetchPruneRepoPath runs `git fetch --prune` for the given repo path.
+func (a *App) FetchPruneRepoPath(pathID string) error {
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)
+	if err != nil {
+		return fmt.Errorf("repo path not found: %w", err)
+	}
+	cmd := exec.Command("git", "-C", rp.Path, "fetch", "--prune")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git fetch --prune in %s: %w\n%s", rp.Path, err, out)
+	}
+	return nil
+}
+
 // ListLocalBranches returns all local git branches for the given repo path.
 func (a *App) ListLocalBranches(pathID string) ([]vcs.LocalBranch, error) {
 	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)

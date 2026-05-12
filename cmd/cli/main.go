@@ -77,24 +77,6 @@ func main() {
 	root.AddCommand(newSlackRemoveDMEntryCmd())
 	root.AddCommand(newSlackPreviewDMsCmd())
 
-	// Context logs & consolidated log
-	root.AddCommand(newLogListCmd())
-	root.AddCommand(newLogListAllCmd())
-	root.AddCommand(newLogCreateCmd())
-	root.AddCommand(newLogUpdateCmd())
-	root.AddCommand(newLogDeleteCmd())
-	root.AddCommand(newLogAttachFileCmd())
-	root.AddCommand(newLogDetachFileCmd())
-	root.AddCommand(newConsolidatedGetCmd())
-	root.AddCommand(newConsolidatedUpdateCmd())
-	root.AddCommand(newConsolidatedInitCmd())
-	root.AddCommand(newConsolidatedAnalyzeCmd())
-
-	// Chat
-	root.AddCommand(newChatListCmd())
-	root.AddCommand(newChatSendCmd())
-	root.AddCommand(newChatApplySuggestionCmd())
-
 	// Auth & AI settings
 	root.AddCommand(newAuthStatusCmd())
 	root.AddCommand(newGetAISettingsCmd())

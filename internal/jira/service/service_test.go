@@ -849,36 +849,24 @@ func TestJiraLinkToRelationType(t *testing.T) {
 	}
 }
 
-func TestSetAgentProposal_PersistsStatus(t *testing.T) {
+func TestIsValidWorkflowStatus_KnownStatuses(t *testing.T) {
 	svc := newTestService(t, nil)
 	ctx := context.Background()
-	c := createCtx(t, svc, "test-ctx")
 
-	proposal, err := svc.SetAgentProposal(ctx, c.ID, "in_progress", "work underway", "finish the PR")
-	require.NoError(t, err)
-	require.NotNil(t, proposal)
-	assert.Equal(t, "in_progress", proposal.ProposedStatus)
-	assert.NotEmpty(t, proposal.ID)
+	for _, slug := range []string{"in_progress", "not_started", "scoping", "needs_attention", "ready"} {
+		valid, err := svc.IsValidWorkflowStatus(ctx, slug)
+		require.NoError(t, err, "slug=%s", slug)
+		assert.True(t, valid, "slug=%s should be valid", slug)
+	}
 }
 
-func TestSetAgentProposal_EmptyCommentAndNextStep_OK(t *testing.T) {
+func TestIsValidWorkflowStatus_UnknownSlug(t *testing.T) {
 	svc := newTestService(t, nil)
 	ctx := context.Background()
-	c := createCtx(t, svc, "bare-ctx")
 
-	proposal, err := svc.SetAgentProposal(ctx, c.ID, "ready", "", "")
+	valid, err := svc.IsValidWorkflowStatus(ctx, "nonexistent_slug")
 	require.NoError(t, err)
-	assert.Equal(t, "ready", proposal.ProposedStatus)
-	assert.Nil(t, proposal.ProposedComment)
-	assert.Nil(t, proposal.ProposedNextStep)
-}
-
-func TestSetAgentProposal_UnknownContextID_ReturnsError(t *testing.T) {
-	svc := newTestService(t, nil)
-	ctx := context.Background()
-
-	_, err := svc.SetAgentProposal(ctx, "nonexistent-id", "in_progress", "", "")
-	require.Error(t, err)
+	assert.False(t, valid)
 }
 
 // --- SlackProvider per-message reload tests ---

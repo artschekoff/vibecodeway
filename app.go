@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/artschekoff/context-consolidator/internal/analysis"
 	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
-	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/extract"
 	"github.com/artschekoff/context-consolidator/internal/hotkey"
 	"github.com/artschekoff/context-consolidator/internal/jira"
@@ -21,7 +21,6 @@ import (
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	openaiclient "github.com/artschekoff/context-consolidator/internal/openai"
-	"github.com/artschekoff/context-consolidator/internal/openquestions"
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	"github.com/artschekoff/context-consolidator/internal/applog"
@@ -87,7 +86,7 @@ type UploadPreviewBatchResult struct {
 type App struct {
 	ctx           context.Context
 	svc           *jiraservice.ContextService
-	contextLog    *contextlog.Service
+	analysisSvc   *analysis.Service
 	openAI        *openaiclient.Client
 	db            *appstore.Store
 	logger        *zap.Logger
@@ -167,15 +166,9 @@ func (a *App) startup(ctx context.Context) {
 	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)
 	a.svc.SetVCSStore(a.vcsStore)
 
-	openAI := openaiclient.NewClient(s, slackRunner.Passphrase, logger)
+	openAI := openaiclient.NewClient(s, logger)
 	a.openAI = openAI
-	contextLogRepo := contextlog.NewRepo(s.DB())
-	a.contextLog = contextlog.NewService(contextLogRepo, openAI.AsContextLogClient(), logger)
-	a.svc.SetContextLog(a.contextLog)
-
-	oqSvc := openquestions.NewService(s, openAI.AsOpenQuestionsClient(), logger)
-	a.svc.SetOpenQuestionsService(oqSvc)
-	a.svc.SetNextStepAI(openAI.AsNextStepClient())
+	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)
 	if err := a.hotkeyService.Start(); err != nil {
@@ -757,83 +750,6 @@ func (a *App) ReloadAllContexts() ([]jiraservice.ReloadAllResult, error) {
 	})
 }
 
-// --- Context logs ---
-
-// ListContextLogs returns all change-log entries for a context, newest first.
-func (a *App) ListContextLogs(contextID string) ([]contextlog.ContextLog, error) {
-	return a.cliRunner.ListContextLogs(a.ctx, contextID)
-}
-
-// ListAllLogs returns log entries across all contexts, optionally filtered by trigger.
-// Pass empty string for trigger to return all triggers. limit<=0 defaults to 100.
-func (a *App) ListAllLogs(trigger string, limit int) ([]contextlog.LogEntry, error) {
-	return a.cliRunner.ListAllLogs(a.ctx, trigger, limit)
-}
-
-// CreateContextLog adds a manual (user-authored) log entry and refreshes the consolidated log.
-func (a *App) CreateContextLog(contextID, summaryMd string) (*contextlog.ContextLog, error) {
-	return a.cliRunner.CreateContextLog(a.ctx, contextID, summaryMd)
-}
-
-// UpdateContextLog edits the summary of an existing log entry and refreshes the consolidated log.
-func (a *App) UpdateContextLog(id, summaryMd string) (*contextlog.ContextLog, error) {
-	return a.cliRunner.UpdateContextLog(a.ctx, id, summaryMd)
-}
-
-// DeleteContextLog removes a single log entry and refreshes the consolidated log.
-func (a *App) DeleteContextLog(id string) error {
-	return a.cliRunner.DeleteContextLog(a.ctx, id)
-}
-
-// AttachLogFile links an uploaded file to a log entry.
-func (a *App) AttachLogFile(logID, fileID string) error {
-	return a.cliRunner.AttachLogFile(a.ctx, logID, fileID)
-}
-
-// DetachLogFile removes the link between a log entry and an uploaded file.
-func (a *App) DetachLogFile(logID, fileID string) error {
-	return a.cliRunner.DetachLogFile(a.ctx, logID, fileID)
-}
-
-// --- Consolidated log ---
-
-// GetConsolidatedContextLog returns the consolidated log for a context (may be nil).
-func (a *App) GetConsolidatedContextLog(contextID string) (*contextlog.ConsolidatedLog, error) {
-	return a.cliRunner.GetConsolidatedContextLog(a.ctx, contextID)
-}
-
-// UpdateConsolidatedContextLog overwrites the consolidated log with user-provided markdown.
-func (a *App) UpdateConsolidatedContextLog(contextID, contentMd string) (*contextlog.ConsolidatedLog, error) {
-	return a.cliRunner.UpdateConsolidatedContextLog(a.ctx, contextID, contentMd)
-}
-
-// InitializeConsolidatedLog performs the AI-driven bootstrap of a fresh consolidated log.
-func (a *App) InitializeConsolidatedLog(contextID string) (*contextlog.ConsolidatedLog, error) {
-	return a.cliRunner.InitializeConsolidatedLog(a.ctx, contextID)
-}
-
-// AnalyzeContextChanges triggers an on-demand change-log analysis.
-func (a *App) AnalyzeContextChanges(contextID string) (*contextlog.ContextLog, error) {
-	return a.cliRunner.AnalyzeContextChanges(a.ctx, contextID)
-}
-
-// --- Chat ---
-
-// ListContextChat returns the full chat transcript for a context (oldest first).
-func (a *App) ListContextChat(contextID string) ([]contextlog.ChatMessage, error) {
-	return a.cliRunner.ListContextChat(a.ctx, contextID)
-}
-
-// ChatWithContext appends a user message and returns the AI assistant reply.
-func (a *App) ChatWithContext(contextID, userMessage string) (*contextlog.ChatMessage, error) {
-	return a.cliRunner.ChatWithContext(a.ctx, contextID, userMessage)
-}
-
-// ApplyChatSuggestion applies an assistant-proposed consolidated rewrite to the consolidated log.
-func (a *App) ApplyChatSuggestion(messageID string) (*contextlog.ConsolidatedLog, error) {
-	return a.cliRunner.ApplyChatSuggestion(a.ctx, messageID)
-}
-
 // --- AI settings ---
 
 // AISettingsResponse is the shape returned to the frontend; raw API keys are never included.
@@ -869,10 +785,6 @@ func (a *App) GetAISettings() (*AISettingsResponse, error) {
 // SetAISettings upserts the AI configuration for the given provider.
 // Empty key strings preserve existing stored keys.
 func (a *App) SetAISettings(provider, openaiKey, anthropicKey, model, baseURL string) error {
-	passphrase := a.slackRunner.Passphrase()
-	if (openaiKey != "" || anthropicKey != "") && passphrase == "" {
-		return fmt.Errorf("set Slack passphrase first (used to encrypt the API key)")
-	}
 	_, err := a.cliRunner.SetAISettings(a.ctx, cliclient.SetAISettingsOpts{
 		Provider:     provider,
 		APIKey:       openaiKey,

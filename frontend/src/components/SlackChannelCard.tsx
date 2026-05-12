@@ -61,6 +61,7 @@ interface Props {
   onToggleChannel?: (id: string) => void;
   onToggleThread?: (id: string) => void;
   onMarkThreadViewed?: (id: string) => void;
+  onMarkChannelAllViewed?: (id: string) => void;
 }
 
 function ThreadRow({ thread, replies, onDelete, onToggle, onMarkViewed, isReply }: {
@@ -160,7 +161,7 @@ function ThreadRow({ thread, replies, onDelete, onToggle, onMarkViewed, isReply 
   );
 }
 
-export default function SlackChannelCard({ channel, threads, onDeleteChannel, onDeleteThread, onToggleChannel, onToggleThread, onMarkThreadViewed }: Props) {
+export default function SlackChannelCard({ channel, threads, onDeleteChannel, onDeleteThread, onToggleChannel, onToggleThread, onMarkThreadViewed, onMarkChannelAllViewed }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -175,7 +176,7 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
     return acc;
   }, {});
   const slackChannelLink = channel.workspace && channel.channelId
-    ? `https://app.slack.com/client/${channel.workspace}/${channel.channelId}`
+    ? `https://${channel.workspace}.slack.com/archives/${channel.channelId}`
     : null;
 
   const copyName = (e: React.MouseEvent) => {
@@ -207,6 +208,9 @@ export default function SlackChannelCard({ channel, threads, onDeleteChannel, on
         </button>
         {slackChannelLink && (
           <button className="copy-btn" onClick={(e) => { e.stopPropagation(); BrowserOpenURL(slackChannelLink); }} title="Open channel in Slack"><ExternalLink size={12} /></button>
+        )}
+        {hasUnreadThreads && onMarkChannelAllViewed && (
+          <button className="mark-viewed-btn" onClick={(e) => { e.stopPropagation(); onMarkChannelAllViewed(channel.id); }} title="Mark all threads as viewed"><Check size={13} /></button>
         )}
         <div className="issue-meta">
           <span className="channel-result-workspace">{channel.workspace}</span>

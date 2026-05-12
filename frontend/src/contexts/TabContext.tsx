@@ -19,6 +19,7 @@ interface TabContextValue {
   openNewContextTab: (contextId: string, contextKey: string, orgName?: string, orgId?: string) => void;
   openSettingsTab: () => void;
   openLogsTab: () => void;
+  openPromptsTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
   pinTab: (tabId: string) => void;
@@ -170,6 +171,13 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, [focusOrOpen]);
 
+  const openPromptsTab = useCallback(() => {
+    focusOrOpen(
+      (t) => t.type === "prompts",
+      () => ({ id: newTabId(), type: "prompts" as const, title: "AI Prompts", pinned: false })
+    );
+  }, [focusOrOpen]);
+
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId);
@@ -278,6 +286,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openNewContextTab,
         openSettingsTab,
         openLogsTab,
+        openPromptsTab,
         closeTab,
         forceCloseTab,
         pinTab,

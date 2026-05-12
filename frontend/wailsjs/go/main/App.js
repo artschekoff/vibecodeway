@@ -26,24 +26,16 @@ export function AddTrackedRepo(arg1, arg2) {
   return window['go']['main']['App']['AddTrackedRepo'](arg1, arg2);
 }
 
+export function AddUserEvent(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AddUserEvent'](arg1, arg2, arg3);
+}
+
 export function AddVCSBranch(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['AddVCSBranch'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function AnalyzeContextChanges(arg1) {
-  return window['go']['main']['App']['AnalyzeContextChanges'](arg1);
-}
-
-export function AnswerOpenQuestion(arg1, arg2) {
-  return window['go']['main']['App']['AnswerOpenQuestion'](arg1, arg2);
-}
-
-export function ApplyChatSuggestion(arg1) {
-  return window['go']['main']['App']['ApplyChatSuggestion'](arg1);
-}
-
-export function AttachLogFile(arg1, arg2) {
-  return window['go']['main']['App']['AttachLogFile'](arg1, arg2);
+export function AnalyzeContext(arg1) {
+  return window['go']['main']['App']['AnalyzeContext'](arg1);
 }
 
 export function AuthStatus() {
@@ -52,10 +44,6 @@ export function AuthStatus() {
 
 export function CancelRefresh() {
   return window['go']['main']['App']['CancelRefresh']();
-}
-
-export function ChatWithContext(arg1, arg2) {
-  return window['go']['main']['App']['ChatWithContext'](arg1, arg2);
 }
 
 export function CheckAccessibility() {
@@ -86,10 +74,6 @@ export function CreateContext(arg1, arg2) {
   return window['go']['main']['App']['CreateContext'](arg1, arg2);
 }
 
-export function CreateContextLog(arg1, arg2) {
-  return window['go']['main']['App']['CreateContextLog'](arg1, arg2);
-}
-
 export function CreateOrganization(arg1) {
   return window['go']['main']['App']['CreateOrganization'](arg1);
 }
@@ -100,10 +84,6 @@ export function CreateWorkflowStatus(arg1, arg2) {
 
 export function DeleteContext(arg1) {
   return window['go']['main']['App']['DeleteContext'](arg1);
-}
-
-export function DeleteContextLog(arg1) {
-  return window['go']['main']['App']['DeleteContextLog'](arg1);
 }
 
 export function DeleteContextText(arg1) {
@@ -146,16 +126,8 @@ export function DeleteWorkspace(arg1) {
   return window['go']['main']['App']['DeleteWorkspace'](arg1);
 }
 
-export function DetachLogFile(arg1, arg2) {
-  return window['go']['main']['App']['DetachLogFile'](arg1, arg2);
-}
-
 export function DiscardPendingUpload(arg1) {
   return window['go']['main']['App']['DiscardPendingUpload'](arg1);
-}
-
-export function DismissOpenQuestion(arg1) {
-  return window['go']['main']['App']['DismissOpenQuestion'](arg1);
 }
 
 export function DismissPicker() {
@@ -166,8 +138,16 @@ export function DismissReviewRequest(arg1) {
   return window['go']['main']['App']['DismissReviewRequest'](arg1);
 }
 
+export function FetchPruneRepoPath(arg1) {
+  return window['go']['main']['App']['FetchPruneRepoPath'](arg1);
+}
+
 export function FindWorkspaceForBranch(arg1, arg2) {
   return window['go']['main']['App']['FindWorkspaceForBranch'](arg1, arg2);
+}
+
+export function GenerateHandoffPacket(arg1) {
+  return window['go']['main']['App']['GenerateHandoffPacket'](arg1);
 }
 
 export function GetAISettings() {
@@ -182,20 +162,20 @@ export function GetAppSettings() {
   return window['go']['main']['App']['GetAppSettings']();
 }
 
-export function GetConsolidatedContextLog(arg1) {
-  return window['go']['main']['App']['GetConsolidatedContextLog'](arg1);
-}
-
 export function GetContextDetail(arg1) {
   return window['go']['main']['App']['GetContextDetail'](arg1);
+}
+
+export function GetContextSnapshot(arg1) {
+  return window['go']['main']['App']['GetContextSnapshot'](arg1);
 }
 
 export function GetJiraInstanceURL() {
   return window['go']['main']['App']['GetJiraInstanceURL']();
 }
 
-export function GetOpenQuestions(arg1) {
-  return window['go']['main']['App']['GetOpenQuestions'](arg1);
+export function GetLatestHandoffPacket(arg1) {
+  return window['go']['main']['App']['GetLatestHandoffPacket'](arg1);
 }
 
 export function GetPendingCodeReviews() {
@@ -222,40 +202,20 @@ export function GetVCSPRsForContext(arg1) {
   return window['go']['main']['App']['GetVCSPRsForContext'](arg1);
 }
 
-export function GetWorkflowProposals(arg1) {
-  return window['go']['main']['App']['GetWorkflowProposals'](arg1);
-}
-
-export function GetWorkflowSummary(arg1) {
-  return window['go']['main']['App']['GetWorkflowSummary'](arg1);
-}
-
 export function HasSlackPassphrase() {
   return window['go']['main']['App']['HasSlackPassphrase']();
 }
 
-export function InitializeConsolidatedLog(arg1) {
-  return window['go']['main']['App']['InitializeConsolidatedLog'](arg1);
+export function ListAIPrompts() {
+  return window['go']['main']['App']['ListAIPrompts']();
 }
 
 export function ListAllContexts() {
   return window['go']['main']['App']['ListAllContexts']();
 }
 
-export function ListAllLogs(arg1, arg2) {
-  return window['go']['main']['App']['ListAllLogs'](arg1, arg2);
-}
-
 export function ListAllWorkspaces() {
   return window['go']['main']['App']['ListAllWorkspaces']();
-}
-
-export function ListContextChat(arg1) {
-  return window['go']['main']['App']['ListContextChat'](arg1);
-}
-
-export function ListContextLogs(arg1) {
-  return window['go']['main']['App']['ListContextLogs'](arg1);
 }
 
 export function ListContextTexts(arg1) {
@@ -268,6 +228,10 @@ export function ListContexts() {
 
 export function ListContextsByOrg(arg1) {
   return window['go']['main']['App']['ListContextsByOrg'](arg1);
+}
+
+export function ListEvents(arg1) {
+  return window['go']['main']['App']['ListEvents'](arg1);
 }
 
 export function ListLocalBranches(arg1) {
@@ -330,12 +294,20 @@ export function LoadSlackContext(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['LoadSlackContext'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
+export function MarkBranchAllViewed(arg1) {
+  return window['go']['main']['App']['MarkBranchAllViewed'](arg1);
+}
+
 export function MarkCommentViewed(arg1) {
   return window['go']['main']['App']['MarkCommentViewed'](arg1);
 }
 
 export function MarkContextAllViewed(arg1) {
   return window['go']['main']['App']['MarkContextAllViewed'](arg1);
+}
+
+export function MarkIssueAllViewed(arg1) {
+  return window['go']['main']['App']['MarkIssueAllViewed'](arg1);
 }
 
 export function MarkIssueViewed(arg1) {
@@ -348,6 +320,10 @@ export function MarkPRCommentViewed(arg1) {
 
 export function MarkPRViewed(arg1) {
   return window['go']['main']['App']['MarkPRViewed'](arg1);
+}
+
+export function MarkSlackChannelAllViewed(arg1) {
+  return window['go']['main']['App']['MarkSlackChannelAllViewed'](arg1);
 }
 
 export function MarkSlackDMConfigViewed(arg1) {
@@ -372,6 +348,10 @@ export function OpenRepoPathTerminal(arg1) {
 
 export function OpenWorkspaceTerminal(arg1) {
   return window['go']['main']['App']['OpenWorkspaceTerminal'](arg1);
+}
+
+export function OverrideCurrentStep(arg1, arg2) {
+  return window['go']['main']['App']['OverrideCurrentStep'](arg1, arg2);
 }
 
 export function PickAndExtractFiles(arg1) {
@@ -438,6 +418,10 @@ export function RemoveVCSBranch(arg1) {
   return window['go']['main']['App']['RemoveVCSBranch'](arg1);
 }
 
+export function ResetAIPrompt(arg1) {
+  return window['go']['main']['App']['ResetAIPrompt'](arg1);
+}
+
 export function SearchContextIDs(arg1) {
   return window['go']['main']['App']['SearchContextIDs'](arg1);
 }
@@ -494,10 +478,6 @@ export function SetTrackedRepoPath(arg1, arg2) {
   return window['go']['main']['App']['SetTrackedRepoPath'](arg1, arg2);
 }
 
-export function SetUserWorkflowOverrides(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['SetUserWorkflowOverrides'](arg1, arg2, arg3, arg4);
-}
-
 export function SyncAllComments(arg1) {
   return window['go']['main']['App']['SyncAllComments'](arg1);
 }
@@ -534,16 +514,12 @@ export function ToggleUploadedFileActive(arg1) {
   return window['go']['main']['App']['ToggleUploadedFileActive'](arg1);
 }
 
-export function UpdateConsolidatedContextLog(arg1, arg2) {
-  return window['go']['main']['App']['UpdateConsolidatedContextLog'](arg1, arg2);
+export function UpdateAIPrompt(arg1, arg2) {
+  return window['go']['main']['App']['UpdateAIPrompt'](arg1, arg2);
 }
 
 export function UpdateContext(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateContext'](arg1, arg2, arg3);
-}
-
-export function UpdateContextLog(arg1, arg2) {
-  return window['go']['main']['App']['UpdateContextLog'](arg1, arg2);
 }
 
 export function UpdateOrganization(arg1, arg2) {
@@ -552,6 +528,10 @@ export function UpdateOrganization(arg1, arg2) {
 
 export function UpdateTrackedRepoMeta(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateTrackedRepoMeta'](arg1, arg2, arg3, arg4);
+}
+
+export function UpdateUserNextSteps(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateUserNextSteps'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateVCSBranchLabel(arg1, arg2) {

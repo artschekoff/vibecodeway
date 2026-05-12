@@ -2,66 +2,89 @@ package main
 
 import (
 	"context"
+	"time"
 
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 )
 
-// --- Workflow: user overrides ---
+// --- Analysis ---
 
-// SetUserWorkflowOverrides saves the user's overrides for status, comment, and next-step.
-// Pass an empty string for any field to clear that override (revert to AI proposal).
-func (a *App) SetUserWorkflowOverrides(contextID, status, comment, nextStep string) error {
-	return a.db.SetUserOverride(context.Background(), contextID, status, comment, nextStep)
+// AnalyzeContext runs the full AI analysis pipeline for a context:
+// extracts structured events from new data, rebuilds the three-section snapshot,
+// and generates next-step recommendations by time horizon.
+// This is triggered manually by the user; it does NOT run on refresh.
+func (a *App) AnalyzeContext(contextID string) (*appstore.ContextSnapshot, error) {
+	return a.analysisSvc.AnalyzeContext(a.ctx, contextID)
 }
 
-// GetWorkflowSummary returns the current AI proposal and user overrides for a context.
-func (a *App) GetWorkflowSummary(contextID string) (*WorkflowSummary, error) {
-	c, err := a.db.GetContext(context.Background(), contextID)
+// GenerateHandoffPacket calls the AI to build a structured business requirements packet
+// from the full event log. The packet is saved to the database and returned.
+// Each call produces a new packet — use GetLatestHandoffPacket to retrieve without re-generating.
+func (a *App) GenerateHandoffPacket(contextID string) (*appstore.InferredRequirementsPacket, error) {
+	return a.analysisSvc.GenerateHandoffPacket(a.ctx, contextID)
+}
+
+// GetLatestHandoffPacket returns the most recently generated handoff packet for a context
+// without calling the AI. Returns nil if no packet has been generated yet.
+func (a *App) GetLatestHandoffPacket(contextID string) (*appstore.InferredRequirementsPacket, error) {
+	return a.db.GetLatestPacket(context.Background(), contextID)
+}
+
+// --- Snapshot ---
+
+// GetContextSnapshot returns the current analysis snapshot for a context, or nil if not yet analyzed.
+func (a *App) GetContextSnapshot(contextID string) (*appstore.ContextSnapshot, error) {
+	return a.db.GetSnapshot(context.Background(), contextID)
+}
+
+// UpdateUserNextSteps saves user-written next-step notes by time horizon.
+// These are always visible without re-analysis and are passed as hints on next Analyze run.
+func (a *App) UpdateUserNextSteps(contextID, short, mid, long string) error {
+	return a.db.UpdateUserNextSteps(context.Background(), contextID, short, mid, long)
+}
+
+// OverrideCurrentStep lets the user correct the AI's identified current step.
+// The correction is persisted immediately and marks the snapshot stale.
+func (a *App) OverrideCurrentStep(contextID, description string) error {
+	if err := a.db.OverrideCurrentStep(context.Background(), contextID, description); err != nil {
+		return err
+	}
+	// Also emit a current_step_override event so analysis picks it up.
+	_, err := a.db.AddEvent(context.Background(), appstore.Event{
+		ContextID:  contextID,
+		Type:       appstore.EventTypeCurrentStepOverride,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		SourceType: appstore.EventSourceUser,
+		Summary:    description,
+	})
+	return err
+}
+
+// AddUserEvent appends a user-authored event to the event log and marks the snapshot stale.
+// eventType must be one of: user_note, next_step_recommendation, open_question_answered,
+// requirement_confirmed, requirement_rejected, current_step_override.
+func (a *App) AddUserEvent(contextID, eventType, summary string) (*appstore.Event, error) {
+	evt, err := a.db.AddEvent(context.Background(), appstore.Event{
+		ContextID:  contextID,
+		Type:       eventType,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		SourceType: appstore.EventSourceUser,
+		Summary:    summary,
+	})
 	if err != nil {
 		return nil, err
 	}
-	return contextToWorkflowSummary(c), nil
+	_ = a.db.MarkSnapshotStale(context.Background(), contextID)
+	return evt, nil
 }
 
-// WorkflowSummary is the complete workflow state returned to the frontend.
-type WorkflowSummary struct {
-	// AI proposal (what the system computed last refresh)
-	AIProposedStatus   string  `json:"aiProposedStatus"`
-	AIProposedComment  *string `json:"aiProposedComment,omitempty"`
-	AIProposedNextStep *string `json:"aiProposedNextStep,omitempty"`
-	AIProposedAt       *string `json:"aiProposedAt,omitempty"`
-	// User overrides (nil = user accepts AI proposal)
-	UserStatusOverride    *string `json:"userStatusOverride,omitempty"`
-	UserCommentOverride   *string `json:"userCommentOverride,omitempty"`
-	UserNextStepOverride  *string `json:"userNextStepOverride,omitempty"`
-	UserOverrideUpdatedAt *string `json:"userOverrideUpdatedAt,omitempty"`
-	// Effective (resolved) values — what the UI should actually display
-	EffectiveStatus   string `json:"effectiveStatus"`
-	EffectiveComment  string `json:"effectiveComment"`
-	EffectiveNextStep string `json:"effectiveNextStep"`
+// ListEvents returns all events for a context in chronological order.
+func (a *App) ListEvents(contextID string) ([]appstore.Event, error) {
+	return a.db.ListEvents(context.Background(), contextID)
 }
 
-func contextToWorkflowSummary(c *appstore.Context) *WorkflowSummary {
-	return &WorkflowSummary{
-		AIProposedStatus:      c.AIProposedStatus,
-		AIProposedComment:     c.AIProposedComment,
-		AIProposedNextStep:    c.AIProposedNextStep,
-		AIProposedAt:          c.AIProposedAt,
-		UserStatusOverride:    c.UserStatusOverride,
-		UserCommentOverride:   c.UserCommentOverride,
-		UserNextStepOverride:  c.UserNextStepOverride,
-		UserOverrideUpdatedAt: c.UserOverrideUpdatedAt,
-		EffectiveStatus:       c.EffectiveStatus(),
-		EffectiveComment:      c.EffectiveComment(),
-		EffectiveNextStep:     c.EffectiveNextStep(),
-	}
-}
-
-// GetWorkflowProposals returns the history of AI proposals for a context, newest first.
-func (a *App) GetWorkflowProposals(contextID string) ([]appstore.WorkflowProposal, error) {
-	return a.db.ListWorkflowProposals(context.Background(), contextID)
-}
+// --- Workflow statuses (enum table — unchanged) ---
 
 // ListWorkflowStatuses returns all available workflow status options.
 func (a *App) ListWorkflowStatuses() ([]appstore.WorkflowStatus, error) {
@@ -69,34 +92,18 @@ func (a *App) ListWorkflowStatuses() ([]appstore.WorkflowStatus, error) {
 }
 
 // CreateWorkflowStatus adds a new custom workflow status.
-// slug must match [a-z][a-z0-9_]* and be unique.
 func (a *App) CreateWorkflowStatus(slug, label string) (*appstore.WorkflowStatus, error) {
 	return a.db.CreateWorkflowStatus(context.Background(), slug, label)
 }
 
-// UpdateWorkflowStatus renames the display label of a status (slug is immutable).
+// UpdateWorkflowStatus renames the display label of a status.
 func (a *App) UpdateWorkflowStatus(id, label string) (*appstore.WorkflowStatus, error) {
 	return a.db.UpdateWorkflowStatus(context.Background(), id, label)
 }
 
-// DeleteWorkflowStatus removes a custom status and nulls out affected context overrides.
-// Returns an error if the status is a built-in system status.
+// DeleteWorkflowStatus removes a custom status.
 func (a *App) DeleteWorkflowStatus(id string) error {
 	return a.db.DeleteWorkflowStatus(context.Background(), id)
-}
-
-// --- Open questions ---
-
-func (a *App) GetOpenQuestions(contextID string) ([]appstore.OpenQuestion, error) {
-	return a.db.ListOpenQuestions(context.Background(), contextID)
-}
-
-func (a *App) DismissOpenQuestion(questionID string) error {
-	return a.db.DismissOpenQuestion(context.Background(), questionID)
-}
-
-func (a *App) AnswerOpenQuestion(questionID, answer string) error {
-	return a.db.AnswerOpenQuestion(context.Background(), questionID, answer)
 }
 
 // --- VCS Repo Meta ---

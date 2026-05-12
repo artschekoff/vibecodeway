@@ -1,5 +1,5 @@
 // Package openai wraps the OpenAI chat-completion API with a lazy per-call settings
-// resolver (env vars first, encrypted DB row second) and a single ChatCompletion helper
+// resolver (env vars first, DB row second) and a single ChatCompletion helper
 // used by the contextlog service.
 package openai
 
@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	openai "github.com/sashabaranov/go-openai"
 	"go.uber.org/zap"
@@ -22,6 +21,9 @@ const (
 	EnvModel   = "OPENAI_MODEL"
 	EnvBaseURL = "OPENAI_BASE_URL"
 )
+
+// DefaultOpenAIModel is used when the model field is empty and provider is openai.
+const DefaultOpenAIModel = "gpt-4o"
 
 // Source reports where the API key came from for a given call.
 type Source string
@@ -57,22 +59,16 @@ type Response struct {
 	Source  Source
 }
 
-// PassphraseFn returns the current Slack passphrase used to decrypt ai_settings.openai_key_enc.
-// Returning an empty string means "no passphrase available"; the DB key path is then skipped.
-type PassphraseFn func() string
-
 // Client performs chat completions against OpenAI.
 // Settings are resolved on every call so the user can change them at runtime without a restart.
 type Client struct {
-	store      *appstore.Store
-	passphrase PassphraseFn
-	logger     *zap.Logger
+	store  *appstore.Store
+	logger *zap.Logger
 }
 
-// NewClient wires a Client that pulls settings from env vars first and from the encrypted
-// ai_settings row second. The passphrase callback is invoked lazily per request.
-func NewClient(store *appstore.Store, passphrase PassphraseFn, logger *zap.Logger) *Client {
-	return &Client{store: store, passphrase: passphrase, logger: logger}
+// NewClient wires a Client that pulls settings from env vars first and from the DB row second.
+func NewClient(store *appstore.Store, logger *zap.Logger) *Client {
+	return &Client{store: store, logger: logger}
 }
 
 // DescribeSettings returns the visible AI settings (without the raw key) and the source
@@ -120,7 +116,7 @@ func (c *Client) DescribeSettings(ctx context.Context) (*appstore.AISettings, So
 			effective.Model = envModel
 		}
 		if effective.Model == "" {
-			effective.Model = contextlog.DefaultModel
+			effective.Model = DefaultOpenAIModel
 		}
 		if envBase := strings.TrimSpace(os.Getenv(EnvBaseURL)); envBase != "" {
 			effective.BaseURL = envBase
@@ -177,7 +173,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 		return nil, err
 	}
 
-	apiKey, source, err := c.resolveAPIKeyFromSettings(ctx, dbSettings)
+	apiKey, source, err := c.resolveAPIKey(ctx, dbSettings)
 	if err != nil {
 		return nil, err
 	}
@@ -212,22 +208,14 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 	return resp, nil
 }
 
-// resolveAPIKeyFromSettings checks env first, then the encrypted DB row.
-// The DB key consulted depends on the provider in the supplied settings.
-func (c *Client) resolveAPIKeyFromSettings(ctx context.Context, settings *appstore.AISettings) (string, Source, error) {
+// resolveAPIKey checks env first, then the DB row.
+func (c *Client) resolveAPIKey(ctx context.Context, settings *appstore.AISettings) (string, Source, error) {
 	switch settings.Provider {
 	case appstore.ProviderAnthropic:
 		if k := strings.TrimSpace(os.Getenv(EnvAnthropicAPIKey)); k != "" {
 			return k, SourceEnv, nil
 		}
-		if c.passphrase == nil {
-			return "", SourceNone, nil
-		}
-		pass := c.passphrase()
-		if pass == "" {
-			return "", SourceNone, nil
-		}
-		key, err := c.store.GetAIAnthropicKey(ctx, pass)
+		key, err := c.store.GetAIAnthropicKey(ctx)
 		if errors.Is(err, appstore.ErrAIKeyNotSet) {
 			return "", SourceNone, nil
 		}
@@ -237,18 +225,10 @@ func (c *Client) resolveAPIKeyFromSettings(ctx context.Context, settings *appsto
 		return key, SourceDB, nil
 
 	case appstore.ProviderLocal:
-		// Local endpoints may not require a key; use env/db key if set, otherwise empty.
 		if k := strings.TrimSpace(os.Getenv(EnvAPIKey)); k != "" {
 			return k, SourceEnv, nil
 		}
-		if c.passphrase == nil {
-			return "", SourceDB, nil
-		}
-		pass := c.passphrase()
-		if pass == "" {
-			return "", SourceDB, nil
-		}
-		key, err := c.store.GetAIOpenAIKey(ctx, pass)
+		key, err := c.store.GetAIOpenAIKey(ctx)
 		if errors.Is(err, appstore.ErrAIKeyNotSet) {
 			return "", SourceDB, nil
 		}
@@ -261,14 +241,7 @@ func (c *Client) resolveAPIKeyFromSettings(ctx context.Context, settings *appsto
 		if k := strings.TrimSpace(os.Getenv(EnvAPIKey)); k != "" {
 			return k, SourceEnv, nil
 		}
-		if c.passphrase == nil {
-			return "", SourceNone, nil
-		}
-		pass := c.passphrase()
-		if pass == "" {
-			return "", SourceNone, nil
-		}
-		key, err := c.store.GetAIOpenAIKey(ctx, pass)
+		key, err := c.store.GetAIOpenAIKey(ctx)
 		if errors.Is(err, appstore.ErrAIKeyNotSet) {
 			return "", SourceNone, nil
 		}

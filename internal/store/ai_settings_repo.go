@@ -9,28 +9,29 @@ import (
 	"time"
 )
 
-// ErrAIKeyNotSet is returned by GetAIOpenAIKey and GetAIAnthropicKey when no encrypted key has been stored.
+// ErrAIKeyNotSet is returned by GetAIOpenAIKey and GetAIAnthropicKey when no key has been stored.
 var ErrAIKeyNotSet = errors.New("ai key not set in database")
 
 const aiSettingsSingletonID = 1
 
 // SetAISettingsStoreOpts holds all fields that can be updated in ai_settings.
 // Empty string fields are ignored (preserve existing values) except where noted.
-// Passphrase is required when OpenAIKey or AnthropicKey is non-empty.
 type SetAISettingsStoreOpts struct {
 	Provider     string // "openai" | "anthropic" | "local"; empty = preserve existing
-	OpenAIKey    string // empty = preserve existing ciphertext
-	AnthropicKey string // empty = preserve existing ciphertext
+	OpenAIKey    string // empty = preserve existing
+	AnthropicKey string // empty = preserve existing
 	Model        string
 	// BaseURL to set; empty string clears the stored base URL (unlike key fields which preserve on empty).
-	BaseURL      string
-	Passphrase   string
+	BaseURL string
 }
 
 // GetAISettings returns the current AI settings metadata (no secrets).
 // Returns zero-value settings with Provider="openai" and HasKey=false when not yet created.
 func (s *Store) GetAISettings(ctx context.Context) (*AISettings, error) {
 	var (
+		keyPlain    sql.NullString
+		antKeyPlain sql.NullString
+		// legacy encrypted columns — kept for schema compatibility
 		keyEnc      []byte
 		keyNonce    []byte
 		antKeyEnc   []byte
@@ -41,12 +42,13 @@ func (s *Store) GetAISettings(ctx context.Context) (*AISettings, error) {
 		updatedAt   string
 	)
 	err := s.db.QueryRowContext(ctx,
-		`SELECT openai_key_enc, openai_key_nonce,
+		`SELECT openai_key, anthropic_key,
+		        openai_key_enc, openai_key_nonce,
 		        anthropic_key_enc, anthropic_key_nonce,
 		        provider, model, base_url, updated_at
 		 FROM ai_settings WHERE id = ?`,
 		aiSettingsSingletonID,
-	).Scan(&keyEnc, &keyNonce, &antKeyEnc, &antKeyNonce, &provider, &model, &baseURL, &updatedAt)
+	).Scan(&keyPlain, &antKeyPlain, &keyEnc, &keyNonce, &antKeyEnc, &antKeyNonce, &provider, &model, &baseURL, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &AISettings{Provider: "openai"}, nil
 	}
@@ -56,8 +58,8 @@ func (s *Store) GetAISettings(ctx context.Context) (*AISettings, error) {
 	if provider == "" {
 		provider = ProviderOpenAI
 	}
-	hasOpenAI := len(keyEnc) > 0 && len(keyNonce) > 0
-	hasAnthropic := len(antKeyEnc) > 0 && len(antKeyNonce) > 0
+	hasOpenAI := (keyPlain.Valid && keyPlain.String != "") || (len(keyEnc) > 0 && len(keyNonce) > 0)
+	hasAnthropic := (antKeyPlain.Valid && antKeyPlain.String != "") || (len(antKeyEnc) > 0 && len(antKeyNonce) > 0)
 	hasKey := (provider == ProviderAnthropic && hasAnthropic) ||
 		(provider != ProviderAnthropic && (hasOpenAI || provider == ProviderLocal))
 	return &AISettings{
@@ -71,82 +73,50 @@ func (s *Store) GetAISettings(ctx context.Context) (*AISettings, error) {
 	}, nil
 }
 
-// GetAIOpenAIKey returns the decrypted OpenAI API key stored in ai_settings.
-// Returns ErrAIKeyNotSet when no key has been stored yet. The passphrase must be the
-// same Slack passphrase used when the key was saved.
-func (s *Store) GetAIOpenAIKey(ctx context.Context, passphrase string) (string, error) {
-	var (
-		keyEnc   []byte
-		keyNonce []byte
-	)
+// GetAIOpenAIKey returns the stored OpenAI API key.
+// Returns ErrAIKeyNotSet when no key has been stored yet.
+func (s *Store) GetAIOpenAIKey(ctx context.Context) (string, error) {
+	var key sql.NullString
 	err := s.db.QueryRowContext(ctx,
-		"SELECT openai_key_enc, openai_key_nonce FROM ai_settings WHERE id = ?",
+		"SELECT openai_key FROM ai_settings WHERE id = ?",
 		aiSettingsSingletonID,
-	).Scan(&keyEnc, &keyNonce)
+	).Scan(&key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrAIKeyNotSet
 	}
 	if err != nil {
 		return "", fmt.Errorf("loading ai key: %w", err)
 	}
-	if len(keyEnc) == 0 || len(keyNonce) == 0 {
+	if !key.Valid || key.String == "" {
 		return "", ErrAIKeyNotSet
 	}
-	plain, err := Decrypt(keyEnc, keyNonce, passphrase)
-	if err != nil {
-		return "", fmt.Errorf("decrypting ai key: %w", err)
-	}
-	return string(plain), nil
+	return key.String, nil
 }
 
-// GetAIAnthropicKey returns the decrypted Anthropic API key stored in ai_settings.
+// GetAIAnthropicKey returns the stored Anthropic API key.
 // Returns ErrAIKeyNotSet when no key has been stored yet.
-func (s *Store) GetAIAnthropicKey(ctx context.Context, passphrase string) (string, error) {
-	var (
-		keyEnc   []byte
-		keyNonce []byte
-	)
+func (s *Store) GetAIAnthropicKey(ctx context.Context) (string, error) {
+	var key sql.NullString
 	err := s.db.QueryRowContext(ctx,
-		"SELECT anthropic_key_enc, anthropic_key_nonce FROM ai_settings WHERE id = ?",
+		"SELECT anthropic_key FROM ai_settings WHERE id = ?",
 		aiSettingsSingletonID,
-	).Scan(&keyEnc, &keyNonce)
+	).Scan(&key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrAIKeyNotSet
 	}
 	if err != nil {
 		return "", fmt.Errorf("loading anthropic key: %w", err)
 	}
-	if len(keyEnc) == 0 || len(keyNonce) == 0 {
+	if !key.Valid || key.String == "" {
 		return "", ErrAIKeyNotSet
 	}
-	plain, err := Decrypt(keyEnc, keyNonce, passphrase)
-	if err != nil {
-		return "", fmt.Errorf("decrypting anthropic key: %w", err)
-	}
-	return string(plain), nil
+	return key.String, nil
 }
 
 // SetAISettings upserts the singleton ai_settings row using the provided opts.
-// Key fields (OpenAIKey / AnthropicKey) are encrypted when non-empty; empty = preserve.
-// Passphrase is only required when a key field is non-empty.
+// Empty key fields preserve the existing stored key.
 func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-
-	var openAIEnc, openAINonce, antEnc, antNonce []byte
-	if opts.OpenAIKey != "" {
-		ct, nc, err := Encrypt([]byte(opts.OpenAIKey), opts.Passphrase)
-		if err != nil {
-			return fmt.Errorf("encrypting openai key: %w", err)
-		}
-		openAIEnc, openAINonce = ct, nc
-	}
-	if opts.AnthropicKey != "" {
-		ct, nc, err := Encrypt([]byte(opts.AnthropicKey), opts.Passphrase)
-		if err != nil {
-			return fmt.Errorf("encrypting anthropic key: %w", err)
-		}
-		antEnc, antNonce = ct, nc
-	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -165,13 +135,21 @@ func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) 
 		if provider == "" {
 			provider = ProviderOpenAI
 		}
+		var openAIKey, antKey *string
+		if opts.OpenAIKey != "" {
+			openAIKey = &opts.OpenAIKey
+		}
+		if opts.AnthropicKey != "" {
+			antKey = &opts.AnthropicKey
+		}
 		_, err = tx.ExecContext(ctx,
 			`INSERT INTO ai_settings
-			 (id, openai_key_enc, openai_key_nonce, anthropic_key_enc, anthropic_key_nonce,
+			 (id, openai_key, anthropic_key,
+			  openai_key_enc, openai_key_nonce, anthropic_key_enc, anthropic_key_nonce,
 			  provider, model, base_url, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`,
 			aiSettingsSingletonID,
-			openAIEnc, openAINonce, antEnc, antNonce,
+			openAIKey, antKey,
 			provider, opts.Model, opts.BaseURL, now,
 		)
 		if err != nil {
@@ -184,23 +162,19 @@ func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) 
 			setClauses = append(setClauses, "provider = ?")
 			args = append(args, opts.Provider)
 		}
-		// model: preserve-on-empty (user may not always send it from CLI)
 		if opts.Model != "" {
 			setClauses = append(setClauses, "model = ?")
 			args = append(args, opts.Model)
 		}
-		// base_url: always update (empty string = clear/use default endpoint)
-		setClauses = append(setClauses, "base_url = ?")
-		args = append(args, opts.BaseURL)
-		setClauses = append(setClauses, "updated_at = ?")
-		args = append(args, now)
+		setClauses = append(setClauses, "base_url = ?", "updated_at = ?")
+		args = append(args, opts.BaseURL, now)
 		if opts.OpenAIKey != "" {
-			setClauses = append(setClauses, "openai_key_enc = ?", "openai_key_nonce = ?")
-			args = append(args, openAIEnc, openAINonce)
+			setClauses = append(setClauses, "openai_key = ?")
+			args = append(args, opts.OpenAIKey)
 		}
 		if opts.AnthropicKey != "" {
-			setClauses = append(setClauses, "anthropic_key_enc = ?", "anthropic_key_nonce = ?")
-			args = append(args, antEnc, antNonce)
+			setClauses = append(setClauses, "anthropic_key = ?")
+			args = append(args, opts.AnthropicKey)
 		}
 		args = append(args, aiSettingsSingletonID)
 		query := "UPDATE ai_settings SET " + strings.Join(setClauses, ", ") + " WHERE id = ?"
@@ -215,10 +189,10 @@ func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) 
 	return nil
 }
 
-// ClearAIOpenAIKey removes the stored encrypted OpenAI key, preserving model/baseURL.
+// ClearAIOpenAIKey removes the stored OpenAI key, preserving model/baseURL.
 func (s *Store) ClearAIOpenAIKey(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx,
-		"UPDATE ai_settings SET openai_key_enc = NULL, openai_key_nonce = NULL, updated_at = ? WHERE id = ?",
+		"UPDATE ai_settings SET openai_key = NULL, openai_key_enc = NULL, openai_key_nonce = NULL, updated_at = ? WHERE id = ?",
 		time.Now().UTC().Format(time.RFC3339), aiSettingsSingletonID,
 	)
 	if err != nil {

@@ -23,7 +23,6 @@ func TestSetAISettings_AnthropicProvider(t *testing.T) {
 		Provider:     "anthropic",
 		AnthropicKey: "sk-ant-test",
 		Model:        "claude-sonnet-4-6",
-		Passphrase:   "testpassphrase",
 	})
 	require.NoError(t, err)
 
@@ -34,7 +33,7 @@ func TestSetAISettings_AnthropicProvider(t *testing.T) {
 	assert.False(t, settings.HasOpenAIKey)
 	assert.Equal(t, "claude-sonnet-4-6", settings.Model)
 
-	key, err := s.GetAIAnthropicKey(context.Background(), "testpassphrase")
+	key, err := s.GetAIAnthropicKey(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "sk-ant-test", key)
 }
@@ -43,12 +42,10 @@ func TestSetAISettings_PreservesKeyOnModelUpdate(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	// Insert with an OpenAI key
 	err := s.SetAISettings(ctx, SetAISettingsStoreOpts{
-		Provider:   "openai",
-		OpenAIKey:  "sk-original",
-		Model:      "gpt-4o",
-		Passphrase: "testpassphrase",
+		Provider:  "openai",
+		OpenAIKey: "sk-original",
+		Model:     "gpt-4o",
 	})
 	require.NoError(t, err)
 
@@ -63,7 +60,7 @@ func TestSetAISettings_PreservesKeyOnModelUpdate(t *testing.T) {
 	assert.True(t, settings.HasOpenAIKey, "key must still be set after model-only update")
 	assert.Equal(t, "gpt-4o-mini", settings.Model)
 
-	key, err := s.GetAIOpenAIKey(ctx, "testpassphrase")
+	key, err := s.GetAIOpenAIKey(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "sk-original", key, "key value must not have changed")
 }

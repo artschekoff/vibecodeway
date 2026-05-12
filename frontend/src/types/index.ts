@@ -12,29 +12,14 @@ export interface Context {
   hasSlack?: boolean;
   hasVcs?: boolean;
   hasFiles?: boolean;
-  // AI proposal
-  aiProposedStatus: string;
-  aiProposedComment?: string;
-  aiProposedNextStep?: string;
-  aiProposedAt?: string;
-  // User overrides (undefined/null = use AI proposal)
-  userStatusOverride?: string;
-  userCommentOverride?: string;
-  userNextStepOverride?: string;
-  userOverrideUpdatedAt?: string;
+  // Snapshot fields
+  snapshotStatus: string;      // from context_snapshots.status
+  snapshotIsStale: boolean;    // true when new data needs re-analysis
 }
 
-// Derived helpers — mirrors the Go EffectiveStatus / EffectiveComment / EffectiveNextStep methods.
+// Derived helper
 export function effectiveStatus(c: Context): string {
-  if (c.aiProposedStatus === "needs_attention") return "needs_attention";
-  if (c.userStatusOverride) return c.userStatusOverride;
-  return c.aiProposedStatus || "not_started";
-}
-export function effectiveComment(c: Context): string {
-  return (c.userCommentOverride && c.userCommentOverride !== "") ? c.userCommentOverride : (c.aiProposedComment ?? "");
-}
-export function effectiveNextStep(c: Context): string {
-  return (c.userNextStepOverride && c.userNextStepOverride !== "") ? c.userNextStepOverride : (c.aiProposedNextStep ?? "");
+  return c.snapshotStatus || "not_started";
 }
 
 export interface UnviewedBreakdown {
@@ -245,35 +230,6 @@ export interface UploadPreviewBatchResult {
   errors: string[];
 }
 
-export interface AttachedFile {
-  fileId: string;
-  originalName: string;
-  fileType: string;
-  extractedText: string;
-  createdAt: string;
-}
-
-export interface ContextLog {
-  id: string;
-  contextId: string;
-  trigger: string;
-  source?: string;
-  model?: string;
-  promptTokens?: number;
-  completionTokens?: number;
-  diffJson?: string;
-  summaryMd: string;
-  isManual: boolean;
-  editedAt?: string;
-  createdAt: string;
-  files?: AttachedFile[];
-}
-
-export interface LogEntry extends ContextLog {
-  contextKey: string;
-  orgName?: string;
-}
-
 export interface AppLogEntry {
   id: number;
   level: string;
@@ -284,21 +240,39 @@ export interface AppLogEntry {
   createdAt: string;
 }
 
-export interface ConsolidatedLog {
+export interface ContextSnapshot {
   contextId: string;
-  contentMd: string;
+  currentStepDesc: string;
+  currentStepConfidence: "high" | "medium" | "low";
+  currentStepFrom: string;   // JSON array string
+  currentStepOverridden: boolean;
+  sectionOperational: string;
+  sectionNarrative: string;
+  sectionEngineering: string;
+  status: string;
+  aiNextStepsShort: string;
+  aiNextStepsMid: string;
+  aiNextStepsLong: string;
+  userNextStepsShort: string;
+  userNextStepsMid: string;
+  userNextStepsLong: string;
+  lastAnalyzedSessionId?: string;
+  analyzedAt?: string;
+  isStale: boolean;
   version: number;
-  updatedBy: string;
-  updatedAt: string;
 }
 
-export interface ChatMessage {
+export interface ContextEvent {
   id: string;
   contextId: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  proposedConsolidatedMd?: string;
-  appliedAt?: string;
+  syncSessionId?: string;
+  type: string;
+  timestamp: string;
+  sourceType: "jira" | "slack" | "github" | "chat" | "user";
+  sourceId: string;
+  author: string;
+  summary: string;
+  rawReference: string;
   createdAt: string;
 }
 
@@ -495,47 +469,6 @@ export interface WorkflowStatus {
   createdAt: string;
 }
 
-export interface WorkflowSummary {
-  aiProposedStatus: string;
-  aiProposedComment?: string;
-  aiProposedNextStep?: string;
-  aiProposedAt?: string;
-  userStatusOverride?: string;
-  userCommentOverride?: string;
-  userNextStepOverride?: string;
-  userOverrideUpdatedAt?: string;
-  effectiveStatus: string;
-  effectiveComment: string;
-  effectiveNextStep: string;
-}
-
-export interface WorkflowProposal {
-  id: string;
-  contextId: string;
-  proposedStatus: string;
-  proposedComment?: string;
-  proposedNextStep?: string;
-  userStatusOverride?: string;
-  userCommentOverride?: string;
-  userNextStepOverride?: string;
-  prevUserNextStep?: string;
-  resolvedAt?: string;
-  updatedAt: string;
-  createdAt: string;
-}
-
-export interface OpenQuestion {
-  id: string;
-  contextId: string;
-  question: string;
-  status: 'open' | 'answered' | 'dismissed';
-  answer?: string;
-  source: 'ai' | 'user';
-  createdAt: string;
-  updatedAt: string;
-  closedAt?: string;
-}
-
 export type WorkflowStatusValue =
   | 'not_started'
   | 'scoping'
@@ -555,7 +488,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs";
+export type TabType = "org" | "context" | "settings" | "logs" | "prompts";
 
 export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)

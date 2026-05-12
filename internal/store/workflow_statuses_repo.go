@@ -93,9 +93,8 @@ func (s *Store) UpdateWorkflowStatus(ctx context.Context, id, label string) (*Wo
 	return &st, nil
 }
 
-// DeleteWorkflowStatus removes a custom status and NULLs out user_status_override on all contexts
-// that referenced it. ai_proposed_status is reset to 'not_started' for affected contexts
-// (it will be recomputed on the next sync). Returns ErrSystemStatus for built-in statuses.
+// DeleteWorkflowStatus removes a custom status and resets snapshot status to 'not_started'
+// for any context snapshots that referenced it. Returns ErrSystemStatus for built-in statuses.
 func (s *Store) DeleteWorkflowStatus(ctx context.Context, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -114,16 +113,11 @@ func (s *Store) DeleteWorkflowStatus(ctx context.Context, id string) error {
 		return ErrSystemStatus
 	}
 
+	// Reset snapshot status for any context that had this status set.
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE contexts SET user_status_override = NULL WHERE user_status_override = ?
+		UPDATE context_snapshots SET status = 'not_started', is_stale = 1 WHERE status = ?
 	`, slug); err != nil {
-		return fmt.Errorf("null user_status_override: %w", err)
-	}
-
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE contexts SET ai_proposed_status = 'not_started' WHERE ai_proposed_status = ?
-	`, slug); err != nil {
-		return fmt.Errorf("reset ai_proposed_status: %w", err)
+		return fmt.Errorf("reset snapshot status: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM workflow_statuses WHERE id = ?`, id); err != nil {

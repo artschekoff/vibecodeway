@@ -5881,3 +5881,87 @@ select {
   color: var(--text-muted);
   font-size: 0.85em;
 }
+
+/* ─── AI Prompts Page ─────────────────────────────────────────────────────── */
+
+.ai-prompt-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.ai-prompt-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface-2, var(--bg-secondary));
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-prompt-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ai-prompt-card__textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 12px 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  border: none;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  display: block;
+}
+
+.ai-prompt-card__textarea:focus {
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+}
+
+.ai-prompt-card__placeholders {
+  border-top: 1px solid var(--border);
+  padding: 10px 14px;
+  background: var(--surface-2, var(--bg-secondary));
+}
+
+.ai-prompt-card__placeholders-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.ai-prompt-card__placeholder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-prompt-card__placeholder-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ai-prompt-card__placeholder-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ai-prompt-card__placeholder-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}

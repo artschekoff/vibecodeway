@@ -3,7 +3,6 @@
 import {store} from '../models';
 import {vcsstore} from '../models';
 import {slackstore} from '../models';
-import {contextlog} from '../models';
 import {main} from '../models';
 import {service} from '../models';
 import {vcs} from '../models';
@@ -22,21 +21,15 @@ export function AddSpecificPR(arg1:string,arg2:string,arg3:string,arg4:number):P
 
 export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo>;
 
+export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.Event>;
+
 export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<vcsstore.ContextVCSBranch>;
 
-export function AnalyzeContextChanges(arg1:string):Promise<contextlog.ContextLog>;
-
-export function AnswerOpenQuestion(arg1:string,arg2:string):Promise<void>;
-
-export function ApplyChatSuggestion(arg1:string):Promise<contextlog.ConsolidatedLog>;
-
-export function AttachLogFile(arg1:string,arg2:string):Promise<void>;
+export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
 
 export function AuthStatus():Promise<string>;
 
 export function CancelRefresh():Promise<void>;
-
-export function ChatWithContext(arg1:string,arg2:string):Promise<contextlog.ChatMessage>;
 
 export function CheckAccessibility():Promise<boolean>;
 
@@ -52,15 +45,11 @@ export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Arr
 
 export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
-export function CreateContextLog(arg1:string,arg2:string):Promise<contextlog.ContextLog>;
-
 export function CreateOrganization(arg1:string):Promise<store.Organization>;
 
 export function CreateWorkflowStatus(arg1:string,arg2:string):Promise<store.WorkflowStatus>;
 
 export function DeleteContext(arg1:string):Promise<void>;
-
-export function DeleteContextLog(arg1:string):Promise<void>;
 
 export function DeleteContextText(arg1:string):Promise<void>;
 
@@ -82,17 +71,17 @@ export function DeleteWorkflowStatus(arg1:string):Promise<void>;
 
 export function DeleteWorkspace(arg1:string):Promise<void>;
 
-export function DetachLogFile(arg1:string,arg2:string):Promise<void>;
-
 export function DiscardPendingUpload(arg1:string):Promise<void>;
-
-export function DismissOpenQuestion(arg1:string):Promise<void>;
 
 export function DismissPicker():Promise<void>;
 
 export function DismissReviewRequest(arg1:string):Promise<void>;
 
+export function FetchPruneRepoPath(arg1:string):Promise<void>;
+
 export function FindWorkspaceForBranch(arg1:string,arg2:string):Promise<vcsstore.VCSWorkspace>;
+
+export function GenerateHandoffPacket(arg1:string):Promise<store.InferredRequirementsPacket>;
 
 export function GetAISettings():Promise<main.AISettingsResponse>;
 
@@ -100,13 +89,13 @@ export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
 
-export function GetConsolidatedContextLog(arg1:string):Promise<contextlog.ConsolidatedLog>;
-
 export function GetContextDetail(arg1:string):Promise<service.ContextDetail>;
+
+export function GetContextSnapshot(arg1:string):Promise<store.ContextSnapshot>;
 
 export function GetJiraInstanceURL():Promise<string>;
 
-export function GetOpenQuestions(arg1:string):Promise<Array<store.OpenQuestion>>;
+export function GetLatestHandoffPacket(arg1:string):Promise<store.InferredRequirementsPacket>;
 
 export function GetPendingCodeReviews():Promise<Array<vcsstore.ReviewRequest>>;
 
@@ -120,29 +109,21 @@ export function GetVCSAuth(arg1:string):Promise<vcsstore.VCSAuth>;
 
 export function GetVCSPRsForContext(arg1:string):Promise<Array<vcsstore.PullRequest>>;
 
-export function GetWorkflowProposals(arg1:string):Promise<Array<store.WorkflowProposal>>;
-
-export function GetWorkflowSummary(arg1:string):Promise<main.WorkflowSummary>;
-
 export function HasSlackPassphrase():Promise<boolean>;
 
-export function InitializeConsolidatedLog(arg1:string):Promise<contextlog.ConsolidatedLog>;
+export function ListAIPrompts():Promise<Array<store.AIPrompt>>;
 
 export function ListAllContexts():Promise<Array<store.Context>>;
 
-export function ListAllLogs(arg1:string,arg2:number):Promise<Array<contextlog.LogEntry>>;
-
 export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;
-
-export function ListContextChat(arg1:string):Promise<Array<contextlog.ChatMessage>>;
-
-export function ListContextLogs(arg1:string):Promise<Array<contextlog.ContextLog>>;
 
 export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 
 export function ListContexts():Promise<Array<store.Context>>;
 
 export function ListContextsByOrg(arg1:string):Promise<Array<store.Context>>;
+
+export function ListEvents(arg1:string):Promise<Array<store.Event>>;
 
 export function ListLocalBranches(arg1:string):Promise<Array<vcs.LocalBranch>>;
 
@@ -174,15 +155,21 @@ export function ListWorkspaces(arg1:string):Promise<Array<vcsstore.VCSWorkspace>
 
 export function LoadSlackContext(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string):Promise<void>;
 
+export function MarkBranchAllViewed(arg1:string):Promise<void>;
+
 export function MarkCommentViewed(arg1:string):Promise<void>;
 
 export function MarkContextAllViewed(arg1:string):Promise<void>;
+
+export function MarkIssueAllViewed(arg1:string):Promise<void>;
 
 export function MarkIssueViewed(arg1:string):Promise<void>;
 
 export function MarkPRCommentViewed(arg1:string):Promise<void>;
 
 export function MarkPRViewed(arg1:string):Promise<void>;
+
+export function MarkSlackChannelAllViewed(arg1:string):Promise<void>;
 
 export function MarkSlackDMConfigViewed(arg1:string):Promise<void>;
 
@@ -195,6 +182,8 @@ export function OpenAccessibilityPreferences():Promise<void>;
 export function OpenRepoPathTerminal(arg1:string):Promise<void>;
 
 export function OpenWorkspaceTerminal(arg1:string):Promise<void>;
+
+export function OverrideCurrentStep(arg1:string,arg2:string):Promise<void>;
 
 export function PickAndExtractFiles(arg1:string):Promise<main.UploadBatchResult>;
 
@@ -228,6 +217,8 @@ export function RemoveTrackedRepo(arg1:string):Promise<void>;
 
 export function RemoveVCSBranch(arg1:string):Promise<void>;
 
+export function ResetAIPrompt(arg1:string):Promise<void>;
+
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
 export function SearchJQL(arg1:string):Promise<Array<jira.SearchResult>>;
@@ -256,8 +247,6 @@ export function SetSlackPassphrase(arg1:string):Promise<void>;
 
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
-export function SetUserWorkflowOverrides(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
-
 export function SyncAllComments(arg1:string):Promise<number>;
 
 export function ToggleCommentActive(arg1:string):Promise<jirastore.Comment>;
@@ -276,15 +265,15 @@ export function ToggleSlackThreadActive(arg1:string):Promise<slackstore.SlackThr
 
 export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploadedFile>;
 
-export function UpdateConsolidatedContextLog(arg1:string,arg2:string):Promise<contextlog.ConsolidatedLog>;
+export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateContext(arg1:string,arg2:string,arg3:string):Promise<store.Context>;
-
-export function UpdateContextLog(arg1:string,arg2:string):Promise<contextlog.ContextLog>;
 
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
 
 export function UpdateTrackedRepoMeta(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function UpdateUserNextSteps(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UpdateVCSBranchLabel(arg1:string,arg2:string):Promise<void>;
 

@@ -155,6 +155,19 @@ func (r *PRRepo) MarkPRCommentViewed(ctx context.Context, id string) error {
 	return err
 }
 
+// MarkBranchAllViewed marks all PRs for the given branch and all their comments as viewed.
+func (r *PRRepo) MarkBranchAllViewed(ctx context.Context, branchID string) error {
+	if _, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_pull_requests SET viewed_at = datetime('now')
+		 WHERE branch_id = ? AND viewed_at IS NULL`, branchID); err != nil {
+		return err
+	}
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_pr_comments SET viewed_at = datetime('now')
+		 WHERE pr_id IN (SELECT id FROM vcs_pull_requests WHERE branch_id = ?) AND viewed_at IS NULL`, branchID)
+	return err
+}
+
 func (r *PRRepo) scanPRs(rows *sql.Rows) ([]PullRequest, error) {
 	var result []PullRequest
 	for rows.Next() {

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/artschekoff/context-consolidator/internal/store"
 	"github.com/spf13/cobra"
@@ -78,13 +77,8 @@ func newSetAISettingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ai-settings-set",
 		Short: "Set AI configuration (provider, keys, model, baseURL)",
-		Long: `Set AI configuration. Passphrase is read from CONTEXT_CONSOLIDATOR_PASSPHRASE
-env var and is required when --api-key or --anthropic-key is non-empty.`,
+		Long: `Set AI configuration (provider, keys, model, baseURL). Keys are stored in plain text.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			passphrase := os.Getenv(passphraseEnvVar)
-			if (apiKey != "" || anthropicKey != "") && passphrase == "" {
-				return fmt.Errorf("set %s first (used to encrypt the API key)", passphraseEnvVar)
-			}
 			ctx := context.Background()
 			env, err := openServiceEnv()
 			if err != nil {
@@ -98,7 +92,6 @@ env var and is required when --api-key or --anthropic-key is non-empty.`,
 				AnthropicKey: anthropicKey,
 				Model:        model,
 				BaseURL:      baseURL,
-				Passphrase:   passphrase,
 			}); err != nil {
 				return fmt.Errorf("setting ai settings: %w", err)
 			}
@@ -110,8 +103,8 @@ env var and is required when --api-key or --anthropic-key is non-empty.`,
 		},
 	}
 	cmd.Flags().StringVar(&provider, "provider", "", "LLM provider: openai, anthropic, local")
-	cmd.Flags().StringVar(&apiKey, "api-key", "", "OpenAI API key (encrypted at rest)")
-	cmd.Flags().StringVar(&anthropicKey, "anthropic-key", "", "Anthropic API key (encrypted at rest)")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "OpenAI API key")
+	cmd.Flags().StringVar(&anthropicKey, "anthropic-key", "", "Anthropic API key")
 	cmd.Flags().StringVar(&model, "model", "", "Model name")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Custom base URL (for OpenAI proxy or local endpoints)")
 	return cmd

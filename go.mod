@@ -6,6 +6,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.38.0
 	github.com/gen2brain/go-fitz v1.24.15
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/lu4p/cat v0.1.5
 	github.com/mark3labs/mcp-go v0.47.0
 	github.com/sashabaranov/go-openai v1.41.2

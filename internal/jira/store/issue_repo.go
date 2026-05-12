@@ -79,6 +79,17 @@ func (r *Repo) MarkIssueViewed(ctx context.Context, id string) error {
 	return err
 }
 
+// MarkIssueAllViewed marks the issue and all its comments as viewed.
+func (r *Repo) MarkIssueAllViewed(ctx context.Context, id string) error {
+	if _, err := r.db.ExecContext(ctx,
+		"UPDATE jira_issues SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL", id); err != nil {
+		return err
+	}
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE jira_comments SET viewed_at = datetime('now') WHERE issue_id = ? AND viewed_at IS NULL", id)
+	return err
+}
+
 // GetIssueJiraKeys returns all jira_key values for a context (for dedup checks).
 func (r *Repo) GetIssueJiraKeys(ctx context.Context, contextID string) (map[string]bool, error) {
 	rows, err := r.db.QueryContext(ctx,

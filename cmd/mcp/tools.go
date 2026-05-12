@@ -18,8 +18,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStore *vcsstore.Store, cliRunner *cliclient.Runner, logger *zap.Logger) {
-	h := &handlers{svc: svc, vcsStore: vcsStore, cli: cliRunner, logger: logger}
+func registerTools(s *server.MCPServer, store *appstore.Store, svc *jiraservice.ContextService, vcsStore *vcsstore.Store, cliRunner *cliclient.Runner, logger *zap.Logger) {
+	h := &handlers{store: store, svc: svc, vcsStore: vcsStore, cli: cliRunner, logger: logger}
 
 	s.AddTool(
 		mcp.NewTool("load_context",
@@ -139,15 +139,12 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 
 	s.AddTool(
 		mcp.NewTool("context_log",
-			mcp.WithDescription("Return the AI-maintained context log. By default returns the rolling consolidated log for the context as Markdown. Pass history='true' to receive a JSON array of every individual change-log entry (newest first) instead."),
+			mcp.WithDescription("Return the event log for a context as a JSON array of events, ordered by timestamp ascending."),
 			mcp.WithString("context_id",
 				mcp.Description("Context UUID. Use either context_id or context_key."),
 			),
 			mcp.WithString("context_key",
 				mcp.Description("Context user-assigned key. Use either context_id or context_key."),
-			),
-			mcp.WithString("history",
-				mcp.Description("Set to 'true' to return the full history of context_log entries as JSON. Omit or set to anything else to get the consolidated log as Markdown."),
 			),
 		),
 		h.handleContextLog,
@@ -237,6 +234,7 @@ func registerTools(s *server.MCPServer, svc *jiraservice.ContextService, vcsStor
 }
 
 type handlers struct {
+	store    *appstore.Store
 	svc      *jiraservice.ContextService
 	vcsStore *vcsstore.Store
 	cli      *cliclient.Runner
@@ -435,32 +433,15 @@ func (h *handlers) handleContextLog(ctx context.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cl := h.svc.ContextLog()
-	if cl == nil {
-		return mcp.NewToolResultError("context log service is not configured"), nil
-	}
-
-	history := strings.EqualFold(strings.TrimSpace(req.GetString("history", "")), "true")
-	if history {
-		logs, err := cl.ListLogs(ctx, id)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("listing context logs: %v", err)), nil
-		}
-		data, err := json.MarshalIndent(logs, "", "  ")
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
-		}
-		return mcp.NewToolResultText(string(data)), nil
-	}
-
-	consolidated, err := cl.GetConsolidated(ctx, id)
+	events, err := h.store.ListEvents(ctx, id)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("loading consolidated log: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("listing events: %v", err)), nil
 	}
-	if consolidated == nil || consolidated.ContentMd == "" {
-		return mcp.NewToolResultText("_(consolidated context log is empty — run InitializeConsolidatedLog in the app)_"), nil
+	data, err := json.MarshalIndent(events, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
 	}
-	return mcp.NewToolResultText(consolidated.ContentMd), nil
+	return mcp.NewToolResultText(string(data)), nil
 }
 
 func (h *handlers) handleContextLogAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -469,19 +450,23 @@ func (h *handlers) handleContextLogAdd(ctx context.Context, req mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cl := h.svc.ContextLog()
-	if cl == nil {
-		return mcp.NewToolResultError("context log service is not configured"), nil
-	}
-
 	message := strings.TrimSpace(req.GetString("message", ""))
 	if message == "" {
 		return mcp.NewToolResultError("message is required"), nil
 	}
 
-	stored, err := cl.CreateAgentLog(ctx, id, message)
+	stored, err := h.store.AddEvent(ctx, appstore.Event{
+		ContextID:  id,
+		Type:       appstore.EventTypeUserNote,
+		SourceType: appstore.EventSourceUser,
+		Summary:    message,
+	})
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("creating agent log: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("adding event: %v", err)), nil
+	}
+
+	if err := h.store.MarkSnapshotStale(ctx, id); err != nil {
+		h.logger.Warn("context_log_add: mark snapshot stale failed", zap.String("contextID", id), zap.Error(err))
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Log entry created (id=%s).", stored.ID)), nil
@@ -507,28 +492,36 @@ func (h *handlers) handleContextSetStatus(ctx context.Context, req mcp.CallToolR
 
 	comment := strings.TrimSpace(req.GetString("comment", ""))
 	nextStep := strings.TrimSpace(req.GetString("next_step", ""))
+	message := strings.TrimSpace(req.GetString("message", ""))
 
-	if _, err := h.svc.SetAgentProposal(ctx, id, status, comment, nextStep); err != nil {
+	// Build the summary for the status-update event from all provided fields.
+	parts := []string{"Status: " + status}
+	if comment != "" {
+		parts = append(parts, "Comment: "+comment)
+	}
+	if nextStep != "" {
+		parts = append(parts, "Next step: "+nextStep)
+	}
+	if message != "" {
+		parts = append(parts, message)
+	}
+	summary := strings.Join(parts, "\n")
+
+	if _, err := h.store.AddEvent(ctx, appstore.Event{
+		ContextID:  id,
+		Type:       appstore.EventTypeStatusUpdate,
+		SourceType: appstore.EventSourceUser,
+		Summary:    summary,
+	}); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("setting status: %v", err)), nil
 	}
 
-	message := strings.TrimSpace(req.GetString("message", ""))
-	logAppended := false
-	if message != "" {
-		cl := h.svc.ContextLog()
-		if cl == nil {
-			h.logger.Warn("context_set_status: context log service not configured, message dropped", zap.String("contextID", id))
-		} else {
-			if _, err := cl.CreateAgentLog(ctx, id, message); err != nil {
-				h.logger.Warn("context_set_status: failed to create agent log", zap.String("contextID", id), zap.Error(err))
-			} else {
-				logAppended = true
-			}
-		}
+	if err := h.store.MarkSnapshotStale(ctx, id); err != nil {
+		h.logger.Warn("context_set_status: mark snapshot stale failed", zap.String("contextID", id), zap.Error(err))
 	}
 
 	result := fmt.Sprintf("Status set to %q.", status)
-	if logAppended {
+	if message != "" {
 		result += " Log entry appended."
 	}
 	return mcp.NewToolResultText(result), nil
@@ -611,24 +604,13 @@ func (h *handlers) handleLoadContext(ctx context.Context, req mcp.CallToolReques
 
 	// Logs section — always last, only when no filter is active.
 	if filter == "" {
-		if cl := h.svc.ContextLog(); cl != nil {
-			logs, err := cl.ListLogs(ctx, detail.Context.ID)
-			if err == nil && len(logs) > 0 {
-				fmt.Fprintf(&buf, "\n--- LOGS (%d %s) ---\n\n", len(logs), pluralWord(len(logs), "entry", "entries"))
-				for _, l := range logs {
-					fmt.Fprintf(&buf, "[%s · %s]\n", jiraservice.FormatDateTime(l.CreatedAt), strings.ToUpper(l.Trigger))
-					fmt.Fprint(&buf, l.SummaryMd)
-					fmt.Fprint(&buf, "\n")
-					if len(l.Files) > 0 {
-						fmt.Fprint(&buf, "\nReferenced files:\n")
-						for _, f := range l.Files {
-							fmt.Fprintf(&buf, "### %s (%s)\n\n", f.OriginalName, f.FileType)
-							fmt.Fprint(&buf, f.ExtractedText)
-							fmt.Fprint(&buf, "\n\n")
-						}
-					}
-					fmt.Fprint(&buf, "\n")
-				}
+		events, err := h.store.ListEvents(ctx, detail.Context.ID)
+		if err == nil && len(events) > 0 {
+			fmt.Fprintf(&buf, "\n--- EVENTS (%d %s) ---\n\n", len(events), pluralWord(len(events), "entry", "entries"))
+			for _, e := range events {
+				fmt.Fprintf(&buf, "[%s · %s · %s]\n", jiraservice.FormatDateTime(e.Timestamp), strings.ToUpper(e.Type), strings.ToUpper(e.SourceType))
+				fmt.Fprint(&buf, e.Summary)
+				fmt.Fprint(&buf, "\n\n")
 			}
 		}
 	}

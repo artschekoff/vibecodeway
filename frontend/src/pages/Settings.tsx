@@ -7,25 +7,35 @@ import { useTabContext } from "../contexts/TabContext";
 import WorkflowStatusManager from "../components/WorkflowStatusManager";
 
 const OPENAI_MODELS = [
-  { id: "gpt-4.1",       label: "GPT-4.1 (recommended)" },
-  { id: "gpt-4.1-mini",  label: "GPT-4.1 Mini" },
-  { id: "gpt-4.1-nano",  label: "GPT-4.1 Nano" },
+  // GPT-5 series
+  { id: "gpt-5.5",       label: "GPT-5.5 (flagship)" },
+  { id: "gpt-5.5-pro",   label: "GPT-5.5 Pro" },
+  { id: "gpt-5.4",       label: "GPT-5.4" },
+  { id: "gpt-5.4-pro",   label: "GPT-5.4 Pro" },
+  { id: "gpt-5.4-mini",  label: "GPT-5.4 mini" },
+  { id: "gpt-5.4-nano",  label: "GPT-5.4 nano" },
+  { id: "gpt-5",         label: "GPT-5" },
+  { id: "gpt-5-mini",    label: "GPT-5 mini" },
+  { id: "gpt-5-nano",    label: "GPT-5 nano" },
+  // GPT-4.1 series
+  { id: "gpt-4.1",       label: "GPT-4.1 (recommended non-reasoning)" },
+  { id: "gpt-4.1-mini",  label: "GPT-4.1 mini" },
+  // GPT-4o series
   { id: "gpt-4o",        label: "GPT-4o" },
-  { id: "gpt-4o-mini",   label: "GPT-4o Mini" },
-  { id: "o4-mini",       label: "o4-mini" },
-  { id: "o3-mini",       label: "o3-mini" },
-  { id: "gpt-4-turbo",   label: "GPT-4 Turbo" },
-  { id: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+  { id: "gpt-4o-mini",   label: "GPT-4o mini" },
+  // Reasoning (o-series)
+  { id: "o3",            label: "o3" },
+  { id: "o3-pro",        label: "o3 Pro" },
 ] as const;
 
 const CLAUDE_MODELS = [
-  { id: "claude-opus-4-6",            label: "Claude Opus 4.6 (most capable)" },
-  { id: "claude-sonnet-4-6",          label: "Claude Sonnet 4.6 (recommended)" },
-  { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (fast)" },
-  { id: "claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet" },
-  { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-  { id: "claude-3-5-haiku-20241022",  label: "Claude 3.5 Haiku" },
-  { id: "claude-3-opus-20240229",     label: "Claude 3 Opus" },
+  { id: "claude-opus-4-7",           label: "Claude Opus 4.7 (most capable)" },
+  { id: "claude-sonnet-4-6",         label: "Claude Sonnet 4.6 (recommended)" },
+  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (fast)" },
+  { id: "claude-opus-4-6",           label: "Claude Opus 4.6" },
+  { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
+  { id: "claude-opus-4-5-20251101",  label: "Claude Opus 4.5" },
+  { id: "claude-opus-4-1-20250805",  label: "Claude Opus 4.1" },
 ] as const;
 
 export default function SettingsPage() {
@@ -560,10 +570,6 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              API keys are encrypted with your Slack passphrase before being stored on disk.
-              You must unlock the app with that passphrase before saving a key for the first time.
-            </div>
           </div>
         </section>
 

@@ -41,33 +41,33 @@ import {
   GetUnviewedBreakdown,
   MarkContextAllViewed,
   MarkIssueViewed,
+  MarkIssueAllViewed,
   MarkCommentViewed,
   MarkSlackThreadViewed,
+  MarkSlackChannelAllViewed,
   MarkSlackDMConfigViewed,
   MarkPRViewed,
   MarkPRCommentViewed,
-  GetWorkflowSummary,
-  GetOpenQuestions,
-  GetWorkflowProposals,
+  MarkBranchAllViewed,
+  AnalyzeContext,
+  GetContextSnapshot,
+  GenerateHandoffPacket,
+  AddUserEvent,
+  ListEvents,
   GetJiraInstanceURL,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, WorkflowSummary, OpenQuestion, WorkflowProposal, VCSWorkspace } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
 import SlackChannelCard from "../components/SlackChannelCard";
 import SlackDMConfigCard from "../components/SlackDMConfigCard";
-import ContextChatPanel from "../components/ContextChatPanel";
-import ContextLogList from "../components/ContextLogList";
-import ConsolidatedLogView from "../components/ConsolidatedLogView";
 import UploadedFileCard from "../components/UploadedFileCard";
 import ContextTextCard from "../components/ContextTextCard";
 import ContextForm from "../components/ContextForm";
-import WorkflowProposalCard from "../components/WorkflowProposalCard";
-import OpenQuestionsPanel from "../components/OpenQuestionsPanel";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 
@@ -137,11 +137,12 @@ function PRCommentItem({ comment, depth = 0, onMarkViewed }: { comment: import("
   );
 }
 
-function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed }: {
+function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed, checkoutNode }: {
   pr: PullRequest;
   vcsBranches?: VCSBranch[];
   onMarkPRViewed?: (id: string) => void;
   onMarkCommentViewed?: (id: string) => void;
+  checkoutNode?: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -197,6 +198,9 @@ function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed }: {
               onClick={(e) => { e.stopPropagation(); onMarkPRViewed(pr.id); }}
               title="Mark as viewed"
             ><Check size={13} /></button>
+          )}
+          {checkoutNode && (
+            <span onClick={(e) => e.stopPropagation()}>{checkoutNode}</span>
           )}
           <ChevronDown size={15} className={`pr-expand-chevron${expanded ? " pr-expand-chevron--open" : ""}`} />
         </div>
@@ -341,8 +345,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [toastMsg, setToastMsg] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [sidePanelTab, setSidePanelTab] = useState<"chat" | "logs" | "consolidated">("chat");
-  const [consolidatedReloadKey, setConsolidatedReloadKey] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [editJqlQuery, setEditJqlQuery] = useState<string | undefined>(undefined);
   const [editJiraIssues, setEditJiraIssues] = useState<Issue[] | undefined>(undefined);
@@ -354,11 +356,12 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [editRelations, setEditRelations] = useState<ContextRelation[] | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<UnviewedBreakdown | null>(null);
   const [markingAllViewed, setMarkingAllViewed] = useState(false);
-  const [workflowSummary, setWorkflowSummary] = useState<WorkflowSummary | null>(null);
-  const [openQuestions, setOpenQuestions] = useState<OpenQuestion[]>([]);
-  const [proposals, setProposals] = useState<WorkflowProposal[]>([]);
-  const [showProposalHistory, setShowProposalHistory] = useState(false);
-  const [workflowError, setWorkflowError] = useState("");
+  const [snapshot, setSnapshot] = useState<ContextSnapshot | null>(null);
+  const [events, setEvents] = useState<ContextEvent[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [snapshotError, setSnapshotError] = useState("");
+  const [addEventType, setAddEventType] = useState("user_note");
+  const [addEventSummary, setAddEventSummary] = useState("");
   const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
   const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
   const {
@@ -385,22 +388,34 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }
   }, [id]);
 
-  const loadWorkflow = useCallback(async () => {
+  const loadSnapshot = useCallback(async () => {
     if (!id) return;
-    setWorkflowError("");
     try {
-      const [summary, questions, props] = await Promise.all([
-        GetWorkflowSummary(id) as Promise<WorkflowSummary>,
-        GetOpenQuestions(id) as Promise<OpenQuestion[]>,
-        GetWorkflowProposals(id) as Promise<WorkflowProposal[]>,
+      const [snap, evts] = await Promise.all([
+        GetContextSnapshot(id) as Promise<ContextSnapshot>,
+        ListEvents(id) as Promise<ContextEvent[]>,
       ]);
-      setWorkflowSummary(summary);
-      setOpenQuestions(questions ?? []);
-      setProposals(props ?? []);
+      setSnapshot(snap);
+      setEvents(evts ?? []);
     } catch {
-      setWorkflowError("Failed to load workflow data");
+      // snapshot not yet generated — that's fine
     }
   }, [id]);
+
+  const analyzeContext = async () => {
+    setIsAnalyzing(true);
+    setSnapshotError("");
+    try {
+      const result = await AnalyzeContext(id) as ContextSnapshot;
+      setSnapshot(result);
+      const evts = await ListEvents(id) as ContextEvent[];
+      setEvents(evts ?? []);
+    } catch (e) {
+      setSnapshotError(String(e));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const load = useCallback(async (silent = false) => {
     if (!id) return;
@@ -443,8 +458,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
 
   useEffect(() => {
     load();
-    void loadWorkflow();
-  }, [load, loadWorkflow]);
+    void loadSnapshot();
+  }, [load, loadSnapshot]);
 
   useEffect(() => {
     GetJiraInstanceURL().then(setJiraInstanceUrl).catch(() => {});
@@ -494,7 +509,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       const msg = parts.length > 0 ? parts.join(" · ") : "Everything is up to date.";
       showToast(msg);
       load(true);
-      void loadWorkflow();
+      void loadSnapshot();
     } catch (e) {
       setRefreshError(String(e));
     } finally {
@@ -897,41 +912,121 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         {toastMsg && <div className={`toast toast--${toastType}`}>{toastMsg}</div>}
 
         <div className="detail-primary">
-        {/* Workflow status + open questions */}
-        {workflowError && <div className="error-banner" style={{ marginBottom: 8 }}>{workflowError}</div>}
-        {workflowSummary && (
-          <WorkflowProposalCard
-            contextId={id!}
-            summary={workflowSummary}
-            onUpdated={(updated) => setWorkflowSummary(updated)}
-          />
-        )}
-        <OpenQuestionsPanel questions={openQuestions} onUpdated={() => void loadWorkflow()} />
-
-        {/* Proposal history */}
-        {proposals.length > 0 && (
-          <div className="workflow-history">
-            <button
-              className="workflow-history-toggle"
-              onClick={() => setShowProposalHistory((v) => !v)}
-            >
-              {showProposalHistory ? "▾" : "▸"} Proposal History{proposals.length > 5 ? ` (last 5 of ${proposals.length})` : ` (${proposals.length})`}
-            </button>
-            {showProposalHistory && (
-              <div className="workflow-history-list">
-                {proposals.slice(0, 5).map((p) => (
-                  <div key={p.id} className="workflow-history-item">
-                    <span className="workflow-history-date">
-                      {(() => { try { return new Date(p.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return p.createdAt; } })()}
-                    </span>
-                    <span className={`workflow-badge workflow-badge--${p.proposedStatus}`}>{p.proposedStatus.replace(/_/g, " ")}</span>
-                    {p.proposedComment && <span className="workflow-history-comment">{p.proposedComment}</span>}
+        {/* Analysis snapshot */}
+        <div className="detail-section" style={{ marginBottom: 12 }}>
+          <div className="detail-section-header">
+            <span className="detail-section-title">Analysis</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {snapshot?.isStale && (
+                <span style={{ color: "orange", fontSize: 12 }}>New data — re-analyze</span>
+              )}
+              <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 10px" }} onClick={() => void analyzeContext()} disabled={isAnalyzing}>
+                {isAnalyzing ? "Analyzing…" : "Analyze"}
+              </button>
+            </div>
+          </div>
+          {snapshotError && <div className="error-banner" style={{ margin: "0 14px 8px" }}>{snapshotError}</div>}
+          <div style={{ padding: "8px 14px" }}>
+            {snapshot ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>
+                  <strong>Current step:</strong> {snapshot.currentStepDesc}{" "}
+                  <em style={{ color: "var(--text-muted)", fontSize: 12 }}>({snapshot.currentStepConfidence})</em>
+                </div>
+                <div>
+                  <strong>Status:</strong>{" "}
+                  <span className={`workflow-badge workflow-badge--${snapshot.status}`}>{snapshot.status.replace(/_/g, " ")}</span>
+                </div>
+                {snapshot.sectionOperational && (
+                  <details open>
+                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Operational</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionOperational}</pre>
+                  </details>
+                )}
+                {snapshot.sectionNarrative && (
+                  <details>
+                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Narrative</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionNarrative}</pre>
+                  </details>
+                )}
+                {snapshot.sectionEngineering && (
+                  <details>
+                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Engineering</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionEngineering}</pre>
+                  </details>
+                )}
+                {(snapshot.aiNextStepsShort || snapshot.aiNextStepsMid || snapshot.aiNextStepsLong) && (
+                  <div style={{ marginTop: 4 }}>
+                    <strong style={{ fontSize: 13 }}>Next steps (AI):</strong>
+                    {snapshot.aiNextStepsShort && <div style={{ fontSize: 12 }}><em>Today:</em> {snapshot.aiNextStepsShort}</div>}
+                    {snapshot.aiNextStepsMid && <div style={{ fontSize: 12 }}><em>This week:</em> {snapshot.aiNextStepsMid}</div>}
+                    {snapshot.aiNextStepsLong && <div style={{ fontSize: 12 }}><em>This month:</em> {snapshot.aiNextStepsLong}</div>}
                   </div>
-                ))}
+                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "2px 10px" }}
+                    onClick={async () => {
+                      try {
+                        const packet = await GenerateHandoffPacket(id);
+                        await navigator.clipboard.writeText(JSON.stringify(packet, null, 2));
+                      } catch { /* best-effort */ }
+                    }}
+                  >
+                    Copy Handoff Packet
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No analysis yet. Click Analyze to start.</div>
             )}
           </div>
-        )}
+          {/* Add user event */}
+          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border)", marginTop: 4 }}>
+            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 6 }}>Add Note</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <select
+                className="passphrase-input"
+                style={{ fontSize: 12, padding: "2px 6px" }}
+                value={addEventType}
+                onChange={(e) => setAddEventType(e.target.value)}
+              >
+                <option value="user_note">Note</option>
+                <option value="next_step_recommendation">Next step recommendation</option>
+                <option value="current_step_override">Correct current step</option>
+                <option value="open_question_answered">Answer open question</option>
+                <option value="requirement_confirmed">Confirm requirement</option>
+              </select>
+              <input
+                className="passphrase-input"
+                style={{ fontSize: 12, flex: 1, minWidth: 160 }}
+                placeholder="Summary…"
+                value={addEventSummary}
+                onChange={(e) => setAddEventSummary(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" && addEventSummary.trim()) {
+                    await AddUserEvent(id, addEventType, addEventSummary.trim());
+                    setAddEventSummary("");
+                    void loadSnapshot();
+                  }
+                }}
+              />
+              <button
+                className="btn-primary"
+                style={{ fontSize: 12, padding: "2px 10px" }}
+                onClick={async () => {
+                  if (!addEventSummary.trim()) return;
+                  await AddUserEvent(id, addEventType, addEventSummary.trim());
+                  setAddEventSummary("");
+                  void loadSnapshot();
+                }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
 
         {isEmpty ? (
           <div className="empty-state">
@@ -973,7 +1068,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       onDeleteComment: handleDeleteComment,
                       onToggleIssue: (id: string) => void handleToggleIssue(id),
                       onToggleComment: (id: string) => void handleToggleComment(id),
-                      onMarkIssueViewed: async (iid: string) => { await MarkIssueViewed(iid); load(true); void loadBreakdown(); },
+                      onMarkIssueViewed: async (iid: string) => { await MarkIssueAllViewed(iid); load(true); void loadBreakdown(); },
                       onMarkCommentViewed: async (cid: string) => { await MarkCommentViewed(cid); load(true); void loadBreakdown(); },
                       jiraBaseUrl: detail?.jira?.baseUrl || jiraInstanceUrl,
                     };
@@ -1018,6 +1113,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       onToggleChannel={(id) => void handleToggleChannel(id)}
                       onToggleThread={(id) => void handleToggleThread(id)}
                       onMarkThreadViewed={async (tid) => { await MarkSlackThreadViewed(tid); load(true); void loadBreakdown(); }}
+                      onMarkChannelAllViewed={async (cid) => { await MarkSlackChannelAllViewed(cid); load(true); void loadBreakdown(); }}
                     />
                   ))}
 
@@ -1142,32 +1238,17 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                               <ExternalLink size={12} />
                             </button>
                           )}
-                          {b.branch && (() => {
-                            const workspace = workspaces.find(
-                              (w) => w.branch === b.branch && w.repoId === b.repoId
-                            );
-                            return workspace ? (
-                              <WorkspaceMenu
-                                workspace={workspace}
-                                checkoutLoading={checkoutLoading}
-                                onCheckout={() => void handleCheckout(b.branch, b.repoId)}
-                                onMarkDone={(id) => void handleMarkWorkspaceDone(id)}
-                                onDelete={(id) => void handleDeleteWorkspace(id)}
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                className="vcs-checkout-btn"
-                                title={`Checkout ${b.branch} in workspace`}
-                                disabled={checkoutLoading}
-                                onClick={() => void handleCheckout(b.branch, b.repoId)}
-                              >
-                                Checkout
-                              </button>
-                            );
-                          })()}
+                          {branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt)) && (
+                            <button
+                              type="button"
+                              className="mark-viewed-btn"
+                              style={{ marginLeft: "auto" }}
+                              title="Mark all PRs and comments as viewed"
+                              onClick={() => void (async () => { await MarkBranchAllViewed(b.id); load(true); void loadBreakdown(); })()}
+                            ><Check size={13} /></button>
+                          )}
                           {branchPRs.length > 0 && (
-                            <span className="detail-section-count" style={{ marginLeft: "auto" }}>
+                            <span className="detail-section-count" style={{ marginLeft: branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt)) ? 0 : "auto" }}>
                               {branchPRs.length}
                             </span>
                           )}
@@ -1178,17 +1259,43 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           <div className="detail-section-empty" style={{ padding: "8px 14px 12px" }}>
                             Click <strong>Refresh</strong> to fetch PRs
                           </div>
-                        ) : (
-                          branchPRs.map((pr) => (
+                        ) : (() => {
+                          const workspace = b.branch
+                            ? workspaces.find((w) => w.branch === b.branch && w.repoId === b.repoId)
+                            : undefined;
+                          const checkoutNode = b.branch
+                            ? workspace
+                              ? (
+                                <WorkspaceMenu
+                                  workspace={workspace}
+                                  checkoutLoading={checkoutLoading}
+                                  onCheckout={() => void handleCheckout(b.branch, b.repoId)}
+                                  onMarkDone={(id) => void handleMarkWorkspaceDone(id)}
+                                  onDelete={(id) => void handleDeleteWorkspace(id)}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="vcs-checkout-btn"
+                                  title={`Checkout ${b.branch} in workspace`}
+                                  disabled={checkoutLoading}
+                                  onClick={() => void handleCheckout(b.branch, b.repoId)}
+                                >
+                                  Checkout
+                                </button>
+                              )
+                            : undefined;
+                          return branchPRs.map((pr, idx) => (
                             <PRCard
                               key={pr.id}
                               pr={pr}
                               vcsBranches={vcsBranches}
                               onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
                               onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
+                              checkoutNode={idx === 0 ? checkoutNode : undefined}
                             />
-                          ))
-                        )}
+                          ));
+                        })()}
                       </div>
                     );
                   })}
@@ -1237,44 +1344,26 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         )}
         </div>
 
-        {id && (
+        {id && events.length > 0 && (
           <aside className="detail-sidepanel">
             <div className="sidepanel-tabs">
-              <button
-                className={`sidepanel-tab${sidePanelTab === "chat" ? " sidepanel-tab--active" : ""}`}
-                onClick={() => setSidePanelTab("chat")}
-              >
-                Chat
-              </button>
-              <button
-                className={`sidepanel-tab${sidePanelTab === "logs" ? " sidepanel-tab--active" : ""}`}
-                onClick={() => setSidePanelTab("logs")}
-              >
-                Logs
-              </button>
-              <button
-                className={`sidepanel-tab${sidePanelTab === "consolidated" ? " sidepanel-tab--active" : ""}`}
-                onClick={() => setSidePanelTab("consolidated")}
-              >
-                Consolidated
+              <button className="sidepanel-tab sidepanel-tab--active">
+                Events
               </button>
             </div>
-            <div className="sidepanel-body">
-              {sidePanelTab === "chat" && (
-                <ContextChatPanel
-                  contextId={id}
-                  onConsolidatedUpdated={() => setConsolidatedReloadKey((k) => k + 1)}
-                />
-              )}
-              {sidePanelTab === "logs" && (
-                <ContextLogList
-                  contextId={id}
-                  onChanged={() => setConsolidatedReloadKey((k) => k + 1)}
-                />
-              )}
-              {sidePanelTab === "consolidated" && (
-                <ConsolidatedLogView contextId={id} reloadKey={consolidatedReloadKey} />
-              )}
+            <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px" }}>
+              {events.map((ev) => (
+                <div key={ev.id} style={{ fontSize: 12, borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 6 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                      {(() => { try { return new Date(ev.timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ev.timestamp; } })()}
+                    </span>
+                    <span className="platform-badge">{ev.sourceType}</span>
+                    {ev.author && <span style={{ color: "var(--text-muted)" }}>{ev.author}</span>}
+                  </div>
+                  <div>{ev.summary}</div>
+                </div>
+              ))}
             </div>
           </aside>
         )}

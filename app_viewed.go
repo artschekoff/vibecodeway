@@ -36,6 +36,21 @@ func (a *App) MarkPRCommentViewed(id string) error {
 	return a.vcsStore.PullRequests.MarkPRCommentViewed(a.ctx, id)
 }
 
+// MarkBranchAllViewed marks all PRs and PR comments for the given branch as viewed.
+func (a *App) MarkBranchAllViewed(id string) error {
+	return a.vcsStore.PullRequests.MarkBranchAllViewed(a.ctx, id)
+}
+
+// MarkSlackChannelAllViewed marks all threads under a Slack channel as viewed.
+func (a *App) MarkSlackChannelAllViewed(id string) error {
+	return a.svc.MarkSlackChannelAllViewed(a.ctx, id)
+}
+
+// MarkIssueAllViewed marks a Jira issue and all its comments as viewed.
+func (a *App) MarkIssueAllViewed(id string) error {
+	return a.svc.MarkIssueAllViewed(a.ctx, id)
+}
+
 // MarkContextAllViewed sets viewed_at = now for every unread item in a context.
 func (a *App) MarkContextAllViewed(contextID string) error {
 	return a.svc.MarkContextAllViewed(a.ctx, contextID)

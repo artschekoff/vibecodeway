@@ -64,6 +64,7 @@ import {
   ListLocalBranches,
   DeleteLocalBranch,
   CheckoutLocalBranch,
+  FetchPruneRepoPath,
   ListOrganizations,
   SetContextOrg,
   // @ts-ignore
@@ -78,7 +79,7 @@ import type {
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
   ContextRelation, RelationsPayload, Organization, VCSRepoPath, VCSWorkspace, LocalBranch,
 } from "../types";
-import { effectiveStatus, effectiveComment, effectiveNextStep } from "../types";
+import { effectiveStatus } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
@@ -719,12 +720,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     }
   };
 
-  const loadWorkspacesForRepo = async (repoId: string) => {
+  const loadWorkspacesForRepo = async (repoId: string, fetchPrune = false) => {
     const paths = (await ListRepoLocalPaths(repoId) as VCSRepoPath[]) ?? [];
     const wsResult: Record<string, VCSWorkspace[]> = {};
     const brResult: Record<string, LocalBranch[]> = {};
     await Promise.all(
       paths.map(async (p) => {
+        if (fetchPrune) await (FetchPruneRepoPath(p.id) as Promise<void>).catch(() => {});
         wsResult[p.id] = (await ListWorkspaces(p.id) as VCSWorkspace[]) ?? [];
         brResult[p.id] = await (ListLocalBranches(p.id) as Promise<LocalBranch[]>).catch(() => []);
       })
@@ -742,7 +744,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     setRefreshingRepoId(repoId);
     try {
       await RefreshWorkspacesForRepo(repoId);
-      await loadWorkspacesForRepo(repoId);
+      await loadWorkspacesForRepo(repoId, true);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -955,8 +957,6 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 <div className="needs-attention-header">Needs Attention</div>
                 <div className="needs-attention-list">
                   {needsAttentionContexts.map((c) => {
-                    const comment = effectiveComment(c);
-                    const nextStep = effectiveNextStep(c);
                     return (
                       <div
                         key={c.id}
@@ -967,8 +967,6 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         onKeyDown={(e) => e.key === "Enter" && openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name, c.orgId)}
                       >
                         <span className="needs-attention-key">{c.key}</span>
-                        {comment && <span className="needs-attention-comment">{comment}</span>}
-                        {nextStep && <span className="needs-attention-nextstep">Next: {nextStep}</span>}
                       </div>
                     );
                   })}
@@ -1045,8 +1043,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                 <td>
                                   <WorkflowStatusBadge
                                     status={effectiveStatus(c)}
-                                    isAI={!c.userStatusOverride || c.aiProposedStatus === "needs_attention"}
-                                    title={effectiveComment(c) || undefined}
+                                    isAI={false}
                                   />
                                 </td>
                                 <td>

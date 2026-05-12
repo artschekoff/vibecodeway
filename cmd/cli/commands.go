@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/extract"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
@@ -29,17 +28,16 @@ import (
 // The GUI sets this env var when spawning CLI subprocesses.
 const passphraseEnvVar = "CONTEXT_CONSOLIDATOR_PASSPHRASE"
 
-// serviceEnv holds all objects needed to call ContextService and contextlog methods.
+// serviceEnv holds all objects needed to call ContextService methods.
 type serviceEnv struct {
-	store      *appstore.Store
-	svc        *jiraservice.ContextService
-	contextLog *contextlog.Service
-	openAI     *openaiclient.Client
-	logger     *zap.Logger
+	store  *appstore.Store
+	svc    *jiraservice.ContextService
+	openAI *openaiclient.Client
+	logger *zap.Logger
 }
 
 // openServiceEnv opens the database, reads the passphrase from the env, and
-// constructs ContextService + contextlog.Service (with optional AI).
+// constructs ContextService (with optional AI).
 func openServiceEnv() (*serviceEnv, error) {
 	logger, err := zap.NewProduction(zap.WithCaller(false))
 	if err != nil {
@@ -77,17 +75,13 @@ func openServiceEnv() (*serviceEnv, error) {
 	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)
 	svc.SetVCSStore(vcsStore)
 
-	openAI := openaiclient.NewClient(s, slackRunner.Passphrase, logger)
-	contextLogRepo := contextlog.NewRepo(s.DB())
-	contextLogSvc := contextlog.NewService(contextLogRepo, openAI.AsContextLogClient(), logger)
-	svc.SetContextLog(contextLogSvc)
+	openAI := openaiclient.NewClient(s, logger)
 
 	return &serviceEnv{
-		store:      s,
-		svc:        svc,
-		contextLog: contextLogSvc,
-		openAI:     openAI,
-		logger:     logger,
+		store:  s,
+		svc:    svc,
+		openAI: openAI,
+		logger: logger,
 	}, nil
 }
 

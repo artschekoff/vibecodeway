@@ -10,7 +10,7 @@ import {
   SetJiraBaseURL,
   AddVCSBranch,
   AddSpecificPR,
-  CreateContextLog,
+  AddUserEvent,
 } from "../../wailsjs/go/main/App";
 import type { Context, Organization } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
@@ -124,7 +124,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
           break;
         default:
           if (destination === "log") {
-            await CreateContextLog(contextID, logDraft.trim() || text);
+            await AddUserEvent(contextID, "user_note", logDraft.trim() || text);
           } else {
             await QuickAttachText(contextID, text);
           }

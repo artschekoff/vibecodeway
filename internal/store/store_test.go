@@ -172,14 +172,13 @@ func TestToggleContextStatus_NotFound(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestAIProposalDefaults(t *testing.T) {
+func TestSnapshotStatusDefaults(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	org, err := s.CreateOrganization(ctx, "test-org")
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "not_started", c.AIProposedStatus)
-	assert.Nil(t, c.UserStatusOverride)
-	assert.Nil(t, c.UserNextStepOverride)
+	assert.Equal(t, "not_started", c.SnapshotStatus)
+	assert.False(t, c.SnapshotIsStale)
 }

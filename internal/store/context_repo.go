@@ -67,16 +67,11 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		       EXISTS(SELECT 1 FROM context_vcs_branches WHERE context_id = c.id) AS has_vcs,
 		       (EXISTS(SELECT 1 FROM context_texts WHERE context_id = c.id)
 		        OR EXISTS(SELECT 1 FROM context_uploaded_files WHERE context_id = c.id)) AS has_files,
-		       c.ai_proposed_status,
-		       c.ai_proposed_comment,
-		       c.ai_proposed_next_step,
-		       c.ai_proposed_at,
-		       c.user_status_override,
-		       c.user_comment_override,
-		       c.user_next_step_override,
-		       c.user_override_updated_at
+		       COALESCE(sn.status, 'not_started') AS snapshot_status,
+		       COALESCE(sn.is_stale, 0) AS snapshot_is_stale
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
+		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
 		WHERE (? OR c.status = 'active')
 		GROUP BY c.id
 		ORDER BY c.sort_order ASC NULLS LAST, c.updated_at DESC
@@ -91,42 +86,46 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 // GetContext returns a single context by ID.
 func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 	var c Context
+	var isStaleInt int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, key, status, org_id, created_at, updated_at,
-		       ai_proposed_status, ai_proposed_comment, ai_proposed_next_step, ai_proposed_at,
-		       user_status_override, user_comment_override, user_next_step_override, user_override_updated_at
-		FROM contexts WHERE id = ?`,
+		`SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
+		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0)
+		FROM contexts c
+		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
+		WHERE c.id = ?`,
 		id,
 	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
-		&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
-		&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt)
+		&c.SnapshotStatus, &isStaleInt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting context: %w", err)
 	}
+	c.SnapshotIsStale = isStaleInt == 1
 	return &c, nil
 }
 
 // GetContextByKey returns a single context by user-assigned key.
 func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, error) {
 	var c Context
+	var isStaleInt int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, key, status, org_id, created_at, updated_at,
-		       ai_proposed_status, ai_proposed_comment, ai_proposed_next_step, ai_proposed_at,
-		       user_status_override, user_comment_override, user_next_step_override, user_override_updated_at
-		FROM contexts WHERE key = ?`,
+		`SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
+		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0)
+		FROM contexts c
+		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
+		WHERE c.key = ?`,
 		key,
 	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
-		&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
-		&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt)
+		&c.SnapshotStatus, &isStaleInt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting context by key: %w", err)
 	}
+	c.SnapshotIsStale = isStaleInt == 1
 	return &c, nil
 }
 
@@ -139,13 +138,13 @@ func (s *Store) CreateContext(ctx context.Context, key, orgID string) (*Context,
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	c := &Context{
-		ID:               uuid.New().String(),
-		Key:              key,
-		Status:           contextStatusActive,
-		OrgID:            orgID,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		AIProposedStatus: "not_started",
+		ID:             uuid.New().String(),
+		Key:            key,
+		Status:         contextStatusActive,
+		OrgID:          orgID,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		SnapshotStatus: "not_started",
 	}
 	// Place the new context first by giving it sort_order = MIN(existing) - 1.
 	// Defaults to 0 if there are no existing contexts.
@@ -375,15 +374,16 @@ func scanContextRows(rows *sql.Rows) ([]Context, error) {
 	var contexts []Context
 	for rows.Next() {
 		var c Context
+		var isStaleInt int
 		if err := rows.Scan(
 			&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
 			&c.IssueCount, &c.LastItemAt, &c.UnviewedCount,
 			&c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles,
-			&c.AIProposedStatus, &c.AIProposedComment, &c.AIProposedNextStep, &c.AIProposedAt,
-			&c.UserStatusOverride, &c.UserCommentOverride, &c.UserNextStepOverride, &c.UserOverrideUpdatedAt,
+			&c.SnapshotStatus, &isStaleInt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning context: %w", err)
 		}
+		c.SnapshotIsStale = isStaleInt == 1
 		contexts = append(contexts, c)
 	}
 	return contexts, rows.Err()

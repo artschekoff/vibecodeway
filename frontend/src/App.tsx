@@ -5,6 +5,7 @@ import ContextList from "./pages/ContextList";
 import ContextDetail from "./pages/ContextDetail";
 import Settings from "./pages/Settings";
 import AppLogsPage from "./pages/AppLogsPage";
+import PromptsPage from "./pages/PromptsPage";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
 import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
@@ -39,6 +40,7 @@ function TabContent() {
 
   if (activeTab.type === "settings") return <Settings />;
   if (activeTab.type === "logs") return <AppLogsPage />;
+  if (activeTab.type === "prompts") return <PromptsPage />;
   if (activeTab.type === "org") {
     return <ContextList orgId={activeTab.orgId!} tabId={activeTab.id} />;
   }

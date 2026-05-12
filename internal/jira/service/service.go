@@ -13,15 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	"github.com/artschekoff/context-consolidator/internal/openquestions"
 	"github.com/artschekoff/context-consolidator/internal/provider"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
-	"github.com/artschekoff/context-consolidator/internal/workflow"
 	"go.uber.org/zap"
 )
 
@@ -138,13 +135,14 @@ type SearchDiff struct {
 
 // RefreshResult summarises what was updated during a RefreshContext run.
 type RefreshResult struct {
-	IssuesRefreshed  int `json:"issuesRefreshed"`
-	NewComments      int `json:"newComments"`
-	ThreadsRefreshed int `json:"threadsRefreshed"`
-	DMsRefreshed     int `json:"dmsRefreshed"`
-	PRsRefreshed     int `json:"prsRefreshed"`
-	NewPRComments    int `json:"newPRComments"`
-	NewNotifications int `json:"newNotifications"`
+	IssuesRefreshed  int    `json:"issuesRefreshed"`
+	NewComments      int    `json:"newComments"`
+	ThreadsRefreshed int    `json:"threadsRefreshed"`
+	DMsRefreshed     int    `json:"dmsRefreshed"`
+	PRsRefreshed     int    `json:"prsRefreshed"`
+	NewPRComments    int    `json:"newPRComments"`
+	NewNotifications int    `json:"newNotifications"`
+	SyncSessionID    string `json:"syncSessionId,omitempty"`
 }
 
 // ReloadAllResult summarises what was fetched for one context during a ReloadAllContexts run.
@@ -193,45 +191,10 @@ type ContextService struct {
 	jiraRepo      *jirastore.Repo
 	slackRepo     *slackstore.Repo
 	vcsStore      *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
-	jira          JiraAPI
-	slack         SlackRunner
-	logger        *zap.Logger
-	providers     []provider.Provider
-	contextLog    *contextlog.Service
-	openQuestions OpenQuestionsRunner
-	nextStepAI    workflow.NextStepAIClient // may be nil
-}
-
-// SetContextLog attaches a contextlog.Service for refresh/reload change recording.
-// Passing nil disables logging hooks. Safe to call after construction.
-func (svc *ContextService) SetContextLog(cl *contextlog.Service) {
-	svc.contextLog = cl
-}
-
-// ContextLog returns the currently attached contextlog.Service, or nil if none.
-func (svc *ContextService) ContextLog() *contextlog.Service {
-	return svc.contextLog
-}
-
-// OpenQuestionsRunner is the interface used by ContextService to run the open-questions agent.
-type OpenQuestionsRunner interface {
-	AnalyzeContext(ctx context.Context, contextID, contentMD string, repos []openquestions.RepoInfo) error
-	ReevaluateOpenQuestions(ctx context.Context, contextID, contentMD string) error
-}
-
-// SetOpenQuestionsService attaches the open-questions agent. Passing nil disables it.
-func (svc *ContextService) SetOpenQuestionsService(oqs OpenQuestionsRunner) { svc.openQuestions = oqs }
-
-// SetNextStepAI attaches the AI client used for next-step generation.
-// Passing nil falls back to template-based generation.
-func (svc *ContextService) SetNextStepAI(ai workflow.NextStepAIClient) { svc.nextStepAI = ai }
-
-// SetAgentProposal persists an AI-agent-provided workflow proposal for contextID.
-// status should be one of the valid workflow statuses (validated by the caller).
-// comment and nextStep are optional; pass empty string to omit.
-// This is the service-layer entry point for MCP context_set_status calls.
-func (svc *ContextService) SetAgentProposal(ctx context.Context, contextID, status, comment, nextStep string) (*appstore.WorkflowProposal, error) {
-	return svc.store.SetAIProposal(ctx, contextID, status, comment, nextStep, "")
+	jira      JiraAPI
+	slack     SlackRunner
+	logger    *zap.Logger
+	providers []provider.Provider
 }
 
 // IsValidWorkflowStatus reports whether slug is a registered workflow status in the DB.
@@ -957,13 +920,22 @@ func (svc *ContextService) ToggleContextTextActive(ctx context.Context, id strin
 func (svc *ContextService) RefreshContext(ctx context.Context, contextID string, onProgress ...RefreshProgressFunc) (*RefreshResult, error) {
 	result := &RefreshResult{}
 
+	// Create a sync session so the analysis engine can identify which items are new.
+	sourceNames := make([]string, 0, len(svc.providers))
+	for _, p := range svc.providers {
+		sourceNames = append(sourceNames, p.Name())
+	}
+	session, err := svc.store.CreateSyncSession(ctx, contextID, sourceNames)
+	if err != nil {
+		svc.logger.Warn("refresh: create sync session failed", zap.String("contextID", contextID), zap.Error(err))
+	}
+
 	var notify RefreshProgressFunc
 	if len(onProgress) > 0 && onProgress[0] != nil {
 		notify = onProgress[0]
 	}
 
-	before := svc.snapshotBefore(ctx, contextID)
-
+	totalItems := 0
 	for i, p := range svc.providers {
 		if notify != nil {
 			notify(i+1, len(svc.providers), p.Name())
@@ -974,6 +946,7 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 				zap.String("provider", p.Name()), zap.String("contextID", contextID), zap.Error(err))
 			continue
 		}
+		totalItems += stats.ItemsRefreshed + stats.NewItems
 		// Map each provider's stats to the named result fields for frontend compatibility.
 		switch p.Name() {
 		case providerJira:
@@ -989,49 +962,26 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		}
 	}
 
-	isFirst, _ := svc.store.IsFirstRefresh(ctx, contextID)
-
-	svc.recordContextChange(ctx, contextID, contextlog.TriggerRefresh, before)
-	svc.runPostRefreshWorkflow(ctx, contextID, isFirst)
+	// Tag newly inserted items with this session ID and complete the session.
+	if session != nil {
+		if tagErr := svc.store.TagSessionItems(ctx, contextID, session.ID, session.StartedAt); tagErr != nil {
+			svc.logger.Warn("refresh: tag session items failed", zap.String("sessionID", session.ID), zap.Error(tagErr))
+		}
+		if completeErr := svc.store.CompleteSyncSession(ctx, session.ID, totalItems); completeErr != nil {
+			svc.logger.Warn("refresh: complete sync session failed", zap.String("sessionID", session.ID), zap.Error(completeErr))
+		}
+		// Mark snapshot stale so the UI prompts re-analysis.
+		if staleErr := svc.store.MarkSnapshotStale(ctx, contextID); staleErr != nil {
+			svc.logger.Warn("refresh: mark snapshot stale failed", zap.String("contextID", contextID), zap.Error(staleErr))
+		}
+		result.SyncSessionID = session.ID
+	}
 
 	if err := svc.store.TouchContext(ctx, contextID); err != nil {
 		svc.logger.Warn("refresh: touch context failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 
 	return result, nil
-}
-
-// snapshotBefore takes a snapshot for change-log diffing, or returns nil if logging
-// is disabled or the snapshot fails (in which case RecordChange is skipped).
-func (svc *ContextService) snapshotBefore(ctx context.Context, contextID string) contextlog.Snapshot {
-	if svc.contextLog == nil {
-		return nil
-	}
-	snap, err := svc.contextLog.Repo().SnapshotFull(ctx, contextID)
-	if err != nil {
-		svc.logger.Warn("contextlog: snapshot before failed",
-			zap.String("contextID", contextID), zap.Error(err))
-		return nil
-	}
-	return snap
-}
-
-// recordContextChange takes an "after" snapshot and records the diff through contextlog.
-// A nil before (typically from snapshotBefore failure or disabled logging) is skipped.
-func (svc *ContextService) recordContextChange(ctx context.Context, contextID, trigger string, before contextlog.Snapshot) {
-	if svc.contextLog == nil || before == nil {
-		return
-	}
-	after, err := svc.contextLog.Repo().SnapshotFull(ctx, contextID)
-	if err != nil {
-		svc.logger.Warn("contextlog: snapshot after failed",
-			zap.String("contextID", contextID), zap.Error(err))
-		return
-	}
-	if _, err := svc.contextLog.RecordChange(ctx, contextID, trigger, before, after); err != nil {
-		svc.logger.Warn("contextlog: record change failed",
-			zap.String("contextID", contextID), zap.Error(err))
-	}
 }
 
 // FormatContext collects all provider artifacts for contextID, sorts them globally
@@ -1092,7 +1042,6 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 			defer func() { <-sem }()
 
 			r := ReloadAllResult{ContextID: c.ID, ContextKey: c.Key}
-			before := svc.snapshotBefore(ctx, c.ID)
 
 			if notify != nil {
 				notifyMu.Lock()
@@ -1145,7 +1094,6 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 				r.Error = strings.Join(errs, "; ")
 			}
 
-			svc.recordContextChange(ctx, c.ID, contextlog.TriggerReload, before)
 			results[i] = r
 		}(i, c)
 	}
@@ -1341,6 +1289,11 @@ func (svc *ContextService) MarkIssueViewed(ctx context.Context, id string) error
 	return svc.jiraRepo.MarkIssueViewed(ctx, id)
 }
 
+// MarkIssueAllViewed marks a Jira issue and all its comments as viewed.
+func (svc *ContextService) MarkIssueAllViewed(ctx context.Context, id string) error {
+	return svc.jiraRepo.MarkIssueAllViewed(ctx, id)
+}
+
 // MarkCommentViewed marks a Jira comment as viewed.
 func (svc *ContextService) MarkCommentViewed(ctx context.Context, id string) error {
 	return svc.jiraRepo.MarkCommentViewed(ctx, id)
@@ -1349,6 +1302,11 @@ func (svc *ContextService) MarkCommentViewed(ctx context.Context, id string) err
 // MarkSlackThreadViewed marks a Slack thread as viewed.
 func (svc *ContextService) MarkSlackThreadViewed(ctx context.Context, id string) error {
 	return svc.slackRepo.MarkSlackThreadViewed(ctx, id)
+}
+
+// MarkSlackChannelAllViewed marks all threads under a Slack channel as viewed.
+func (svc *ContextService) MarkSlackChannelAllViewed(ctx context.Context, channelID string) error {
+	return svc.slackRepo.MarkSlackChannelAllViewed(ctx, channelID)
 }
 
 // MarkSlackDMConfigViewed marks a Slack DM config as viewed.
@@ -1401,92 +1359,3 @@ func (svc *ContextService) RefreshAllContexts(ctx context.Context, notify Reload
 	return results, nil
 }
 
-// runPostRefreshWorkflow runs after every refresh: recomputes AI proposal and
-// optionally runs the open-questions agent (first refresh only) or re-evaluates
-// existing open questions (subsequent refreshes).
-func (svc *ContextService) runPostRefreshWorkflow(ctx context.Context, contextID string, isFirstRefresh bool) {
-	if svc.vcsStore == nil {
-		return
-	}
-
-	// 1. Compute new status.
-	status, comment, err := workflow.Compute(ctx, contextID, svc.store, svc.vcsStore)
-	if err != nil {
-		svc.logger.Warn("workflow compute failed", zap.Error(err), zap.String("contextID", contextID))
-		return
-	}
-
-	// 2. Load the current user's next-step override to pass to the AI.
-	c, err := svc.store.GetContext(ctx, contextID)
-	prevUserNextStep := ""
-	if err == nil && c.UserNextStepOverride != nil {
-		prevUserNextStep = *c.UserNextStepOverride
-	}
-
-	// 3. Generate next step (uses AI if configured, templates otherwise).
-	nextStep := workflow.GenerateNextStep(ctx, svc.nextStepAI, status, comment, prevUserNextStep)
-
-	// 4. Persist the AI proposal (also appends to proposals history).
-	if _, err := svc.store.SetAIProposal(ctx, contextID, status, comment, nextStep, prevUserNextStep); err != nil {
-		svc.logger.Warn("set ai proposal failed", zap.Error(err), zap.String("contextID", contextID))
-	}
-
-	// 5. Run open-questions agent.
-	if svc.openQuestions != nil {
-		contentMD := svc.buildContextMD(ctx, contextID)
-		if isFirstRefresh {
-			repos := svc.repoInfoForContext(ctx, contextID)
-			if err := svc.openQuestions.AnalyzeContext(ctx, contextID, contentMD, repos); err != nil {
-				svc.logger.Warn("open questions analysis failed", zap.Error(err), zap.String("contextID", contextID))
-			}
-		} else {
-			if err := svc.openQuestions.ReevaluateOpenQuestions(ctx, contextID, contentMD); err != nil {
-				svc.logger.Warn("open questions re-evaluation failed", zap.Error(err), zap.String("contextID", contextID))
-			}
-		}
-	}
-}
-
-// buildContextMD assembles a Markdown representation of all active text content
-// and uploaded files for the given context.
-func (svc *ContextService) buildContextMD(ctx context.Context, contextID string) string {
-	var sb strings.Builder
-	texts, _ := svc.store.ListContextTexts(ctx, contextID, true)
-	for _, t := range texts {
-		fmt.Fprintf(&sb, "## %s\n%s\n\n", t.Name, t.Content)
-	}
-	files, _ := svc.store.ListUploadedFiles(ctx, contextID, true)
-	for _, f := range files {
-		fmt.Fprintf(&sb, "## %s\n%s\n\n", f.OriginalName, f.ExtractedText)
-	}
-	return sb.String()
-}
-
-// repoInfoForContext returns slim repo info for all repos associated with branches
-// linked to the given context.
-func (svc *ContextService) repoInfoForContext(ctx context.Context, contextID string) []openquestions.RepoInfo {
-	if svc.vcsStore == nil {
-		return nil
-	}
-	branches, err := svc.vcsStore.Branches.ListBranches(ctx, contextID)
-	if err != nil {
-		return nil
-	}
-	seen := map[string]bool{}
-	var result []openquestions.RepoInfo
-	for _, b := range branches {
-		if b.RepoID == "" || seen[b.RepoID] {
-			continue
-		}
-		seen[b.RepoID] = true
-		if b.Repo == nil {
-			continue
-		}
-		result = append(result, openquestions.RepoInfo{
-			FullName:    b.Repo.Owner + "/" + b.Repo.Name,
-			Label:       b.Repo.Label,
-			Description: b.Repo.Description,
-		})
-	}
-	return result
-}

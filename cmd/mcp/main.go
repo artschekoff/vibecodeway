@@ -20,7 +20,6 @@ import (
 	"os"
 
 	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
-	"github.com/artschekoff/context-consolidator/internal/contextlog"
 	"github.com/artschekoff/context-consolidator/internal/jira"
 	"github.com/artschekoff/context-consolidator/internal/jira/acli"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
@@ -85,12 +84,6 @@ func run() error {
 	vcsStore := vcsstore.NewStore(s.DB())
 	svc.SetVCSStore(vcsStore)
 
-	// MCP only reads context logs, so no AI client is required; pass nil to disable
-	// AI-dependent paths while keeping CRUD/list endpoints functional.
-	contextLogRepo := contextlog.NewRepo(s.DB())
-	contextLogSvc := contextlog.NewService(contextLogRepo, nil, logger)
-	svc.SetContextLog(contextLogSvc)
-
 	mcpServer := server.NewMCPServer(
 		serverName,
 		serverVersion,
@@ -98,7 +91,7 @@ func run() error {
 	)
 
 	cliRunner := cliclient.NewRunner(logger)
-	registerTools(mcpServer, svc, vcsStore, cliRunner, logger)
+	registerTools(mcpServer, s, svc, vcsStore, cliRunner, logger)
 
 	logger.Info("context-consolidator-mcp starting", zap.String("version", serverVersion))
 

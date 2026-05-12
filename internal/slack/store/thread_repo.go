@@ -140,6 +140,13 @@ func (r *Repo) MarkSlackThreadViewed(ctx context.Context, id string) error {
 	return err
 }
 
+// MarkSlackChannelAllViewed marks all threads under the given slack_channel_id as viewed.
+func (r *Repo) MarkSlackChannelAllViewed(ctx context.Context, channelID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE slack_threads SET viewed_at = datetime('now') WHERE slack_channel_id = ? AND viewed_at IS NULL", channelID)
+	return err
+}
+
 // nullableString converts an empty string to nil so SQLite stores NULL
 // for optional FK columns instead of an empty string that would violate the FK.
 // DeleteChannelBlobs removes whole-channel snapshot records (thread_ts="") for the given

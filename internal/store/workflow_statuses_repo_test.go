@@ -113,7 +113,7 @@ func TestDeleteWorkflowStatus_RemovesCustomStatus(t *testing.T) {
 	}
 }
 
-func TestDeleteWorkflowStatus_NullsContextUserOverride(t *testing.T) {
+func TestDeleteWorkflowStatus_ResetsSnapshotStatus(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
@@ -124,34 +124,20 @@ func TestDeleteWorkflowStatus_NullsContextUserOverride(t *testing.T) {
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "test-context", org.ID)
 	require.NoError(t, err)
-	require.NoError(t, s.SetUserOverride(ctx, c.ID, "custom_done", "", ""))
+
+	// Give the context a snapshot with the custom status.
+	require.NoError(t, s.UpsertSnapshot(ctx, &ContextSnapshot{
+		ContextID: c.ID,
+		Status:    "custom_done",
+	}))
 
 	require.NoError(t, s.DeleteWorkflowStatus(ctx, st.ID))
 
-	updated, err := s.GetContext(ctx, c.ID)
+	sn, err := s.GetSnapshot(ctx, c.ID)
 	require.NoError(t, err)
-	assert.Nil(t, updated.UserStatusOverride)
-}
-
-func TestDeleteWorkflowStatus_ResetsAIProposedStatus(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-
-	st, err := s.CreateWorkflowStatus(ctx, "review_pending", "Review Pending")
-	require.NoError(t, err)
-
-	org, err := s.CreateOrganization(ctx, "test-org")
-	require.NoError(t, err)
-	c, err := s.CreateContext(ctx, "ai-ctx", org.ID)
-	require.NoError(t, err)
-	_, err = s.SetAIProposal(ctx, c.ID, "review_pending", "waiting for review", "", "")
-	require.NoError(t, err)
-
-	require.NoError(t, s.DeleteWorkflowStatus(ctx, st.ID))
-
-	updated, err := s.GetContext(ctx, c.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "not_started", updated.AIProposedStatus)
+	require.NotNil(t, sn)
+	assert.Equal(t, "not_started", sn.Status)
+	assert.True(t, sn.IsStale)
 }
 
 func TestIsValidWorkflowStatus(t *testing.T) {
