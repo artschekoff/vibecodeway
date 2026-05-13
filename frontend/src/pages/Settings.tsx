@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, GetKeybindings, UpdateKeybinding } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
-import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo } from "../types";
+import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
 import { useTabContext } from "../contexts/TabContext";
 import WorkflowStatusManager from "../components/WorkflowStatusManager";
+import KeybindingRow from "../components/KeybindingRow";
 
 const OPENAI_MODELS = [
   // GPT-5 series
@@ -56,6 +57,7 @@ export default function SettingsPage() {
   const [vcsAuth, setVcsAuth] = useState<Record<VCSPlatform, string>>({} as Record<VCSPlatform, string>);
   const [vcsConnecting, setVcsConnecting] = useState<VCSPlatform | null>(null);
   const [vcsMessage, setVcsMessage] = useState("");
+  const [keybindings, setKeybindings] = useState<Keybinding[]>([]);
   const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
   const [codeCopied, setCodeCopied] = useState(false);
 
@@ -71,6 +73,9 @@ export default function SettingsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    GetKeybindings().then((kbs) => {
+      if (!cancelled) setKeybindings(kbs as unknown as Keybinding[]);
+    }).catch(() => {});
     Promise.all([
       GetAISettings(),
       GetSupportedPlatforms().catch(() => []),
@@ -210,31 +215,24 @@ export default function SettingsPage() {
             <span className="detail-section-title">Keyboard Shortcuts</span>
           </div>
           <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
-            <div className="hotkey-row">
-              <div className="hotkey-keys">
-                <kbd className="hotkey-kbd">⌘</kbd>
-                <kbd className="hotkey-kbd">⇧</kbd>
-                <kbd className="hotkey-kbd">C</kbd>
-              </div>
-              <div className="hotkey-desc">
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Quick Attach</div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                  Select text in any app and press this shortcut — a context picker will open to attach the text to. Works globally, even when the app is minimized.
-                </div>
-              </div>
-            </div>
-            <div className="hotkey-row">
-              <div className="hotkey-keys">
-                <kbd className="hotkey-kbd">⌘</kbd>
-                <kbd className="hotkey-kbd">↵</kbd>
-              </div>
-              <div className="hotkey-desc">
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Send message in chat</div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                  In the context chat window — sends the message without inserting a new line.
-                </div>
-              </div>
-            </div>
+            {keybindings.map((kb) => (
+              <KeybindingRow
+                key={kb.id}
+                binding={kb}
+                onSave={async (command, modifierKeys, keyCode) => {
+                  try {
+                    await UpdateKeybinding(command, modifierKeys, keyCode);
+                    setKeybindings((prev) =>
+                      prev.map((b) =>
+                        b.command === command ? { ...b, modifierKeys, keyCode } : b
+                      )
+                    );
+                  } catch (e) {
+                    console.error("Failed to update keybinding", e);
+                  }
+                }}
+              />
+            ))}
           </div>
         </section>
 

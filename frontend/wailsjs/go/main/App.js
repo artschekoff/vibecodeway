@@ -162,6 +162,10 @@ export function GetAppSettings() {
   return window['go']['main']['App']['GetAppSettings']();
 }
 
+export function GetKeybindings() {
+  return window['go']['main']['App']['GetKeybindings']();
+}
+
 export function GetContextDetail(arg1) {
   return window['go']['main']['App']['GetContextDetail'](arg1);
 }
@@ -524,6 +528,10 @@ export function UpdateAIPrompt(arg1, arg2) {
 
 export function UpdateContext(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateContext'](arg1, arg2, arg3);
+}
+
+export function UpdateKeybinding(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateKeybinding'](arg1, arg2, arg3);
 }
 
 export function UpdateOrganization(arg1, arg2) {

@@ -89,6 +89,8 @@ export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
 
+export function GetKeybindings():Promise<Array<store.Keybinding>>;
+
 export function GetContextDetail(arg1:string):Promise<service.ContextDetail>;
 
 export function GetContextSnapshot(arg1:string):Promise<store.ContextSnapshot>;
@@ -270,6 +272,8 @@ export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploa
 export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateContext(arg1:string,arg2:string,arg3:string):Promise<store.Context>;
+
+export function UpdateKeybinding(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
 
