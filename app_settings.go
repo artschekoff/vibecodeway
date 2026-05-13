@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -98,6 +99,26 @@ func (a *App) restartBackgroundRefresh(settings appstore.AppSettings) {
 	a.bg.mu.Unlock()
 
 	go a.backgroundRefreshLoop(ctx, settings)
+}
+
+// GetKeybindings returns all user-configurable keyboard shortcuts.
+func (a *App) GetKeybindings() ([]appstore.Keybinding, error) {
+	return a.db.GetKeybindings(context.Background())
+}
+
+// UpdateKeybinding saves a new modifier+key combo for a command and,
+// for the "quick_attach" command, re-registers the global hotkey immediately.
+// modifierKeys is a comma-separated string (e.g. "cmd,shift"), keyCode is e.g. "c".
+func (a *App) UpdateKeybinding(command, modifierKeys, keyCode string) error {
+	if err := a.db.UpdateKeybinding(context.Background(), command, modifierKeys, keyCode); err != nil {
+		return err
+	}
+	if command == "quick_attach" {
+		if err := a.hotkeyService.Reconfigure(modifierKeys, keyCode); err != nil {
+			return fmt.Errorf("reconfigure hotkey: %w", err)
+		}
+	}
+	return nil
 }
 
 // backgroundRefreshLoop runs two independent tickers — one for contexts and one

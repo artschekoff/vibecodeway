@@ -171,10 +171,15 @@ func (a *App) startup(ctx context.Context) {
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)
-	if err := a.hotkeyService.Start("cmd,shift", "c"); err != nil {
-		logger.Warn("failed to register global hotkey Cmd+Shift+C", zap.Error(err))
-	} else {
-		logger.Info("global hotkey Cmd+Shift+C registered")
+	{
+		kb, err := s.GetKeybindingByCommand(context.Background(), "quick_attach")
+		if err != nil {
+			kb = &appstore.Keybinding{ModifierKeys: "cmd,shift", KeyCode: "c"}
+			logger.Warn("hotkey: could not load saved binding, using default", zap.Error(err))
+		}
+		if err := a.hotkeyService.Start(kb.ModifierKeys, kb.KeyCode); err != nil {
+			logger.Warn("hotkey service: failed to register", zap.Error(err))
+		}
 	}
 
 	a.startBackgroundRefresh()
