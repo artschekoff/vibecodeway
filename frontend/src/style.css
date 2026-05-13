@@ -5141,6 +5141,16 @@ select {
   opacity: 0.6;
 }
 
+.tab-item__close-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  align-self: stretch;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .tab-item__action {
   display: flex;
   align-items: center;
@@ -5156,10 +5166,9 @@ select {
   pointer-events: none;
   transition: opacity 0.1s, background 0.1s;
   flex-shrink: 0;
-  margin-left: auto;
 }
 
-.tab-item:hover .tab-item__action {
+.tab-item__close-zone:hover .tab-item__action {
   opacity: 1;
   pointer-events: auto;
 }

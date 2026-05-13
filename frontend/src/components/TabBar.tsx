@@ -58,23 +58,25 @@ function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; org
       title={tab.pinned ? `${displayTitle} (pinned — right-click to unpin)` : `${displayTitle} (right-click to pin)`}
     >
       <span className={`tab-item__title${isOrg ? " tab-item__title--org" : ""}`}>{displayTitle}</span>
-      {tab.pinned ? (
-        <button
-          className="tab-item__action"
-          onClick={(e) => { e.stopPropagation(); unpinTab(tab.id); }}
-          title="Unpin tab"
-        >
-          <Pin size={11} />
-        </button>
-      ) : (
-        <button
-          className="tab-item__action"
-          onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-          title="Close tab"
-        >
-          <X size={11} />
-        </button>
-      )}
+      <span className="tab-item__close-zone">
+        {tab.pinned ? (
+          <button
+            className="tab-item__action"
+            onClick={(e) => { e.stopPropagation(); unpinTab(tab.id); }}
+            title="Unpin tab"
+          >
+            <Pin size={11} />
+          </button>
+        ) : (
+          <button
+            className="tab-item__action"
+            onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
+            title="Close tab"
+          >
+            <X size={11} />
+          </button>
+        )}
+      </span>
     </div>
   );
 }
