@@ -1375,8 +1375,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px" }}>
               {isAnalyzing ? (
                 <div className="event-skeleton-list">
-                  {([0.85, 1.0, 0.6] as const).map((w, i) => (
-                    <div key={i} className="event-skeleton-row">
+                  {([0.85, 1.0, 0.6] as const).map((w) => (
+                    <div key={w} className="event-skeleton-row">
                       <div className="event-skeleton-meta">
                         <div className="event-skeleton-line event-skeleton-line--date" />
                         <div className="event-skeleton-line event-skeleton-line--badge" />
