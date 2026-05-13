@@ -280,6 +280,16 @@ export interface EstimationLog {
   estimationBasis: string;
 }
 
+export interface Keybinding {
+  id: string;
+  command: string;
+  label: string;
+  description: string;
+  modifierKeys: string;  // comma-separated: "cmd,shift"
+  keyCode: string;       // "c", "enter", "space", etc.
+  updatedAt: string;
+}
+
 export interface ContextEvent {
   id: string;
   contextId: string;
