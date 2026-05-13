@@ -3720,11 +3720,26 @@ select {
   border-bottom: 1px solid var(--border);
 }
 
+.pr-repo-group-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 .pr-repo-group-name {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
   font-family: var(--font-mono, monospace);
+}
+
+.pr-branch-chip--header {
+  max-width: 280px;
+  font-size: 12px;
+}
+
+.pr-type-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .pr-repo-link {

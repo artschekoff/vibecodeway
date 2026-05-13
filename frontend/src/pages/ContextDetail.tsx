@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, Pencil, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -173,6 +173,7 @@ function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed, checkout
       {/* Top row: number + title + action buttons */}
       <div className="pr-card-top" onClick={() => setExpanded((v) => !v)}>
         <div className="pr-card-title-row">
+          <GitPullRequest size={13} className="pr-type-icon" />
           <span className="pr-number">#{pr.prNumber}</span>
           <span className="pr-title">{pr.title}</span>
         </div>
@@ -1228,6 +1229,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       <div key={b.id} className="pr-repo-group">
                         {/* Repo / branch sub-header */}
                         <div className="pr-repo-group-header">
+                          <GitBranch size={13} className="pr-repo-group-icon" />
                           <span className="pr-repo-group-name">
                             {repoUrl ? (
                               <button
@@ -1240,18 +1242,22 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                               </button>
                             ) : repoLabel}
                           </span>
+                          {b.branch && (
+                            branchUrl ? (
+                              <button
+                                type="button"
+                                className="pr-branch-chip pr-branch-chip--link pr-branch-chip--header"
+                                onClick={() => BrowserOpenURL(branchUrl)}
+                                title={`Open branch ${b.branch} on GitHub`}
+                              >
+                                {b.branch}
+                              </button>
+                            ) : (
+                              <span className="pr-branch-chip pr-branch-chip--header">{b.branch}</span>
+                            )
+                          )}
                           {b.label && (
                             <span className="vcs-label-badge" title="Repo label">{b.label}</span>
-                          )}
-                          {b.branch && repoUrl && (
-                            <button
-                              type="button"
-                              className="vcs-repo-icon-link"
-                              onClick={() => BrowserOpenURL(repoUrl)}
-                              title={`Open ${repoLabel} on GitHub`}
-                            >
-                              <ExternalLink size={12} />
-                            </button>
                           )}
                           {branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt)) && (
                             <button
