@@ -139,7 +139,7 @@ type SyncSession struct {
 	ContextID    string  `json:"contextId"`
 	StartedAt    string  `json:"startedAt"`
 	FinishedAt   *string `json:"finishedAt,omitempty"`
-	Sources      string  `json:"sources"`      // JSON array of source names, e.g. ["jira","slack"]
+	Sources      string  `json:"sources"` // JSON array of source names, e.g. ["jira","slack"]
 	ItemsFetched int     `json:"itemsFetched"`
 }
 
@@ -162,19 +162,19 @@ type Event struct {
 
 // Event type constants — mirrors the plan's event taxonomy.
 const (
-	EventTypeRequirementStated    = "requirement_stated"
-	EventTypeRequirementConfirmed = "requirement_confirmed"
-	EventTypeRequirementRejected  = "requirement_rejected"
-	EventTypeOpenQuestionRaised   = "open_question_raised"
-	EventTypeOpenQuestionAnswered = "open_question_answered"
-	EventTypeDecisionMade         = "decision_made"
-	EventTypeBlockerIdentified    = "blocker_identified"
-	EventTypeBlockerResolved      = "blocker_resolved"
-	EventTypeWorkCompleted        = "work_completed"
-	EventTypeStatusUpdate         = "status_update"
-	EventTypeCurrentStepOverride       = "current_step_override"
-	EventTypeNextStepRecommendation    = "next_step_recommendation"
-	EventTypeUserNote                  = "user_note"
+	EventTypeRequirementStated      = "requirement_stated"
+	EventTypeRequirementConfirmed   = "requirement_confirmed"
+	EventTypeRequirementRejected    = "requirement_rejected"
+	EventTypeOpenQuestionRaised     = "open_question_raised"
+	EventTypeOpenQuestionAnswered   = "open_question_answered"
+	EventTypeDecisionMade           = "decision_made"
+	EventTypeBlockerIdentified      = "blocker_identified"
+	EventTypeBlockerResolved        = "blocker_resolved"
+	EventTypeWorkCompleted          = "work_completed"
+	EventTypeStatusUpdate           = "status_update"
+	EventTypeCurrentStepOverride    = "current_step_override"
+	EventTypeNextStepRecommendation = "next_step_recommendation"
+	EventTypeUserNote               = "user_note"
 )
 
 // Event source type constants.
@@ -190,15 +190,15 @@ const (
 // It has three markdown sections derived from the full event log, plus
 // a current_step that can be overridden by the user.
 type ContextSnapshot struct {
-	ContextID             string  `json:"contextId"`
-	CurrentStepDesc       string  `json:"currentStepDesc"`
-	CurrentStepConfidence string  `json:"currentStepConfidence"` // "high" | "medium" | "low"
-	CurrentStepFrom       string  `json:"currentStepFrom"`       // JSON array of event IDs
-	CurrentStepOverridden bool    `json:"currentStepOverridden"`
-	SectionOperational    string  `json:"sectionOperational"`
-	SectionNarrative      string  `json:"sectionNarrative"`
-	SectionEngineering    string  `json:"sectionEngineering"`
-	Status string `json:"status"` // slug from workflow_statuses, e.g. "in_progress"
+	ContextID             string `json:"contextId"`
+	CurrentStepDesc       string `json:"currentStepDesc"`
+	CurrentStepConfidence string `json:"currentStepConfidence"` // "high" | "medium" | "low"
+	CurrentStepFrom       string `json:"currentStepFrom"`       // JSON array of event IDs
+	CurrentStepOverridden bool   `json:"currentStepOverridden"`
+	SectionOperational    string `json:"sectionOperational"`
+	SectionNarrative      string `json:"sectionNarrative"`
+	SectionEngineering    string `json:"sectionEngineering"`
+	Status                string `json:"status"` // slug from workflow_statuses, e.g. "in_progress"
 
 	// AI-generated next-step recommendations by time horizon (rebuilt on each analysis).
 	AINextStepsShort string `json:"aiNextStepsShort"` // ~1 day
@@ -239,15 +239,28 @@ type EstimationLog struct {
 	EstimationBasis           string   `json:"estimationBasis"`
 }
 
+// Keybinding is a user-configurable keyboard shortcut.
+// modifier_keys is a comma-separated list of: "cmd", "shift", "ctrl", "alt".
+// key_code is a lowercase key name: "c", "enter", "space", "f1"–"f12", etc.
+type Keybinding struct {
+	ID           string `json:"id"`
+	Command      string `json:"command"`
+	Label        string `json:"label"`
+	Description  string `json:"description"`
+	ModifierKeys string `json:"modifierKeys"` // e.g. "cmd,shift"
+	KeyCode      string `json:"keyCode"`      // e.g. "c"
+	UpdatedAt    string `json:"updatedAt"`
+}
+
 // AIPrompt is a user-editable prompt template stored in the database.
 // Each prompt uses {{placeholder}} syntax for dynamic values substituted at call time.
 type AIPrompt struct {
-	ID          string              `json:"id"`
-	Label       string              `json:"label"`
-	Body        string              `json:"body"`
-	DefaultBody string              `json:"defaultBody"`
+	ID           string              `json:"id"`
+	Label        string              `json:"label"`
+	Body         string              `json:"body"`
+	DefaultBody  string              `json:"defaultBody"`
 	Placeholders []PromptPlaceholder `json:"placeholders"`
-	UpdatedAt   string              `json:"updatedAt"`
+	UpdatedAt    string              `json:"updatedAt"`
 }
 
 // PromptPlaceholder describes a single interpolation variable available in a prompt template.

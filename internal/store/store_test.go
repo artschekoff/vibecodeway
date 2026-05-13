@@ -217,3 +217,24 @@ func TestContextSnapshotEstimationFields(t *testing.T) {
 	assert.Equal(t, "medium", got.EstimationConfidence)
 	assert.Equal(t, "2 requirements identified", got.EstimationBasis)
 }
+
+func TestKeybindingsTableExists(t *testing.T) {
+	s := openTestStore(t)
+	assertTableExists(t, s, "keybindings")
+}
+
+func TestKeybindingsSeedDefaults(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	bindings, err := s.GetKeybindings(ctx)
+	require.NoError(t, err)
+	assert.Len(t, bindings, 2)
+
+	commands := make([]string, len(bindings))
+	for i, b := range bindings {
+		commands[i] = b.Command
+	}
+	assert.Contains(t, commands, "quick_attach")
+	assert.Contains(t, commands, "send_chat")
+}
