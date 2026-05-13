@@ -171,7 +171,7 @@ func (a *App) startup(ctx context.Context) {
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)
-	if err := a.hotkeyService.Start(); err != nil {
+	if err := a.hotkeyService.Start("cmd,shift", "c"); err != nil {
 		logger.Warn("failed to register global hotkey Cmd+Shift+C", zap.Error(err))
 	} else {
 		logger.Info("global hotkey Cmd+Shift+C registered")
