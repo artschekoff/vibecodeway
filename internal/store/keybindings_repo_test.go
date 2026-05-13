@@ -45,5 +45,5 @@ func TestUpdateKeybinding_UnknownCommandReturnsError(t *testing.T) {
 	ctx := context.Background()
 
 	err := s.UpdateKeybinding(ctx, "nonexistent_command", "cmd", "z")
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
 }

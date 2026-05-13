@@ -65,7 +65,7 @@ func (s *Store) UpdateKeybinding(ctx context.Context, command, modifierKeys, key
 		return fmt.Errorf("update keybinding rows affected: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("update keybinding: command %q not found", command)
+		return ErrNotFound
 	}
 	return nil
 }
