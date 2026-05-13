@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { HasSlackPassphrase, SetSlackPassphrase } from "../../wailsjs/go/main/App";
+import { HasSlackPassphrase, ValidateSlackPassphrase } from "../../wailsjs/go/main/App";
 
 interface PassphraseContextValue {
   isSet: boolean;
@@ -61,7 +61,7 @@ export function PassphraseProvider({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError("");
     try {
-      await SetSlackPassphrase(value.trim());
+      await ValidateSlackPassphrase(value.trim());
       setIsSet(true);
       setShowModal(false);
       setValue("");
@@ -106,7 +106,7 @@ export function PassphraseProvider({ children }: { children: ReactNode }) {
                 className="btn-primary passphrase-btn"
                 disabled={submitting}
               >
-                {submitting ? "Unlocking…" : "Continue"}
+                {submitting ? "Verifying…" : "Unlock"}
               </button>
               <button
                 type="button"

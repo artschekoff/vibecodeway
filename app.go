@@ -236,6 +236,20 @@ func (a *App) HasSlackPassphrase() bool {
 	return a.slackRunner.Passphrase() != ""
 }
 
+// ValidateSlackPassphrase sets the passphrase and verifies it is correct by making a
+// lightweight list-workspaces call. Returns nil when the passphrase decrypts credentials
+// successfully. On failure the passphrase is cleared and the slack-cli error is returned.
+func (a *App) ValidateSlackPassphrase(passphrase string) error {
+	if err := a.slackRunner.SetPassphrase(passphrase); err != nil {
+		return err
+	}
+	if _, err := a.slackRunner.Run(context.Background(), []string{"list-workspaces"}, nil); err != nil {
+		_ = a.slackRunner.SetPassphrase("")
+		return err
+	}
+	return nil
+}
+
 // --- Context CRUD ---
 
 // ListContexts returns active contexts only.
