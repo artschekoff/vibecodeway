@@ -1365,7 +1365,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         )}
         </div>
 
-        {id && events.length > 0 && (
+        {id && (
           <aside className="detail-sidepanel">
             <div className="sidepanel-tabs">
               <button className="sidepanel-tab sidepanel-tab--active">
@@ -1373,7 +1373,24 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               </button>
             </div>
             <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px" }}>
-              {events.map((ev) => (
+              {isAnalyzing ? (
+                <div className="event-skeleton-list">
+                  {([0.85, 1.0, 0.6] as const).map((w, i) => (
+                    <div key={i} className="event-skeleton-row">
+                      <div className="event-skeleton-meta">
+                        <div className="event-skeleton-line event-skeleton-line--date" />
+                        <div className="event-skeleton-line event-skeleton-line--badge" />
+                      </div>
+                      <div className="event-skeleton-line event-skeleton-line--body" style={{ width: `${w * 100}%` }} />
+                      <div className="event-skeleton-line event-skeleton-line--body" style={{ width: `${w * 55}%` }} />
+                    </div>
+                  ))}
+                </div>
+              ) : events.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", paddingTop: 24 }}>
+                  No events
+                </div>
+              ) : events.map((ev) => (
                 <div key={ev.id} style={{ fontSize: 12, borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 6 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
                     <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
