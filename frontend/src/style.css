@@ -5173,6 +5173,11 @@ select {
   pointer-events: auto;
 }
 
+.tab-item__close-zone:focus-within .tab-item__action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .tab-item__action:hover {
   background: var(--bg-tertiary);
   color: var(--text);

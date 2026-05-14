@@ -25,6 +25,8 @@ import TabBar from "./TabBar";
 beforeEach(() => {
   mockClose.mockClear();
   mockSetActive.mockClear();
+  mockPin.mockClear();
+  mockUnpin.mockClear();
 });
 
 describe("TabBar", () => {
