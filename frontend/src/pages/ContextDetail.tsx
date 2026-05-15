@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -54,13 +54,19 @@ import {
   GetEstimationHistory,
   GenerateHandoffPacket,
   AddUserEvent,
+  DeleteUserEvent,
+  UpdateUserEvent,
   ListEvents,
   GetJiraInstanceURL,
+  GetTaskAssignment,
+  GenerateTaskAssignment,
+  RefineTaskAssignment,
+  SaveTaskAssignment,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, TaskAssignment } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -366,6 +372,17 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [snapshotError, setSnapshotError] = useState("");
   const [addEventType, setAddEventType] = useState("user_note");
   const [addEventSummary, setAddEventSummary] = useState("");
+  const [taskAssignment, setTaskAssignment] = useState<TaskAssignment | null>(null);
+  const [isGeneratingAssignment, setIsGeneratingAssignment] = useState(false);
+  const [isEditingAssignment, setIsEditingAssignment] = useState(false);
+  const [editAssignmentContent, setEditAssignmentContent] = useState("");
+  const [showAssignmentAiForm, setShowAssignmentAiForm] = useState(false);
+  const [assignmentAiPrompt, setAssignmentAiPrompt] = useState("");
+  const [isRefiningAssignment, setIsRefiningAssignment] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editEventType, setEditEventType] = useState("user_note");
+  const [editEventSummary, setEditEventSummary] = useState("");
   const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
   const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
   const {
@@ -395,12 +412,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const loadSnapshot = useCallback(async () => {
     if (!id) return;
     try {
-      const [snap, evts] = await Promise.all([
+      const [snap, evts, ta] = await Promise.all([
         GetContextSnapshot(id) as Promise<ContextSnapshot>,
         ListEvents(id) as Promise<ContextEvent[]>,
+        GetTaskAssignment(id).catch(() => null) as Promise<TaskAssignment | null>,
       ]);
       setSnapshot(snap);
       setEvents(evts ?? []);
+      setTaskAssignment(ta);
     } catch {
       // snapshot not yet generated — that's fine
     }
@@ -993,54 +1012,141 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     Copy Handoff Packet
                   </button>
                 </div>
+                {/* Task Assignments */}
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13, userSelect: "none" }}>
+                    Task Assignments
+                  </summary>
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {isEditingAssignment ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <textarea
+                          className="passphrase-input"
+                          style={{ fontSize: 12, minHeight: 160, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                          value={editAssignmentContent}
+                          onChange={(e) => setEditAssignmentContent(e.target.value)}
+                        />
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            className="btn-primary"
+                            style={{ fontSize: 12, padding: "2px 10px" }}
+                            onClick={async () => {
+                              await SaveTaskAssignment(id, editAssignmentContent);
+                              setTaskAssignment((prev) => prev ? { ...prev, content: editAssignmentContent } : { contextId: id, content: editAssignmentContent, updatedAt: "" });
+                              setIsEditingAssignment(false);
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "2px 10px" }}
+                            onClick={() => setIsEditingAssignment(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : taskAssignment?.content ? (
+                      <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        {taskAssignment.content}
+                      </pre>
+                    ) : (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        Not generated yet. Click Generate to create task assignments from Jira issues and events.
+                      </div>
+                    )}
+
+                    {!isEditingAssignment && (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: "2px 10px" }}
+                          disabled={isGeneratingAssignment}
+                          onClick={async () => {
+                            setIsGeneratingAssignment(true);
+                            try {
+                              const ta = await GenerateTaskAssignment(id) as TaskAssignment;
+                              setTaskAssignment(ta);
+                            } finally {
+                              setIsGeneratingAssignment(false);
+                            }
+                          }}
+                        >
+                          {isGeneratingAssignment ? "Generating…" : "Generate"}
+                        </button>
+                        {taskAssignment?.content && (
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "2px 10px" }}
+                            onClick={() => {
+                              setEditAssignmentContent(taskAssignment.content);
+                              setIsEditingAssignment(true);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {taskAssignment?.content && (
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "2px 10px" }}
+                            onClick={() => setShowAssignmentAiForm((v) => !v)}
+                          >
+                            Ask AI
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {showAssignmentAiForm && !isEditingAssignment && (
+                      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 2 }}>
+                          Describe how to change the document (e.g. "Focus on backend engineers only", "Translate to Spanish")
+                        </div>
+                        <textarea
+                          className="passphrase-input"
+                          style={{ fontSize: 12, minHeight: 56, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                          placeholder="Your instruction…"
+                          value={assignmentAiPrompt}
+                          onChange={(e) => setAssignmentAiPrompt(e.target.value)}
+                        />
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            className="btn-primary"
+                            style={{ fontSize: 12, padding: "2px 10px" }}
+                            disabled={isRefiningAssignment || !assignmentAiPrompt.trim()}
+                            onClick={async () => {
+                              if (!assignmentAiPrompt.trim()) return;
+                              setIsRefiningAssignment(true);
+                              try {
+                                const ta = await RefineTaskAssignment(id, assignmentAiPrompt.trim()) as TaskAssignment;
+                                setTaskAssignment(ta);
+                                setAssignmentAiPrompt("");
+                                setShowAssignmentAiForm(false);
+                              } finally {
+                                setIsRefiningAssignment(false);
+                              }
+                            }}
+                          >
+                            {isRefiningAssignment ? "Applying…" : "Apply"}
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "2px 10px" }}
+                            onClick={() => { setShowAssignmentAiForm(false); setAssignmentAiPrompt(""); }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </details>
               </div>
             ) : (
               <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No analysis yet. Click Analyze to start.</div>
             )}
-          </div>
-          {/* Add user event */}
-          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border)", marginTop: 4 }}>
-            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 6 }}>Add Note</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <select
-                className="passphrase-input"
-                style={{ fontSize: 12, padding: "2px 6px" }}
-                value={addEventType}
-                onChange={(e) => setAddEventType(e.target.value)}
-              >
-                <option value="user_note">Note</option>
-                <option value="next_step_recommendation">Next step recommendation</option>
-                <option value="current_step_override">Correct current step</option>
-                <option value="open_question_answered">Answer open question</option>
-                <option value="requirement_confirmed">Confirm requirement</option>
-              </select>
-              <input
-                className="passphrase-input"
-                style={{ fontSize: 12, flex: 1, minWidth: 160 }}
-                placeholder="Summary…"
-                value={addEventSummary}
-                onChange={(e) => setAddEventSummary(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter" && addEventSummary.trim()) {
-                    await AddUserEvent(id, addEventType, addEventSummary.trim());
-                    setAddEventSummary("");
-                    void loadSnapshot();
-                  }
-                }}
-              />
-              <button
-                className="btn-primary"
-                style={{ fontSize: 12, padding: "2px 10px" }}
-                onClick={async () => {
-                  if (!addEventSummary.trim()) return;
-                  await AddUserEvent(id, addEventType, addEventSummary.trim());
-                  setAddEventSummary("");
-                  void loadSnapshot();
-                }}
-              >
-                Add
-              </button>
-            </div>
           </div>
         </div>
 
@@ -1372,7 +1478,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 Events
               </button>
             </div>
-            <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px" }}>
+            <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column" }}>
               {isAnalyzing ? (
                 <div className="event-skeleton-list">
                   {([0.85, 1.0, 0.6] as const).map((w) => (
@@ -1392,16 +1498,158 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 </div>
               ) : events.map((ev) => (
                 <div key={ev.id} style={{ fontSize: 12, borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 6 }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
-                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                      {(() => { try { return new Date(ev.timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ev.timestamp; } })()}
-                    </span>
-                    <span className="platform-badge">{ev.sourceType}</span>
-                    {ev.author && <span style={{ color: "var(--text-muted)" }}>{ev.author}</span>}
-                  </div>
-                  <div>{ev.summary}</div>
+                  {editingEventId === ev.id ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <select
+                        className="passphrase-input"
+                        style={{ fontSize: 11, padding: "2px 4px" }}
+                        value={editEventType}
+                        onChange={(e) => setEditEventType(e.target.value)}
+                      >
+                        <option value="user_note">Note</option>
+                        <option value="next_step_recommendation">Next step recommendation</option>
+                        <option value="current_step_override">Correct current step</option>
+                        <option value="open_question_answered">Answer open question</option>
+                        <option value="requirement_confirmed">Confirm requirement</option>
+                      </select>
+                      <input
+                        className="passphrase-input"
+                        style={{ fontSize: 11, width: "100%" }}
+                        value={editEventSummary}
+                        onChange={(e) => setEditEventSummary(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && editEventSummary.trim()) {
+                            await UpdateUserEvent(id, ev.id, editEventType, editEventSummary.trim());
+                            setEditingEventId(null);
+                            void loadSnapshot();
+                          } else if (e.key === "Escape") {
+                            setEditingEventId(null);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button
+                          className="btn-primary"
+                          style={{ fontSize: 11, padding: "2px 8px" }}
+                          onClick={async () => {
+                            if (!editEventSummary.trim()) return;
+                            await UpdateUserEvent(id, ev.id, editEventType, editEventSummary.trim());
+                            setEditingEventId(null);
+                            void loadSnapshot();
+                          }}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 11, padding: "2px 8px" }}
+                          onClick={() => setEditingEventId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
+                        <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                          {(() => { try { return new Date(ev.timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ev.timestamp; } })()}
+                        </span>
+                        <span className="platform-badge">{ev.sourceType}</span>
+                        {ev.author && <span style={{ color: "var(--text-muted)" }}>{ev.author}</span>}
+                        {ev.sourceType === "user" && (
+                          <div style={{ display: "flex", gap: 2, marginLeft: "auto" }}>
+                            <button
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
+                              title="Edit"
+                              onClick={() => { setEditingEventId(ev.id); setEditEventType(ev.type); setEditEventSummary(ev.summary); }}
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
+                              title="Delete"
+                              onClick={async () => { await DeleteUserEvent(id, ev.id); void loadSnapshot(); }}
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div>{ev.summary}</div>
+                    </>
+                  )}
                 </div>
               ))}
+              {!isAnalyzing && (
+                showAddForm ? (
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <select
+                        className="passphrase-input"
+                        style={{ fontSize: 12, padding: "2px 6px" }}
+                        value={addEventType}
+                        onChange={(e) => setAddEventType(e.target.value)}
+                      >
+                        <option value="user_note">Note</option>
+                        <option value="next_step_recommendation">Next step recommendation</option>
+                        <option value="current_step_override">Correct current step</option>
+                        <option value="open_question_answered">Answer open question</option>
+                        <option value="requirement_confirmed">Confirm requirement</option>
+                      </select>
+                      <input
+                        className="passphrase-input"
+                        style={{ fontSize: 12, width: "100%" }}
+                        placeholder="Summary…"
+                        value={addEventSummary}
+                        onChange={(e) => setAddEventSummary(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && addEventSummary.trim()) {
+                            await AddUserEvent(id, addEventType, addEventSummary.trim());
+                            setAddEventSummary("");
+                            setShowAddForm(false);
+                            void loadSnapshot();
+                          } else if (e.key === "Escape") {
+                            setShowAddForm(false);
+                            setAddEventSummary("");
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button
+                          className="btn-primary"
+                          style={{ fontSize: 12, padding: "2px 10px", flex: 1 }}
+                          onClick={async () => {
+                            if (!addEventSummary.trim()) return;
+                            await AddUserEvent(id, addEventType, addEventSummary.trim());
+                            setAddEventSummary("");
+                            setShowAddForm(false);
+                            void loadSnapshot();
+                          }}
+                        >
+                          Add
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: "2px 10px" }}
+                          onClick={() => { setShowAddForm(false); setAddEventSummary(""); }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    style={{ width: "100%", background: "none", border: "1px dashed var(--border)", borderRadius: 6, cursor: "pointer", padding: "6px 0", fontSize: 16, color: "var(--text-muted)", marginTop: 4 }}
+                    onClick={() => setShowAddForm(true)}
+                  >
+                    +
+                  </button>
+                )
+              )}
             </div>
           </aside>
         )}
