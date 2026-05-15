@@ -24,14 +24,15 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "context_key", Description: "Project/module key"},
 		{Name: "events", Description: "Full event log as JSON array"},
 	},
-	"task_assignment": {
+	"person_assignment": {
 		{Name: "context_key", Description: "Project/module key of the context"},
 		{Name: "raw_content", Description: "Formatted Jira issues and activity for this context"},
 		{Name: "events", Description: "Full event log in chronological order"},
 		{Name: "custom_instructions", Description: "Optional extra instructions section (empty by default)"},
 	},
-	"task_assignment_refine": {
-		{Name: "current_content", Description: "The existing task assignment document to refine"},
+	"person_assignment_refine": {
+		{Name: "person_name", Description: "The name of the person whose assignment is being refined"},
+		{Name: "current_body", Description: "The current Markdown body for this person"},
 		{Name: "user_instruction", Description: "The user's modification instruction"},
 		{Name: "raw_content", Description: "Formatted Jira issues and activity (reference)"},
 		{Name: "events", Description: "Full event log (reference)"},

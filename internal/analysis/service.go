@@ -121,7 +121,7 @@ Produce a JSON object with exactly this structure. Return ONLY valid JSON, no ma
   "extraction_notes": null
 }`
 
-	defaultTaskAssignmentPrompt = `You are an AI analyst generating personalized task assignments for project participants.
+	defaultPersonAssignmentPrompt = `You are an AI analyst generating detailed, technical task assignments for each participant in a project.
 
 ## Context key: {{context_key}}
 
@@ -132,20 +132,34 @@ Produce a JSON object with exactly this structure. Return ONLY valid JSON, no ma
 {{events}}
 {{custom_instructions}}
 ## Task
-Identify every person mentioned as an assignee or commenter in the Jira issues above.
-For each person write a section (## Person Name) containing:
-1. Their current responsibility based on assigned issues and status
-2. Specific next actions derived from the event log and issue state
-3. Any blockers or open questions directly relevant to them
+Identify every person who is an assignee or has commented in the Jira issues above.
+For each person produce an entry in the JSON array below.
 
-Skip people mentioned only in passing. If no Jira participants are found, write a brief summary of open work items without per-person sections.
+The "body" field must be rich Markdown covering ALL of the following that are relevant:
+- **Current assignment**: which specific Jira issues/subtasks they own, their status
+- **Technical context**: exact service names, API endpoints, DB tables, functions, modules, branches, PRs relevant to their work
+- **Infrastructure details**: cloud services, queues, cron jobs, feature flags, env vars they need to touch
+- **Business entities & rules**: domain objects, business logic constraints, data contracts they must respect
+- **Methods & approaches**: specific algorithms, patterns, or architectural decisions already agreed on
+- **Next concrete actions**: step-by-step tasks derived from issue state and event log
+- **Blockers & dependencies**: open questions or blockers that directly affect them
 
-Return ONLY Markdown, no JSON, no preamble.`
+Do NOT summarise vaguely. Include exact names, IDs, values, and references found in the source data.
 
-	defaultTaskAssignmentRefinePrompt = `You have the following task assignment document:
+Return ONLY valid JSON — no markdown fences, no preamble:
+[
+  {
+    "name": "Person Name",
+    "body": "## Person Name\n\n### Current Assignment\n...\n\n### Technical Context\n..."
+  }
+]`
+
+	defaultPersonAssignmentRefinePrompt = `You are refining a single person's task assignment document.
+
+## Person: {{person_name}}
 
 ## Current document
-{{current_content}}
+{{current_body}}
 
 ## User instruction
 {{user_instruction}}
@@ -156,7 +170,8 @@ Return ONLY Markdown, no JSON, no preamble.`
 ## Event log (for reference)
 {{events}}
 
-Apply the user instruction to modify the document. Return ONLY the updated Markdown, no preamble.`
+Apply the user instruction. Preserve all technical details (service names, endpoints, DB tables, methods, infrastructure specifics) unless the instruction explicitly says to remove them.
+Return ONLY the updated Markdown for this person's body — no JSON, no preamble.`
 )
 
 // Service orchestrates the full analysis pipeline for one context.
@@ -442,9 +457,9 @@ func (s *Service) GenerateHandoffPacket(ctx context.Context, contextID string) (
 	return pkt, nil
 }
 
-// GenerateTaskAssignments generates per-participant task assignment text from Jira issues
-// and the event log, saves it to the DB, and returns the result.
-func (s *Service) GenerateTaskAssignments(ctx context.Context, contextID string) (*appstore.TaskAssignment, error) {
+// GeneratePersonAssignments generates per-person technical assignment records from Jira issues
+// and the event log. Replaces all existing assignments for the context and returns the new set.
+func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID string) ([]appstore.PersonAssignment, error) {
 	ctxRow, err := s.store.GetContext(ctx, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("get context: %w", err)
@@ -457,7 +472,7 @@ func (s *Service) GenerateTaskAssignments(ctx context.Context, contextID string)
 
 	var rawBuf strings.Builder
 	if err := s.jiraSvc.FormatContext(ctx, &rawBuf, contextID, "jira", time.Time{}, false); err != nil {
-		s.logger.Warn("task assignment: format jira context failed",
+		s.logger.Warn("person assignment: format jira context failed",
 			zap.String("contextID", contextID), zap.Error(err))
 	}
 	rawContent := rawBuf.String()
@@ -470,7 +485,7 @@ func (s *Service) GenerateTaskAssignments(ctx context.Context, contextID string)
 		})
 	}
 
-	tmpl := s.loadPrompt(ctx, "task_assignment", defaultTaskAssignmentPrompt)
+	tmpl := s.loadPrompt(ctx, "person_assignment", defaultPersonAssignmentPrompt)
 	prompt := applyPlaceholders(tmpl, map[string]string{
 		"context_key":         ctxRow.Key,
 		"raw_content":         rawContent,
@@ -480,27 +495,34 @@ func (s *Service) GenerateTaskAssignments(ctx context.Context, contextID string)
 
 	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
-		return nil, fmt.Errorf("ai task assignment: %w", err)
+		return nil, fmt.Errorf("ai person assignment: %w", err)
+	}
+
+	parsed, err := parsePersonAssignmentArray(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("parse person assignment response: %w", err)
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	ta := appstore.TaskAssignment{
-		ContextID:   contextID,
-		Content:     resp.Content,
-		GeneratedAt: &now,
+	for i := range parsed {
+		parsed[i].GeneratedAt = &now
 	}
-	return s.store.UpsertTaskAssignment(ctx, ta)
+
+	return s.store.ReplacePersonAssignments(ctx, contextID, parsed)
 }
 
-// RefineTaskAssignments refines the existing task assignment document based on a user instruction.
-func (s *Service) RefineTaskAssignments(ctx context.Context, contextID, userInstruction string) (*appstore.TaskAssignment, error) {
-	existing, err := s.store.GetTaskAssignment(ctx, contextID)
+// RefinePersonAssignment refines a single person's assignment body based on a user instruction.
+// Returns the updated PersonAssignment.
+func (s *Service) RefinePersonAssignment(ctx context.Context, contextID, personID, userInstruction string) (*appstore.PersonAssignment, error) {
+	existing, err := s.store.GetPersonAssignment(ctx, personID)
 	if err != nil {
-		return nil, fmt.Errorf("get existing task assignment: %w", err)
+		return nil, fmt.Errorf("get person assignment: %w", err)
 	}
-	currentContent := ""
+	currentBody := ""
+	personName := ""
 	if existing != nil {
-		currentContent = existing.Content
+		currentBody = existing.Body
+		personName = existing.Name
 	}
 
 	allEvents, err := s.store.ListEvents(ctx, contextID)
@@ -510,7 +532,7 @@ func (s *Service) RefineTaskAssignments(ctx context.Context, contextID, userInst
 
 	var rawBuf strings.Builder
 	if err := s.jiraSvc.FormatContext(ctx, &rawBuf, contextID, "jira", time.Time{}, false); err != nil {
-		s.logger.Warn("task assignment refine: format jira context failed",
+		s.logger.Warn("person assignment refine: format jira context failed",
 			zap.String("contextID", contextID), zap.Error(err))
 	}
 	rawContent := rawBuf.String()
@@ -523,9 +545,10 @@ func (s *Service) RefineTaskAssignments(ctx context.Context, contextID, userInst
 		})
 	}
 
-	tmpl := s.loadPrompt(ctx, "task_assignment_refine", defaultTaskAssignmentRefinePrompt)
+	tmpl := s.loadPrompt(ctx, "person_assignment_refine", defaultPersonAssignmentRefinePrompt)
 	prompt := applyPlaceholders(tmpl, map[string]string{
-		"current_content":  currentContent,
+		"person_name":      personName,
+		"current_body":     currentBody,
 		"user_instruction": userInstruction,
 		"raw_content":      rawContent,
 		"events":           formatEventsForPrompt(promptEvents),
@@ -533,16 +556,14 @@ func (s *Service) RefineTaskAssignments(ctx context.Context, contextID, userInst
 
 	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
-		return nil, fmt.Errorf("ai task assignment refine: %w", err)
+		return nil, fmt.Errorf("ai person assignment refine: %w", err)
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	ta := appstore.TaskAssignment{
-		ContextID:   contextID,
-		Content:     resp.Content,
-		GeneratedAt: &now,
+	if err := s.store.UpdatePersonAssignmentBody(ctx, personID, resp.Content); err != nil {
+		return nil, fmt.Errorf("save refined person assignment: %w", err)
 	}
-	return s.store.UpsertTaskAssignment(ctx, ta)
+
+	return s.store.GetPersonAssignment(ctx, personID)
 }
 
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
@@ -723,6 +744,26 @@ func parsePacketResponse(content string) (*appstore.InferredRequirementsPacket, 
 		pkt.Summary.InferredTradeoffs = []string{}
 	}
 	return &pkt, nil
+}
+
+// parsePersonAssignmentArray parses the AI's JSON array of {name, body} objects.
+func parsePersonAssignmentArray(content string) ([]appstore.PersonAssignment, error) {
+	content = extractJSON(content, '[')
+	var raw []struct {
+		Name string `json:"name"`
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(content), &raw); err != nil {
+		return nil, fmt.Errorf("unmarshal person assignments: %w (content: %.300s)", err, content)
+	}
+	result := make([]appstore.PersonAssignment, 0, len(raw))
+	for _, r := range raw {
+		if r.Name == "" {
+			continue
+		}
+		result = append(result, appstore.PersonAssignment{Name: r.Name, Body: r.Body})
+	}
+	return result, nil
 }
 
 // extractJSON finds the first occurrence of startChar ('{' or '[') in content
