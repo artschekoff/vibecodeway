@@ -90,6 +90,47 @@ func (a *App) ListEvents(contextID string) ([]appstore.Event, error) {
 	return a.db.ListEvents(context.Background(), contextID)
 }
 
+// DeleteUserEvent removes a user-authored event and marks the snapshot stale.
+func (a *App) DeleteUserEvent(contextID, eventID string) error {
+	if err := a.db.DeleteEvent(context.Background(), eventID); err != nil {
+		return err
+	}
+	_ = a.db.MarkSnapshotStale(context.Background(), contextID)
+	return nil
+}
+
+// UpdateUserEvent changes the type and summary of a user-authored event and marks the snapshot stale.
+func (a *App) UpdateUserEvent(contextID, eventID, eventType, summary string) (*appstore.Event, error) {
+	evt, err := a.db.UpdateEvent(context.Background(), eventID, eventType, summary)
+	if err != nil {
+		return nil, err
+	}
+	_ = a.db.MarkSnapshotStale(context.Background(), contextID)
+	return evt, nil
+}
+
+// --- Task Assignments ---
+
+// GetTaskAssignment returns the saved task assignment for a context, or nil if none exists yet.
+func (a *App) GetTaskAssignment(contextID string) (*appstore.TaskAssignment, error) {
+	return a.db.GetTaskAssignment(context.Background(), contextID)
+}
+
+// GenerateTaskAssignment runs the AI task assignment pipeline and saves the result.
+func (a *App) GenerateTaskAssignment(contextID string) (*appstore.TaskAssignment, error) {
+	return a.analysisSvc.GenerateTaskAssignments(a.ctx, contextID)
+}
+
+// RefineTaskAssignment refines the existing task assignment document using the provided instruction.
+func (a *App) RefineTaskAssignment(contextID, instruction string) (*appstore.TaskAssignment, error) {
+	return a.analysisSvc.RefineTaskAssignments(a.ctx, contextID, instruction)
+}
+
+// SaveTaskAssignment persists a manually edited task assignment content.
+func (a *App) SaveTaskAssignment(contextID, content string) error {
+	return a.db.UpdateTaskAssignmentContent(context.Background(), contextID, content)
+}
+
 // --- Workflow statuses (enum table — unchanged) ---
 
 // ListWorkflowStatuses returns all available workflow status options.
