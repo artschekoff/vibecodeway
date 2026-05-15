@@ -4,11 +4,12 @@ import path from 'path';
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      'react': path.resolve(__dirname, '../node_modules/react'),
-      'react-dom': path.resolve(__dirname, '../node_modules/react-dom'),
-    },
+    alias: [
+      { find: /.*\/wailsjs\/go\/main\/App/, replacement: path.resolve(__dirname, 'src/__mocks__/wailsjs-app.ts') },
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      { find: 'react', replacement: path.resolve(__dirname, '../node_modules/react') },
+      { find: 'react-dom', replacement: path.resolve(__dirname, '../node_modules/react-dom') },
+    ],
   },
   test: {
     environment: 'jsdom',
