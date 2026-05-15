@@ -120,6 +120,43 @@ Produce a JSON object with exactly this structure. Return ONLY valid JSON, no ma
   "handoff_candidate": null,
   "extraction_notes": null
 }`
+
+	defaultTaskAssignmentPrompt = `You are an AI analyst generating personalized task assignments for project participants.
+
+## Context key: {{context_key}}
+
+## Jira issues and activity
+{{raw_content}}
+
+## Event log
+{{events}}
+{{custom_instructions}}
+## Task
+Identify every person mentioned as an assignee or commenter in the Jira issues above.
+For each person write a section (## Person Name) containing:
+1. Their current responsibility based on assigned issues and status
+2. Specific next actions derived from the event log and issue state
+3. Any blockers or open questions directly relevant to them
+
+Skip people mentioned only in passing. If no Jira participants are found, write a brief summary of open work items without per-person sections.
+
+Return ONLY Markdown, no JSON, no preamble.`
+
+	defaultTaskAssignmentRefinePrompt = `You have the following task assignment document:
+
+## Current document
+{{current_content}}
+
+## User instruction
+{{user_instruction}}
+
+## Jira issues and activity (for reference)
+{{raw_content}}
+
+## Event log (for reference)
+{{events}}
+
+Apply the user instruction to modify the document. Return ONLY the updated Markdown, no preamble.`
 )
 
 // Service orchestrates the full analysis pipeline for one context.
@@ -403,6 +440,109 @@ func (s *Service) GenerateHandoffPacket(ctx context.Context, contextID string) (
 		s.logger.Warn("analysis: save packet failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 	return pkt, nil
+}
+
+// GenerateTaskAssignments generates per-participant task assignment text from Jira issues
+// and the event log, saves it to the DB, and returns the result.
+func (s *Service) GenerateTaskAssignments(ctx context.Context, contextID string) (*appstore.TaskAssignment, error) {
+	ctxRow, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("get context: %w", err)
+	}
+
+	allEvents, err := s.store.ListEvents(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("list events: %w", err)
+	}
+
+	var rawBuf strings.Builder
+	if err := s.jiraSvc.FormatContext(ctx, &rawBuf, contextID, "jira", time.Time{}, false); err != nil {
+		s.logger.Warn("task assignment: format jira context failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	rawContent := rawBuf.String()
+
+	promptEvents := make([]eventForPrompt, 0, len(allEvents))
+	for _, e := range allEvents {
+		promptEvents = append(promptEvents, eventForPrompt{
+			ID: e.ID, Type: e.Type, Timestamp: e.Timestamp,
+			SourceType: e.SourceType, Author: e.Author, Summary: e.Summary,
+		})
+	}
+
+	tmpl := s.loadPrompt(ctx, "task_assignment", defaultTaskAssignmentPrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{
+		"context_key":         ctxRow.Key,
+		"raw_content":         rawContent,
+		"events":              formatEventsForPrompt(promptEvents),
+		"custom_instructions": "",
+	})
+
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return nil, fmt.Errorf("ai task assignment: %w", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	ta := appstore.TaskAssignment{
+		ContextID:   contextID,
+		Content:     resp.Content,
+		GeneratedAt: &now,
+	}
+	return s.store.UpsertTaskAssignment(ctx, ta)
+}
+
+// RefineTaskAssignments refines the existing task assignment document based on a user instruction.
+func (s *Service) RefineTaskAssignments(ctx context.Context, contextID, userInstruction string) (*appstore.TaskAssignment, error) {
+	existing, err := s.store.GetTaskAssignment(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("get existing task assignment: %w", err)
+	}
+	currentContent := ""
+	if existing != nil {
+		currentContent = existing.Content
+	}
+
+	allEvents, err := s.store.ListEvents(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("list events: %w", err)
+	}
+
+	var rawBuf strings.Builder
+	if err := s.jiraSvc.FormatContext(ctx, &rawBuf, contextID, "jira", time.Time{}, false); err != nil {
+		s.logger.Warn("task assignment refine: format jira context failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	rawContent := rawBuf.String()
+
+	promptEvents := make([]eventForPrompt, 0, len(allEvents))
+	for _, e := range allEvents {
+		promptEvents = append(promptEvents, eventForPrompt{
+			ID: e.ID, Type: e.Type, Timestamp: e.Timestamp,
+			SourceType: e.SourceType, Author: e.Author, Summary: e.Summary,
+		})
+	}
+
+	tmpl := s.loadPrompt(ctx, "task_assignment_refine", defaultTaskAssignmentRefinePrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{
+		"current_content":  currentContent,
+		"user_instruction": userInstruction,
+		"raw_content":      rawContent,
+		"events":           formatEventsForPrompt(promptEvents),
+	})
+
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return nil, fmt.Errorf("ai task assignment refine: %w", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	ta := appstore.TaskAssignment{
+		ContextID:   contextID,
+		Content:     resp.Content,
+		GeneratedAt: &now,
+	}
+	return s.store.UpsertTaskAssignment(ctx, ta)
 }
 
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
