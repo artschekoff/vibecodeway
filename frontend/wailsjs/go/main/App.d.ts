@@ -23,10 +23,6 @@ export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo
 
 export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.Event>;
 
-export function DeleteUserEvent(arg1:string,arg2:string):Promise<void>;
-
-export function UpdateUserEvent(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.Event>;
-
 export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<vcsstore.ContextVCSBranch>;
 
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
@@ -71,7 +67,11 @@ export function DeleteSlackThread(arg1:string):Promise<void>;
 
 export function DeleteUploadedFile(arg1:string):Promise<void>;
 
+export function DeleteUserEvent(arg1:string,arg2:string):Promise<void>;
+
 export function DeleteWorkflowStatus(arg1:string):Promise<void>;
+
+export function DeletePersonAssignment(arg1:string):Promise<void>;
 
 export function DeleteWorkspace(arg1:string):Promise<void>;
 
@@ -87,13 +87,7 @@ export function FindWorkspaceForBranch(arg1:string,arg2:string):Promise<vcsstore
 
 export function GenerateHandoffPacket(arg1:string):Promise<store.InferredRequirementsPacket>;
 
-export function GetTaskAssignment(arg1:string):Promise<store.TaskAssignment|null>;
-
-export function GenerateTaskAssignment(arg1:string):Promise<store.TaskAssignment>;
-
-export function RefineTaskAssignment(arg1:string,arg2:string):Promise<store.TaskAssignment>;
-
-export function SaveTaskAssignment(arg1:string,arg2:string):Promise<void>;
+export function GeneratePersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
 export function GetAISettings():Promise<main.AISettingsResponse>;
 
@@ -118,6 +112,8 @@ export function GetPendingCodeReviews():Promise<Array<vcsstore.ReviewRequest>>;
 export function GetPendingText():Promise<string>;
 
 export function GetSupportedPlatforms():Promise<Array<vcsstore.VCSPlatformInfo>>;
+
+export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
 export function GetUnviewedBreakdown(arg1:string):Promise<store.UnviewedBreakdown>;
 
@@ -211,6 +207,8 @@ export function PreviewSlackDMs(arg1:string,arg2:string):Promise<string>;
 
 export function QuickAttachText(arg1:string,arg2:string):Promise<store.ContextText>;
 
+export function RefinePersonAssignment(arg1:string,arg2:string,arg3:string):Promise<store.PersonAssignment>;
+
 export function RefreshAllContexts():Promise<Array<service.ReloadAllResult>>;
 
 export function RefreshContext(arg1:string):Promise<service.RefreshResult>;
@@ -234,6 +232,8 @@ export function RemoveTrackedRepo(arg1:string):Promise<void>;
 export function RemoveVCSBranch(arg1:string):Promise<void>;
 
 export function ResetAIPrompt(arg1:string):Promise<void>;
+
+export function SavePersonAssignment(arg1:string,arg2:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
@@ -290,6 +290,8 @@ export function UpdateKeybinding(arg1:string,arg2:string,arg3:string):Promise<vo
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
 
 export function UpdateTrackedRepoMeta(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function UpdateUserEvent(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.Event>;
 
 export function UpdateUserNextSteps(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

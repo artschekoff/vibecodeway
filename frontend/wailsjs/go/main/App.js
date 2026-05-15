@@ -30,14 +30,6 @@ export function AddUserEvent(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddUserEvent'](arg1, arg2, arg3);
 }
 
-export function DeleteUserEvent(arg1, arg2) {
-  return window['go']['main']['App']['DeleteUserEvent'](arg1, arg2);
-}
-
-export function UpdateUserEvent(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['UpdateUserEvent'](arg1, arg2, arg3, arg4);
-}
-
 export function AddVCSBranch(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['AddVCSBranch'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -126,8 +118,16 @@ export function DeleteUploadedFile(arg1) {
   return window['go']['main']['App']['DeleteUploadedFile'](arg1);
 }
 
+export function DeleteUserEvent(arg1, arg2) {
+  return window['go']['main']['App']['DeleteUserEvent'](arg1, arg2);
+}
+
 export function DeleteWorkflowStatus(arg1) {
   return window['go']['main']['App']['DeleteWorkflowStatus'](arg1);
+}
+
+export function DeletePersonAssignment(arg1) {
+  return window['go']['main']['App']['DeletePersonAssignment'](arg1);
 }
 
 export function DeleteWorkspace(arg1) {
@@ -158,20 +158,8 @@ export function GenerateHandoffPacket(arg1) {
   return window['go']['main']['App']['GenerateHandoffPacket'](arg1);
 }
 
-export function GetTaskAssignment(arg1) {
-  return window['go']['main']['App']['GetTaskAssignment'](arg1);
-}
-
-export function GenerateTaskAssignment(arg1) {
-  return window['go']['main']['App']['GenerateTaskAssignment'](arg1);
-}
-
-export function RefineTaskAssignment(arg1, arg2) {
-  return window['go']['main']['App']['RefineTaskAssignment'](arg1, arg2);
-}
-
-export function SaveTaskAssignment(arg1, arg2) {
-  return window['go']['main']['App']['SaveTaskAssignment'](arg1, arg2);
+export function GeneratePersonAssignments(arg1) {
+  return window['go']['main']['App']['GeneratePersonAssignments'](arg1);
 }
 
 export function GetAISettings() {
@@ -220,6 +208,10 @@ export function GetPendingText() {
 
 export function GetSupportedPlatforms() {
   return window['go']['main']['App']['GetSupportedPlatforms']();
+}
+
+export function GetPersonAssignments(arg1) {
+  return window['go']['main']['App']['GetPersonAssignments'](arg1);
 }
 
 export function GetUnviewedBreakdown(arg1) {
@@ -406,6 +398,10 @@ export function QuickAttachText(arg1, arg2) {
   return window['go']['main']['App']['QuickAttachText'](arg1, arg2);
 }
 
+export function RefinePersonAssignment(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RefinePersonAssignment'](arg1, arg2, arg3);
+}
+
 export function RefreshAllContexts() {
   return window['go']['main']['App']['RefreshAllContexts']();
 }
@@ -452,6 +448,10 @@ export function RemoveVCSBranch(arg1) {
 
 export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
+}
+
+export function SavePersonAssignment(arg1, arg2) {
+  return window['go']['main']['App']['SavePersonAssignment'](arg1, arg2);
 }
 
 export function SearchContextIDs(arg1) {
@@ -564,6 +564,10 @@ export function UpdateOrganization(arg1, arg2) {
 
 export function UpdateTrackedRepoMeta(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateTrackedRepoMeta'](arg1, arg2, arg3, arg4);
+}
+
+export function UpdateUserEvent(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateUserEvent'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateUserNextSteps(arg1, arg2, arg3, arg4) {

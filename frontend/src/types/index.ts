@@ -280,9 +280,11 @@ export interface EstimationLog {
   estimationBasis: string;
 }
 
-export interface TaskAssignment {
+export interface PersonAssignment {
+  id: string;
   contextId: string;
-  content: string;
+  name: string;
+  body: string;
   generatedAt?: string;
   updatedAt: string;
 }
