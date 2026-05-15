@@ -58,15 +58,16 @@ import {
   UpdateUserEvent,
   ListEvents,
   GetJiraInstanceURL,
-  GetTaskAssignment,
-  GenerateTaskAssignment,
-  RefineTaskAssignment,
-  SaveTaskAssignment,
+  GetPersonAssignments,
+  GeneratePersonAssignments,
+  RefinePersonAssignment,
+  SavePersonAssignment,
+  DeletePersonAssignment,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, TaskAssignment } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -372,13 +373,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [snapshotError, setSnapshotError] = useState("");
   const [addEventType, setAddEventType] = useState("user_note");
   const [addEventSummary, setAddEventSummary] = useState("");
-  const [taskAssignment, setTaskAssignment] = useState<TaskAssignment | null>(null);
-  const [isGeneratingAssignment, setIsGeneratingAssignment] = useState(false);
-  const [isEditingAssignment, setIsEditingAssignment] = useState(false);
-  const [editAssignmentContent, setEditAssignmentContent] = useState("");
-  const [showAssignmentAiForm, setShowAssignmentAiForm] = useState(false);
-  const [assignmentAiPrompt, setAssignmentAiPrompt] = useState("");
-  const [isRefiningAssignment, setIsRefiningAssignment] = useState(false);
+  const [personAssignments, setPersonAssignments] = useState<PersonAssignment[]>([]);
+  const [isGeneratingAssignments, setIsGeneratingAssignments] = useState(false);
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [editPersonBody, setEditPersonBody] = useState("");
+  const [refiningPersonId, setRefiningPersonId] = useState<string | null>(null);
+  const [personAiPrompt, setPersonAiPrompt] = useState("");
+  const [isRefiningPerson, setIsRefiningPerson] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editEventType, setEditEventType] = useState("user_note");
@@ -412,14 +413,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const loadSnapshot = useCallback(async () => {
     if (!id) return;
     try {
-      const [snap, evts, ta] = await Promise.all([
+      const [snap, evts, pas] = await Promise.all([
         GetContextSnapshot(id) as Promise<ContextSnapshot>,
         ListEvents(id) as Promise<ContextEvent[]>,
-        GetTaskAssignment(id).catch(() => null) as Promise<TaskAssignment | null>,
+        GetPersonAssignments(id).catch(() => []) as Promise<PersonAssignment[]>,
       ]);
       setSnapshot(snap);
       setEvents(evts ?? []);
-      setTaskAssignment(ta);
+      setPersonAssignments(pas ?? []);
     } catch {
       // snapshot not yet generated — that's fine
     }
@@ -1012,135 +1013,168 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     Copy Handoff Packet
                   </button>
                 </div>
-                {/* Task Assignments */}
+                {/* Person Assignments */}
                 <details style={{ marginTop: 8 }}>
                   <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13, userSelect: "none" }}>
-                    Task Assignments
+                    Person Assignments
+                    {personAssignments.length > 0 && (
+                      <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 6, fontSize: 11 }}>
+                        ({personAssignments.length})
+                      </span>
+                    )}
                   </summary>
-                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
-                    {isEditingAssignment ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <textarea
-                          className="passphrase-input"
-                          style={{ fontSize: 12, minHeight: 160, resize: "vertical", width: "100%", fontFamily: "inherit" }}
-                          value={editAssignmentContent}
-                          onChange={(e) => setEditAssignmentContent(e.target.value)}
-                        />
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button
-                            className="btn-primary"
-                            style={{ fontSize: 12, padding: "2px 10px" }}
-                            onClick={async () => {
-                              await SaveTaskAssignment(id, editAssignmentContent);
-                              setTaskAssignment((prev) => prev ? { ...prev, content: editAssignmentContent } : { contextId: id, content: editAssignmentContent, updatedAt: "" });
-                              setIsEditingAssignment(false);
-                            }}
-                          >
-                            Save
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 12, padding: "2px 10px" }}
-                            onClick={() => setIsEditingAssignment(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : taskAssignment?.content ? (
-                      <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                        {taskAssignment.content}
-                      </pre>
-                    ) : (
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {/* Generate button */}
+                    <div>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 10px" }}
+                        disabled={isGeneratingAssignments}
+                        onClick={async () => {
+                          setIsGeneratingAssignments(true);
+                          try {
+                            const pas = await GeneratePersonAssignments(id) as PersonAssignment[];
+                            setPersonAssignments(pas ?? []);
+                          } finally {
+                            setIsGeneratingAssignments(false);
+                          }
+                        }}
+                      >
+                        {isGeneratingAssignments ? "Generating…" : personAssignments.length > 0 ? "Re-generate" : "Generate"}
+                      </button>
+                    </div>
+
+                    {personAssignments.length === 0 && !isGeneratingAssignments && (
                       <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        Not generated yet. Click Generate to create task assignments from Jira issues and events.
+                        Not generated yet. Click Generate to create per-person assignments from Jira issues and events.
                       </div>
                     )}
 
-                    {!isEditingAssignment && (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button
-                          className="btn-secondary"
-                          style={{ fontSize: 12, padding: "2px 10px" }}
-                          disabled={isGeneratingAssignment}
-                          onClick={async () => {
-                            setIsGeneratingAssignment(true);
-                            try {
-                              const ta = await GenerateTaskAssignment(id) as TaskAssignment;
-                              setTaskAssignment(ta);
-                            } finally {
-                              setIsGeneratingAssignment(false);
-                            }
-                          }}
-                        >
-                          {isGeneratingAssignment ? "Generating…" : "Generate"}
-                        </button>
-                        {taskAssignment?.content && (
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 12, padding: "2px 10px" }}
-                            onClick={() => {
-                              setEditAssignmentContent(taskAssignment.content);
-                              setIsEditingAssignment(true);
-                            }}
-                          >
-                            Edit
-                          </button>
-                        )}
-                        {taskAssignment?.content && (
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 12, padding: "2px 10px" }}
-                            onClick={() => setShowAssignmentAiForm((v) => !v)}
-                          >
-                            Ask AI
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    {/* One card per person */}
+                    {personAssignments.map((pa) => (
+                      <div
+                        key={pa.id}
+                        style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}
+                      >
+                        {/* Card header: name + action buttons */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>{pa.name}</span>
+                          {editingPersonId !== pa.id && refiningPersonId !== pa.id && (
+                            <>
+                              <button
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1, fontSize: 11 }}
+                                title="Ask AI"
+                                onClick={() => { setRefiningPersonId(pa.id); setPersonAiPrompt(""); }}
+                              >
+                                AI
+                              </button>
+                              <button
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
+                                title="Delete"
+                                onClick={async () => {
+                                  await DeletePersonAssignment(pa.id);
+                                  setPersonAssignments((prev) => prev.filter((p) => p.id !== pa.id));
+                                }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </>
+                          )}
+                        </div>
 
-                    {showAssignmentAiForm && !isEditingAssignment && (
-                      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 2 }}>
-                          Describe how to change the document (e.g. "Focus on backend engineers only", "Translate to Spanish")
-                        </div>
-                        <textarea
-                          className="passphrase-input"
-                          style={{ fontSize: 12, minHeight: 56, resize: "vertical", width: "100%", fontFamily: "inherit" }}
-                          placeholder="Your instruction…"
-                          value={assignmentAiPrompt}
-                          onChange={(e) => setAssignmentAiPrompt(e.target.value)}
-                        />
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button
-                            className="btn-primary"
-                            style={{ fontSize: 12, padding: "2px 10px" }}
-                            disabled={isRefiningAssignment || !assignmentAiPrompt.trim()}
-                            onClick={async () => {
-                              if (!assignmentAiPrompt.trim()) return;
-                              setIsRefiningAssignment(true);
-                              try {
-                                const ta = await RefineTaskAssignment(id, assignmentAiPrompt.trim()) as TaskAssignment;
-                                setTaskAssignment(ta);
-                                setAssignmentAiPrompt("");
-                                setShowAssignmentAiForm(false);
-                              } finally {
-                                setIsRefiningAssignment(false);
-                              }
-                            }}
+                        {/* Edit mode — click body text to enter */}
+                        {editingPersonId === pa.id ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <textarea
+                              className="passphrase-input"
+                              style={{ fontSize: 12, minHeight: 180, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                              value={editPersonBody}
+                              onChange={(e) => setEditPersonBody(e.target.value)}
+                              autoFocus
+                            />
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                className="btn-primary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                onClick={async () => {
+                                  await SavePersonAssignment(pa.id, editPersonBody);
+                                  setPersonAssignments((prev) =>
+                                    prev.map((p) => p.id === pa.id ? { ...p, body: editPersonBody } : p)
+                                  );
+                                  setEditingPersonId(null);
+                                }}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="btn-secondary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                onClick={() => setEditingPersonId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : refiningPersonId === pa.id ? (
+                          /* Ask AI mode */
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                              Describe how to change {pa.name}{"'"}s assignment
+                            </div>
+                            <textarea
+                              className="passphrase-input"
+                              style={{ fontSize: 12, minHeight: 56, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                              placeholder="Your instruction…"
+                              value={personAiPrompt}
+                              onChange={(e) => setPersonAiPrompt(e.target.value)}
+                              autoFocus
+                            />
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                className="btn-primary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                disabled={isRefiningPerson || !personAiPrompt.trim()}
+                                onClick={async () => {
+                                  if (!personAiPrompt.trim()) return;
+                                  setIsRefiningPerson(true);
+                                  try {
+                                    const updated = await RefinePersonAssignment(id, pa.id, personAiPrompt.trim()) as PersonAssignment;
+                                    setPersonAssignments((prev) =>
+                                      prev.map((p) => p.id === pa.id ? updated : p)
+                                    );
+                                    setRefiningPersonId(null);
+                                    setPersonAiPrompt("");
+                                  } finally {
+                                    setIsRefiningPerson(false);
+                                  }
+                                }}
+                              >
+                                {isRefiningPerson ? "Applying…" : "Apply"}
+                              </button>
+                              <button
+                                className="btn-secondary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                onClick={() => { setRefiningPersonId(null); setPersonAiPrompt(""); }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, margin: "4px 0 0", color: "var(--text-muted)", lineHeight: 1.4, maxHeight: 200, overflow: "auto" }}>
+                              {pa.body}
+                            </pre>
+                          </div>
+                        ) : (
+                          /* Display mode — click text to edit (Jira-style inline edit) */
+                          <pre
+                            style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, color: "var(--text-muted)", lineHeight: 1.5, cursor: "text" }}
+                            title="Click to edit"
+                            onClick={() => { setEditingPersonId(pa.id); setEditPersonBody(pa.body); }}
                           >
-                            {isRefiningAssignment ? "Applying…" : "Apply"}
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 12, padding: "2px 10px" }}
-                            onClick={() => { setShowAssignmentAiForm(false); setAssignmentAiPrompt(""); }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                            {pa.body}
+                          </pre>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 </details>
               </div>
