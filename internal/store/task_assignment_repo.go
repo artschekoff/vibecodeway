@@ -5,55 +5,110 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-// GetTaskAssignment returns the task assignment record for a context, or nil if none exists yet.
-func (s *Store) GetTaskAssignment(ctx context.Context, contextID string) (*TaskAssignment, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT context_id, content, generated_at, updated_at
-		FROM context_task_assignments WHERE context_id = ?
+// ListPersonAssignments returns all person assignments for a context ordered by name.
+func (s *Store) ListPersonAssignments(ctx context.Context, contextID string) ([]PersonAssignment, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, context_id, name, body, generated_at, updated_at
+		FROM context_person_assignments
+		WHERE context_id = ?
+		ORDER BY name ASC
 	`, contextID)
-	var ta TaskAssignment
+	if err != nil {
+		return nil, fmt.Errorf("list person assignments: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var result []PersonAssignment
+	for rows.Next() {
+		var pa PersonAssignment
+		var generatedAt sql.NullString
+		if err := rows.Scan(&pa.ID, &pa.ContextID, &pa.Name, &pa.Body, &generatedAt, &pa.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan person assignment: %w", err)
+		}
+		if generatedAt.Valid {
+			pa.GeneratedAt = &generatedAt.String
+		}
+		result = append(result, pa)
+	}
+	return result, rows.Err()
+}
+
+// GetPersonAssignment returns a single person assignment by ID.
+func (s *Store) GetPersonAssignment(ctx context.Context, id string) (*PersonAssignment, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, context_id, name, body, generated_at, updated_at
+		FROM context_person_assignments WHERE id = ?
+	`, id)
+	var pa PersonAssignment
 	var generatedAt sql.NullString
-	if err := row.Scan(&ta.ContextID, &ta.Content, &generatedAt, &ta.UpdatedAt); err != nil {
+	if err := row.Scan(&pa.ID, &pa.ContextID, &pa.Name, &pa.Body, &generatedAt, &pa.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get task assignment: %w", err)
+		return nil, fmt.Errorf("get person assignment: %w", err)
 	}
 	if generatedAt.Valid {
-		ta.GeneratedAt = &generatedAt.String
+		pa.GeneratedAt = &generatedAt.String
 	}
-	return &ta, nil
+	return &pa, nil
 }
 
-// UpsertTaskAssignment saves or replaces a task assignment for a context.
-func (s *Store) UpsertTaskAssignment(ctx context.Context, ta TaskAssignment) (*TaskAssignment, error) {
+// ReplacePersonAssignments deletes all existing assignments for a context and inserts the new set.
+// Runs in a single transaction. Returns the inserted rows with their generated IDs.
+func (s *Store) ReplacePersonAssignments(ctx context.Context, contextID string, assignments []PersonAssignment) ([]PersonAssignment, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	ta.UpdatedAt = now
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO context_task_assignments (context_id, content, generated_at, updated_at)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(context_id) DO UPDATE SET
-			content      = excluded.content,
-			generated_at = excluded.generated_at,
-			updated_at   = excluded.updated_at
-	`, ta.ContextID, ta.Content, ta.GeneratedAt, ta.UpdatedAt)
+
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("upsert task assignment: %w", err)
+		return nil, fmt.Errorf("begin replace person assignments: %w", err)
 	}
-	return &ta, nil
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM context_person_assignments WHERE context_id = ?`, contextID,
+	); err != nil {
+		return nil, fmt.Errorf("delete old person assignments: %w", err)
+	}
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO context_person_assignments (id, context_id, name, body, generated_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("prepare insert person assignment: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	result := make([]PersonAssignment, 0, len(assignments))
+	for _, a := range assignments {
+		a.ID = uuid.New().String()
+		a.ContextID = contextID
+		a.UpdatedAt = now
+		if _, err := stmt.ExecContext(ctx, a.ID, a.ContextID, a.Name, a.Body, a.GeneratedAt, a.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("insert person assignment %q: %w", a.Name, err)
+		}
+		result = append(result, a)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit replace person assignments: %w", err)
+	}
+	return result, nil
 }
 
-// UpdateTaskAssignmentContent updates only the content field (for user manual edits).
-func (s *Store) UpdateTaskAssignmentContent(ctx context.Context, contextID, content string) error {
+// UpdatePersonAssignmentBody updates the body of a single person assignment (user manual edit).
+func (s *Store) UpdatePersonAssignmentBody(ctx context.Context, id, body string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE context_task_assignments SET content = ?, updated_at = ? WHERE context_id = ?`,
-		content, now, contextID,
+		`UPDATE context_person_assignments SET body = ?, updated_at = ? WHERE id = ?`,
+		body, now, id,
 	)
 	if err != nil {
-		return fmt.Errorf("update task assignment content: %w", err)
+		return fmt.Errorf("update person assignment body: %w", err)
 	}
 	return nil
 }

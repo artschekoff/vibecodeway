@@ -239,10 +239,12 @@ type EstimationLog struct {
 	EstimationBasis           string   `json:"estimationBasis"`
 }
 
-// TaskAssignment stores the AI-generated (or user-edited) per-participant assignment text for a context.
-type TaskAssignment struct {
+// PersonAssignment stores one AI-generated (or user-edited) task assignment for a single person.
+type PersonAssignment struct {
+	ID          string  `json:"id"`
 	ContextID   string  `json:"contextId"`
-	Content     string  `json:"content"`
+	Name        string  `json:"name"`
+	Body        string  `json:"body"`
 	GeneratedAt *string `json:"generatedAt,omitempty"`
 	UpdatedAt   string  `json:"updatedAt"`
 }
