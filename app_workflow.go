@@ -109,26 +109,32 @@ func (a *App) UpdateUserEvent(contextID, eventID, eventType, summary string) (*a
 	return evt, nil
 }
 
-// --- Task Assignments ---
+// --- Person Assignments ---
 
-// GetTaskAssignment returns the saved task assignment for a context, or nil if none exists yet.
-func (a *App) GetTaskAssignment(contextID string) (*appstore.TaskAssignment, error) {
-	return a.db.GetTaskAssignment(context.Background(), contextID)
+// GetPersonAssignments returns all person assignment records for a context.
+func (a *App) GetPersonAssignments(contextID string) ([]appstore.PersonAssignment, error) {
+	return a.db.ListPersonAssignments(context.Background(), contextID)
 }
 
-// GenerateTaskAssignment runs the AI task assignment pipeline and saves the result.
-func (a *App) GenerateTaskAssignment(contextID string) (*appstore.TaskAssignment, error) {
-	return a.analysisSvc.GenerateTaskAssignments(a.ctx, contextID)
+// GeneratePersonAssignments runs the AI pipeline to produce per-person technical assignment records.
+// Replaces all existing assignments for the context.
+func (a *App) GeneratePersonAssignments(contextID string) ([]appstore.PersonAssignment, error) {
+	return a.analysisSvc.GeneratePersonAssignments(a.ctx, contextID)
 }
 
-// RefineTaskAssignment refines the existing task assignment document using the provided instruction.
-func (a *App) RefineTaskAssignment(contextID, instruction string) (*appstore.TaskAssignment, error) {
-	return a.analysisSvc.RefineTaskAssignments(a.ctx, contextID, instruction)
+// RefinePersonAssignment refines a single person's assignment body using the provided instruction.
+func (a *App) RefinePersonAssignment(contextID, personID, instruction string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.RefinePersonAssignment(a.ctx, contextID, personID, instruction)
 }
 
-// SaveTaskAssignment persists a manually edited task assignment content.
-func (a *App) SaveTaskAssignment(contextID, content string) error {
-	return a.db.UpdateTaskAssignmentContent(context.Background(), contextID, content)
+// SavePersonAssignment persists a manually edited body for a person assignment.
+func (a *App) SavePersonAssignment(personID, body string) error {
+	return a.db.UpdatePersonAssignmentBody(context.Background(), personID, body)
+}
+
+// DeletePersonAssignment removes a person assignment record.
+func (a *App) DeletePersonAssignment(personID string) error {
+	return a.db.DeletePersonAssignment(context.Background(), personID)
 }
 
 // --- Workflow statuses (enum table — unchanged) ---

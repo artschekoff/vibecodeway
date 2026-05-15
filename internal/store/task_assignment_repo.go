@@ -112,3 +112,14 @@ func (s *Store) UpdatePersonAssignmentBody(ctx context.Context, id, body string)
 	}
 	return nil
 }
+
+// DeletePersonAssignment removes a person assignment by ID.
+func (s *Store) DeletePersonAssignment(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM context_person_assignments WHERE id = ?`, id,
+	)
+	if err != nil {
+		return fmt.Errorf("delete person assignment: %w", err)
+	}
+	return nil
+}
