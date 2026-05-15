@@ -280,6 +280,13 @@ export interface EstimationLog {
   estimationBasis: string;
 }
 
+export interface TaskAssignment {
+  contextId: string;
+  content: string;
+  generatedAt?: string;
+  updatedAt: string;
+}
+
 export interface Keybinding {
   id: string;
   command: string;
