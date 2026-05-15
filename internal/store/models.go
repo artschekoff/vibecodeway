@@ -239,6 +239,14 @@ type EstimationLog struct {
 	EstimationBasis           string   `json:"estimationBasis"`
 }
 
+// TaskAssignment stores the AI-generated (or user-edited) per-participant assignment text for a context.
+type TaskAssignment struct {
+	ContextID   string  `json:"contextId"`
+	Content     string  `json:"content"`
+	GeneratedAt *string `json:"generatedAt,omitempty"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
 // Keybinding is a user-configurable keyboard shortcut.
 // modifier_keys is a comma-separated list of: "cmd", "shift", "ctrl", "alt".
 // key_code is a lowercase key name: "c", "enter", "space", "f1"–"f12", etc.
