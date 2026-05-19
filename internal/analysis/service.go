@@ -362,13 +362,18 @@ func (p *PersonAssignmentProcessor) RunStep(ctx context.Context, inputState stri
 	var promptVer string
 	if step.SourceType == "instruction" {
 		promptVer = promptVersionRefineV1
-		allMsgs, _ := p.svc.listMessages(ctx, pa.ContextID, time.Time{})
+		// Retrieve only the top-15 most semantically relevant messages to stay token-efficient.
+		relevantMsgs, semErr := p.svc.searchSemantic(ctx, pa.ContextID, step.UserInstruction, semanticSearchTopK)
+		if semErr != nil || len(relevantMsgs) == 0 {
+			// Fallback: retrieve all messages if semantic search fails.
+			relevantMsgs, _ = p.svc.listMessages(ctx, pa.ContextID, time.Time{})
+		}
 		tmpl := p.svc.loadPrompt(ctx, "person_assignment_refine", defaultPersonAssignmentRefinePrompt)
 		prompt = applyPlaceholders(tmpl, map[string]string{
 			"person_name":      pa.Name,
 			"current_body":     inputState,
 			"user_instruction": step.UserInstruction,
-			"raw_content":      formatMessages(allMsgs),
+			"raw_content":      formatMessages(relevantMsgs),
 			"events":           eventsStr,
 		})
 	} else {
