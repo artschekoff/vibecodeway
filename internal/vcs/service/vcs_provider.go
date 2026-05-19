@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/provider"
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	"github.com/artschekoff/context-consolidator/internal/vcs"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"go.uber.org/zap"
@@ -40,20 +41,21 @@ type NotifyFunc func(ctx context.Context, contextID, entityType, entityID, event
 // VCSProvider implements provider.Provider for VCS platforms (GitHub, GitLab, Linear).
 // It dispatches to the appropriate VCSRunner based on the platform stored with each repo.
 type VCSProvider struct {
-	store   *vcsstore.Store
-	runners map[vcs.Platform]vcs.VCSRunner
-	logger  *zap.Logger
-	notify  NotifyFunc // nil = no-op
+	store     *vcsstore.Store
+	runners   map[vcs.Platform]vcs.VCSRunner
+	logger    *zap.Logger
+	notify    NotifyFunc // nil = no-op
+	msgWriter appstore.MessageWriter
 }
 
 // NewVCSProvider constructs a VCSProvider with the given runner implementations.
 // Only runners for enabled platforms should be passed.
-func NewVCSProvider(store *vcsstore.Store, logger *zap.Logger, runners ...vcs.VCSRunner) *VCSProvider {
+func NewVCSProvider(store *vcsstore.Store, logger *zap.Logger, msgWriter appstore.MessageWriter, runners ...vcs.VCSRunner) *VCSProvider {
 	rm := make(map[vcs.Platform]vcs.VCSRunner, len(runners))
 	for _, r := range runners {
 		rm[r.Platform()] = r
 	}
-	return &VCSProvider{store: store, runners: rm, logger: logger}
+	return &VCSProvider{store: store, runners: rm, logger: logger, msgWriter: msgWriter}
 }
 
 // WithNotifyFunc sets the callback that is invoked when a notable PR state change is detected.
@@ -128,6 +130,25 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 			}
 			stats.ItemsRefreshed++
 
+			var prMsgID string
+			if p.msgWriter != nil {
+				prExtID := branch.Repo.Owner + "/" + branch.Repo.Name + "#" + fmt.Sprint(pr.Number)
+				prAuthorID := p.msgWriter.ResolveAuthor(ctx, "github", pr.Author)
+				prMsgID, _ = p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+					ContextID:  contextID,
+					SourceID:   "github",
+					ExternalID: prExtID,
+					Title:      pr.Title,
+					RawAuthor:  pr.Author,
+					AuthorID:   prAuthorID,
+					CreatedAt:  pr.CreatedAt,
+					UpdatedAt:  pr.UpdatedAt,
+				})
+				if prMsgID != "" {
+					_ = p.store.PullRequests.SetPRMessageID(ctx, res.ID, prMsgID)
+				}
+			}
+
 			if p.notify != nil && !res.IsNew {
 				// PR was merged or closed.
 				if res.StateChanged && (pr.State == "merged" || pr.State == "closed") {
@@ -192,16 +213,35 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 			}
 
 			for _, c := range comments {
-				if err := p.store.PullRequests.UpsertComment(ctx,
+				cID, err := p.store.PullRequests.UpsertComment(ctx,
 					prID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
 					c.Path, c.Line, c.IsResolved, c.InReplyToID,
 					c.CreatedAt, c.UpdatedAt,
-				); err != nil {
+				)
+				if err != nil {
 					p.logger.Warn("vcs sync: upsert comment failed",
 						zap.String("externalID", c.ExternalID), zap.Error(err))
 					continue
 				}
 				stats.NewItems++
+
+				if p.msgWriter != nil && cID != "" && prMsgID != "" {
+					cAuthorID := p.msgWriter.ResolveAuthor(ctx, "github", c.Author)
+					cMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+						ContextID:  contextID,
+						SourceID:   "github",
+						ExternalID: c.ExternalID,
+						ParentID:   prMsgID,
+						Body:       c.Body,
+						RawAuthor:  c.Author,
+						AuthorID:   cAuthorID,
+						CreatedAt:  c.CreatedAt,
+						UpdatedAt:  c.UpdatedAt,
+					})
+					if cMsgID != "" {
+						_ = p.store.PullRequests.SetPRCommentMessageID(ctx, cID, cMsgID)
+					}
+				}
 			}
 		}
 	}

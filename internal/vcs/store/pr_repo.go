@@ -185,7 +185,8 @@ func (r *PRRepo) scanPRs(rows *sql.Rows) ([]PullRequest, error) {
 }
 
 // UpsertComment creates or updates a PR comment identified by (prID, externalID).
-func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, parentID *string, commentType, author, body string, path *string, line *int, isResolved bool, inReplyToID *string, createdAt, updatedAt string) error {
+// Returns the internal comment ID and any error.
+func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, parentID *string, commentType, author, body string, path *string, line *int, isResolved bool, inReplyToID *string, createdAt, updatedAt string) (string, error) {
 	var existing string
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id FROM vcs_pr_comments WHERE pr_id = ? AND external_id = ?`,
@@ -203,10 +204,10 @@ func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, par
 			    is_resolved = ?, in_reply_to_id = ?, comment_updated_at = ?
 			WHERE id = ?
 		`, parentID, commentType, author, body, path, line, resolved, inReplyToID, updatedAt, existing)
-		return err
+		return existing, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("query vcs comment: %w", err)
+		return "", fmt.Errorf("query vcs comment: %w", err)
 	}
 
 	id := uuid.New().String()
@@ -222,9 +223,9 @@ func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, par
 	`, id, prID, externalID, parentID, commentType, author, body, path, line,
 		resolved, inReplyToID, createdAt, updatedAt)
 	if err != nil {
-		return fmt.Errorf("insert vcs comment: %w", err)
+		return "", fmt.Errorf("insert vcs comment: %w", err)
 	}
-	return nil
+	return id, nil
 }
 
 // ListCommentsForPR returns all comments for a PR as a flat list (no tree building).
@@ -323,6 +324,20 @@ func BuildCommentTree(flat []PRComment) []PRComment {
 		roots = append(roots, *c)
 	}
 	return roots
+}
+
+// SetPRMessageID sets the message_id FK on a vcs_pull_requests row.
+func (r *PRRepo) SetPRMessageID(ctx context.Context, prID, messageID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE vcs_pull_requests SET message_id = ? WHERE id = ?", messageID, prID)
+	return err
+}
+
+// SetPRCommentMessageID sets the message_id FK on a vcs_pr_comments row.
+func (r *PRRepo) SetPRCommentMessageID(ctx context.Context, commentID, messageID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE vcs_pr_comments SET message_id = ? WHERE id = ?", messageID, commentID)
+	return err
 }
 
 func (r *PRRepo) scanComments(rows *sql.Rows) ([]PRComment, error) {
