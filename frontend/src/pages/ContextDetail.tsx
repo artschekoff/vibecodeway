@@ -60,6 +60,8 @@ import {
   GetJiraInstanceURL,
   GetPersonAssignments,
   GeneratePersonAssignments,
+  GenerateSinglePersonAssignment,
+  GetContextParticipants,
   RefinePersonAssignment,
   SavePersonAssignment,
   DeletePersonAssignment,
@@ -77,6 +79,7 @@ import UploadedFileCard from "../components/UploadedFileCard";
 import ContextTextCard from "../components/ContextTextCard";
 import ContextForm from "../components/ContextForm";
 import EstimationPanel from "../components/EstimationPanel";
+import { UnresolvedAuthorsModal } from "../components/UnresolvedAuthorsModal";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 
@@ -380,7 +383,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [refiningPersonId, setRefiningPersonId] = useState<string | null>(null);
   const [personAiPrompt, setPersonAiPrompt] = useState("");
   const [isRefiningPerson, setIsRefiningPerson] = useState(false);
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+  const [expandedGenerateFor, setExpandedGenerateFor] = useState<string | null>(null);
+  const [participantCustomPrompts, setParticipantCustomPrompts] = useState<Record<string, string>>({});
+  const [generatingForPerson, setGeneratingForPerson] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showAuthorModal, setShowAuthorModal] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editEventType, setEditEventType] = useState("user_note");
   const [editEventSummary, setEditEventSummary] = useState("");
@@ -540,6 +549,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       showToast(msg);
       load(true);
       void loadSnapshot();
+      setShowAuthorModal(true);
     } catch (e) {
       setRefreshError(String(e));
     } finally {
@@ -1024,11 +1034,103 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     )}
                   </summary>
                   <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 8 }}>
-                    {/* Generate button */}
+
+                    {/* Participant discovery + per-person generate */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: "2px 10px" }}
+                          disabled={isLoadingParticipants}
+                          onClick={async () => {
+                            setIsLoadingParticipants(true);
+                            try {
+                              const names = await GetContextParticipants(id) as string[];
+                              setParticipants(names ?? []);
+                            } finally {
+                              setIsLoadingParticipants(false);
+                            }
+                          }}
+                        >
+                          {isLoadingParticipants ? "Loading…" : participants.length > 0 ? "Refresh Participants" : "Load Participants"}
+                        </button>
+                        {participants.length === 0 && !isLoadingParticipants && (
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            Load participants to generate individual assignments
+                          </span>
+                        )}
+                      </div>
+
+                      {participants.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {participants.map((name) => {
+                            const isExpanded = expandedGenerateFor === name;
+                            const isGenerating = generatingForPerson === name;
+                            const customPrompt = participantCustomPrompts[name] ?? "";
+                            return (
+                              <div key={name} style={{ border: "1px solid var(--border)", borderRadius: 5, overflow: "hidden" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", background: "var(--bg-secondary)" }}>
+                                  <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{name}</span>
+                                  <button
+                                    className="btn-secondary"
+                                    style={{ fontSize: 11, padding: "1px 8px" }}
+                                    disabled={isGenerating}
+                                    onClick={() => setExpandedGenerateFor(isExpanded ? null : name)}
+                                  >
+                                    {isGenerating ? "Generating…" : isExpanded ? "Cancel" : "Generate"}
+                                  </button>
+                                </div>
+                                {isExpanded && !isGenerating && (
+                                  <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                                      Additional context for {name} (optional)
+                                    </div>
+                                    <textarea
+                                      className="passphrase-input"
+                                      style={{ fontSize: 12, minHeight: 52, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                                      placeholder="e.g. Focus on backend API implementation, skip frontend"
+                                      value={customPrompt}
+                                      onChange={(e) => setParticipantCustomPrompts((prev) => ({ ...prev, [name]: e.target.value }))}
+                                    />
+                                    <button
+                                      className="btn-primary"
+                                      style={{ fontSize: 12, padding: "2px 10px", alignSelf: "flex-start" }}
+                                      onClick={async () => {
+                                        setGeneratingForPerson(name);
+                                        setExpandedGenerateFor(null);
+                                        try {
+                                          const pa = await GenerateSinglePersonAssignment(id, name, customPrompt.trim()) as PersonAssignment;
+                                          setPersonAssignments((prev) => {
+                                            const idx = prev.findIndex((p) => p.id === pa.id || p.name === pa.name);
+                                            return idx >= 0 ? prev.map((p, i) => i === idx ? pa : p) : [...prev, pa];
+                                          });
+                                        } finally {
+                                          setGeneratingForPerson(null);
+                                        }
+                                      }}
+                                    >
+                                      Generate for {name}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {personAssignments.length === 0 && participants.length === 0 && !isLoadingParticipants && (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        Load participants then generate individual assignments, or use the legacy bulk generate below.
+                      </div>
+                    )}
+
+                    {/* Legacy bulk generate */}
                     <div>
                       <button
                         className="btn-secondary"
-                        style={{ fontSize: 12, padding: "2px 10px" }}
+                        style={{ fontSize: 11, padding: "2px 8px", opacity: 0.7 }}
                         disabled={isGeneratingAssignments}
                         onClick={async () => {
                           setIsGeneratingAssignments(true);
@@ -1040,15 +1142,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           }
                         }}
                       >
-                        {isGeneratingAssignments ? "Generating…" : personAssignments.length > 0 ? "Re-generate" : "Generate"}
+                        {isGeneratingAssignments ? "Generating…" : "Bulk Generate All"}
                       </button>
                     </div>
-
-                    {personAssignments.length === 0 && !isGeneratingAssignments && (
-                      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        Not generated yet. Click Generate to create per-person assignments from Jira issues and events.
-                      </div>
-                    )}
 
                     {/* One card per person */}
                     {personAssignments.map((pa) => (
@@ -1063,10 +1159,26 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                             <>
                               <button
                                 style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1, fontSize: 11 }}
-                                title="Ask AI"
+                                title="Refine with AI"
                                 onClick={() => { setRefiningPersonId(pa.id); setPersonAiPrompt(""); }}
                               >
                                 AI
+                              </button>
+                              <button
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1, fontSize: 11 }}
+                                title="Re-generate"
+                                disabled={generatingForPerson === pa.name}
+                                onClick={async () => {
+                                  setGeneratingForPerson(pa.name);
+                                  try {
+                                    const updated = await GenerateSinglePersonAssignment(id, pa.name, "") as PersonAssignment;
+                                    setPersonAssignments((prev) => prev.map((p) => p.id === pa.id ? updated : p));
+                                  } finally {
+                                    setGeneratingForPerson(null);
+                                  }
+                                }}
+                              >
+                                {generatingForPerson === pa.name ? "…" : "↻"}
                               </button>
                               <button
                                 style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
@@ -1364,6 +1476,32 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       ? `${b.repo.owner}/${b.repo.name}`
                       : b.id;
                     const branchPRs = pullRequests.filter((pr) => pr.branchId === b.id);
+                    const workspace = b.branch
+                      ? workspaces.find((w) => w.branch === b.branch && w.repoId === b.repoId)
+                      : undefined;
+                    const checkoutNode = b.branch
+                      ? workspace
+                        ? (
+                          <WorkspaceMenu
+                            workspace={workspace}
+                            checkoutLoading={checkoutLoading}
+                            onCheckout={() => void handleCheckout(b.branch, b.repoId)}
+                            onMarkDone={(id) => void handleMarkWorkspaceDone(id)}
+                            onDelete={(id) => void handleDeleteWorkspace(id)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="vcs-checkout-btn"
+                            title={`Checkout ${b.branch} in workspace`}
+                            disabled={checkoutLoading}
+                            onClick={() => void handleCheckout(b.branch, b.repoId)}
+                          >
+                            Checkout
+                          </button>
+                        )
+                      : undefined;
+                    const hasUnread = branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt));
 
                     return (
                       <div key={b.id} className="pr-repo-group">
@@ -1399,17 +1537,25 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           {b.label && (
                             <span className="vcs-label-badge" title="Repo label">{b.label}</span>
                           )}
-                          {branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt)) && (
+                          {checkoutNode && (
+                            <span
+                              style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {checkoutNode}
+                            </span>
+                          )}
+                          {hasUnread && (
                             <button
                               type="button"
                               className="mark-viewed-btn"
-                              style={{ marginLeft: "auto" }}
+                              style={{ marginLeft: checkoutNode ? 6 : "auto" }}
                               title="Mark all PRs and comments as viewed"
                               onClick={() => void (async () => { await MarkBranchAllViewed(b.id); load(true); void loadBreakdown(); })()}
                             ><Check size={13} /></button>
                           )}
                           {branchPRs.length > 0 && (
-                            <span className="detail-section-count" style={{ marginLeft: branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt)) ? 0 : "auto" }}>
+                            <span className="detail-section-count" style={{ marginLeft: checkoutNode || hasUnread ? 0 : "auto" }}>
                               {branchPRs.length}
                             </span>
                           )}
@@ -1420,43 +1566,15 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           <div className="detail-section-empty" style={{ padding: "8px 14px 12px" }}>
                             Click <strong>Refresh</strong> to fetch PRs
                           </div>
-                        ) : (() => {
-                          const workspace = b.branch
-                            ? workspaces.find((w) => w.branch === b.branch && w.repoId === b.repoId)
-                            : undefined;
-                          const checkoutNode = b.branch
-                            ? workspace
-                              ? (
-                                <WorkspaceMenu
-                                  workspace={workspace}
-                                  checkoutLoading={checkoutLoading}
-                                  onCheckout={() => void handleCheckout(b.branch, b.repoId)}
-                                  onMarkDone={(id) => void handleMarkWorkspaceDone(id)}
-                                  onDelete={(id) => void handleDeleteWorkspace(id)}
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="vcs-checkout-btn"
-                                  title={`Checkout ${b.branch} in workspace`}
-                                  disabled={checkoutLoading}
-                                  onClick={() => void handleCheckout(b.branch, b.repoId)}
-                                >
-                                  Checkout
-                                </button>
-                              )
-                            : undefined;
-                          return branchPRs.map((pr, idx) => (
-                            <PRCard
-                              key={pr.id}
-                              pr={pr}
-                              vcsBranches={vcsBranches}
-                              onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
-                              onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
-                              checkoutNode={idx === 0 ? checkoutNode : undefined}
-                            />
-                          ));
-                        })()}
+                        ) : branchPRs.map((pr) => (
+                          <PRCard
+                            key={pr.id}
+                            pr={pr}
+                            vcsBranches={vcsBranches}
+                            onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
+                            onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
+                          />
+                        ))}
                       </div>
                     );
                   })}
@@ -1702,6 +1820,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           initialRelations={editRelations}
           onSave={handleUpdate}
           onCancel={closeEditForm}
+        />
+      )}
+      {showAuthorModal && detail && (
+        <UnresolvedAuthorsModal
+          contextID={id}
+          orgID={detail.context.orgId}
+          onClose={() => setShowAuthorModal(false)}
         />
       )}
       {checkoutTarget && checkoutPaths.length > 1 && (
