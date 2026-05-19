@@ -64,7 +64,7 @@ func openServiceEnv() (*serviceEnv, error) {
 	jiraRepo := jirastore.NewRepo(s.DB())
 	slackRepo := slackstore.NewRepo(s.DB())
 
-	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger)
+	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger, s)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
