@@ -88,6 +88,7 @@ import ContextForm from "../components/ContextForm";
 import EstimationPanel from "../components/EstimationPanel";
 import { UnresolvedAuthorsModal } from "../components/UnresolvedAuthorsModal";
 import { InstructionInput } from "../components/InstructionInput";
+import { ReasoningChainGraph } from "../components/ReasoningChainGraph";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 
@@ -392,6 +393,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [personAiPrompt, setPersonAiPrompt] = useState("");
   const [isRefiningPerson, setIsRefiningPerson] = useState(false);
   const [stepsMap, setStepsMap] = useState<Record<string, PersonAssignmentStep[]>>({});
+  const [reasoningGraphFor, setReasoningGraphFor] = useState<string | null>(null);
   const [expandedChainFor, setExpandedChainFor] = useState<string | null>(null);
   const [pendingMap, setPendingMap] = useState<Record<string, ContextMessage[]>>({});
   const [loadingStepsFor, setLoadingStepsFor] = useState<string | null>(null);
@@ -1235,6 +1237,16 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                               >
                                 <Trash2 size={12} />
                               </button>
+                              <button
+                                style={{ background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 11, color: "var(--text-muted)", padding: "2px 8px" }}
+                                onClick={async () => {
+                                  setReasoningGraphFor(pa.id);
+                                  // Pre-load steps if not already loaded
+                                  if (!stepsMap[pa.id]) await loadSteps(pa.id);
+                                }}
+                              >
+                                Show Reasoning
+                              </button>
                             </>
                           )}
                         </div>
@@ -2025,6 +2037,21 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           </div>
         </div>
       )}
+      {reasoningGraphFor && (() => {
+        const pa = personAssignments.find(p => p.id === reasoningGraphFor);
+        if (!pa) return null;
+        return (
+          <ReasoningChainGraph
+            personAssignment={pa}
+            steps={stepsMap[pa.id] ?? []}
+            onClose={() => setReasoningGraphFor(null)}
+            onStepsChanged={(updated, newSteps) => {
+              setPersonAssignments(prev => prev.map(p => p.id === updated.id ? updated : p));
+              setStepsMap(prev => ({ ...prev, [updated.id]: newSteps }));
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
