@@ -130,6 +130,78 @@ func (s *Store) ListMessagesSince(ctx context.Context, contextID string, since t
 	return msgs, rows.Err()
 }
 
+// SearchMessages returns messages for contextID whose title or body contains query.
+// Returns up to 20 results ordered by created_at DESC.
+func (s *Store) SearchMessages(ctx context.Context, contextID, query string) ([]Message, error) {
+	like := "%" + query + "%"
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT m.id, m.author_id, COALESCE(u.display_name, ''), m.raw_author,
+		       m.context_id, m.organization_id, m.parent_id,
+		       m.title, m.body, m.source_id, COALESCE(src.label, m.source_id),
+		       m.external_id, m.created_at, m.updated_at, m.inserted_at
+		FROM messages m
+		LEFT JOIN users u     ON u.id = m.author_id
+		LEFT JOIN sources src ON src.id = m.source_id
+		WHERE m.context_id = ?
+		  AND (m.title LIKE ? OR m.body LIKE ?)
+		ORDER BY m.created_at DESC
+		LIMIT 20
+	`, contextID, like, like)
+	if err != nil {
+		return nil, fmt.Errorf("search messages: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var msgs []Message
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(
+			&m.ID, &m.AuthorID, &m.AuthorDisplayName, &m.RawAuthor,
+			&m.ContextID, &m.OrganizationID, &m.ParentID,
+			&m.Title, &m.Body, &m.SourceID, &m.SourceLabel,
+			&m.ExternalID, &m.CreatedAt, &m.UpdatedAt, &m.InsertedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan message: %w", err)
+		}
+		msgs = append(msgs, m)
+	}
+	return msgs, rows.Err()
+}
+
+// ListPendingMessages returns messages for contextID created after sinceTimestamp.
+// Used to show which new messages haven't been incorporated into the assignment yet.
+func (s *Store) ListPendingMessages(ctx context.Context, contextID, sinceTimestamp string) ([]Message, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT m.id, m.author_id, COALESCE(u.display_name, ''), m.raw_author,
+		       m.context_id, m.organization_id, m.parent_id,
+		       m.title, m.body, m.source_id, COALESCE(src.label, m.source_id),
+		       m.external_id, m.created_at, m.updated_at, m.inserted_at
+		FROM messages m
+		LEFT JOIN users u     ON u.id = m.author_id
+		LEFT JOIN sources src ON src.id = m.source_id
+		WHERE m.context_id = ?
+		  AND m.created_at > ?
+		ORDER BY m.created_at ASC
+	`, contextID, sinceTimestamp)
+	if err != nil {
+		return nil, fmt.Errorf("list pending messages: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var msgs []Message
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(
+			&m.ID, &m.AuthorID, &m.AuthorDisplayName, &m.RawAuthor,
+			&m.ContextID, &m.OrganizationID, &m.ParentID,
+			&m.Title, &m.Body, &m.SourceID, &m.SourceLabel,
+			&m.ExternalID, &m.CreatedAt, &m.UpdatedAt, &m.InsertedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan pending message: %w", err)
+		}
+		msgs = append(msgs, m)
+	}
+	return msgs, rows.Err()
+}
+
 // BackfillMessages creates message records for provider items with message_id IS NULL.
 // Idempotent — safe to call at startup.
 func (s *Store) BackfillMessages(ctx context.Context) error {
