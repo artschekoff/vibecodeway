@@ -15,6 +15,14 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	promptVersionIncrementalV1 = "pa_incremental_v1"
+	promptVersionRefineV1      = "pa_refine_v1"
+	promptVersionInitialV1     = "pa_initial_v1"
+)
+
+const summaryThreshold = 5
+
 // defaultXxxPrompt constants mirror the seed values in migration 050_ai_prompts.sql.
 // They are used as fallbacks when the DB row is unavailable (e.g. during tests without a seeded DB).
 const (
@@ -234,19 +242,204 @@ Return ONLY the Markdown body — no JSON wrapper, no preamble.`
 
 Apply the user instruction. Preserve all technical details (service names, endpoints, DB tables, methods, infrastructure specifics) unless the instruction explicitly says to remove them.
 Return ONLY the updated Markdown for this person's body — no JSON, no preamble.`
+
+	defaultPersonAssignmentIncrementalPrompt = `You are updating a developer's technical task assignment based on new context.
+Maximum output: {{max_tokens_hint}} words. Be surgical — only modify sections directly affected by the new messages.
+
+## Developer: {{person_name}}
+
+## Current Assignment
+{{current_body}}
+
+## New Messages (appeared since last update)
+{{delta_content}}
+
+## Recent Events
+{{events}}
+
+---
+EXAMPLE (do not copy verbatim — illustrates edit style):
+
+New message: "[Slack] @alice: API deadline moved to Friday, need auth endpoint done by EOD Thursday"
+
+Before excerpt:
+### Auth Service
+- Implement login endpoint (timeline: next sprint)
+
+After excerpt:
+### Auth Service
+- Implement login endpoint (**deadline: Thursday EOD** — Slack update from @alice)
+
+---
+
+Update the assignment. Preserve all unchanged sections verbatim. Return ONLY the updated Markdown body.`
+
+	defaultPersonAssignmentSummaryPrompt = `Compress the following task assignment into a concise summary (max 150 words).
+Preserve: assignee name, key responsibilities, blockers, deadlines.
+Discard: verbose explanations, unchanged background context.
+
+Assignment:
+{{body}}
+
+Return ONLY the compressed summary — no preamble.`
+
+	defaultPersonAssignmentJudgePrompt = `You are a code review judge evaluating a task assignment update.
+
+## Updated Assignment
+{{output_state}}
+
+## Message that triggered this update
+{{message_content}}
+
+Score on three criteria (each 0–10, integer):
+1. Completeness: does it mention all people and their roles?
+2. Specificity: are tasks concrete (not vague like "handle X")?
+3. Delta-accuracy: does it correctly incorporate the triggering message?
+
+Respond in this exact format (nothing else):
+SCORE: <avg 0.0-1.0 float>
+NOTES: <one sentence explaining the lowest-scoring criterion>`
 )
 
 // Service orchestrates the full analysis pipeline for one context.
 type Service struct {
-	store  *appstore.Store
-	jiraSvc *jiraservice.ContextService
-	ai     *openai.Client
-	logger *zap.Logger
+	store    *appstore.Store
+	jiraSvc  *jiraservice.ContextService
+	ai       *openai.Client
+	logger   *zap.Logger
+	chainSvc *ReasoningChainService
+	paJudge  *PersonAssignmentJudge
 }
 
 // NewService creates an analysis service.
 func NewService(store *appstore.Store, jiraSvc *jiraservice.ContextService, ai *openai.Client, logger *zap.Logger) *Service {
-	return &Service{store: store, jiraSvc: jiraSvc, ai: ai, logger: logger}
+	svc := &Service{
+		store:    store,
+		jiraSvc:  jiraSvc,
+		ai:       ai,
+		logger:   logger,
+		chainSvc: NewReasoningChainService(store, logger),
+	}
+	svc.paJudge = &PersonAssignmentJudge{svc: svc}
+	return svc
+}
+
+// PersonAssignmentProcessor runs one incremental or refine step of a person assignment chain.
+type PersonAssignmentProcessor struct {
+	svc *Service
+}
+
+func (p *PersonAssignmentProcessor) RunStep(ctx context.Context, inputState string, step *appstore.ReasoningChainStep) (string, error) {
+	pa, err := p.svc.store.GetPersonAssignment(ctx, step.EntityID)
+	if err != nil || pa == nil {
+		return "", fmt.Errorf("get person assignment for processor: %w", err)
+	}
+
+	allEvents, _ := p.svc.store.ListEvents(ctx, pa.ContextID)
+	promptEvents := make([]eventForPrompt, 0, len(allEvents))
+	for _, e := range allEvents {
+		promptEvents = append(promptEvents, eventForPrompt{
+			ID: e.ID, Type: e.Type, Timestamp: e.Timestamp,
+			SourceType: e.SourceType, Author: e.Author, Summary: e.Summary,
+		})
+	}
+	eventsJSON, _ := json.Marshal(allEvents)
+	step.EventsSnapshot = string(eventsJSON)
+
+	eventsStr := formatEventsForPrompt(promptEvents)
+
+	// Populate compressed summary when chain is getting long.
+	steps, _ := p.svc.store.ListChainSteps(ctx, appstore.ChainEntityPersonAssignment, step.EntityID)
+	if len(steps) >= summaryThreshold && step.CompressedSummary == "" {
+		if summary, err := p.svc.compressAssignmentBody(ctx, inputState); err == nil {
+			step.CompressedSummary = summary
+		}
+	}
+
+	var prompt string
+	var promptVer string
+	if step.SourceType == "instruction" {
+		promptVer = promptVersionRefineV1
+		allMsgs, _ := p.svc.listMessages(ctx, pa.ContextID, time.Time{})
+		tmpl := p.svc.loadPrompt(ctx, "person_assignment_refine", defaultPersonAssignmentRefinePrompt)
+		prompt = applyPlaceholders(tmpl, map[string]string{
+			"person_name":      pa.Name,
+			"current_body":     inputState,
+			"user_instruction": step.UserInstruction,
+			"raw_content":      formatMessages(allMsgs),
+			"events":           eventsStr,
+		})
+	} else {
+		promptVer = promptVersionIncrementalV1
+		effectiveInput := inputState
+		if step.CompressedSummary != "" {
+			effectiveInput = step.CompressedSummary
+		}
+		tokenHint := "400"
+		tmpl := p.svc.loadPrompt(ctx, "person_assignment_incremental", defaultPersonAssignmentIncrementalPrompt)
+		prompt = applyPlaceholders(tmpl, map[string]string{
+			"person_name":     pa.Name,
+			"current_body":    effectiveInput,
+			"delta_content":   step.MessageContent,
+			"events":          eventsStr,
+			"max_tokens_hint": tokenHint,
+		})
+	}
+
+	step.PromptVersion = promptVer
+
+	resp, err := p.svc.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return "", err
+	}
+	return resp.Content, nil
+}
+
+// PersonAssignmentJudge scores a completed person assignment step.
+type PersonAssignmentJudge struct {
+	svc *Service
+}
+
+func (j *PersonAssignmentJudge) Score(ctx context.Context, step appstore.ReasoningChainStep) (float64, string, error) {
+	if step.OutputState == "" {
+		return 0, "empty output", nil
+	}
+	tmpl := j.svc.loadPrompt(ctx, "person_assignment_judge", defaultPersonAssignmentJudgePrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{
+		"output_state":    step.OutputState,
+		"message_content": step.MessageContent,
+	})
+	resp, err := j.svc.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return 0, "", fmt.Errorf("judge AI call: %w", err)
+	}
+	var score float64
+	var notes string
+	lines := strings.SplitN(resp.Content, "\n", 2)
+	if len(lines) >= 1 {
+		fmt.Sscanf(strings.TrimPrefix(strings.TrimSpace(lines[0]), "SCORE:"), "%f", &score)
+	}
+	if len(lines) >= 2 {
+		notes = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[1]), "NOTES:"))
+	}
+	if score < 0 {
+		score = 0
+	}
+	if score > 1 {
+		score = 1
+	}
+	return score, notes, nil
+}
+
+// compressAssignmentBody calls the AI to produce a compressed summary of a person assignment body.
+func (s *Service) compressAssignmentBody(ctx context.Context, body string) (string, error) {
+	tmpl := s.loadPrompt(ctx, "person_assignment_summary", defaultPersonAssignmentSummaryPrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{"body": body})
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return "", err
+	}
+	return resp.Content, nil
 }
 
 // computeCompletionDate adds hours to an RFC3339 base time string and returns RFC3339.
@@ -539,7 +732,7 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 		return nil, fmt.Errorf("list events: %w", err)
 	}
 
-	allMsgs, err := s.listMessages(ctx, contextID, time.Time{}, "jira")
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{})
 	if err != nil {
 		s.logger.Warn("person assignment: list messages failed",
 			zap.String("contextID", contextID), zap.Error(err))
@@ -577,7 +770,28 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 		parsed[i].GeneratedAt = &now
 	}
 
-	return s.store.ReplacePersonAssignments(ctx, contextID, parsed)
+	result, err := s.store.ReplacePersonAssignments(ctx, contextID, parsed)
+	if err != nil {
+		return nil, fmt.Errorf("replace person assignments: %w", err)
+	}
+	rawContent := formatMessages(allMsgs)
+	eventsJSON, _ := json.Marshal(allEvents)
+	eventsSnapshot := string(eventsJSON)
+	for _, pa := range result {
+		_, _ = s.store.AppendChainStep(ctx, appstore.ReasoningChainStep{
+			EntityType:     appstore.ChainEntityPersonAssignment,
+			EntityID:       pa.ID,
+			SourceType:     "initial",
+			MessageContent: rawContent,
+			InputState:     "",
+			OutputState:    pa.Body,
+			PromptVersion:  promptVersionInitialV1,
+			EventsSnapshot: eventsSnapshot,
+			IsCurrent:      true,
+		})
+		_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, pa.ID, now)
+	}
+	return result, nil
 }
 
 // RefinePersonAssignment refines a single person's assignment body based on a user instruction.
@@ -588,49 +802,34 @@ func (s *Service) RefinePersonAssignment(ctx context.Context, contextID, personI
 		return nil, fmt.Errorf("get person assignment: %w", err)
 	}
 	currentBody := ""
-	personName := ""
 	if existing != nil {
 		currentBody = existing.Body
-		personName = existing.Name
 	}
 
-	allEvents, err := s.store.ListEvents(ctx, contextID)
-	if err != nil {
-		return nil, fmt.Errorf("list events: %w", err)
-	}
-
-	allMsgs, err := s.listMessages(ctx, contextID, time.Time{}, "jira")
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{})
 	if err != nil {
 		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 	rawContent := formatMessages(allMsgs)
 
-	promptEvents := make([]eventForPrompt, 0, len(allEvents))
-	for _, e := range allEvents {
-		promptEvents = append(promptEvents, eventForPrompt{
-			ID: e.ID, Type: e.Type, Timestamp: e.Timestamp,
-			SourceType: e.SourceType, Author: e.Author, Summary: e.Summary,
-		})
-	}
-
-	tmpl := s.loadPrompt(ctx, "person_assignment_refine", defaultPersonAssignmentRefinePrompt)
-	prompt := applyPlaceholders(tmpl, map[string]string{
-		"person_name":      personName,
-		"current_body":     currentBody,
-		"user_instruction": userInstruction,
-		"raw_content":      rawContent,
-		"events":           formatEventsForPrompt(promptEvents),
-	})
-
-	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	processor := &PersonAssignmentProcessor{svc: s}
+	newStep, err := s.chainSvc.AppendStep(ctx, appstore.ReasoningChainStep{
+		EntityType:      appstore.ChainEntityPersonAssignment,
+		EntityID:        personID,
+		SourceType:      "instruction",
+		UserInstruction: userInstruction,
+		MessageContent:  rawContent,
+		InputState:      currentBody,
+	}, processor, s.paJudge)
 	if err != nil {
-		return nil, fmt.Errorf("ai person assignment refine: %w", err)
+		return nil, fmt.Errorf("append refine step: %w", err)
 	}
-
-	if err := s.store.UpdatePersonAssignmentBody(ctx, personID, resp.Content); err != nil {
-		return nil, fmt.Errorf("save refined person assignment: %w", err)
+	outputState, _ := s.store.SetChainCurrentStep(ctx, appstore.ChainEntityPersonAssignment, personID, newStep.ID)
+	if outputState != "" {
+		_ = s.store.UpdatePersonAssignmentBody(ctx, personID, outputState)
 	}
-
+	now := time.Now().UTC().Format(time.RFC3339)
+	_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, personID, now)
 	return s.store.GetPersonAssignment(ctx, personID)
 }
 
@@ -654,7 +853,7 @@ func (s *Service) GenerateSinglePersonAssignment(ctx context.Context, contextID,
 		return nil, fmt.Errorf("list events: %w", err)
 	}
 
-	allMsgs, err := s.listMessages(ctx, contextID, time.Time{}, "jira")
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{})
 	if err != nil {
 		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
 	}
@@ -688,11 +887,30 @@ func (s *Service) GenerateSinglePersonAssignment(ctx context.Context, contextID,
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	return s.store.UpsertPersonAssignment(ctx, contextID, appstore.PersonAssignment{
+	saved, err := s.store.UpsertPersonAssignment(ctx, contextID, appstore.PersonAssignment{
 		Name:        personName,
 		Body:        resp.Content,
 		GeneratedAt: &now,
 	})
+	if err != nil {
+		return nil, err
+	}
+	rawContent2 := formatMessages(allMsgs)
+	eventsJSON2, _ := json.Marshal(allEvents)
+	_, _ = s.store.AppendChainStep(ctx, appstore.ReasoningChainStep{
+		EntityType:     appstore.ChainEntityPersonAssignment,
+		EntityID:       saved.ID,
+		SourceType:     "initial",
+		MessageContent: rawContent2,
+		InputState:     "",
+		OutputState:    saved.Body,
+		PromptVersion:  promptVersionInitialV1,
+		EventsSnapshot: string(eventsJSON2),
+		IsCurrent:      true,
+	})
+	now2 := time.Now().UTC().Format(time.RFC3339)
+	_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, saved.ID, now2)
+	return saved, nil
 }
 
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
