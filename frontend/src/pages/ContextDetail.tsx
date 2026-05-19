@@ -65,11 +65,18 @@ import {
   RefinePersonAssignment,
   SavePersonAssignment,
   DeletePersonAssignment,
+  GetPersonAssignmentSteps,
+  SetCurrentAssignmentStep,
+  RebuildAssignmentChainFrom,
+  RegeneratePersonAssignment,
+  GetPendingMessages,
+  MarkAssignmentsOutdated,
+  GenerateEventsFromMessages,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -80,6 +87,7 @@ import ContextTextCard from "../components/ContextTextCard";
 import ContextForm from "../components/ContextForm";
 import EstimationPanel from "../components/EstimationPanel";
 import { UnresolvedAuthorsModal } from "../components/UnresolvedAuthorsModal";
+import { InstructionInput } from "../components/InstructionInput";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 
@@ -383,6 +391,15 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [refiningPersonId, setRefiningPersonId] = useState<string | null>(null);
   const [personAiPrompt, setPersonAiPrompt] = useState("");
   const [isRefiningPerson, setIsRefiningPerson] = useState(false);
+  const [stepsMap, setStepsMap] = useState<Record<string, PersonAssignmentStep[]>>({});
+  const [expandedChainFor, setExpandedChainFor] = useState<string | null>(null);
+  const [pendingMap, setPendingMap] = useState<Record<string, ContextMessage[]>>({});
+  const [loadingStepsFor, setLoadingStepsFor] = useState<string | null>(null);
+  const [regeneratingFor, setRegeneratingFor] = useState<string | null>(null);
+  const [rebuildingFrom, setRebuildingFrom] = useState<{ paId: string; stepIndex: number } | null>(null);
+  const [editStepContent, setEditStepContent] = useState<Record<string, string>>({});
+  const [editingStepKey, setEditingStepKey] = useState<string | null>(null);
+  const [promotingStep, setPromotingStep] = useState<string | null>(null);
   const [participants, setParticipants] = useState<string[]>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
   const [expandedGenerateFor, setExpandedGenerateFor] = useState<string | null>(null);
@@ -408,6 +425,21 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     (ws) => setWorkspaces(ws),
     "No local path set for this repository. Add one in the Repositories tab."
   );
+
+  const loadSteps = async (paId: string) => {
+    setLoadingStepsFor(paId);
+    try {
+      const steps = await GetPersonAssignmentSteps(paId) as PersonAssignmentStep[] | null;
+      setStepsMap(p => ({ ...p, [paId]: steps ?? [] }));
+    } finally { setLoadingStepsFor(null); }
+  };
+
+  const loadPending = async (paId: string) => {
+    try {
+      const msgs = await GetPendingMessages(paId) as ContextMessage[] | null;
+      setPendingMap(p => ({ ...p, [paId]: msgs ?? [] }));
+    } catch { /* non-critical */ }
+  };
 
   const loadBreakdown = useCallback(async () => {
     if (!id) return;
@@ -550,6 +582,19 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       load(true);
       void loadSnapshot();
       setShowAuthorModal(true);
+      try {
+        const [pendingCounts] = await Promise.all([
+          MarkAssignmentsOutdated(id) as Promise<Record<string, number> | null>,
+          GenerateEventsFromMessages(id),
+        ]);
+        if (pendingCounts) {
+          const updatedPAs = await GetPersonAssignments(id) as PersonAssignment[] | null;
+          if (updatedPAs) setPersonAssignments(updatedPAs);
+          for (const [paId, count] of Object.entries(pendingCounts)) {
+            if (count > 0) void loadPending(paId);
+          }
+        }
+      } catch { /* non-critical */ }
     } catch (e) {
       setRefreshError(String(e));
     } finally {
@@ -1194,6 +1239,37 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           )}
                         </div>
 
+                        {/* Outdated banner */}
+                        {pa.isOutdated && !pendingMap[pa.id] && (() => { void loadPending(pa.id); return null; })()}
+                        {pa.isOutdated && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", background: "rgba(255,180,0,0.1)", border: "1px solid rgba(255,180,0,0.3)", borderRadius: 4, fontSize: 11, marginBottom: 4 }}>
+                            <span style={{ color: "#f0a500" }}>⚠ Outdated</span>
+                            {(pendingMap[pa.id] ?? []).length > 0 && (
+                              <span style={{ color: "var(--text-muted)" }}>
+                                {(pendingMap[pa.id] ?? []).length} new message{(pendingMap[pa.id] ?? []).length !== 1 ? "s" : ""} not yet incorporated
+                              </span>
+                            )}
+                            <button
+                              className="btn-primary"
+                              style={{ fontSize: 10, padding: "2px 8px", marginLeft: "auto" }}
+                              disabled={regeneratingFor === pa.id}
+                              onClick={async () => {
+                                setRegeneratingFor(pa.id);
+                                try {
+                                  const updated = await RegeneratePersonAssignment(pa.id) as PersonAssignment;
+                                  setPersonAssignments(prev => prev.map(p => p.id === pa.id ? updated : p));
+                                  setPendingMap(p => ({ ...p, [pa.id]: [] }));
+                                  void loadSteps(pa.id);
+                                } finally { setRegeneratingFor(null); }
+                              }}
+                            >
+                              {regeneratingFor === pa.id
+                                ? <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", display: "inline-block", animation: "spin 0.6s linear infinite" }} />Re-generating…</span>
+                                : "Re-generate"}
+                            </button>
+                          </div>
+                        )}
+
                         {/* Edit mode — click body text to enter */}
                         {editingPersonId === pa.id ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1230,47 +1306,24 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                         ) : refiningPersonId === pa.id ? (
                           /* Ask AI mode */
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                              Describe how to change {pa.name}{"'"}s assignment
-                            </div>
-                            <textarea
-                              className="passphrase-input"
-                              style={{ fontSize: 12, minHeight: 56, resize: "vertical", width: "100%", fontFamily: "inherit" }}
-                              placeholder="Your instruction…"
+                            <InstructionInput
+                              contextId={id}
                               value={personAiPrompt}
-                              onChange={(e) => setPersonAiPrompt(e.target.value)}
-                              autoFocus
+                              onChange={setPersonAiPrompt}
+                              label={`Describe how to change ${pa.name}'s assignment`}
+                              isLoading={isRefiningPerson}
+                              onApply={async (fullPrompt) => {
+                                setIsRefiningPerson(true);
+                                try {
+                                  const updated = await RefinePersonAssignment(id, pa.id, fullPrompt) as PersonAssignment;
+                                  setPersonAssignments(prev => prev.map(p => p.id === pa.id ? updated : p));
+                                  void loadSteps(pa.id);
+                                  setRefiningPersonId(null);
+                                  setPersonAiPrompt("");
+                                } finally { setIsRefiningPerson(false); }
+                              }}
+                              onCancel={() => { setRefiningPersonId(null); setPersonAiPrompt(""); }}
                             />
-                            <div style={{ display: "flex", gap: 4 }}>
-                              <button
-                                className="btn-primary"
-                                style={{ fontSize: 12, padding: "2px 10px" }}
-                                disabled={isRefiningPerson || !personAiPrompt.trim()}
-                                onClick={async () => {
-                                  if (!personAiPrompt.trim()) return;
-                                  setIsRefiningPerson(true);
-                                  try {
-                                    const updated = await RefinePersonAssignment(id, pa.id, personAiPrompt.trim()) as PersonAssignment;
-                                    setPersonAssignments((prev) =>
-                                      prev.map((p) => p.id === pa.id ? updated : p)
-                                    );
-                                    setRefiningPersonId(null);
-                                    setPersonAiPrompt("");
-                                  } finally {
-                                    setIsRefiningPerson(false);
-                                  }
-                                }}
-                              >
-                                {isRefiningPerson ? "Applying…" : "Apply"}
-                              </button>
-                              <button
-                                className="btn-secondary"
-                                style={{ fontSize: 12, padding: "2px 10px" }}
-                                onClick={() => { setRefiningPersonId(null); setPersonAiPrompt(""); }}
-                              >
-                                Cancel
-                              </button>
-                            </div>
                             <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, margin: "4px 0 0", color: "var(--text-muted)", lineHeight: 1.4, maxHeight: 200, overflow: "auto" }}>
                               {pa.body}
                             </pre>
@@ -1285,6 +1338,117 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                             {pa.body}
                           </pre>
                         )}
+
+                        {/* Reasoning chain */}
+                        <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+                          <button
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 10, padding: 0 }}
+                            onClick={async () => {
+                              if (expandedChainFor === pa.id) { setExpandedChainFor(null); return; }
+                              setExpandedChainFor(pa.id);
+                              if (!stepsMap[pa.id]) await loadSteps(pa.id);
+                            }}
+                          >
+                            {expandedChainFor === pa.id ? "▲ Hide chain" : `▶ Reasoning chain${stepsMap[pa.id] ? ` (${stepsMap[pa.id].length} steps)` : ""}`}
+                          </button>
+
+                          {expandedChainFor === pa.id && (
+                            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                              {loadingStepsFor === pa.id && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Loading…</div>}
+                              {(stepsMap[pa.id] ?? []).map((step) => {
+                                const key = `${pa.id}-${step.stepIndex}`;
+                                const isRebuildingThis = rebuildingFrom?.paId === pa.id && rebuildingFrom.stepIndex === step.stepIndex;
+                                const sourceLabel = step.sourceType === "initial" ? "Initial generation" : step.sourceType === "instruction" ? "Instruction" : "New message";
+                                return (
+                                  <div
+                                    key={step.id}
+                                    style={{
+                                      borderLeft: step.isCurrent ? "3px solid var(--accent)" : "2px solid var(--border)",
+                                      paddingLeft: 8, fontSize: 11,
+                                      background: step.isCurrent ? "rgba(var(--accent-rgb, 99,102,241),0.04)" : "transparent",
+                                      borderRadius: "0 4px 4px 0",
+                                      padding: "4px 8px",
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      <span style={{ background: "var(--surface2)", borderRadius: 3, padding: "1px 5px", fontSize: 10, color: "var(--text-muted)" }}>{sourceLabel}</span>
+                                      {step.isCurrent && <span style={{ fontSize: 10, color: "var(--accent)", fontWeight: 600 }}>CURRENT</span>}
+                                      {step.qualityScore != null && (
+                                        <span title={step.qualityNotes ?? ""} style={{
+                                          fontSize: 9, fontWeight: 600, padding: "1px 5px", borderRadius: 3,
+                                          background: step.qualityScore >= 0.7 ? "rgba(34,197,94,0.15)" : step.qualityScore >= 0.4 ? "rgba(234,179,8,0.15)" : "rgba(239,68,68,0.15)",
+                                          color: step.qualityScore >= 0.7 ? "#16a34a" : step.qualityScore >= 0.4 ? "#ca8a04" : "#dc2626",
+                                        }}>
+                                          ★ {(step.qualityScore * 10).toFixed(0)}/10
+                                        </span>
+                                      )}
+                                      <span style={{ color: "var(--text-muted)", fontSize: 10 }}>
+                                        {new Date(step.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                      </span>
+                                      <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                                        {!step.isCurrent && (
+                                          <button
+                                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent)", fontSize: 10 }}
+                                            disabled={promotingStep === step.id}
+                                            onClick={async () => {
+                                              setPromotingStep(step.id);
+                                              try {
+                                                const updated = await SetCurrentAssignmentStep(pa.id, step.id) as PersonAssignment;
+                                                setPersonAssignments(prev => prev.map(p => p.id === pa.id ? updated : p));
+                                                await loadSteps(pa.id);
+                                              } finally { setPromotingStep(null); }
+                                            }}
+                                          >
+                                            {promotingStep === step.id ? "Setting…" : "Set as current"}
+                                          </button>
+                                        )}
+                                        <button
+                                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 10 }}
+                                          onClick={() => { setEditStepContent(p => ({ ...p, [key]: p[key] ?? step.messageContent })); setEditingStepKey(editingStepKey === key ? null : key); }}
+                                        >
+                                          Edit &amp; Rebuild
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div style={{ color: "var(--text-muted)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", marginTop: 2 }}>
+                                      {(step.messageContent || step.userInstruction || "").slice(0, 120)}
+                                    </div>
+
+                                    {editingStepKey === key && (
+                                      <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                                        <textarea
+                                          style={{ width: "100%", minHeight: 60, resize: "vertical", fontSize: 11, fontFamily: "inherit", textAlign: "left", padding: "6px 8px", boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)" }}
+                                          value={editStepContent[key] ?? step.messageContent}
+                                          onChange={e => setEditStepContent(p => ({ ...p, [key]: e.target.value }))}
+                                        />
+                                        <div style={{ display: "flex", gap: 4 }}>
+                                          <button
+                                            className="btn-primary"
+                                            style={{ fontSize: 10, padding: "2px 8px" }}
+                                            disabled={isRebuildingThis}
+                                            onClick={async () => {
+                                              setRebuildingFrom({ paId: pa.id, stepIndex: step.stepIndex });
+                                              try {
+                                                const updated = await RebuildAssignmentChainFrom(pa.id, step.stepIndex, editStepContent[key] ?? "") as PersonAssignment;
+                                                setPersonAssignments(prev => prev.map(p => p.id === pa.id ? updated : p));
+                                                await loadSteps(pa.id);
+                                                setEditingStepKey(null);
+                                              } finally { setRebuildingFrom(null); }
+                                            }}
+                                          >
+                                            {isRebuildingThis ? "Rebuilding…" : "Rebuild from here"}
+                                          </button>
+                                          <button className="btn-secondary" style={{ fontSize: 10, padding: "2px 6px" }} onClick={() => setEditingStepKey(null)}>Cancel</button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

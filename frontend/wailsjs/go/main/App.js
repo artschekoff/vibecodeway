@@ -645,3 +645,31 @@ export function VCSLoginStart(arg1) {
 export function ValidateSlackPassphrase(arg1) {
   return window['go']['main']['App']['ValidateSlackPassphrase'](arg1);
 }
+
+export function GetPersonAssignmentSteps(arg1) {
+  return window['go']['main']['App']['GetPersonAssignmentSteps'](arg1);
+}
+
+export function SetCurrentAssignmentStep(arg1, arg2) {
+  return window['go']['main']['App']['SetCurrentAssignmentStep'](arg1, arg2);
+}
+
+export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
+}
+
+export function RegeneratePersonAssignment(arg1) {
+  return window['go']['main']['App']['RegeneratePersonAssignment'](arg1);
+}
+
+export function GetPendingMessages(arg1) {
+  return window['go']['main']['App']['GetPendingMessages'](arg1);
+}
+
+export function MarkAssignmentsOutdated(arg1) {
+  return window['go']['main']['App']['MarkAssignmentsOutdated'](arg1);
+}
+
+export function GenerateEventsFromMessages(arg1) {
+  return window['go']['main']['App']['GenerateEventsFromMessages'](arg1);
+}

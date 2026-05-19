@@ -301,6 +301,20 @@ export function ToggleSlackThreadActive(arg1:string):Promise<slackstore.SlackThr
 
 export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploadedFile>;
 
+export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.ReasoningChainStep>>;
+
+export function SetCurrentAssignmentStep(arg1:string,arg2:string):Promise<store.PersonAssignment>;
+
+export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
+
+export function RegeneratePersonAssignment(arg1:string):Promise<store.PersonAssignment>;
+
+export function GetPendingMessages(arg1:string):Promise<Array<store.Message>>;
+
+export function MarkAssignmentsOutdated(arg1:string):Promise<{[key: string]: number}>;
+
+export function GenerateEventsFromMessages(arg1:string):Promise<void>;
+
 export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateContext(arg1:string,arg2:string,arg3:string):Promise<store.Context>;

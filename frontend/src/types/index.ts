@@ -286,7 +286,41 @@ export interface PersonAssignment {
   name: string;
   body: string;
   generatedAt?: string;
+  analyzedThrough?: string;
+  isOutdated: boolean;
   updatedAt: string;
+}
+
+export interface ReasoningChainStep {
+  id: string;
+  entityType: string;
+  entityId: string;
+  stepIndex: number;
+  sourceType: "initial" | "message" | "instruction";
+  messageId?: string;
+  messageContent: string;
+  userInstruction?: string;
+  inputState: string;
+  outputState: string;
+  compressedSummary: string;
+  eventsSnapshot: string;
+  promptVersion: string;
+  qualityScore?: number;
+  qualityNotes?: string;
+  isCurrent: boolean;
+  createdAt: string;
+}
+
+export type PersonAssignmentStep = ReasoningChainStep;
+
+export interface ContextMessage {
+  id: string;
+  title: string;
+  body: string;
+  sourceId: string;
+  sourceLabel: string;
+  rawAuthor: string;
+  createdAt: string;
 }
 
 export interface Keybinding {
