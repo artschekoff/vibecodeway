@@ -12,7 +12,7 @@ import (
 // ListPersonAssignments returns all person assignments for a context ordered by name.
 func (s *Store) ListPersonAssignments(ctx context.Context, contextID string) ([]PersonAssignment, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, context_id, name, body, generated_at, updated_at
+		SELECT id, context_id, name, body, generated_at, analyzed_through, is_outdated, updated_at
 		FROM context_person_assignments
 		WHERE context_id = ?
 		ORDER BY name ASC
@@ -25,13 +25,19 @@ func (s *Store) ListPersonAssignments(ctx context.Context, contextID string) ([]
 	var result []PersonAssignment
 	for rows.Next() {
 		var pa PersonAssignment
-		var generatedAt sql.NullString
-		if err := rows.Scan(&pa.ID, &pa.ContextID, &pa.Name, &pa.Body, &generatedAt, &pa.UpdatedAt); err != nil {
+		var generatedAt, analyzedThrough sql.NullString
+		var isOutdated int
+		if err := rows.Scan(&pa.ID, &pa.ContextID, &pa.Name, &pa.Body,
+			&generatedAt, &analyzedThrough, &isOutdated, &pa.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan person assignment: %w", err)
 		}
 		if generatedAt.Valid {
 			pa.GeneratedAt = &generatedAt.String
 		}
+		if analyzedThrough.Valid {
+			pa.AnalyzedThrough = &analyzedThrough.String
+		}
+		pa.IsOutdated = isOutdated != 0
 		result = append(result, pa)
 	}
 	return result, rows.Err()
@@ -40,12 +46,14 @@ func (s *Store) ListPersonAssignments(ctx context.Context, contextID string) ([]
 // GetPersonAssignment returns a single person assignment by ID.
 func (s *Store) GetPersonAssignment(ctx context.Context, id string) (*PersonAssignment, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, context_id, name, body, generated_at, updated_at
+		SELECT id, context_id, name, body, generated_at, analyzed_through, is_outdated, updated_at
 		FROM context_person_assignments WHERE id = ?
 	`, id)
 	var pa PersonAssignment
-	var generatedAt sql.NullString
-	if err := row.Scan(&pa.ID, &pa.ContextID, &pa.Name, &pa.Body, &generatedAt, &pa.UpdatedAt); err != nil {
+	var generatedAt, analyzedThrough sql.NullString
+	var isOutdated int
+	if err := row.Scan(&pa.ID, &pa.ContextID, &pa.Name, &pa.Body,
+		&generatedAt, &analyzedThrough, &isOutdated, &pa.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -54,6 +62,10 @@ func (s *Store) GetPersonAssignment(ctx context.Context, id string) (*PersonAssi
 	if generatedAt.Valid {
 		pa.GeneratedAt = &generatedAt.String
 	}
+	if analyzedThrough.Valid {
+		pa.AnalyzedThrough = &analyzedThrough.String
+	}
+	pa.IsOutdated = isOutdated != 0
 	return &pa, nil
 }
 
@@ -156,4 +168,26 @@ func (s *Store) DeletePersonAssignment(ctx context.Context, id string) error {
 		return fmt.Errorf("delete person assignment: %w", err)
 	}
 	return nil
+}
+
+// SetPersonAssignmentOutdated sets the is_outdated flag without touching body or chain steps.
+func (s *Store) SetPersonAssignmentOutdated(ctx context.Context, id string, outdated bool) error {
+	v := 0
+	if outdated {
+		v = 1
+	}
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE context_person_assignments SET is_outdated = ?, updated_at = ? WHERE id = ?`,
+		v, time.Now().UTC().Format(time.RFC3339), id,
+	)
+	return err
+}
+
+// SetPersonAssignmentAnalyzedThrough advances the watermark timestamp.
+func (s *Store) SetPersonAssignmentAnalyzedThrough(ctx context.Context, id, ts string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE context_person_assignments SET analyzed_through = ?, updated_at = ? WHERE id = ?`,
+		ts, time.Now().UTC().Format(time.RFC3339), id,
+	)
+	return err
 }
