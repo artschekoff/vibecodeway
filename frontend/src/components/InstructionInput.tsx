@@ -73,6 +73,10 @@ export function InstructionInput({ contextId, value, onChange, onApply, onCancel
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     Array.from(e.target.files ?? []).forEach(f => {
+      if (f.size > 500_000) {
+        console.warn(`File ${f.name} is too large (max 500 KB), skipping`);
+        return;
+      }
       const r = new FileReader();
       r.onload = ev => setAttachedFiles(p => p.some(x => x.name === f.name) ? p : [...p, { name: f.name, content: ev.target?.result as string }]);
       r.readAsText(f);

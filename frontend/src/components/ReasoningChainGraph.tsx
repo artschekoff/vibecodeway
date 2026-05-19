@@ -137,10 +137,17 @@ export function ReasoningChainGraph({ personAssignment, steps, onClose, onStepsC
 
   const stopPropagation = useCallback(async () => {
     if (state.phase !== "propagating") return;
-    // Steps already committed up to currentIndex-1 (each confirmCurrentStep saved them).
-    // Just reload and close propagation.
-    const updated = await CommitStepOutput(paId, state.currentIndex - 1, state.committed[state.committed.length - 1]?.inputState ?? "", state.prevOutput) as PersonAssignment;
-    onStepsChanged(updated, steps);
+    const lastCommitted = state.committed[state.committed.length - 1];
+    if (!lastCommitted) {
+      setState({ phase: "idle" });
+      return;
+    }
+    // The last committed step is already saved; just promote it to current.
+    const lastStep = steps[lastCommitted.stepIndex];
+    if (lastStep) {
+      const updated = await SetCurrentAssignmentStep(paId, lastStep.id) as PersonAssignment;
+      onStepsChanged(updated, steps.map(s => ({ ...s, isCurrent: s.id === lastStep.id })));
+    }
     setState({ phase: "idle" });
   }, [state, paId, steps, onStepsChanged]);
 
