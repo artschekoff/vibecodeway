@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -43,6 +45,9 @@ func (s *Store) UpsertMessage(ctx context.Context, args UpsertMessageArgs) (stri
 	).Scan(&id)
 
 	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("lookup message: %w", err)
+		}
 		id = uuid.New().String()
 		_, err = s.db.ExecContext(ctx, `
 			INSERT INTO messages
@@ -345,9 +350,10 @@ func (s *Store) backfillVCSPRComments(ctx context.Context) error {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT vpc.id, vpc.external_id, vpc.body, COALESCE(vpc.author,''),
 		       vpc.comment_created_at, COALESCE(vpc.comment_updated_at, vpc.comment_created_at),
-		       vpr.message_id
+		       vpr.message_id, cvb.context_id
 		FROM vcs_pr_comments vpc
 		JOIN vcs_pull_requests vpr ON vpc.pr_id = vpr.id
+		JOIN context_vcs_branches cvb ON vpr.branch_id = cvb.id
 		WHERE vpc.message_id IS NULL AND vpr.message_id IS NOT NULL
 	`)
 	if err != nil {
@@ -357,11 +363,12 @@ func (s *Store) backfillVCSPRComments(ctx context.Context) error {
 	type row struct {
 		id, externalID, body, author, createdAt, updatedAt string
 		parentMsgID                                        string
+		contextID                                          string
 	}
 	var items []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.externalID, &r.body, &r.author, &r.createdAt, &r.updatedAt, &r.parentMsgID); err != nil {
+		if err := rows.Scan(&r.id, &r.externalID, &r.body, &r.author, &r.createdAt, &r.updatedAt, &r.parentMsgID, &r.contextID); err != nil {
 			return err
 		}
 		items = append(items, r)
@@ -372,6 +379,7 @@ func (s *Store) backfillVCSPRComments(ctx context.Context) error {
 	for _, r := range items {
 		authorID := s.ResolveAuthor(ctx, "github", r.author)
 		msgID, err := s.UpsertMessage(ctx, UpsertMessageArgs{
+			ContextID:  r.contextID,
 			SourceID:   "github",
 			ExternalID: r.externalID,
 			Body:       r.body,

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -32,6 +34,21 @@ func (s *Store) CreateUser(ctx context.Context, args CreateUserArgs) (*User, err
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 	return u, nil
+}
+
+// GetUser returns a user by ID. Returns ErrNotFound if not found.
+func (s *Store) GetUser(ctx context.Context, id string) (*User, error) {
+	var u User
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, org_id, display_name, email, avatar_url, created_at, updated_at FROM users WHERE id = ?`, id,
+	).Scan(&u.ID, &u.OrgID, &u.DisplayName, &u.Email, &u.AvatarURL, &u.CreatedAt, &u.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	return &u, nil
 }
 
 // ListUsers returns all org users, optionally filtered by orgID (empty = all orgs).

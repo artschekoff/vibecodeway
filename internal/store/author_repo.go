@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -86,13 +87,40 @@ func (s *Store) AssignAuthor(ctx context.Context, sourceID, rawAuthor, userID st
 	return nil
 }
 
-// AssignAuthorBatch runs AssignAuthor for each mapping in a single call.
+// AssignAuthorBatch runs assignAuthorTx for each mapping in a single transaction.
 // Used by the modal "Confirm" button to submit all assignments at once.
 func (s *Store) AssignAuthorBatch(ctx context.Context, assignments []AuthorAssignment) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	for _, a := range assignments {
-		if err := s.AssignAuthor(ctx, a.SourceID, a.RawAuthor, a.UserID); err != nil {
+		if err := s.assignAuthorTx(ctx, tx, a.SourceID, a.RawAuthor, a.UserID); err != nil {
 			return err
 		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) assignAuthorTx(ctx context.Context, tx *sql.Tx, sourceID, rawAuthor, userID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	id := uuid.New().String()
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO author_mappings (id, user_id, source_id, external_name, created_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(source_id, external_name) DO UPDATE SET user_id = excluded.user_id
+	`, id, userID, sourceID, rawAuthor, now)
+	if err != nil {
+		return fmt.Errorf("upsert author mapping: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `
+		UPDATE messages SET author_id = ?
+		WHERE source_id = ? AND raw_author = ? AND author_id IS NULL
+	`, userID, sourceID, rawAuthor)
+	if err != nil {
+		return fmt.Errorf("backfill author_id: %w", err)
 	}
 	return nil
 }
