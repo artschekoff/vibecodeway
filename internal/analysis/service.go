@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -154,6 +153,65 @@ Return ONLY valid JSON — no markdown fences, no preamble:
   }
 ]`
 
+	defaultSinglePersonAssignmentPrompt = `You are a senior technical lead writing an implementation-ready task assignment for a single developer.
+The document must be detailed enough that a coding agent can execute the work without asking any clarifying questions.
+
+## Context key: {{context_key}}
+
+## Developer: {{person_name}}
+
+## Jira issues and activity
+{{raw_content}}
+
+## Event log
+{{events}}
+{{custom_prompt}}
+## Task
+Write a comprehensive technical implementation assignment for **{{person_name}} only**.
+Focus exclusively on what this person owns or has commented on.
+
+Include ALL sections below. Write "N/A" in any section with no data — do not omit sections.
+Use the exact names, keys, IDs, values, and identifiers found in the source data.
+
+### Current Assignment
+- Exact Jira issue keys, summaries, and current statuses they own
+- Acceptance criteria extracted from issue descriptions and comments
+
+### Technical Context
+- Exact service, package, and module names to work in
+- Specific API endpoints, HTTP methods, request/response field names and types
+- Database table names, columns, indices, foreign keys involved
+- Function and method names to create, modify, or call
+- Relevant file paths, directory structure, module boundaries
+- Active branch name(s) and open PR URLs or numbers
+
+### Implementation Steps
+Numbered step-by-step guide. For each step write:
+1. What file / module / function to open or create
+2. Exactly what logic to add or change (describe the algorithm or behavior explicitly)
+3. Expected output, return value, or observable side effect
+
+### Data Contracts
+- Request/response bodies with field names and data types
+- New or modified DB schema (DDL if applicable)
+- Validation rules, nullable constraints, business logic rules
+
+### Infrastructure & Configuration
+- Environment variables and feature flags required
+- External services, queues, webhooks, or cron jobs to configure
+- Required DB migrations or deployment actions
+
+### Testing Requirements
+- Unit tests to write (list the functions/scenarios to cover)
+- Integration or E2E test scenarios
+- How to verify the full implementation is correct end-to-end
+
+### Blockers & Dependencies
+- Unanswered questions that block this work
+- Other people's tasks this work depends on
+
+Return ONLY the Markdown body — no JSON wrapper, no preamble.`
+
 	defaultPersonAssignmentRefinePrompt = `You are refining a single person's task assignment document.
 
 ## Person: {{person_name}}
@@ -253,11 +311,11 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 	}
 
 	// Format only items added since the last analysis for event extraction.
-	var buf strings.Builder
-	if err := s.jiraSvc.FormatContext(ctx, &buf, contextID, "", deltaStart, true); err != nil {
-		s.logger.Warn("analysis: format context failed", zap.String("contextID", contextID), zap.Error(err))
+	msgs, err := s.listMessages(ctx, contextID, deltaStart)
+	if err != nil {
+		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
 	}
-	rawContent := buf.String()
+	rawContent := formatMessages(msgs)
 
 	// Pull existing user next-step hints for the prompt.
 	userHints := nextStepsForPrompt{}
@@ -470,12 +528,11 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 		return nil, fmt.Errorf("list events: %w", err)
 	}
 
-	var rawBuf strings.Builder
-	if err := s.jiraSvc.FormatContext(ctx, &rawBuf, contextID, "jira", time.Time{}, false); err != nil {
-		s.logger.Warn("person assignment: format jira context failed",
-			zap.String("contextID", contextID), zap.Error(err))
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{}, "jira")
+	if err != nil {
+		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
 	}
-	rawContent := rawBuf.String()
+	rawContent := formatMessages(allMsgs)
 
 	promptEvents := make([]eventForPrompt, 0, len(allEvents))
 	for _, e := range allEvents {
@@ -530,12 +587,11 @@ func (s *Service) RefinePersonAssignment(ctx context.Context, contextID, personI
 		return nil, fmt.Errorf("list events: %w", err)
 	}
 
-	var rawBuf strings.Builder
-	if err := s.jiraSvc.FormatContext(ctx, &rawBuf, contextID, "jira", time.Time{}, false); err != nil {
-		s.logger.Warn("person assignment refine: format jira context failed",
-			zap.String("contextID", contextID), zap.Error(err))
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{}, "jira")
+	if err != nil {
+		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
 	}
-	rawContent := rawBuf.String()
+	rawContent := formatMessages(allMsgs)
 
 	promptEvents := make([]eventForPrompt, 0, len(allEvents))
 	for _, e := range allEvents {
@@ -564,6 +620,67 @@ func (s *Service) RefinePersonAssignment(ctx context.Context, contextID, personI
 	}
 
 	return s.store.GetPersonAssignment(ctx, personID)
+}
+
+// GetContextParticipants returns sorted unique participant names (assignees + comment authors)
+// from the Jira issues linked to the context.
+func (s *Service) GetContextParticipants(ctx context.Context, contextID string) ([]string, error) {
+	return s.jiraSvc.GetContextParticipants(ctx, contextID)
+}
+
+// GenerateSinglePersonAssignment produces a focused, implementation-ready technical assignment
+// for one named person. customPrompt is injected as additional context when non-empty.
+// The result is upserted into the DB (create or update by contextID + personName).
+func (s *Service) GenerateSinglePersonAssignment(ctx context.Context, contextID, personName, customPrompt string) (*appstore.PersonAssignment, error) {
+	ctxRow, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("get context: %w", err)
+	}
+
+	allEvents, err := s.store.ListEvents(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("list events: %w", err)
+	}
+
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{}, "jira")
+	if err != nil {
+		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
+	}
+	rawContent := formatMessages(allMsgs)
+
+	promptEvents := make([]eventForPrompt, 0, len(allEvents))
+	for _, e := range allEvents {
+		promptEvents = append(promptEvents, eventForPrompt{
+			ID: e.ID, Type: e.Type, Timestamp: e.Timestamp,
+			SourceType: e.SourceType, Author: e.Author, Summary: e.Summary,
+		})
+	}
+
+	customSection := ""
+	if customPrompt != "" {
+		customSection = "\n## Additional context\n" + customPrompt + "\n"
+	}
+
+	tmpl := s.loadPrompt(ctx, "person_assignment_single", defaultSinglePersonAssignmentPrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{
+		"context_key":   ctxRow.Key,
+		"person_name":   personName,
+		"raw_content":   rawContent,
+		"events":        formatEventsForPrompt(promptEvents),
+		"custom_prompt": customSection,
+	})
+
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return nil, fmt.Errorf("ai single person assignment: %w", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	return s.store.UpsertPersonAssignment(ctx, contextID, appstore.PersonAssignment{
+		Name:        personName,
+		Body:        resp.Content,
+		GeneratedAt: &now,
+	})
 }
 
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
@@ -786,5 +903,55 @@ func extractJSON(content string, startChar byte) string {
 
 func ptrStr(s string) *string { return &s }
 
-// Ensure io.Writer is imported (used by FormatContext).
-var _ io.Writer = (*strings.Builder)(nil)
+// listMessages fetches messages for contextID on or after since.
+// Pass sourceIDs to filter by specific sources; pass none for all sources.
+func (s *Service) listMessages(ctx context.Context, contextID string, since time.Time, sourceIDs ...string) ([]appstore.Message, error) {
+	return s.store.ListMessagesSince(ctx, contextID, since, sourceIDs...)
+}
+
+// formatMessages renders messages into a text block for AI prompts.
+// Children (parent_id != nil) are indented under their parent.
+func formatMessages(msgs []appstore.Message) string {
+	if len(msgs) == 0 {
+		return ""
+	}
+	byParent := make(map[string][]appstore.Message)
+	var roots []appstore.Message
+	for _, m := range msgs {
+		if m.ParentID == nil {
+			roots = append(roots, m)
+		} else {
+			byParent[*m.ParentID] = append(byParent[*m.ParentID], m)
+		}
+	}
+
+	var b strings.Builder
+	var write func(m appstore.Message, indent string)
+	write = func(m appstore.Message, indent string) {
+		author := m.AuthorDisplayName
+		if author == "" {
+			author = m.RawAuthor
+		}
+		if author == "" {
+			author = "unknown"
+		}
+		label := m.SourceLabel
+		if label == "" {
+			label = strings.ToUpper(m.SourceID)
+		}
+		fmt.Fprintf(&b, "\n%s=== [%s] %s (by %s) ===\n", indent, label, m.CreatedAt, author)
+		if m.Title != "" {
+			fmt.Fprintf(&b, "%sTitle: %s\n", indent, m.Title)
+		}
+		if m.Body != "" {
+			fmt.Fprintf(&b, "%s%s\n", indent, m.Body)
+		}
+		for _, child := range byParent[m.ID] {
+			write(child, indent+"  ")
+		}
+	}
+	for _, root := range roots {
+		write(root, "")
+	}
+	return b.String()
+}
