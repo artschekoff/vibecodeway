@@ -163,7 +163,7 @@ func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int)
 		return nil
 	}
 	for _, c := range comments {
-		if err := a.vcsStore.PullRequests.UpsertComment(a.ctx,
+		if _, err := a.vcsStore.PullRequests.UpsertComment(a.ctx,
 			res.ID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
 			c.Path, c.Line, c.IsResolved, c.InReplyToID,
 			c.CreatedAt, c.UpdatedAt,
@@ -507,6 +507,20 @@ func (a *App) DeleteLocalBranch(pathID, branch string) error {
 		return fmt.Errorf("repo path not found: %w", err)
 	}
 	return vcs.GitDeleteLocalBranch(rp.Path, branch)
+}
+
+// SwitchMainWorkingTree switches the primary checkout of the repo at pathID to branch.
+func (a *App) SwitchMainWorkingTree(repoPathID, branch string) error {
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, repoPathID)
+	if err != nil {
+		return fmt.Errorf("repo path not found: %w", err)
+	}
+	cmd := exec.Command("git", "-C", rp.Path, "switch", branch)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git switch %s in %s: %w\n%s", branch, rp.Path, err, out)
+	}
+	return nil
 }
 
 // CheckoutLocalBranch checks out a local branch as a worktree (or opens the

@@ -152,7 +152,7 @@ func (a *App) startup(ctx context.Context) {
 
 	ghRunner := githubrunner.NewRunner(logger)
 	a.vcsStore = vcsstore.NewStore(s.DB())
-	a.vcsSvc = vcsservice.NewVCSProvider(a.vcsStore, logger, ghRunner)
+	a.vcsSvc = vcsservice.NewVCSProvider(a.vcsStore, logger, s, ghRunner)
 	// Bootstrap the runner with any previously stored GitHub token so gh CLI calls
 	// work immediately on startup without requiring keychain access.
 	if auth, err := a.vcsStore.Auth.GetAuth(ctx, "github"); err == nil && auth.Token != "" {

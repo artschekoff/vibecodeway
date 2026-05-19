@@ -70,7 +70,7 @@ func openServiceEnv() (*serviceEnv, error) {
 
 	vcsStore := vcsstore.NewStore(s.DB())
 	ghRunner := githubrunner.NewRunner(logger)
-	vcsProvider := vcsservice.NewVCSProvider(vcsStore, logger, ghRunner)
+	vcsProvider := vcsservice.NewVCSProvider(vcsStore, logger, s, ghRunner)
 
 	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)
 	svc.SetVCSStore(vcsStore)
