@@ -839,6 +839,195 @@ func (s *Service) GetContextParticipants(ctx context.Context, contextID string) 
 	return s.jiraSvc.GetContextParticipants(ctx, contextID)
 }
 
+// MarkAssignmentsOutdated checks every PersonAssignment for pending messages (created after
+// analyzed_through). Sets is_outdated=true on assignments with pending messages.
+// Returns a map of personAssignmentID → pending message count.
+// Does NOT call the AI — the user triggers re-generation explicitly.
+func (s *Service) MarkAssignmentsOutdated(ctx context.Context, contextID string) (map[string]int, error) {
+	assignments, err := s.store.ListPersonAssignments(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("list assignments: %w", err)
+	}
+
+	result := make(map[string]int, len(assignments))
+	for _, pa := range assignments {
+		watermark := ""
+		if pa.AnalyzedThrough != nil {
+			watermark = *pa.AnalyzedThrough
+		} else if pa.GeneratedAt != nil {
+			watermark = *pa.GeneratedAt
+		}
+		if watermark == "" {
+			result[pa.ID] = 0
+			continue
+		}
+
+		pending, err := s.store.ListPendingMessages(ctx, contextID, watermark)
+		if err != nil {
+			s.logger.Warn("mark outdated: list pending failed", zap.String("pa", pa.ID), zap.Error(err))
+			continue
+		}
+
+		result[pa.ID] = len(pending)
+		if len(pending) > 0 && !pa.IsOutdated {
+			_ = s.store.SetPersonAssignmentOutdated(ctx, pa.ID, true)
+		}
+	}
+	return result, nil
+}
+
+// GetPendingMessages returns messages for a PersonAssignment that haven't been analyzed yet.
+func (s *Service) GetPendingMessages(ctx context.Context, personAssignmentID string) ([]appstore.Message, error) {
+	pa, err := s.store.GetPersonAssignment(ctx, personAssignmentID)
+	if err != nil || pa == nil {
+		return nil, fmt.Errorf("get person assignment: %w", err)
+	}
+	watermark := ""
+	if pa.AnalyzedThrough != nil {
+		watermark = *pa.AnalyzedThrough
+	} else if pa.GeneratedAt != nil {
+		watermark = *pa.GeneratedAt
+	}
+	if watermark == "" {
+		return nil, nil
+	}
+	return s.store.ListPendingMessages(ctx, pa.ContextID, watermark)
+}
+
+// RegeneratePersonAssignment takes the current assignment body plus all pending messages
+// (created after analyzed_through) and produces a new step via the AI.
+// The new step becomes is_current; is_outdated is cleared; analyzed_through advances.
+func (s *Service) RegeneratePersonAssignment(ctx context.Context, personAssignmentID string) (*appstore.PersonAssignment, error) {
+	pa, err := s.store.GetPersonAssignment(ctx, personAssignmentID)
+	if err != nil || pa == nil {
+		return nil, fmt.Errorf("get person assignment: %w", err)
+	}
+
+	watermark := ""
+	if pa.AnalyzedThrough != nil {
+		watermark = *pa.AnalyzedThrough
+	} else if pa.GeneratedAt != nil {
+		watermark = *pa.GeneratedAt
+	}
+
+	var pendingMsgs []appstore.Message
+	if watermark != "" {
+		pendingMsgs, err = s.store.ListPendingMessages(ctx, pa.ContextID, watermark)
+		if err != nil {
+			return nil, fmt.Errorf("list pending messages: %w", err)
+		}
+	}
+	if len(pendingMsgs) == 0 {
+		_ = s.store.SetPersonAssignmentOutdated(ctx, personAssignmentID, false)
+		return pa, nil
+	}
+
+	deltaContent := formatMessages(pendingMsgs)
+
+	processor := &PersonAssignmentProcessor{svc: s}
+	newStep, err := s.chainSvc.AppendStep(ctx, appstore.ReasoningChainStep{
+		EntityType:     appstore.ChainEntityPersonAssignment,
+		EntityID:       personAssignmentID,
+		SourceType:     "message",
+		MessageContent: deltaContent,
+		InputState:     pa.Body,
+	}, processor, s.paJudge)
+	if err != nil {
+		return nil, fmt.Errorf("append regeneration step: %w", err)
+	}
+
+	outputState, err := s.store.SetChainCurrentStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, newStep.ID)
+	if err != nil {
+		return nil, fmt.Errorf("set current step: %w", err)
+	}
+	if err := s.store.UpdatePersonAssignmentBody(ctx, personAssignmentID, outputState); err != nil {
+		return nil, fmt.Errorf("sync assignment body: %w", err)
+	}
+	_ = s.store.SetPersonAssignmentOutdated(ctx, personAssignmentID, false)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, personAssignmentID, now)
+
+	return s.store.GetPersonAssignment(ctx, personAssignmentID)
+}
+
+// RebuildAssignmentChainFrom re-runs the reasoning chain from fromStepIndex.
+// overrideContent replaces that step's original message_content when non-empty.
+// All steps from fromStepIndex onward are deleted and re-created.
+func (s *Service) RebuildAssignmentChainFrom(ctx context.Context, personAssignmentID string, fromStepIndex int, overrideContent string) (*appstore.PersonAssignment, error) {
+	processor := &PersonAssignmentProcessor{svc: s}
+	if err := s.chainSvc.RebuildFrom(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, fromStepIndex, overrideContent, processor, s.paJudge); err != nil {
+		return nil, fmt.Errorf("rebuild chain: %w", err)
+	}
+
+	steps, err := s.store.ListChainSteps(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("list chain steps after rebuild: %w", err)
+	}
+	for _, st := range steps {
+		if st.IsCurrent {
+			if err := s.store.UpdatePersonAssignmentBody(ctx, personAssignmentID, st.OutputState); err != nil {
+				return nil, fmt.Errorf("sync assignment body: %w", err)
+			}
+			break
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, personAssignmentID, now)
+	return s.store.GetPersonAssignment(ctx, personAssignmentID)
+}
+
+// GenerateEventsFromMessages extracts typed events from the message layer since the last event.
+// Call after RefreshContext to keep the event log current without a full AnalyzeContext run.
+func (s *Service) GenerateEventsFromMessages(ctx context.Context, contextID string) ([]appstore.Event, error) {
+	ctxRow, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("get context: %w", err)
+	}
+
+	existing, err := s.store.ListEvents(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("list events: %w", err)
+	}
+	var since time.Time
+	for _, e := range existing {
+		t, _ := time.Parse(time.RFC3339, e.Timestamp)
+		if t.After(since) {
+			since = t
+		}
+	}
+
+	msgs, err := s.listMessages(ctx, contextID, since)
+	if err != nil {
+		return nil, fmt.Errorf("list messages: %w", err)
+	}
+	if len(msgs) == 0 {
+		return nil, nil
+	}
+
+	snapshot, _ := s.store.GetSnapshot(ctx, contextID)
+	extracted, err := s.extractEvents(ctx, ctxRow.Key, formatMessages(msgs), nextStepsForPrompt{}, snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("extract events: %w", err)
+	}
+
+	var saved []appstore.Event
+	for _, e := range extracted {
+		e.ContextID = contextID
+		ev, saveErr := s.store.AddEvent(ctx, e)
+		if saveErr != nil {
+			s.logger.Warn("GenerateEventsFromMessages: save failed", zap.Error(saveErr))
+			continue
+		}
+		saved = append(saved, *ev)
+	}
+	if len(saved) > 0 {
+		_ = s.store.MarkSnapshotStale(ctx, contextID)
+	}
+	return saved, nil
+}
+
 // GenerateSinglePersonAssignment produces a focused, implementation-ready technical assignment
 // for one named person. customPrompt is injected as additional context when non-empty.
 // The result is upserted into the DB (create or update by contextID + personName).
