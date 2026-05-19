@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -133,7 +134,9 @@ func (s *Store) ListMessagesSince(ctx context.Context, contextID string, since t
 // SearchMessages returns messages for contextID whose title or body contains query.
 // Returns up to 20 results ordered by created_at DESC.
 func (s *Store) SearchMessages(ctx context.Context, contextID, query string) ([]Message, error) {
-	like := "%" + query + "%"
+	// Escape LIKE metacharacters
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(query)
+	like := "%" + escaped + "%"
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT m.id, m.author_id, COALESCE(u.display_name, ''), m.raw_author,
 		       m.context_id, m.organization_id, m.parent_id,
@@ -143,7 +146,7 @@ func (s *Store) SearchMessages(ctx context.Context, contextID, query string) ([]
 		LEFT JOIN users u     ON u.id = m.author_id
 		LEFT JOIN sources src ON src.id = m.source_id
 		WHERE m.context_id = ?
-		  AND (m.title LIKE ? OR m.body LIKE ?)
+		  AND (m.title LIKE ? ESCAPE '\' OR m.body LIKE ? ESCAPE '\')
 		ORDER BY m.created_at DESC
 		LIMIT 20
 	`, contextID, like, like)

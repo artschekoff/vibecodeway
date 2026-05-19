@@ -130,18 +130,16 @@ func (s *ReasoningChainService) CommitStep(ctx context.Context, entityType, enti
 		return nil, fmt.Errorf("append committed step: %w", err)
 	}
 
-	if isLast {
-		if _, err := s.store.SetChainCurrentStep(ctx, entityType, entityID, saved.ID); err != nil {
-			return nil, err
-		}
-	}
-
 	// Async quality scoring for wizard-confirmed steps.
 	if judge != nil {
 		go func(ss appstore.ReasoningChainStep) {
 			scoreCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			score, notes, _ := judge.Score(scoreCtx, ss)
+			score, notes, scoreErr := judge.Score(scoreCtx, ss)
+			if scoreErr != nil {
+				s.logger.Warn("quality judge failed", zap.Error(scoreErr))
+				return
+			}
 			_ = s.store.UpdateChainStepQuality(scoreCtx, ss.ID, score, notes)
 		}(*saved)
 	}
@@ -199,17 +197,22 @@ func (s *ReasoningChainService) RebuildFrom(ctx context.Context, entityType, ent
 			PromptVersion:     step.PromptVersion,
 			IsCurrent:         isLast,
 		}
-		saved, _ := s.store.AppendChainStep(ctx, rebuilt)
-		if saved != nil {
-			lastID = saved.ID
-			if judge != nil {
-				go func(ss appstore.ReasoningChainStep) {
-					scoreCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-					defer cancel()
-					score, notes, _ := judge.Score(scoreCtx, ss)
-					_ = s.store.UpdateChainStepQuality(scoreCtx, ss.ID, score, notes)
-				}(*saved)
-			}
+		saved, err := s.store.AppendChainStep(ctx, rebuilt)
+		if err != nil {
+			return fmt.Errorf("rebuild step %d: %w", fromStepIndex+i, err)
+		}
+		lastID = saved.ID
+		if judge != nil {
+			go func(ss appstore.ReasoningChainStep) {
+				scoreCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				score, notes, scoreErr := judge.Score(scoreCtx, ss)
+				if scoreErr != nil {
+					s.logger.Warn("quality judge failed", zap.Error(scoreErr))
+					return
+				}
+				_ = s.store.UpdateChainStepQuality(scoreCtx, ss.ID, score, notes)
+			}(*saved)
 		}
 		inputState = output
 	}

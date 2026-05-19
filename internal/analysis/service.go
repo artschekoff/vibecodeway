@@ -333,8 +333,11 @@ type PersonAssignmentProcessor struct {
 
 func (p *PersonAssignmentProcessor) RunStep(ctx context.Context, inputState string, step *appstore.ReasoningChainStep) (string, error) {
 	pa, err := p.svc.store.GetPersonAssignment(ctx, step.EntityID)
-	if err != nil || pa == nil {
+	if err != nil {
 		return "", fmt.Errorf("get person assignment for processor: %w", err)
+	}
+	if pa == nil {
+		return "", fmt.Errorf("person assignment %s not found", step.EntityID)
 	}
 
 	allEvents, _ := p.svc.store.ListEvents(ctx, pa.ContextID)
@@ -886,8 +889,11 @@ func (s *Service) MarkAssignmentsOutdated(ctx context.Context, contextID string)
 // GetPendingMessages returns messages for a PersonAssignment that haven't been analyzed yet.
 func (s *Service) GetPendingMessages(ctx context.Context, personAssignmentID string) ([]appstore.Message, error) {
 	pa, err := s.store.GetPersonAssignment(ctx, personAssignmentID)
-	if err != nil || pa == nil {
+	if err != nil {
 		return nil, fmt.Errorf("get person assignment: %w", err)
+	}
+	if pa == nil {
+		return nil, fmt.Errorf("person assignment %s not found", personAssignmentID)
 	}
 	watermark := ""
 	if pa.AnalyzedThrough != nil {
@@ -906,8 +912,11 @@ func (s *Service) GetPendingMessages(ctx context.Context, personAssignmentID str
 // The new step becomes is_current; is_outdated is cleared; analyzed_through advances.
 func (s *Service) RegeneratePersonAssignment(ctx context.Context, personAssignmentID string) (*appstore.PersonAssignment, error) {
 	pa, err := s.store.GetPersonAssignment(ctx, personAssignmentID)
-	if err != nil || pa == nil {
+	if err != nil {
 		return nil, fmt.Errorf("get person assignment: %w", err)
+	}
+	if pa == nil {
+		return nil, fmt.Errorf("person assignment %s not found", personAssignmentID)
 	}
 
 	watermark := ""
@@ -1379,6 +1388,12 @@ const semanticSearchTopK = 15
 // For messages without a stored embedding, it generates and stores one lazily.
 // Falls back to returning all messages if the embeddings API is unavailable.
 func (s *Service) searchSemantic(ctx context.Context, contextID, queryText string, topK int) ([]appstore.Message, error) {
+	// Semantic search only available with OpenAI provider.
+	settings, _, err := s.ai.DescribeSettings(ctx)
+	if err != nil || (settings.Provider != "" && settings.Provider != appstore.ProviderOpenAI && settings.Provider != appstore.ProviderLocal) {
+		return s.listMessages(ctx, contextID, time.Time{})
+	}
+
 	allMsgs, err := s.listMessages(ctx, contextID, time.Time{})
 	if err != nil {
 		return nil, err
