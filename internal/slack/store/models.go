@@ -27,6 +27,7 @@ type SlackThread struct {
 	IsActive       bool    `json:"isActive"`
 	ViewedAt       *string `json:"viewedAt"`
 	AiProcessedAt  *string `json:"aiProcessedAt"`
+	MessageID      *string `json:"messageId,omitempty"`
 }
 
 // UpsertSlackThreadArgs holds all fields for UpsertSlackThread.
@@ -98,4 +99,5 @@ type SlackDMConfig struct {
 	IsActive       bool    `json:"isActive"`
 	ViewedAt       *string `json:"viewedAt"`
 	AiProcessedAt  *string `json:"aiProcessedAt"`
+	MessageID      *string `json:"messageId,omitempty"`
 }

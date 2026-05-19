@@ -147,7 +147,7 @@ func (a *App) startup(ctx context.Context) {
 	slackRepo := slackstore.NewRepo(s.DB())
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger)
-	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger)
+	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger, s)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
 	ghRunner := githubrunner.NewRunner(logger)

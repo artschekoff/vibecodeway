@@ -161,7 +161,7 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 
 	// --- build service under test ---
 	jiraProv := jiraservice.NewJiraProvider(jiraRepo, nil, logger)
-	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger)
+	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger, nil)
 	vcsProv := vcsservice.NewVCSProvider(vcsStore, logger)
 
 	jiraSvc := jiraservice.NewContextService(
@@ -386,7 +386,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 
 	// Build service under test.
 	jiraProv := jiraservice.NewJiraProvider(jiraRepo, nil, logger)
-	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger)
+	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger, nil)
 	vcsProv := vcsservice.NewVCSProvider(vcsStore, logger)
 
 	jiraSvc := jiraservice.NewContextService(

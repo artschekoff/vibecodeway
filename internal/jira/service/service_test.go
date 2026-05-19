@@ -551,7 +551,7 @@ func TestRefreshContext_SeparatesDMsFromThreads(t *testing.T) {
 	jRepo := jirastore.NewRepo(s.DB())
 	sRepo := slackstore.NewRepo(s.DB())
 
-	slackProv := NewSlackProvider(sRepo, runner, logger)
+	slackProv := NewSlackProvider(sRepo, runner, logger, nil)
 	svc := NewContextService(s, nil, jRepo, sRepo, runner, logger, slackProv)
 
 	ctx := context.Background()
@@ -588,7 +588,7 @@ func TestReloadAllContexts_SeparatesDMsFromThreads(t *testing.T) {
 	jRepo := jirastore.NewRepo(s.DB())
 	sRepo := slackstore.NewRepo(s.DB())
 
-	slackProv := NewSlackProvider(sRepo, runner, logger)
+	slackProv := NewSlackProvider(sRepo, runner, logger, nil)
 	svc := NewContextService(s, nil, jRepo, sRepo, runner, logger, slackProv)
 
 	ctx := context.Background()
@@ -756,7 +756,7 @@ func TestRefreshContext_SavesDMContent_LastMessageField(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	s := openTestStore(t)
 	sRepo := slackstore.NewRepo(s.DB())
-	slackProv := NewSlackProvider(sRepo, runner, logger)
+	slackProv := NewSlackProvider(sRepo, runner, logger, nil)
 	svc := NewContextService(s, nil, jirastore.NewRepo(s.DB()), sRepo, runner, logger, slackProv)
 
 	ctx := context.Background()
@@ -891,7 +891,7 @@ func TestSlackProvider_Reload_StoresPerMessageRecords(t *testing.T) {
 	_, err = sRepo.UpsertSlackChannel(ctx, ctxRec.ID, "acme", "C1", "general", "")
 	require.NoError(t, err)
 
-	p := NewSlackProvider(sRepo, runner, logger)
+	p := NewSlackProvider(sRepo, runner, logger, nil)
 	_, err = p.Reload(ctx, ctxRec.ID)
 	require.NoError(t, err)
 
@@ -934,7 +934,7 @@ func TestSlackProvider_Reload_DeletesOldBlob(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	p := NewSlackProvider(sRepo, runner, logger)
+	p := NewSlackProvider(sRepo, runner, logger, nil)
 	_, err = p.Reload(ctx, ctxRec.ID)
 	require.NoError(t, err)
 

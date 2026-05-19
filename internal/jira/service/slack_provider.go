@@ -9,6 +9,7 @@ import (
 
 	"github.com/artschekoff/context-consolidator/internal/provider"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	"go.uber.org/zap"
 )
 
@@ -17,11 +18,12 @@ type SlackProvider struct {
 	slackRepo *slackstore.Repo
 	slack     SlackRunner
 	logger    *zap.Logger
+	msgWriter appstore.MessageWriter
 }
 
 // NewSlackProvider constructs a SlackProvider.
-func NewSlackProvider(slackRepo *slackstore.Repo, slack SlackRunner, logger *zap.Logger) *SlackProvider {
-	return &SlackProvider{slackRepo: slackRepo, slack: slack, logger: logger}
+func NewSlackProvider(slackRepo *slackstore.Repo, slack SlackRunner, logger *zap.Logger, msgWriter appstore.MessageWriter) *SlackProvider {
+	return &SlackProvider{slackRepo: slackRepo, slack: slack, logger: logger, msgWriter: msgWriter}
 }
 
 // Name implements provider.Provider.
@@ -89,6 +91,24 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 				zap.String("contextID", contextID), zap.Error(err))
 			continue
 		}
+		if p.msgWriter != nil {
+			externalID := "dm:" + cfg.Workspace
+			authorID := p.msgWriter.ResolveAuthor(ctx, "slack", "")
+			msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+				ContextID:  contextID,
+				SourceID:   "slack",
+				ExternalID: externalID,
+				Title:      "DMs (" + cfg.Workspace + ")",
+				Body:       content,
+				RawAuthor:  "",
+				AuthorID:   authorID,
+				CreatedAt:  cfg.CreatedAt,
+				UpdatedAt:  cfg.UpdatedAt,
+			})
+			if msgID != "" {
+				_ = p.slackRepo.SetDMConfigMessageID(ctx, cfg.ID, msgID)
+			}
+		}
 		stats.NewItems++
 	}
 
@@ -136,7 +156,7 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 		if content == "" {
 			continue
 		}
-		if _, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+		thread, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 			Workspace:   t.Workspace,
 			ChannelID:   t.ChannelID,
 			ThreadTS:    t.ThreadTS,
@@ -144,10 +164,28 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 			Permalink:   t.Permalink,
 			SearchQuery: t.SearchQuery,
 			Content:     content,
-		}); upsertErr != nil {
+		})
+		if upsertErr != nil {
 			p.logger.Warn("slack refresh: upsert thread failed",
 				zap.String("contextID", contextID), zap.Error(upsertErr))
 			continue
+		}
+		if p.msgWriter != nil && thread != nil {
+			authorID := p.msgWriter.ResolveAuthor(ctx, "slack", "")
+			msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+				ContextID:  contextID,
+				SourceID:   "slack",
+				ExternalID: t.ThreadTS,
+				Title:      t.ChannelName,
+				Body:       content,
+				RawAuthor:  "",
+				AuthorID:   authorID,
+				CreatedAt:  slackTSToRFC3339(t.ThreadTS),
+				UpdatedAt:  slackTSToRFC3339(t.ThreadTS),
+			})
+			if msgID != "" {
+				_ = p.slackRepo.SetThreadMessageID(ctx, thread.ID, msgID)
+			}
 		}
 		stats.ItemsRefreshed++
 	}
@@ -193,35 +231,81 @@ func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID st
 				zap.String("channel", ch.ChannelName))
 			continue
 		}
-		if _, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+		msgContent := formatSingleMessage(msg)
+		msgThread, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 			SlackChannelID: ch.ID,
 			Workspace:      ch.Workspace,
 			ChannelID:      ch.ChannelID,
 			ThreadTS:       msg.RawTS,
 			ChannelName:    ch.ChannelName,
-			Content:        formatSingleMessage(msg),
-		}); upsertErr != nil {
+			Content:        msgContent,
+		})
+		if upsertErr != nil {
 			p.logger.Warn("slack refresh: upsert message thread failed",
 				zap.String("channel", ch.ChannelName), zap.String("ts", msg.RawTS), zap.Error(upsertErr))
 			continue
+		}
+		if p.msgWriter != nil && msgThread != nil {
+			rawAuthor := msg.UserID
+			if msg.User != "" {
+				rawAuthor = msg.User
+			}
+			authorID := p.msgWriter.ResolveAuthor(ctx, "slack", rawAuthor)
+			topMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+				ContextID:  contextID,
+				SourceID:   "slack",
+				ExternalID: msg.RawTS,
+				Title:      ch.ChannelName,
+				Body:       msgContent,
+				RawAuthor:  rawAuthor,
+				AuthorID:   authorID,
+				CreatedAt:  slackTSToRFC3339(msg.RawTS),
+				UpdatedAt:  slackTSToRFC3339(msg.RawTS),
+			})
+			if topMsgID != "" {
+				_ = p.slackRepo.SetThreadMessageID(ctx, msgThread.ID, topMsgID)
+			}
 		}
 		upserted++
 		for _, reply := range msg.Replies {
 			if reply.RawTS == "" {
 				continue
 			}
-			if _, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+			replyContent := formatSingleMessage(reply)
+			replyThread, replyErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
 				SlackChannelID: ch.ID,
 				Workspace:      ch.Workspace,
 				ChannelID:      ch.ChannelID,
 				ThreadTS:       reply.RawTS,
 				ParentThreadTS: msg.RawTS,
 				ChannelName:    ch.ChannelName,
-				Content:        formatSingleMessage(reply),
-			}); upsertErr != nil {
+				Content:        replyContent,
+			})
+			if replyErr != nil {
 				p.logger.Warn("slack refresh: upsert reply thread failed",
-					zap.String("channel", ch.ChannelName), zap.String("ts", reply.RawTS), zap.Error(upsertErr))
+					zap.String("channel", ch.ChannelName), zap.String("ts", reply.RawTS), zap.Error(replyErr))
 			} else {
+				if p.msgWriter != nil && replyThread != nil {
+					rawAuthor := reply.UserID
+					if reply.User != "" {
+						rawAuthor = reply.User
+					}
+					authorID := p.msgWriter.ResolveAuthor(ctx, "slack", rawAuthor)
+					replyMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+						ContextID:  contextID,
+						SourceID:   "slack",
+						ExternalID: reply.RawTS,
+						Title:      ch.ChannelName,
+						Body:       replyContent,
+						RawAuthor:  rawAuthor,
+						AuthorID:   authorID,
+						CreatedAt:  slackTSToRFC3339(reply.RawTS),
+						UpdatedAt:  slackTSToRFC3339(reply.RawTS),
+					})
+					if replyMsgID != "" {
+						_ = p.slackRepo.SetThreadMessageID(ctx, replyThread.ID, replyMsgID)
+					}
+				}
 				upserted++
 			}
 		}
@@ -360,4 +444,17 @@ func buildSlackItems(threads []slackstore.SlackThread, dmConfigs []slackstore.Sl
 		items = append(items, provider.Item{CreatedAt: ts, Body: buf.String()})
 	}
 	return items
+}
+
+// slackTSToRFC3339 converts "1746441180.000000" → RFC3339. Falls back to now on parse failure.
+func slackTSToRFC3339(ts string) string {
+	parts := strings.SplitN(ts, ".", 2)
+	if len(parts) == 0 {
+		return time.Now().UTC().Format(time.RFC3339)
+	}
+	var sec int64
+	if _, err := fmt.Sscanf(parts[0], "%d", &sec); err != nil {
+		return time.Now().UTC().Format(time.RFC3339)
+	}
+	return time.Unix(sec, 0).UTC().Format(time.RFC3339)
 }
