@@ -287,3 +287,82 @@ type Organization struct {
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
 }
+
+// Source is a row from the sources dictionary table.
+type Source struct {
+	ID        string `json:"id"`    // slug, e.g. "jira"
+	Label     string `json:"label"` // e.g. "Jira"
+	CreatedAt string `json:"createdAt"`
+}
+
+// User is an org-level person. Not linked to any specific source system.
+type User struct {
+	ID          string  `json:"id"`
+	OrgID       *string `json:"orgId,omitempty"`
+	DisplayName string  `json:"displayName"`
+	Email       string  `json:"email"`
+	AvatarURL   string  `json:"avatarUrl"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
+// AuthorMapping links a verbatim source-system name to an org User.
+type AuthorMapping struct {
+	ID           string `json:"id"`
+	UserID       string `json:"userId"`
+	SourceID     string `json:"sourceId"`
+	ExternalName string `json:"externalName"` // verbatim name as it appears in source data
+	CreatedAt    string `json:"createdAt"`
+}
+
+// UnresolvedAuthor is one unknown author found in a context's messages.
+// Returned by GetUnresolvedAuthors for the assignment modal.
+type UnresolvedAuthor struct {
+	SourceID     string `json:"sourceId"`
+	SourceLabel  string `json:"sourceLabel"`
+	RawAuthor    string `json:"rawAuthor"`
+	MessageCount int    `json:"messageCount"`
+}
+
+// Message is the base abstraction for any content item from any provider.
+// AuthorDisplayName and SourceLabel are populated by JOINs at query time.
+type Message struct {
+	ID                string  `json:"id"`
+	AuthorID          *string `json:"authorId,omitempty"`
+	AuthorDisplayName string  `json:"authorDisplayName,omitempty"` // joined from users
+	RawAuthor         string  `json:"rawAuthor"`                   // verbatim from source
+	ContextID         *string `json:"contextId,omitempty"`
+	OrganizationID    *string `json:"organizationId,omitempty"`
+	ParentID          *string `json:"parentId,omitempty"`
+	Title             string  `json:"title"`
+	Body              string  `json:"body"`
+	SourceID          string  `json:"sourceId"`
+	SourceLabel       string  `json:"sourceLabel,omitempty"` // joined from sources
+	ExternalID        string  `json:"externalId"`
+	CreatedAt         string  `json:"createdAt"`
+	UpdatedAt         string  `json:"updatedAt"`
+	InsertedAt        string  `json:"insertedAt"`
+}
+
+// CreateUserArgs holds fields for creating a new org user.
+type CreateUserArgs struct {
+	OrgID       string
+	DisplayName string
+	Email       string
+	AvatarURL   string
+}
+
+// UpsertMessageArgs holds data for creating or updating a Message record.
+type UpsertMessageArgs struct {
+	ContextID      string
+	OrganizationID string // optional → NULL when empty
+	ParentID       string // optional → NULL when empty
+	AuthorID       string // optional → NULL when empty (unresolved)
+	RawAuthor      string // verbatim name from source; always set when author is known
+	SourceID       string // FK to sources.id, e.g. "jira"
+	ExternalID     string
+	Title          string
+	Body           string
+	CreatedAt      string // RFC3339
+	UpdatedAt      string // RFC3339
+}
