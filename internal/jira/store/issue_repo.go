@@ -167,6 +167,13 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 	return id, nil
 }
 
+// SetIssueMessageID sets the message_id FK on a jira_issues row.
+func (r *Repo) SetIssueMessageID(ctx context.Context, issueID, messageID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE jira_issues SET message_id = ? WHERE id = ?", messageID, issueID)
+	return err
+}
+
 // FindContextsByJiraKeys returns a map of jira_key → []context_id for the given keys
 // that exist in the DB across any context. The same key may appear in multiple contexts.
 // Missing keys are absent from the result. Empty input returns nil, nil.

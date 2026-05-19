@@ -235,6 +235,45 @@ func (svc *ContextService) GetJiraInstanceURL(ctx context.Context) string {
 	return svc.jira.GetInstanceURL(ctx)
 }
 
+// GetContextParticipants returns a sorted, deduplicated list of all Jira issue assignees
+// and comment authors for the given context.
+func (svc *ContextService) GetContextParticipants(ctx context.Context, contextID string) ([]string, error) {
+	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, contextID, false)
+	if err != nil {
+		return nil, fmt.Errorf("get issues for participants: %w", err)
+	}
+
+	seen := make(map[string]bool)
+	issueIDs := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		if issue.Assignee != "" {
+			seen[issue.Assignee] = true
+		}
+		issueIDs = append(issueIDs, issue.ID)
+	}
+
+	if len(issueIDs) > 0 {
+		commentsByIssue, err := svc.jiraRepo.GetCommentsByIssues(ctx, issueIDs, false)
+		if err != nil {
+			return nil, fmt.Errorf("get comments for participants: %w", err)
+		}
+		for _, comments := range commentsByIssue {
+			for _, c := range comments {
+				if c.Author != "" {
+					seen[c.Author] = true
+				}
+			}
+		}
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
 // ListContexts returns active contexts only.
 func (svc *ContextService) ListContexts(ctx context.Context) ([]appstore.Context, error) {
 	return svc.store.ListContexts(ctx, false)
@@ -701,13 +740,13 @@ func syncIssueComments(ctx context.Context, jiraClient commentLister, jiraRepo *
 					continue
 				}
 				for _, c := range comments {
-					inserted, err := jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
+					cID, err := jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
 					if err != nil {
 						logger.Warn("sync comments: upsert failed",
 							zap.String("issue", issue.JiraKey), zap.String("jiraID", c.ID), zap.Error(err))
 						continue
 					}
-					if inserted {
+					if cID != "" {
 						total.Add(1)
 					}
 				}

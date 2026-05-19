@@ -127,8 +127,8 @@ func (r *Repo) DeleteComment(ctx context.Context, id string) error {
 }
 
 // UpsertComment inserts a comment, ignoring duplicates (dedup on issue_id + jira_id).
-// Returns true if a new comment was inserted.
-func (r *Repo) UpsertComment(ctx context.Context, issueID, jiraID, author, body, jiraCreated string) (bool, error) {
+// Returns the internal ID of the newly inserted comment, or "" if it was a duplicate.
+func (r *Repo) UpsertComment(ctx context.Context, issueID, jiraID, author, body, jiraCreated string) (string, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	id := uuid.New().String()
 	res, err := r.db.ExecContext(ctx, `
@@ -137,11 +137,21 @@ func (r *Repo) UpsertComment(ctx context.Context, issueID, jiraID, author, body,
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, id, issueID, jiraID, author, body, jiraCreated, now)
 	if err != nil {
-		return false, fmt.Errorf("upserting comment: %w", err)
+		return "", fmt.Errorf("upserting comment: %w", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return false, fmt.Errorf("checking rows affected: %w", err)
+		return "", fmt.Errorf("checking rows affected: %w", err)
 	}
-	return n > 0, nil
+	if n > 0 {
+		return id, nil
+	}
+	return "", nil
+}
+
+// SetCommentMessageID sets the message_id FK on a jira_comments row.
+func (r *Repo) SetCommentMessageID(ctx context.Context, commentID, messageID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE jira_comments SET message_id = ? WHERE id = ?", messageID, commentID)
+	return err
 }
