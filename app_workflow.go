@@ -212,6 +212,16 @@ func (a *App) CommitAssignmentStep(personAssignmentID string, stepIndex int, inp
 	return a.analysisSvc.CommitAssignmentStep(a.ctx, personAssignmentID, stepIndex, inputState, outputState)
 }
 
+// RunSingleAssignmentStep previews the AI output for one step without saving.
+func (a *App) RunSingleAssignmentStep(personAssignmentID string, stepIndex int, customInputState string) (string, error) {
+	return a.analysisSvc.RunSingleAssignmentStep(a.ctx, personAssignmentID, stepIndex, customInputState)
+}
+
+// CommitStepOutput saves a confirmed step output and truncates downstream stale steps.
+func (a *App) CommitStepOutput(personAssignmentID string, stepIndex int, inputState, outputState string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.CommitStepOutput(a.ctx, personAssignmentID, stepIndex, inputState, outputState)
+}
+
 // --- Workflow statuses (enum table — unchanged) ---
 
 // ListWorkflowStatuses returns all available workflow status options.

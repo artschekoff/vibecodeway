@@ -1115,6 +1115,31 @@ func (s *Service) CommitAssignmentStep(ctx context.Context, personAssignmentID s
 	return s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, inputState, outputState, s.paJudge)
 }
 
+// RunSingleAssignmentStep previews the AI output for one step without persisting anything.
+// customInputState is the (possibly edited) output of the previous step.
+func (s *Service) RunSingleAssignmentStep(ctx context.Context, personAssignmentID string, stepIndex int, customInputState string) (string, error) {
+	processor := &PersonAssignmentProcessor{svc: s}
+	return s.chainSvc.PreviewStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, customInputState, processor)
+}
+
+// CommitStepOutput saves a confirmed step output from the propagation wizard.
+// Truncates from stepIndex onward, re-creates this step. If it's the last step,
+// promotes it to is_current and syncs PersonAssignment.body.
+func (s *Service) CommitStepOutput(ctx context.Context, personAssignmentID string, stepIndex int, inputState, outputState string) (*appstore.PersonAssignment, error) {
+	saved, err := s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, inputState, outputState, s.paJudge)
+	if err != nil {
+		return nil, fmt.Errorf("commit step: %w", err)
+	}
+	if saved.IsCurrent {
+		if err := s.store.UpdatePersonAssignmentBody(ctx, personAssignmentID, saved.OutputState); err != nil {
+			return nil, fmt.Errorf("sync assignment body: %w", err)
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, personAssignmentID, now)
+	}
+	return s.store.GetPersonAssignment(ctx, personAssignmentID)
+}
+
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
 // the fallback string on error so analysis can continue even if the DB row is missing.
 func (s *Service) loadPrompt(ctx context.Context, id, fallback string) string {
