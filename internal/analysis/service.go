@@ -1102,6 +1102,19 @@ func (s *Service) GenerateSinglePersonAssignment(ctx context.Context, contextID,
 	return saved, nil
 }
 
+// PreviewAssignmentStep runs the AI for a PersonAssignment chain step without saving.
+// Used by the propagation wizard in the UI. customInputState overrides the recorded input.
+func (s *Service) PreviewAssignmentStep(ctx context.Context, personAssignmentID string, stepIndex int, customInputState string) (string, error) {
+	processor := &PersonAssignmentProcessor{svc: s}
+	return s.chainSvc.PreviewStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, customInputState, processor)
+}
+
+// CommitAssignmentStep saves a wizard-confirmed step to the PersonAssignment chain.
+// Truncates from stepIndex onward, re-creates this step with the given states.
+func (s *Service) CommitAssignmentStep(ctx context.Context, personAssignmentID string, stepIndex int, inputState, outputState string) (*appstore.ReasoningChainStep, error) {
+	return s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, inputState, outputState, s.paJudge)
+}
+
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
 // the fallback string on error so analysis can continue even if the DB row is missing.
 func (s *Service) loadPrompt(ctx context.Context, id, fallback string) string {

@@ -148,6 +148,70 @@ func (a *App) GenerateSinglePersonAssignment(contextID, personName, customPrompt
 	return a.analysisSvc.GenerateSinglePersonAssignment(a.ctx, contextID, personName, customPrompt)
 }
 
+// SearchMessages returns context messages whose title or body contains query.
+// Used by the @mention search in the instruction input. Returns up to 20 matches.
+func (a *App) SearchMessages(contextID, query string) ([]appstore.Message, error) {
+	if query == "" {
+		return nil, nil
+	}
+	return a.db.SearchMessages(context.Background(), contextID, query)
+}
+
+// GetPendingMessages returns messages that arrived after this assignment's analyzed_through watermark.
+func (a *App) GetPendingMessages(personAssignmentID string) ([]appstore.Message, error) {
+	return a.analysisSvc.GetPendingMessages(a.ctx, personAssignmentID)
+}
+
+// MarkAssignmentsOutdated checks all assignments for a context against new messages
+// and sets is_outdated=true on those with pending content. No AI call.
+func (a *App) MarkAssignmentsOutdated(contextID string) (map[string]int, error) {
+	return a.analysisSvc.MarkAssignmentsOutdated(a.ctx, contextID)
+}
+
+// RegeneratePersonAssignment incorporates all pending messages into the assignment via AI.
+// Creates a new step and promotes it to is_current. Clears is_outdated.
+func (a *App) RegeneratePersonAssignment(personAssignmentID string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.RegeneratePersonAssignment(a.ctx, personAssignmentID)
+}
+
+// GetPersonAssignmentSteps returns the full reasoning chain for a PersonAssignment.
+func (a *App) GetPersonAssignmentSteps(personAssignmentID string) ([]appstore.ReasoningChainStep, error) {
+	return a.db.ListChainSteps(context.Background(), appstore.ChainEntityPersonAssignment, personAssignmentID)
+}
+
+// SetCurrentAssignmentStep promotes the given step to is_current and syncs PersonAssignment.body.
+func (a *App) SetCurrentAssignmentStep(personAssignmentID, stepID string) (*appstore.PersonAssignment, error) {
+	outputState, err := a.db.SetChainCurrentStep(context.Background(), appstore.ChainEntityPersonAssignment, personAssignmentID, stepID)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.db.UpdatePersonAssignmentBody(context.Background(), personAssignmentID, outputState); err != nil {
+		return nil, err
+	}
+	return a.db.GetPersonAssignment(context.Background(), personAssignmentID)
+}
+
+// RebuildAssignmentChainFrom re-runs the reasoning chain from fromStepIndex onward.
+// overrideContent replaces that step's message_content when non-empty.
+func (a *App) RebuildAssignmentChainFrom(personAssignmentID string, fromStepIndex int, overrideContent string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.RebuildAssignmentChainFrom(a.ctx, personAssignmentID, fromStepIndex, overrideContent)
+}
+
+// GenerateEventsFromMessages extracts events from the message layer since the last event.
+func (a *App) GenerateEventsFromMessages(contextID string) ([]appstore.Event, error) {
+	return a.analysisSvc.GenerateEventsFromMessages(a.ctx, contextID)
+}
+
+// PreviewAssignmentStep runs the AI for a step without saving. Used by the propagation wizard.
+func (a *App) PreviewAssignmentStep(personAssignmentID string, stepIndex int, customInputState string) (string, error) {
+	return a.analysisSvc.PreviewAssignmentStep(a.ctx, personAssignmentID, stepIndex, customInputState)
+}
+
+// CommitAssignmentStep saves a wizard-confirmed step output to the chain.
+func (a *App) CommitAssignmentStep(personAssignmentID string, stepIndex int, inputState, outputState string) (*appstore.ReasoningChainStep, error) {
+	return a.analysisSvc.CommitAssignmentStep(a.ctx, personAssignmentID, stepIndex, inputState, outputState)
+}
+
 // --- Workflow statuses (enum table — unchanged) ---
 
 // ListWorkflowStatuses returns all available workflow status options.

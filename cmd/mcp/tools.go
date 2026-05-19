@@ -247,6 +247,26 @@ func registerTools(s *server.MCPServer, store *appstore.Store, svc *jiraservice.
 		),
 		h.handleContextAssignments,
 	)
+
+	s.AddTool(
+		mcp.NewTool("load_task_assignment",
+			mcp.WithDescription("Return the current task assignment body for a person in a context. "+
+				"'Current' means the version flagged as is_current in the reasoning chain — "+
+				"the user controls which version is active. Returns plain Markdown suitable for agent consumption. "+
+				"Use context_assignments to see all persons at once."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context key, e.g. 'sprint-42'. Use either context_id or context_key."),
+			),
+			mcp.WithString("person_name",
+				mcp.Required(),
+				mcp.Description("Exact or partial name of the person whose assignment to return (case-insensitive)."),
+			),
+		),
+		h.handleLoadTaskAssignment,
+	)
 }
 
 type handlers struct {
@@ -914,6 +934,40 @@ func (h *handlers) handleContextAssignments(ctx context.Context, req mcp.CallToo
 		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
 	}
 	return mcp.NewToolResultText(string(data)), nil
+}
+
+func (h *handlers) handleLoadTaskAssignment(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id, err := h.resolveContextID(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	personName := strings.TrimSpace(req.GetString("person_name", ""))
+	if personName == "" {
+		return mcp.NewToolResultError("person_name is required"), nil
+	}
+
+	assignments, err := h.store.ListPersonAssignments(ctx, id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("loading assignments: %v", err)), nil
+	}
+
+	lower := strings.ToLower(personName)
+	for _, a := range assignments {
+		if strings.Contains(strings.ToLower(a.Name), lower) {
+			var sb strings.Builder
+			sb.WriteString("# Task Assignment: ")
+			sb.WriteString(a.Name)
+			sb.WriteString("\n\n")
+			if a.IsOutdated {
+				sb.WriteString("> ⚠️  This assignment is outdated — new messages have arrived since the last generation.\n\n")
+			}
+			sb.WriteString(a.Body)
+			return mcp.NewToolResultText(sb.String()), nil
+		}
+	}
+
+	return mcp.NewToolResultError(fmt.Sprintf("no assignment found for person matching %q in context %q", personName, id)), nil
 }
 
 func splitAndTrim(s string) []string {
