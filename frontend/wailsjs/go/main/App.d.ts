@@ -305,6 +305,10 @@ export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.Reason
 
 export function SetCurrentAssignmentStep(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
+export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
+
 export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
 
 export function RegeneratePersonAssignment(arg1:string):Promise<store.PersonAssignment>;

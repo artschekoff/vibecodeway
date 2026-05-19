@@ -654,6 +654,14 @@ export function SetCurrentAssignmentStep(arg1, arg2) {
   return window['go']['main']['App']['SetCurrentAssignmentStep'](arg1, arg2);
 }
 
+export function RunSingleAssignmentStep(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunSingleAssignmentStep'](arg1, arg2, arg3);
+}
+
+export function CommitStepOutput(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CommitStepOutput'](arg1, arg2, arg3, arg4);
+}
+
 export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
   return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
 }
