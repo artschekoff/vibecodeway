@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/openai"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/viterin/vek/vek32"
 	"go.uber.org/zap"
 )
 
@@ -1364,6 +1366,74 @@ func ptrStr(s string) *string { return &s }
 // Pass sourceIDs to filter by specific sources; pass none for all sources.
 func (s *Service) listMessages(ctx context.Context, contextID string, since time.Time, sourceIDs ...string) ([]appstore.Message, error) {
 	return s.store.ListMessagesSince(ctx, contextID, since, sourceIDs...)
+}
+
+const semanticSearchTopK = 15
+
+// searchSemantic returns the top-K messages most semantically similar to queryText.
+// For messages without a stored embedding, it generates and stores one lazily.
+// Falls back to returning all messages if the embeddings API is unavailable.
+func (s *Service) searchSemantic(ctx context.Context, contextID, queryText string, topK int) ([]appstore.Message, error) {
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	if len(allMsgs) == 0 {
+		return nil, nil
+	}
+
+	// Lazy-embed any messages that don't have an embedding yet.
+	for _, msg := range allMsgs {
+		ok, _ := s.store.HasEmbedding(ctx, msg.ID)
+		if ok {
+			continue
+		}
+		text := msg.Title + "\n" + msg.Body
+		vec, embErr := s.ai.EmbedText(ctx, text)
+		if embErr != nil {
+			s.logger.Warn("embed message failed", zap.String("msg", msg.ID), zap.Error(embErr))
+			// If embedding fails, fall back to returning all messages unranked.
+			return allMsgs, nil
+		}
+		_ = s.store.UpsertMessageEmbedding(ctx, msg.ID, appstore.DefaultEmbeddingModel, vec)
+	}
+
+	queryVec, err := s.ai.EmbedText(ctx, queryText)
+	if err != nil {
+		s.logger.Warn("embed query failed — falling back to all messages", zap.Error(err))
+		return allMsgs, nil
+	}
+
+	// Load all stored vectors for this context.
+	vectors, err := s.store.ListContextEmbeddings(ctx, contextID)
+	if err != nil {
+		return allMsgs, nil
+	}
+
+	// Cosine rank using vek32.
+	type scored struct {
+		msg   appstore.Message
+		score float32
+	}
+	var ranked []scored
+	for _, msg := range allMsgs {
+		vec, ok := vectors[msg.ID]
+		if !ok {
+			continue
+		}
+		sim := vek32.CosineSimilarity(queryVec, vec)
+		ranked = append(ranked, scored{msg, sim})
+	}
+	sort.Slice(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
+
+	if topK > len(ranked) {
+		topK = len(ranked)
+	}
+	result := make([]appstore.Message, topK)
+	for i := range result {
+		result[i] = ranked[i].msg
+	}
+	return result, nil
 }
 
 // formatMessages renders messages into a text block for AI prompts.
