@@ -27,6 +27,8 @@ export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg
 
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
 
+export function AssignAuthorBatch(arg1:Array<store.AuthorAssignment>):Promise<void>;
+
 export function AuthStatus():Promise<string>;
 
 export function CancelRefresh():Promise<void>;
@@ -45,7 +47,11 @@ export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Arr
 
 export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
+export function CreateOrgUser(arg1:string,arg2:string,arg3:string):Promise<store.User>;
+
 export function CreateOrganization(arg1:string):Promise<store.Organization>;
+
+export function CreateUserAndAssign(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<store.User>;
 
 export function CreateWorkflowStatus(arg1:string,arg2:string):Promise<store.WorkflowStatus>;
 
@@ -61,6 +67,8 @@ export function DeleteLocalBranch(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteOrganization(arg1:string):Promise<void>;
 
+export function DeletePersonAssignment(arg1:string):Promise<void>;
+
 export function DeleteSlackDMConfig(arg1:string):Promise<void>;
 
 export function DeleteSlackThread(arg1:string):Promise<void>;
@@ -70,8 +78,6 @@ export function DeleteUploadedFile(arg1:string):Promise<void>;
 export function DeleteUserEvent(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteWorkflowStatus(arg1:string):Promise<void>;
-
-export function DeletePersonAssignment(arg1:string):Promise<void>;
 
 export function DeleteWorkspace(arg1:string):Promise<void>;
 
@@ -89,6 +95,8 @@ export function GenerateHandoffPacket(arg1:string):Promise<store.InferredRequire
 
 export function GeneratePersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
+export function GenerateSinglePersonAssignment(arg1:string,arg2:string,arg3:string):Promise<store.PersonAssignment>;
+
 export function GetAISettings():Promise<main.AISettingsResponse>;
 
 export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
@@ -96,6 +104,8 @@ export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 export function GetAppSettings():Promise<store.AppSettings>;
 
 export function GetContextDetail(arg1:string):Promise<service.ContextDetail>;
+
+export function GetContextParticipants(arg1:string):Promise<Array<string>>;
 
 export function GetContextSnapshot(arg1:string):Promise<store.ContextSnapshot>;
 
@@ -111,9 +121,11 @@ export function GetPendingCodeReviews():Promise<Array<vcsstore.ReviewRequest>>;
 
 export function GetPendingText():Promise<string>;
 
+export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
+
 export function GetSupportedPlatforms():Promise<Array<vcsstore.VCSPlatformInfo>>;
 
-export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
+export function GetUnresolvedAuthors(arg1:string):Promise<Array<store.UnresolvedAuthor>>;
 
 export function GetUnviewedBreakdown(arg1:string):Promise<store.UnviewedBreakdown>;
 
@@ -138,6 +150,10 @@ export function ListContextsByOrg(arg1:string):Promise<Array<store.Context>>;
 export function ListEvents(arg1:string):Promise<Array<store.Event>>;
 
 export function ListLocalBranches(arg1:string):Promise<Array<vcs.LocalBranch>>;
+
+export function ListMessages(arg1:string):Promise<Array<store.Message>>;
+
+export function ListOrgUsers(arg1:string):Promise<Array<store.User>>;
 
 export function ListOrganizations():Promise<Array<store.Organization>>;
 
@@ -262,6 +278,8 @@ export function SetSlackConfig(arg1:string,arg2:string,arg3:string):Promise<slac
 export function SetSlackPassphrase(arg1:string):Promise<void>;
 
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
+
+export function SwitchMainWorkingTree(arg1:string,arg2:string):Promise<void>;
 
 export function SyncAllComments(arg1:string):Promise<number>;
 

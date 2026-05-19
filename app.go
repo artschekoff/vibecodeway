@@ -184,6 +184,10 @@ func (a *App) startup(ctx context.Context) {
 
 	a.startBackgroundRefresh()
 
+	if err := a.db.BackfillMessages(ctx); err != nil {
+		a.logger.Warn("startup: backfill messages failed", zap.Error(err))
+	}
+
 	logger.Info("context-consolidator desktop started")
 }
 
@@ -1000,6 +1004,43 @@ func (a *App) DismissPicker() {
 	// Return focus to the source app so the user can immediately select more
 	// text and use Cmd+Shift+C again without having to manually switch apps.
 	hotkey.DeactivateApp()
+}
+
+// --- Users & Author Resolution ---
+
+// ListOrgUsers returns all users for an org (empty orgID = all orgs).
+func (a *App) ListOrgUsers(orgID string) ([]appstore.User, error) {
+	return a.db.ListUsers(a.ctx, orgID)
+}
+
+// CreateOrgUser creates a new org-level user.
+func (a *App) CreateOrgUser(displayName, email, orgID string) (*appstore.User, error) {
+	return a.db.CreateUser(a.ctx, appstore.CreateUserArgs{
+		OrgID: orgID, DisplayName: displayName, Email: email,
+	})
+}
+
+// GetUnresolvedAuthors returns unresolved (source, rawAuthor) pairs for a context.
+func (a *App) GetUnresolvedAuthors(contextID string) ([]appstore.UnresolvedAuthor, error) {
+	return a.db.GetUnresolvedAuthors(a.ctx, contextID)
+}
+
+// AssignAuthorBatch records author mappings and back-fills author_id on messages.
+func (a *App) AssignAuthorBatch(assignments []appstore.AuthorAssignment) error {
+	return a.db.AssignAuthorBatch(a.ctx, assignments)
+}
+
+// CreateUserAndAssign creates a new org user and maps (sourceID, rawAuthor) → that user.
+func (a *App) CreateUserAndAssign(displayName, email, orgID, sourceID, rawAuthor string) (*appstore.User, error) {
+	return a.db.CreateUserAndAssign(a.ctx,
+		appstore.CreateUserArgs{OrgID: orgID, DisplayName: displayName, Email: email},
+		sourceID, rawAuthor,
+	)
+}
+
+// ListMessages returns all messages for a context ordered by created_at ASC.
+func (a *App) ListMessages(contextID string) ([]appstore.Message, error) {
+	return a.db.ListMessagesSince(a.ctx, contextID, time.Time{})
 }
 
 func buildLogger() (*zap.Logger, error) {

@@ -38,6 +38,10 @@ export function AnalyzeContext(arg1) {
   return window['go']['main']['App']['AnalyzeContext'](arg1);
 }
 
+export function AssignAuthorBatch(arg1) {
+  return window['go']['main']['App']['AssignAuthorBatch'](arg1);
+}
+
 export function AuthStatus() {
   return window['go']['main']['App']['AuthStatus']();
 }
@@ -74,8 +78,16 @@ export function CreateContext(arg1, arg2) {
   return window['go']['main']['App']['CreateContext'](arg1, arg2);
 }
 
+export function CreateOrgUser(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateOrgUser'](arg1, arg2, arg3);
+}
+
 export function CreateOrganization(arg1) {
   return window['go']['main']['App']['CreateOrganization'](arg1);
+}
+
+export function CreateUserAndAssign(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['CreateUserAndAssign'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function CreateWorkflowStatus(arg1, arg2) {
@@ -106,6 +118,10 @@ export function DeleteOrganization(arg1) {
   return window['go']['main']['App']['DeleteOrganization'](arg1);
 }
 
+export function DeletePersonAssignment(arg1) {
+  return window['go']['main']['App']['DeletePersonAssignment'](arg1);
+}
+
 export function DeleteSlackDMConfig(arg1) {
   return window['go']['main']['App']['DeleteSlackDMConfig'](arg1);
 }
@@ -124,10 +140,6 @@ export function DeleteUserEvent(arg1, arg2) {
 
 export function DeleteWorkflowStatus(arg1) {
   return window['go']['main']['App']['DeleteWorkflowStatus'](arg1);
-}
-
-export function DeletePersonAssignment(arg1) {
-  return window['go']['main']['App']['DeletePersonAssignment'](arg1);
 }
 
 export function DeleteWorkspace(arg1) {
@@ -162,6 +174,10 @@ export function GeneratePersonAssignments(arg1) {
   return window['go']['main']['App']['GeneratePersonAssignments'](arg1);
 }
 
+export function GenerateSinglePersonAssignment(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GenerateSinglePersonAssignment'](arg1, arg2, arg3);
+}
+
 export function GetAISettings() {
   return window['go']['main']['App']['GetAISettings']();
 }
@@ -176,6 +192,10 @@ export function GetAppSettings() {
 
 export function GetContextDetail(arg1) {
   return window['go']['main']['App']['GetContextDetail'](arg1);
+}
+
+export function GetContextParticipants(arg1) {
+  return window['go']['main']['App']['GetContextParticipants'](arg1);
 }
 
 export function GetContextSnapshot(arg1) {
@@ -206,12 +226,16 @@ export function GetPendingText() {
   return window['go']['main']['App']['GetPendingText']();
 }
 
+export function GetPersonAssignments(arg1) {
+  return window['go']['main']['App']['GetPersonAssignments'](arg1);
+}
+
 export function GetSupportedPlatforms() {
   return window['go']['main']['App']['GetSupportedPlatforms']();
 }
 
-export function GetPersonAssignments(arg1) {
-  return window['go']['main']['App']['GetPersonAssignments'](arg1);
+export function GetUnresolvedAuthors(arg1) {
+  return window['go']['main']['App']['GetUnresolvedAuthors'](arg1);
 }
 
 export function GetUnviewedBreakdown(arg1) {
@@ -260,6 +284,14 @@ export function ListEvents(arg1) {
 
 export function ListLocalBranches(arg1) {
   return window['go']['main']['App']['ListLocalBranches'](arg1);
+}
+
+export function ListMessages(arg1) {
+  return window['go']['main']['App']['ListMessages'](arg1);
+}
+
+export function ListOrgUsers(arg1) {
+  return window['go']['main']['App']['ListOrgUsers'](arg1);
 }
 
 export function ListOrganizations() {
@@ -508,6 +540,10 @@ export function SetSlackPassphrase(arg1) {
 
 export function SetTrackedRepoPath(arg1, arg2) {
   return window['go']['main']['App']['SetTrackedRepoPath'](arg1, arg2);
+}
+
+export function SwitchMainWorkingTree(arg1, arg2) {
+  return window['go']['main']['App']['SwitchMainWorkingTree'](arg1, arg2);
 }
 
 export function SyncAllComments(arg1) {
