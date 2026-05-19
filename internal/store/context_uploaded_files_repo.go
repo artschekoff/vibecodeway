@@ -85,7 +85,26 @@ func (s *Store) InsertUploadedFile(ctx context.Context, contextID, originalName,
 	if err != nil {
 		return nil, fmt.Errorf("inserting uploaded file: %w", err)
 	}
+	msgID, _ := s.UpsertMessage(ctx, UpsertMessageArgs{
+		ContextID:  f.ContextID,
+		SourceID:   "file",
+		ExternalID: f.ID,
+		Title:      f.OriginalName,
+		Body:       f.ExtractedText,
+		CreatedAt:  f.CreatedAt,
+		UpdatedAt:  f.UpdatedAt,
+	})
+	if msgID != "" {
+		_ = s.SetUploadedFileMessageID(ctx, f.ID, msgID)
+	}
 	return f, nil
+}
+
+// SetUploadedFileMessageID links an uploaded file to its messages row.
+func (s *Store) SetUploadedFileMessageID(ctx context.Context, fileID, messageID string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE context_uploaded_files SET message_id = ? WHERE id = ?", messageID, fileID)
+	return err
 }
 
 // DeleteUploadedFile removes a single uploaded file by its ID.

@@ -77,6 +77,18 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 		if err != nil {
 			return nil, fmt.Errorf("inserting context text: %w", err)
 		}
+		msgID, _ := s.UpsertMessage(ctx, UpsertMessageArgs{
+			ContextID:  t.ContextID,
+			SourceID:   "text",
+			ExternalID: t.ID,
+			Title:      t.Name,
+			Body:       t.Content,
+			CreatedAt:  t.CreatedAt,
+			UpdatedAt:  t.UpdatedAt,
+		})
+		if msgID != "" {
+			_ = s.SetContextTextMessageID(ctx, t.ID, msgID)
+		}
 		return t, nil
 	}
 
@@ -105,7 +117,26 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 	if err != nil {
 		return nil, fmt.Errorf("fetching updated context text: %w", err)
 	}
+	msgID, _ := s.UpsertMessage(ctx, UpsertMessageArgs{
+		ContextID:  t.ContextID,
+		SourceID:   "text",
+		ExternalID: t.ID,
+		Title:      t.Name,
+		Body:       t.Content,
+		CreatedAt:  t.CreatedAt,
+		UpdatedAt:  t.UpdatedAt,
+	})
+	if msgID != "" {
+		_ = s.SetContextTextMessageID(ctx, t.ID, msgID)
+	}
 	return &t, nil
+}
+
+// SetContextTextMessageID links a context text to its messages row.
+func (s *Store) SetContextTextMessageID(ctx context.Context, textID, messageID string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE context_texts SET message_id = ? WHERE id = ?", messageID, textID)
+	return err
 }
 
 // DeleteContextText removes a single context text by its ID.

@@ -148,6 +148,12 @@ func (s *Store) BackfillMessages(ctx context.Context) error {
 	if err := s.backfillVCSPRComments(ctx); err != nil {
 		return fmt.Errorf("backfill vcs pr comments: %w", err)
 	}
+	if err := s.backfillContextTexts(ctx); err != nil {
+		return fmt.Errorf("backfill context texts: %w", err)
+	}
+	if err := s.backfillUploadedFiles(ctx); err != nil {
+		return fmt.Errorf("backfill uploaded files: %w", err)
+	}
 	return nil
 }
 
@@ -393,6 +399,88 @@ func (s *Store) backfillVCSPRComments(ctx context.Context) error {
 			return err
 		}
 		if _, err := s.db.ExecContext(ctx, `UPDATE vcs_pr_comments SET message_id = ? WHERE id = ?`, msgID, r.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) backfillContextTexts(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, context_id, COALESCE(name,''), content, created_at, updated_at
+		FROM context_texts WHERE message_id IS NULL
+	`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	type row struct{ id, contextID, name, content, createdAt, updatedAt string }
+	var items []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.contextID, &r.name, &r.content, &r.createdAt, &r.updatedAt); err != nil {
+			return err
+		}
+		items = append(items, r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, r := range items {
+		msgID, err := s.UpsertMessage(ctx, UpsertMessageArgs{
+			ContextID:  r.contextID,
+			SourceID:   "text",
+			ExternalID: r.id,
+			Title:      r.name,
+			Body:       r.content,
+			CreatedAt:  r.createdAt,
+			UpdatedAt:  r.updatedAt,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE context_texts SET message_id = ? WHERE id = ?`, msgID, r.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) backfillUploadedFiles(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, context_id, original_name, COALESCE(extracted_text,''), created_at, updated_at
+		FROM context_uploaded_files WHERE message_id IS NULL
+	`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	type row struct{ id, contextID, originalName, extractedText, createdAt, updatedAt string }
+	var items []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.contextID, &r.originalName, &r.extractedText, &r.createdAt, &r.updatedAt); err != nil {
+			return err
+		}
+		items = append(items, r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, r := range items {
+		msgID, err := s.UpsertMessage(ctx, UpsertMessageArgs{
+			ContextID:  r.contextID,
+			SourceID:   "file",
+			ExternalID: r.id,
+			Title:      r.originalName,
+			Body:       r.extractedText,
+			CreatedAt:  r.createdAt,
+			UpdatedAt:  r.updatedAt,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE context_uploaded_files SET message_id = ? WHERE id = ?`, msgID, r.id); err != nil {
 			return err
 		}
 	}
