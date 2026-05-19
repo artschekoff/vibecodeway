@@ -124,6 +124,10 @@ Produce a JSON object with exactly this structure. Return ONLY valid JSON, no ma
 
 ## Context key: {{context_key}}
 
+## Org team members
+The following people are the confirmed members of this organisation. Generate an assignment entry for EACH of them (do not add extra people):
+{{org_users}}
+
 ## Jira issues and activity
 {{raw_content}}
 
@@ -131,8 +135,8 @@ Produce a JSON object with exactly this structure. Return ONLY valid JSON, no ma
 {{events}}
 {{custom_instructions}}
 ## Task
-Identify every person who is an assignee or has commented in the Jira issues above.
-For each person produce an entry in the JSON array below.
+For each person listed in "Org team members" produce an entry in the JSON array below.
+If a person has no relevant work found in the source data, still include them with a brief "No active tasks found" body.
 
 The "body" field must be rich Markdown covering ALL of the following that are relevant:
 - **Current assignment**: which specific Jira issues/subtasks they own, their status
@@ -523,6 +527,13 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 		return nil, fmt.Errorf("get context: %w", err)
 	}
 
+	orgUsers, err := s.store.ListUsers(ctx, ctxRow.OrgID)
+	if err != nil {
+		s.logger.Warn("person assignment: list org users failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		// proceed with empty list — AI will still process raw content
+	}
+
 	allEvents, err := s.store.ListEvents(ctx, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("list events: %w", err)
@@ -530,9 +541,9 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 
 	allMsgs, err := s.listMessages(ctx, contextID, time.Time{}, "jira")
 	if err != nil {
-		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
+		s.logger.Warn("person assignment: list messages failed",
+			zap.String("contextID", contextID), zap.Error(err))
 	}
-	rawContent := formatMessages(allMsgs)
 
 	promptEvents := make([]eventForPrompt, 0, len(allEvents))
 	for _, e := range allEvents {
@@ -545,7 +556,8 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 	tmpl := s.loadPrompt(ctx, "person_assignment", defaultPersonAssignmentPrompt)
 	prompt := applyPlaceholders(tmpl, map[string]string{
 		"context_key":         ctxRow.Key,
-		"raw_content":         rawContent,
+		"org_users":           formatOrgUsers(orgUsers),
+		"raw_content":         formatMessages(allMsgs),
 		"events":              formatEventsForPrompt(promptEvents),
 		"custom_instructions": "",
 	})
@@ -952,6 +964,20 @@ func formatMessages(msgs []appstore.Message) string {
 	}
 	for _, root := range roots {
 		write(root, "")
+	}
+	return b.String()
+}
+
+// formatOrgUsers renders org users as a simple bulleted list for prompt injection.
+func formatOrgUsers(users []appstore.User) string {
+	if len(users) == 0 {
+		return "(no org users configured)"
+	}
+	var b strings.Builder
+	for _, u := range users {
+		b.WriteString("- ")
+		b.WriteString(u.DisplayName)
+		b.WriteByte('\n')
 	}
 	return b.String()
 }
