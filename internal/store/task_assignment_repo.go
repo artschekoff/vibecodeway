@@ -113,6 +113,40 @@ func (s *Store) UpdatePersonAssignmentBody(ctx context.Context, id, body string)
 	return nil
 }
 
+// UpsertPersonAssignment creates or updates a person assignment identified by (contextID, name).
+// If a record for this person already exists in the context it is updated in-place;
+// otherwise a new row is inserted.  The saved record is returned.
+func (s *Store) UpsertPersonAssignment(ctx context.Context, contextID string, pa PersonAssignment) (*PersonAssignment, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	var existingID string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM context_person_assignments WHERE context_id = ? AND name = ?`,
+		contextID, pa.Name,
+	).Scan(&existingID)
+
+	switch {
+	case err == sql.ErrNoRows:
+		existingID = uuid.New().String()
+		if _, execErr := s.db.ExecContext(ctx, `
+			INSERT INTO context_person_assignments (id, context_id, name, body, generated_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, existingID, contextID, pa.Name, pa.Body, pa.GeneratedAt, now); execErr != nil {
+			return nil, fmt.Errorf("insert person assignment: %w", execErr)
+		}
+	case err != nil:
+		return nil, fmt.Errorf("lookup person assignment: %w", err)
+	default:
+		if _, execErr := s.db.ExecContext(ctx, `
+			UPDATE context_person_assignments SET body = ?, generated_at = ?, updated_at = ? WHERE id = ?
+		`, pa.Body, pa.GeneratedAt, now, existingID); execErr != nil {
+			return nil, fmt.Errorf("update person assignment: %w", execErr)
+		}
+	}
+
+	return s.GetPersonAssignment(ctx, existingID)
+}
+
 // DeletePersonAssignment removes a person assignment by ID.
 func (s *Store) DeletePersonAssignment(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx,

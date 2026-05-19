@@ -64,6 +64,7 @@ import {
   ListLocalBranches,
   DeleteLocalBranch,
   CheckoutLocalBranch,
+  SwitchMainWorkingTree,
   FetchPruneRepoPath,
   ListOrganizations,
   SetContextOrg,
@@ -260,6 +261,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [searchQuery, setSearchQuery] = useState("");
   const [matchedIDs, setMatchedIDs] = useState<Set<string> | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const initialFetchPruneDone = useRef(false);
   const [orgs, setOrgs] = useState<Organization[]>([]);
 
   // ── Reviews state ──
@@ -426,6 +428,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       EventsOff("bg-refresh:reviews");
     };
   }, [load, loadReviews]);
+
+  // On first load, background fetch-prune all repo paths to get accurate "gone" status.
+  useEffect(() => {
+    const paths = Object.values(repoPaths).flat();
+    if (paths.length === 0 || initialFetchPruneDone.current) return;
+    initialFetchPruneDone.current = true;
+    paths.forEach((p) => {
+      (FetchPruneRepoPath(p.id) as Promise<void>)
+        .then(() => (ListLocalBranches(p.id) as Promise<LocalBranch[]>).catch(() => []))
+        .then((branches) => setLocalBranches((prev) => ({ ...prev, [p.id]: branches })))
+        .catch(() => {});
+    });
+  }, [repoPaths]);
 
   // ── Search ──
   const handleSearchChange = useCallback((value: string) => {
@@ -783,6 +798,15 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     try {
       await CheckoutLocalBranch(pathId, branch);
       await loadWorkspacesForRepo(repoId);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleSwitchMainWorkingTree = async (pathId: string, branch: string) => {
+    try {
+      await SwitchMainWorkingTree(pathId, branch);
+      await reloadLocalBranches(pathId);
     } catch (e) {
       setError(String(e));
     }
@@ -1409,6 +1433,15 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                         onClick={() => BrowserOpenURL(branchUrl)}
                                       >
                                         <ExternalLink size={11} /> Open
+                                      </button>
+                                    )}
+                                    {!b.isCurrent && !(repoWorkspaces[p.id] ?? []).some(w => w.branch === b.name) && (
+                                      <button
+                                        className="repo-path-open"
+                                        title={`Switch main working tree to ${b.name}`}
+                                        onClick={() => void handleSwitchMainWorkingTree(p.id, b.name)}
+                                      >
+                                        <GitBranch size={11} /> Switch
                                       </button>
                                     )}
                                     <button

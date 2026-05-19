@@ -137,6 +137,17 @@ func (a *App) DeletePersonAssignment(personID string) error {
 	return a.db.DeletePersonAssignment(context.Background(), personID)
 }
 
+// GetContextParticipants returns sorted unique Jira assignees and comment authors for a context.
+func (a *App) GetContextParticipants(contextID string) ([]string, error) {
+	return a.analysisSvc.GetContextParticipants(a.ctx, contextID)
+}
+
+// GenerateSinglePersonAssignment generates a focused, implementation-ready assignment for one person.
+// customPrompt may be empty. The record is created or updated for (contextID, personName).
+func (a *App) GenerateSinglePersonAssignment(contextID, personName, customPrompt string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.GenerateSinglePersonAssignment(a.ctx, contextID, personName, customPrompt)
+}
+
 // --- Workflow statuses (enum table — unchanged) ---
 
 // ListWorkflowStatuses returns all available workflow status options.
