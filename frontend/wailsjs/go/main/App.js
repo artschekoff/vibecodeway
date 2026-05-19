@@ -490,6 +490,10 @@ export function SearchContextIDs(arg1) {
   return window['go']['main']['App']['SearchContextIDs'](arg1);
 }
 
+export function SearchMessages(arg1, arg2) {
+  return window['go']['main']['App']['SearchMessages'](arg1, arg2);
+}
+
 export function SearchJQL(arg1) {
   return window['go']['main']['App']['SearchJQL'](arg1);
 }

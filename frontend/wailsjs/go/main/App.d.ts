@@ -255,6 +255,8 @@ export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
 export function SearchJQL(arg1:string):Promise<Array<jira.SearchResult>>;
 
+export function SearchMessages(arg1:string,arg2:string):Promise<Array<store.Message>>;
+
 export function SearchNewIssues(arg1:string):Promise<service.SearchDiff>;
 
 export function SearchSlackChannels(arg1:string,arg2:string):Promise<Array<service.SlackChannelResult>>;
