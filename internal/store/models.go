@@ -278,11 +278,12 @@ type ReasoningChainStep struct {
 // MessageEmbedding stores a float32 embedding vector for a message as a raw BLOB.
 type MessageEmbedding struct {
 	MessageID string    `json:"messageId"`
-	Embedding []float32 `json:"embedding"`
+	Embedding []float32 `json:"-"` // not serialised to frontend
 	Model     string    `json:"model"`
 	CreatedAt string    `json:"createdAt"`
 }
 
+// DefaultEmbeddingModel is the OpenAI model used to produce message embeddings.
 const DefaultEmbeddingModel = "text-embedding-3-small"
 
 // Keybinding is a user-configurable keyboard shortcut.
