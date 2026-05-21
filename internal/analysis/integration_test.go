@@ -143,7 +143,7 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 	)
 	require.NoError(t, err)
 
-	err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, err = vcsStore.PullRequests.UpsertComment(ctx,
 		prResult.ID,
 		"gh-comment-9901",
 		nil,
@@ -160,9 +160,9 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 	require.NoError(t, err)
 
 	// --- build service under test ---
-	jiraProv := jiraservice.NewJiraProvider(jiraRepo, nil, logger)
-	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger)
-	vcsProv := vcsservice.NewVCSProvider(vcsStore, logger)
+	jiraProv := jiraservice.NewJiraProvider(jiraRepo, nil, logger, nil)
+	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger, nil)
+	vcsProv := vcsservice.NewVCSProvider(vcsStore, logger, nil)
 
 	jiraSvc := jiraservice.NewContextService(
 		s, nil, jiraRepo, slackRepo, &noopSlackRunner{}, logger,
@@ -358,7 +358,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	)
 	require.NoError(t, err)
 
-	err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, err = vcsStore.PullRequests.UpsertComment(ctx,
 		prResult.ID,
 		"gh-review-pr221-1",
 		nil,
@@ -371,7 +371,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	)
 	require.NoError(t, err)
 
-	err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, err = vcsStore.PullRequests.UpsertComment(ctx,
 		prResult.ID,
 		"gh-review-pr221-2",
 		nil,
@@ -385,9 +385,9 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	require.NoError(t, err)
 
 	// Build service under test.
-	jiraProv := jiraservice.NewJiraProvider(jiraRepo, nil, logger)
-	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger)
-	vcsProv := vcsservice.NewVCSProvider(vcsStore, logger)
+	jiraProv := jiraservice.NewJiraProvider(jiraRepo, nil, logger, nil)
+	slackProv := jiraservice.NewSlackProvider(slackRepo, &noopSlackRunner{}, logger, nil)
+	vcsProv := vcsservice.NewVCSProvider(vcsStore, logger, nil)
 
 	jiraSvc := jiraservice.NewContextService(
 		s, nil, jiraRepo, slackRepo, &noopSlackRunner{}, logger,

@@ -142,13 +142,13 @@ func TestUpsertAndGetComments(t *testing.T) {
 	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "alice", "Bug", "", "", "")
 	require.NoError(t, err)
 
-	inserted, err := repo.UpsertComment(ctx, issueID, "jira-cmt-1", "bob", "looks good", "2024-01-01T00:00:00Z")
+	commentID, err := repo.UpsertComment(ctx, issueID, "jira-cmt-1", "bob", "looks good", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
-	assert.True(t, inserted)
+	assert.NotEmpty(t, commentID)
 
-	inserted2, err := repo.UpsertComment(ctx, issueID, "jira-cmt-1", "bob", "looks good", "2024-01-01T00:00:00Z")
+	commentID2, err := repo.UpsertComment(ctx, issueID, "jira-cmt-1", "bob", "looks good", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
-	assert.False(t, inserted2, "duplicate should not be inserted")
+	assert.Empty(t, commentID2, "duplicate should not be inserted")
 
 	comments, err := repo.GetCommentsByIssue(ctx, issueID, false)
 	require.NoError(t, err)

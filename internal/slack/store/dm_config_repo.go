@@ -242,3 +242,10 @@ func (r *Repo) MarkSlackDMConfigViewed(ctx context.Context, id string) error {
 		"UPDATE slack_dm_configs SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL", id)
 	return err
 }
+
+// SetDMConfigMessageID sets the message_id FK on a slack_dm_configs row.
+func (r *Repo) SetDMConfigMessageID(ctx context.Context, dmConfigID, messageID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE slack_dm_configs SET message_id = ? WHERE id = ?", messageID, dmConfigID)
+	return err
+}

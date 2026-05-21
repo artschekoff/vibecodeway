@@ -26,6 +26,7 @@ type Issue struct {
 	IsActive    bool      `json:"isActive"`
 	ViewedAt       *string   `json:"viewedAt"`
 	AiProcessedAt  *string   `json:"aiProcessedAt"`
+	MessageID      *string   `json:"messageId,omitempty"`
 	Comments       []Comment `json:"comments,omitempty"`
 }
 
@@ -41,4 +42,5 @@ type Comment struct {
 	IsActive       bool    `json:"isActive"`
 	ViewedAt       *string `json:"viewedAt"`
 	AiProcessedAt  *string `json:"aiProcessedAt"`
+	MessageID      *string `json:"messageId,omitempty"`
 }

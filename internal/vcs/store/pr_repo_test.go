@@ -54,16 +54,16 @@ func TestListCommentsForPRs(t *testing.T) {
 	pr2ID := pr2Result.ID
 
 	// Insert 1 comment on PR1
-	err = vcsStore.PullRequests.UpsertComment(ctx, pr1ID, "ext-1", nil,
+	_, err = vcsStore.PullRequests.UpsertComment(ctx, pr1ID, "ext-1", nil,
 		"review", "alice", "LGTM", nil, nil, false, nil, now, now)
 	require.NoError(t, err)
 
 	// Insert 2 comments on PR2
-	err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-2", nil,
+	_, err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-2", nil,
 		"review", "bob", "Needs work", nil, nil, false, nil, now, now)
 	require.NoError(t, err)
 
-	err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-3", nil,
+	_, err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-3", nil,
 		"review", "carol", "Agreed", nil, nil, false, nil, now, now)
 	require.NoError(t, err)
 

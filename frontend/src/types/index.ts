@@ -280,6 +280,15 @@ export interface EstimationLog {
   estimationBasis: string;
 }
 
+export interface PersonAssignment {
+  id: string;
+  contextId: string;
+  name: string;
+  body: string;
+  generatedAt?: string;
+  updatedAt: string;
+}
+
 export interface Keybinding {
   id: string;
   command: string;

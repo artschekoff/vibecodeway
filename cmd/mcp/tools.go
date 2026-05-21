@@ -231,6 +231,22 @@ func registerTools(s *server.MCPServer, store *appstore.Store, svc *jiraservice.
 		),
 		h.handlePRReviewRequests,
 	)
+
+	s.AddTool(
+		mcp.NewTool("context_assignments",
+			mcp.WithDescription("Return person assignments for a context. Each assignment contains a person name and their task breakdown text. Optionally filter to a single person by name."),
+			mcp.WithString("context_id",
+				mcp.Description("Context UUID. Use either context_id or context_key."),
+			),
+			mcp.WithString("context_key",
+				mcp.Description("Context user-assigned key, e.g. 'sprint-42'. Use either context_id or context_key."),
+			),
+			mcp.WithString("name",
+				mcp.Description("Optional. If provided, returns only the assignment for this person (case-insensitive match)."),
+			),
+		),
+		h.handleContextAssignments,
+	)
 }
 
 type handlers struct {
@@ -865,6 +881,35 @@ func (h *handlers) handlePRReviewRequests(ctx context.Context, _ mcp.CallToolReq
 	}
 
 	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func (h *handlers) handleContextAssignments(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id, err := h.resolveContextID(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	assignments, err := h.store.ListPersonAssignments(ctx, id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("loading assignments: %v", err)), nil
+	}
+
+	if nameFilter := strings.TrimSpace(req.GetString("name", "")); nameFilter != "" {
+		lower := strings.ToLower(nameFilter)
+		filtered := assignments[:0]
+		for _, a := range assignments {
+			if strings.ToLower(a.Name) == lower {
+				filtered = append(filtered, a)
+			}
+		}
+		assignments = filtered
+	}
+
+	data, err := json.MarshalIndent(assignments, "", "  ")
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("serializing: %v", err)), nil
 	}

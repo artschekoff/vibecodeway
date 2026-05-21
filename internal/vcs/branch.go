@@ -53,7 +53,19 @@ func parseLocalBranches(data []byte) []LocalBranch {
 }
 
 // GitDeleteLocalBranch force-deletes a local branch in the repo at dir.
+// If a worktree is using the branch, it is removed first.
 func GitDeleteLocalBranch(dir, branch string) error {
+	worktrees, err := GitWorktreeList(dir)
+	if err == nil {
+		for _, wt := range worktrees {
+			if wt.Branch == branch {
+				if rmErr := GitWorktreeRemove(dir, wt.Path); rmErr != nil {
+					return fmt.Errorf("remove worktree for %s: %w", branch, rmErr)
+				}
+				break
+			}
+		}
+	}
 	cmd := exec.Command("git", "-C", dir, "branch", "-D", branch)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

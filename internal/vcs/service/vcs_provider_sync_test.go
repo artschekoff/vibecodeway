@@ -103,7 +103,7 @@ func newTestProvider(t *testing.T, runner vcs.VCSRunner) (*VCSProvider, *vcsstor
 	t.Helper()
 	vs := openTestVCSStore(t)
 	logger, _ := zap.NewDevelopment()
-	p := NewVCSProvider(vs, logger, runner)
+	p := NewVCSProvider(vs, logger, nil, runner)
 	return p, vs
 }
 
@@ -225,7 +225,7 @@ func TestSyncReviewRequests_NoPlatformRunner_ReturnsError(t *testing.T) {
 	vs := openTestVCSStore(t)
 	logger, _ := zap.NewDevelopment()
 	// Provider with no runners registered.
-	p := NewVCSProvider(vs, logger)
+	p := NewVCSProvider(vs, logger, nil)
 
 	err := p.SyncReviewRequests(context.Background(), vcs.PlatformGitHub)
 	assert.Error(t, err)

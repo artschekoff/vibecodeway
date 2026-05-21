@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -54,13 +54,22 @@ import {
   GetEstimationHistory,
   GenerateHandoffPacket,
   AddUserEvent,
+  DeleteUserEvent,
+  UpdateUserEvent,
   ListEvents,
   GetJiraInstanceURL,
+  GetPersonAssignments,
+  GeneratePersonAssignments,
+  GenerateSinglePersonAssignment,
+  GetContextParticipants,
+  RefinePersonAssignment,
+  SavePersonAssignment,
+  DeletePersonAssignment,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -70,6 +79,7 @@ import UploadedFileCard from "../components/UploadedFileCard";
 import ContextTextCard from "../components/ContextTextCard";
 import ContextForm from "../components/ContextForm";
 import EstimationPanel from "../components/EstimationPanel";
+import { UnresolvedAuthorsModal } from "../components/UnresolvedAuthorsModal";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 
@@ -366,6 +376,23 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [snapshotError, setSnapshotError] = useState("");
   const [addEventType, setAddEventType] = useState("user_note");
   const [addEventSummary, setAddEventSummary] = useState("");
+  const [personAssignments, setPersonAssignments] = useState<PersonAssignment[]>([]);
+  const [isGeneratingAssignments, setIsGeneratingAssignments] = useState(false);
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [editPersonBody, setEditPersonBody] = useState("");
+  const [refiningPersonId, setRefiningPersonId] = useState<string | null>(null);
+  const [personAiPrompt, setPersonAiPrompt] = useState("");
+  const [isRefiningPerson, setIsRefiningPerson] = useState(false);
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+  const [expandedGenerateFor, setExpandedGenerateFor] = useState<string | null>(null);
+  const [participantCustomPrompts, setParticipantCustomPrompts] = useState<Record<string, string>>({});
+  const [generatingForPerson, setGeneratingForPerson] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAuthorModal, setShowAuthorModal] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editEventType, setEditEventType] = useState("user_note");
+  const [editEventSummary, setEditEventSummary] = useState("");
   const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
   const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
   const {
@@ -395,12 +422,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const loadSnapshot = useCallback(async () => {
     if (!id) return;
     try {
-      const [snap, evts] = await Promise.all([
+      const [snap, evts, pas] = await Promise.all([
         GetContextSnapshot(id) as Promise<ContextSnapshot>,
         ListEvents(id) as Promise<ContextEvent[]>,
+        GetPersonAssignments(id).catch(() => []) as Promise<PersonAssignment[]>,
       ]);
       setSnapshot(snap);
       setEvents(evts ?? []);
+      setPersonAssignments(pas ?? []);
     } catch {
       // snapshot not yet generated — that's fine
     }
@@ -520,6 +549,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       showToast(msg);
       load(true);
       void loadSnapshot();
+      setShowAuthorModal(true);
     } catch (e) {
       setRefreshError(String(e));
     } finally {
@@ -993,54 +1023,276 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     Copy Handoff Packet
                   </button>
                 </div>
+                {/* Person Assignments */}
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13, userSelect: "none" }}>
+                    Person Assignments
+                    {personAssignments.length > 0 && (
+                      <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 6, fontSize: 11 }}>
+                        ({personAssignments.length})
+                      </span>
+                    )}
+                  </summary>
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 8 }}>
+
+                    {/* Participant discovery + per-person generate */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: "2px 10px" }}
+                          disabled={isLoadingParticipants}
+                          onClick={async () => {
+                            setIsLoadingParticipants(true);
+                            try {
+                              const names = await GetContextParticipants(id) as string[];
+                              setParticipants(names ?? []);
+                            } finally {
+                              setIsLoadingParticipants(false);
+                            }
+                          }}
+                        >
+                          {isLoadingParticipants ? "Loading…" : participants.length > 0 ? "Refresh Participants" : "Load Participants"}
+                        </button>
+                        {participants.length === 0 && !isLoadingParticipants && (
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            Load participants to generate individual assignments
+                          </span>
+                        )}
+                      </div>
+
+                      {participants.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {participants.map((name) => {
+                            const isExpanded = expandedGenerateFor === name;
+                            const isGenerating = generatingForPerson === name;
+                            const customPrompt = participantCustomPrompts[name] ?? "";
+                            return (
+                              <div key={name} style={{ border: "1px solid var(--border)", borderRadius: 5, overflow: "hidden" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", background: "var(--bg-secondary)" }}>
+                                  <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{name}</span>
+                                  <button
+                                    className="btn-secondary"
+                                    style={{ fontSize: 11, padding: "1px 8px" }}
+                                    disabled={isGenerating}
+                                    onClick={() => setExpandedGenerateFor(isExpanded ? null : name)}
+                                  >
+                                    {isGenerating ? "Generating…" : isExpanded ? "Cancel" : "Generate"}
+                                  </button>
+                                </div>
+                                {isExpanded && !isGenerating && (
+                                  <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                                      Additional context for {name} (optional)
+                                    </div>
+                                    <textarea
+                                      className="passphrase-input"
+                                      style={{ fontSize: 12, minHeight: 52, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                                      placeholder="e.g. Focus on backend API implementation, skip frontend"
+                                      value={customPrompt}
+                                      onChange={(e) => setParticipantCustomPrompts((prev) => ({ ...prev, [name]: e.target.value }))}
+                                    />
+                                    <button
+                                      className="btn-primary"
+                                      style={{ fontSize: 12, padding: "2px 10px", alignSelf: "flex-start" }}
+                                      onClick={async () => {
+                                        setGeneratingForPerson(name);
+                                        setExpandedGenerateFor(null);
+                                        try {
+                                          const pa = await GenerateSinglePersonAssignment(id, name, customPrompt.trim()) as PersonAssignment;
+                                          setPersonAssignments((prev) => {
+                                            const idx = prev.findIndex((p) => p.id === pa.id || p.name === pa.name);
+                                            return idx >= 0 ? prev.map((p, i) => i === idx ? pa : p) : [...prev, pa];
+                                          });
+                                        } finally {
+                                          setGeneratingForPerson(null);
+                                        }
+                                      }}
+                                    >
+                                      Generate for {name}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {personAssignments.length === 0 && participants.length === 0 && !isLoadingParticipants && (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        Load participants then generate individual assignments, or use the legacy bulk generate below.
+                      </div>
+                    )}
+
+                    {/* Legacy bulk generate */}
+                    <div>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 11, padding: "2px 8px", opacity: 0.7 }}
+                        disabled={isGeneratingAssignments}
+                        onClick={async () => {
+                          setIsGeneratingAssignments(true);
+                          try {
+                            const pas = await GeneratePersonAssignments(id) as PersonAssignment[];
+                            setPersonAssignments(pas ?? []);
+                          } finally {
+                            setIsGeneratingAssignments(false);
+                          }
+                        }}
+                      >
+                        {isGeneratingAssignments ? "Generating…" : "Bulk Generate All"}
+                      </button>
+                    </div>
+
+                    {/* One card per person */}
+                    {personAssignments.map((pa) => (
+                      <div
+                        key={pa.id}
+                        style={{ border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}
+                      >
+                        {/* Card header: name + action buttons */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>{pa.name}</span>
+                          {editingPersonId !== pa.id && refiningPersonId !== pa.id && (
+                            <>
+                              <button
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1, fontSize: 11 }}
+                                title="Refine with AI"
+                                onClick={() => { setRefiningPersonId(pa.id); setPersonAiPrompt(""); }}
+                              >
+                                AI
+                              </button>
+                              <button
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1, fontSize: 11 }}
+                                title="Re-generate"
+                                disabled={generatingForPerson === pa.name}
+                                onClick={async () => {
+                                  setGeneratingForPerson(pa.name);
+                                  try {
+                                    const updated = await GenerateSinglePersonAssignment(id, pa.name, "") as PersonAssignment;
+                                    setPersonAssignments((prev) => prev.map((p) => p.id === pa.id ? updated : p));
+                                  } finally {
+                                    setGeneratingForPerson(null);
+                                  }
+                                }}
+                              >
+                                {generatingForPerson === pa.name ? "…" : "↻"}
+                              </button>
+                              <button
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
+                                title="Delete"
+                                onClick={async () => {
+                                  await DeletePersonAssignment(pa.id);
+                                  setPersonAssignments((prev) => prev.filter((p) => p.id !== pa.id));
+                                }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Edit mode — click body text to enter */}
+                        {editingPersonId === pa.id ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <textarea
+                              className="passphrase-input"
+                              style={{ fontSize: 12, minHeight: 180, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                              value={editPersonBody}
+                              onChange={(e) => setEditPersonBody(e.target.value)}
+                              autoFocus
+                            />
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                className="btn-primary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                onClick={async () => {
+                                  await SavePersonAssignment(pa.id, editPersonBody);
+                                  setPersonAssignments((prev) =>
+                                    prev.map((p) => p.id === pa.id ? { ...p, body: editPersonBody } : p)
+                                  );
+                                  setEditingPersonId(null);
+                                }}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="btn-secondary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                onClick={() => setEditingPersonId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : refiningPersonId === pa.id ? (
+                          /* Ask AI mode */
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                              Describe how to change {pa.name}{"'"}s assignment
+                            </div>
+                            <textarea
+                              className="passphrase-input"
+                              style={{ fontSize: 12, minHeight: 56, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                              placeholder="Your instruction…"
+                              value={personAiPrompt}
+                              onChange={(e) => setPersonAiPrompt(e.target.value)}
+                              autoFocus
+                            />
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                className="btn-primary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                disabled={isRefiningPerson || !personAiPrompt.trim()}
+                                onClick={async () => {
+                                  if (!personAiPrompt.trim()) return;
+                                  setIsRefiningPerson(true);
+                                  try {
+                                    const updated = await RefinePersonAssignment(id, pa.id, personAiPrompt.trim()) as PersonAssignment;
+                                    setPersonAssignments((prev) =>
+                                      prev.map((p) => p.id === pa.id ? updated : p)
+                                    );
+                                    setRefiningPersonId(null);
+                                    setPersonAiPrompt("");
+                                  } finally {
+                                    setIsRefiningPerson(false);
+                                  }
+                                }}
+                              >
+                                {isRefiningPerson ? "Applying…" : "Apply"}
+                              </button>
+                              <button
+                                className="btn-secondary"
+                                style={{ fontSize: 12, padding: "2px 10px" }}
+                                onClick={() => { setRefiningPersonId(null); setPersonAiPrompt(""); }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, margin: "4px 0 0", color: "var(--text-muted)", lineHeight: 1.4, maxHeight: 200, overflow: "auto" }}>
+                              {pa.body}
+                            </pre>
+                          </div>
+                        ) : (
+                          /* Display mode — click text to edit (Jira-style inline edit) */
+                          <pre
+                            style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, color: "var(--text-muted)", lineHeight: 1.5, cursor: "text" }}
+                            title="Click to edit"
+                            onClick={() => { setEditingPersonId(pa.id); setEditPersonBody(pa.body); }}
+                          >
+                            {pa.body}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
               </div>
             ) : (
               <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No analysis yet. Click Analyze to start.</div>
             )}
-          </div>
-          {/* Add user event */}
-          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border)", marginTop: 4 }}>
-            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 6 }}>Add Note</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <select
-                className="passphrase-input"
-                style={{ fontSize: 12, padding: "2px 6px" }}
-                value={addEventType}
-                onChange={(e) => setAddEventType(e.target.value)}
-              >
-                <option value="user_note">Note</option>
-                <option value="next_step_recommendation">Next step recommendation</option>
-                <option value="current_step_override">Correct current step</option>
-                <option value="open_question_answered">Answer open question</option>
-                <option value="requirement_confirmed">Confirm requirement</option>
-              </select>
-              <input
-                className="passphrase-input"
-                style={{ fontSize: 12, flex: 1, minWidth: 160 }}
-                placeholder="Summary…"
-                value={addEventSummary}
-                onChange={(e) => setAddEventSummary(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter" && addEventSummary.trim()) {
-                    await AddUserEvent(id, addEventType, addEventSummary.trim());
-                    setAddEventSummary("");
-                    void loadSnapshot();
-                  }
-                }}
-              />
-              <button
-                className="btn-primary"
-                style={{ fontSize: 12, padding: "2px 10px" }}
-                onClick={async () => {
-                  if (!addEventSummary.trim()) return;
-                  await AddUserEvent(id, addEventType, addEventSummary.trim());
-                  setAddEventSummary("");
-                  void loadSnapshot();
-                }}
-              >
-                Add
-              </button>
-            </div>
           </div>
         </div>
 
@@ -1224,6 +1476,32 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       ? `${b.repo.owner}/${b.repo.name}`
                       : b.id;
                     const branchPRs = pullRequests.filter((pr) => pr.branchId === b.id);
+                    const workspace = b.branch
+                      ? workspaces.find((w) => w.branch === b.branch && w.repoId === b.repoId)
+                      : undefined;
+                    const checkoutNode = b.branch
+                      ? workspace
+                        ? (
+                          <WorkspaceMenu
+                            workspace={workspace}
+                            checkoutLoading={checkoutLoading}
+                            onCheckout={() => void handleCheckout(b.branch, b.repoId)}
+                            onMarkDone={(id) => void handleMarkWorkspaceDone(id)}
+                            onDelete={(id) => void handleDeleteWorkspace(id)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="vcs-checkout-btn"
+                            title={`Checkout ${b.branch} in workspace`}
+                            disabled={checkoutLoading}
+                            onClick={() => void handleCheckout(b.branch, b.repoId)}
+                          >
+                            Checkout
+                          </button>
+                        )
+                      : undefined;
+                    const hasUnread = branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt));
 
                     return (
                       <div key={b.id} className="pr-repo-group">
@@ -1259,17 +1537,25 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           {b.label && (
                             <span className="vcs-label-badge" title="Repo label">{b.label}</span>
                           )}
-                          {branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt)) && (
+                          {checkoutNode && (
+                            <span
+                              style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {checkoutNode}
+                            </span>
+                          )}
+                          {hasUnread && (
                             <button
                               type="button"
                               className="mark-viewed-btn"
-                              style={{ marginLeft: "auto" }}
+                              style={{ marginLeft: checkoutNode ? 6 : "auto" }}
                               title="Mark all PRs and comments as viewed"
                               onClick={() => void (async () => { await MarkBranchAllViewed(b.id); load(true); void loadBreakdown(); })()}
                             ><Check size={13} /></button>
                           )}
                           {branchPRs.length > 0 && (
-                            <span className="detail-section-count" style={{ marginLeft: branchPRs.some((pr) => !pr.viewedAt || (pr.comments ?? []).some((c) => !c.viewedAt)) ? 0 : "auto" }}>
+                            <span className="detail-section-count" style={{ marginLeft: checkoutNode || hasUnread ? 0 : "auto" }}>
                               {branchPRs.length}
                             </span>
                           )}
@@ -1280,43 +1566,15 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           <div className="detail-section-empty" style={{ padding: "8px 14px 12px" }}>
                             Click <strong>Refresh</strong> to fetch PRs
                           </div>
-                        ) : (() => {
-                          const workspace = b.branch
-                            ? workspaces.find((w) => w.branch === b.branch && w.repoId === b.repoId)
-                            : undefined;
-                          const checkoutNode = b.branch
-                            ? workspace
-                              ? (
-                                <WorkspaceMenu
-                                  workspace={workspace}
-                                  checkoutLoading={checkoutLoading}
-                                  onCheckout={() => void handleCheckout(b.branch, b.repoId)}
-                                  onMarkDone={(id) => void handleMarkWorkspaceDone(id)}
-                                  onDelete={(id) => void handleDeleteWorkspace(id)}
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="vcs-checkout-btn"
-                                  title={`Checkout ${b.branch} in workspace`}
-                                  disabled={checkoutLoading}
-                                  onClick={() => void handleCheckout(b.branch, b.repoId)}
-                                >
-                                  Checkout
-                                </button>
-                              )
-                            : undefined;
-                          return branchPRs.map((pr, idx) => (
-                            <PRCard
-                              key={pr.id}
-                              pr={pr}
-                              vcsBranches={vcsBranches}
-                              onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
-                              onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
-                              checkoutNode={idx === 0 ? checkoutNode : undefined}
-                            />
-                          ));
-                        })()}
+                        ) : branchPRs.map((pr) => (
+                          <PRCard
+                            key={pr.id}
+                            pr={pr}
+                            vcsBranches={vcsBranches}
+                            onMarkPRViewed={async (pid) => { await MarkPRViewed(pid); load(true); void loadBreakdown(); }}
+                            onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
+                          />
+                        ))}
                       </div>
                     );
                   })}
@@ -1372,7 +1630,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 Events
               </button>
             </div>
-            <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px" }}>
+            <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column" }}>
               {isAnalyzing ? (
                 <div className="event-skeleton-list">
                   {([0.85, 1.0, 0.6] as const).map((w) => (
@@ -1392,16 +1650,158 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 </div>
               ) : events.map((ev) => (
                 <div key={ev.id} style={{ fontSize: 12, borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 6 }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
-                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                      {(() => { try { return new Date(ev.timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ev.timestamp; } })()}
-                    </span>
-                    <span className="platform-badge">{ev.sourceType}</span>
-                    {ev.author && <span style={{ color: "var(--text-muted)" }}>{ev.author}</span>}
-                  </div>
-                  <div>{ev.summary}</div>
+                  {editingEventId === ev.id ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <select
+                        className="passphrase-input"
+                        style={{ fontSize: 11, padding: "2px 4px" }}
+                        value={editEventType}
+                        onChange={(e) => setEditEventType(e.target.value)}
+                      >
+                        <option value="user_note">Note</option>
+                        <option value="next_step_recommendation">Next step recommendation</option>
+                        <option value="current_step_override">Correct current step</option>
+                        <option value="open_question_answered">Answer open question</option>
+                        <option value="requirement_confirmed">Confirm requirement</option>
+                      </select>
+                      <input
+                        className="passphrase-input"
+                        style={{ fontSize: 11, width: "100%" }}
+                        value={editEventSummary}
+                        onChange={(e) => setEditEventSummary(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && editEventSummary.trim()) {
+                            await UpdateUserEvent(id, ev.id, editEventType, editEventSummary.trim());
+                            setEditingEventId(null);
+                            void loadSnapshot();
+                          } else if (e.key === "Escape") {
+                            setEditingEventId(null);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button
+                          className="btn-primary"
+                          style={{ fontSize: 11, padding: "2px 8px" }}
+                          onClick={async () => {
+                            if (!editEventSummary.trim()) return;
+                            await UpdateUserEvent(id, ev.id, editEventType, editEventSummary.trim());
+                            setEditingEventId(null);
+                            void loadSnapshot();
+                          }}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 11, padding: "2px 8px" }}
+                          onClick={() => setEditingEventId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
+                        <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                          {(() => { try { return new Date(ev.timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ev.timestamp; } })()}
+                        </span>
+                        <span className="platform-badge">{ev.sourceType}</span>
+                        {ev.author && <span style={{ color: "var(--text-muted)" }}>{ev.author}</span>}
+                        {ev.sourceType === "user" && (
+                          <div style={{ display: "flex", gap: 2, marginLeft: "auto" }}>
+                            <button
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
+                              title="Edit"
+                              onClick={() => { setEditingEventId(ev.id); setEditEventType(ev.type); setEditEventSummary(ev.summary); }}
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
+                              title="Delete"
+                              onClick={async () => { await DeleteUserEvent(id, ev.id); void loadSnapshot(); }}
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div>{ev.summary}</div>
+                    </>
+                  )}
                 </div>
               ))}
+              {!isAnalyzing && (
+                showAddForm ? (
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <select
+                        className="passphrase-input"
+                        style={{ fontSize: 12, padding: "2px 6px" }}
+                        value={addEventType}
+                        onChange={(e) => setAddEventType(e.target.value)}
+                      >
+                        <option value="user_note">Note</option>
+                        <option value="next_step_recommendation">Next step recommendation</option>
+                        <option value="current_step_override">Correct current step</option>
+                        <option value="open_question_answered">Answer open question</option>
+                        <option value="requirement_confirmed">Confirm requirement</option>
+                      </select>
+                      <input
+                        className="passphrase-input"
+                        style={{ fontSize: 12, width: "100%" }}
+                        placeholder="Summary…"
+                        value={addEventSummary}
+                        onChange={(e) => setAddEventSummary(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && addEventSummary.trim()) {
+                            await AddUserEvent(id, addEventType, addEventSummary.trim());
+                            setAddEventSummary("");
+                            setShowAddForm(false);
+                            void loadSnapshot();
+                          } else if (e.key === "Escape") {
+                            setShowAddForm(false);
+                            setAddEventSummary("");
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button
+                          className="btn-primary"
+                          style={{ fontSize: 12, padding: "2px 10px", flex: 1 }}
+                          onClick={async () => {
+                            if (!addEventSummary.trim()) return;
+                            await AddUserEvent(id, addEventType, addEventSummary.trim());
+                            setAddEventSummary("");
+                            setShowAddForm(false);
+                            void loadSnapshot();
+                          }}
+                        >
+                          Add
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: "2px 10px" }}
+                          onClick={() => { setShowAddForm(false); setAddEventSummary(""); }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    style={{ width: "100%", background: "none", border: "1px dashed var(--border)", borderRadius: 6, cursor: "pointer", padding: "6px 0", fontSize: 16, color: "var(--text-muted)", marginTop: 4 }}
+                    onClick={() => setShowAddForm(true)}
+                  >
+                    +
+                  </button>
+                )
+              )}
             </div>
           </aside>
         )}
@@ -1420,6 +1820,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           initialRelations={editRelations}
           onSave={handleUpdate}
           onCancel={closeEditForm}
+        />
+      )}
+      {showAuthorModal && detail && (
+        <UnresolvedAuthorsModal
+          contextID={id}
+          orgID={detail.context.orgId}
+          onClose={() => setShowAuthorModal(false)}
         />
       )}
       {checkoutTarget && checkoutPaths.length > 1 && (

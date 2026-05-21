@@ -68,6 +68,7 @@ type PullRequest struct {
 	FetchedAt     string      `json:"fetchedAt"`
 	ViewedAt      *string     `json:"viewedAt"`
 	AiProcessedAt *string     `json:"aiProcessedAt"`
+	MessageID     *string     `json:"messageId,omitempty"`
 	Comments      []PRComment `json:"comments,omitempty"`
 }
 
@@ -89,6 +90,7 @@ type PRComment struct {
 	CommentUpdatedAt string      `json:"commentUpdatedAt"`
 	ViewedAt         *string     `json:"viewedAt"`
 	AiProcessedAt    *string     `json:"aiProcessedAt"`
+	MessageID        *string     `json:"messageId,omitempty"`
 	Replies          []PRComment `json:"replies,omitempty"`
 }
 

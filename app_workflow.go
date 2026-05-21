@@ -90,6 +90,64 @@ func (a *App) ListEvents(contextID string) ([]appstore.Event, error) {
 	return a.db.ListEvents(context.Background(), contextID)
 }
 
+// DeleteUserEvent removes a user-authored event and marks the snapshot stale.
+func (a *App) DeleteUserEvent(contextID, eventID string) error {
+	if err := a.db.DeleteEvent(context.Background(), eventID); err != nil {
+		return err
+	}
+	_ = a.db.MarkSnapshotStale(context.Background(), contextID)
+	return nil
+}
+
+// UpdateUserEvent changes the type and summary of a user-authored event and marks the snapshot stale.
+func (a *App) UpdateUserEvent(contextID, eventID, eventType, summary string) (*appstore.Event, error) {
+	evt, err := a.db.UpdateEvent(context.Background(), eventID, eventType, summary)
+	if err != nil {
+		return nil, err
+	}
+	_ = a.db.MarkSnapshotStale(context.Background(), contextID)
+	return evt, nil
+}
+
+// --- Person Assignments ---
+
+// GetPersonAssignments returns all person assignment records for a context.
+func (a *App) GetPersonAssignments(contextID string) ([]appstore.PersonAssignment, error) {
+	return a.db.ListPersonAssignments(context.Background(), contextID)
+}
+
+// GeneratePersonAssignments runs the AI pipeline to produce per-person technical assignment records.
+// Replaces all existing assignments for the context.
+func (a *App) GeneratePersonAssignments(contextID string) ([]appstore.PersonAssignment, error) {
+	return a.analysisSvc.GeneratePersonAssignments(a.ctx, contextID)
+}
+
+// RefinePersonAssignment refines a single person's assignment body using the provided instruction.
+func (a *App) RefinePersonAssignment(contextID, personID, instruction string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.RefinePersonAssignment(a.ctx, contextID, personID, instruction)
+}
+
+// SavePersonAssignment persists a manually edited body for a person assignment.
+func (a *App) SavePersonAssignment(personID, body string) error {
+	return a.db.UpdatePersonAssignmentBody(context.Background(), personID, body)
+}
+
+// DeletePersonAssignment removes a person assignment record.
+func (a *App) DeletePersonAssignment(personID string) error {
+	return a.db.DeletePersonAssignment(context.Background(), personID)
+}
+
+// GetContextParticipants returns sorted unique Jira assignees and comment authors for a context.
+func (a *App) GetContextParticipants(contextID string) ([]string, error) {
+	return a.analysisSvc.GetContextParticipants(a.ctx, contextID)
+}
+
+// GenerateSinglePersonAssignment generates a focused, implementation-ready assignment for one person.
+// customPrompt may be empty. The record is created or updated for (contextID, personName).
+func (a *App) GenerateSinglePersonAssignment(contextID, personName, customPrompt string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.GenerateSinglePersonAssignment(a.ctx, contextID, personName, customPrompt)
+}
+
 // --- Workflow statuses (enum table — unchanged) ---
 
 // ListWorkflowStatuses returns all available workflow status options.

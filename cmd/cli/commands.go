@@ -64,13 +64,13 @@ func openServiceEnv() (*serviceEnv, error) {
 	jiraRepo := jirastore.NewRepo(s.DB())
 	slackRepo := slackstore.NewRepo(s.DB())
 
-	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger)
-	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger)
+	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
+	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger, s)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
 	vcsStore := vcsstore.NewStore(s.DB())
 	ghRunner := githubrunner.NewRunner(logger)
-	vcsProvider := vcsservice.NewVCSProvider(vcsStore, logger, ghRunner)
+	vcsProvider := vcsservice.NewVCSProvider(vcsStore, logger, s, ghRunner)
 
 	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)
 	svc.SetVCSStore(vcsStore)

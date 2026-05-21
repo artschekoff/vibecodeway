@@ -123,6 +123,36 @@ func (s *Store) ListEventsSince(ctx context.Context, contextID, lastSessionID st
 	return scanEvents(rows)
 }
 
+// DeleteEvent removes a single event from the log.
+func (s *Store) DeleteEvent(ctx context.Context, eventID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM event_log WHERE id = ? AND source_type = 'user'`, eventID)
+	if err != nil {
+		return fmt.Errorf("delete event: %w", err)
+	}
+	return nil
+}
+
+// UpdateEvent updates the type and summary of a user-authored event.
+func (s *Store) UpdateEvent(ctx context.Context, eventID, eventType, summary string) (*Event, error) {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE event_log SET type = ?, summary = ? WHERE id = ? AND source_type = 'user'`,
+		eventType, summary, eventID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("update event: %w", err)
+	}
+	var e Event
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, context_id, sync_session_id, type, timestamp, source_type, source_id, author, summary, raw_reference, created_at
+		FROM event_log WHERE id = ?
+	`, eventID)
+	if err := row.Scan(&e.ID, &e.ContextID, &e.SyncSessionID, &e.Type, &e.Timestamp,
+		&e.SourceType, &e.SourceID, &e.Author, &e.Summary, &e.RawReference, &e.CreatedAt); err != nil {
+		return nil, fmt.Errorf("fetch updated event: %w", err)
+	}
+	return &e, nil
+}
+
 func scanEvents(rows *sql.Rows) ([]Event, error) {
 	var result []Event
 	for rows.Next() {

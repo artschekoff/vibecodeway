@@ -169,3 +169,10 @@ func nullableString(s string) any {
 	}
 	return s
 }
+
+// SetThreadMessageID sets the message_id FK on a slack_threads row.
+func (r *Repo) SetThreadMessageID(ctx context.Context, threadID, messageID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE slack_threads SET message_id = ? WHERE id = ?", messageID, threadID)
+	return err
+}
