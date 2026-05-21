@@ -239,15 +239,52 @@ type EstimationLog struct {
 	EstimationBasis           string   `json:"estimationBasis"`
 }
 
-// PersonAssignment stores one AI-generated (or user-edited) task assignment for a single person.
+// PersonAssignment holds the active (is_current) version of one person's task assignment.
+// Body always mirrors the is_current ReasoningChainStep's output_state for entity_type="person_assignment".
 type PersonAssignment struct {
-	ID          string  `json:"id"`
-	ContextID   string  `json:"contextId"`
-	Name        string  `json:"name"`
-	Body        string  `json:"body"`
-	GeneratedAt *string `json:"generatedAt,omitempty"`
-	UpdatedAt   string  `json:"updatedAt"`
+	ID              string  `json:"id"`
+	ContextID       string  `json:"contextId"`
+	Name            string  `json:"name"`
+	Body            string  `json:"body"`
+	GeneratedAt     *string `json:"generatedAt,omitempty"`
+	AnalyzedThrough *string `json:"analyzedThrough,omitempty"`
+	IsOutdated      bool    `json:"isOutdated"`
+	UpdatedAt       string  `json:"updatedAt"`
 }
+
+// ReasoningChainStep is one step in a generic reasoning chain.
+// entity_type = "person_assignment" | "context"
+// input_state/output_state hold the domain-specific payload (markdown body, JSON events, etc.)
+type ReasoningChainStep struct {
+	ID                string   `json:"id"`
+	EntityType        string   `json:"entityType"`
+	EntityID          string   `json:"entityId"`
+	StepIndex         int      `json:"stepIndex"`
+	SourceType        string   `json:"sourceType"`
+	MessageID         string   `json:"messageId,omitempty"`
+	MessageContent    string   `json:"messageContent"`
+	UserInstruction   string   `json:"userInstruction,omitempty"`
+	InputState        string   `json:"inputState"`
+	OutputState       string   `json:"outputState"`
+	CompressedSummary string   `json:"compressedSummary"`
+	EventsSnapshot    string   `json:"eventsSnapshot"`
+	PromptVersion     string   `json:"promptVersion"`
+	QualityScore      *float64 `json:"qualityScore,omitempty"`
+	QualityNotes      string   `json:"qualityNotes,omitempty"`
+	IsCurrent         bool     `json:"isCurrent"`
+	CreatedAt         string   `json:"createdAt"`
+}
+
+// MessageEmbedding stores a float32 embedding vector for a message as a raw BLOB.
+type MessageEmbedding struct {
+	MessageID string    `json:"messageId"`
+	Embedding []float32 `json:"-"` // not serialised to frontend
+	Model     string    `json:"model"`
+	CreatedAt string    `json:"createdAt"`
+}
+
+// DefaultEmbeddingModel is the OpenAI model used to produce message embeddings.
+const DefaultEmbeddingModel = "text-embedding-3-small"
 
 // Keybinding is a user-configurable keyboard shortcut.
 // modifier_keys is a comma-separated list of: "cmd", "shift", "ctrl", "alt".

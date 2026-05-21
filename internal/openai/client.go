@@ -208,6 +208,34 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 	return resp, nil
 }
 
+// EmbedText calls the OpenAI embeddings API and returns a float32 vector.
+// Uses the same API key resolution as ChatCompletion.
+func (c *Client) EmbedText(ctx context.Context, text string) ([]float32, error) {
+	dbSettings, _, err := c.DescribeSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	apiKey, _, err := c.resolveAPIKey(ctx, dbSettings)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := openai.DefaultConfig(apiKey)
+	sdkClient := openai.NewClientWithConfig(cfg)
+
+	resp, err := sdkClient.CreateEmbeddings(ctx, openai.EmbeddingRequest{
+		Input: []string{text},
+		Model: openai.SmallEmbedding3,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("openai embeddings: %w", err)
+	}
+	if len(resp.Data) == 0 {
+		return nil, errors.New("openai embeddings: empty response")
+	}
+	return resp.Data[0].Embedding, nil
+}
+
 // resolveAPIKey checks env first, then the DB row.
 func (c *Client) resolveAPIKey(ctx context.Context, settings *appstore.AISettings) (string, Source, error) {
 	switch settings.Provider {

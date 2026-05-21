@@ -255,6 +255,8 @@ export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
 export function SearchJQL(arg1:string):Promise<Array<jira.SearchResult>>;
 
+export function SearchMessages(arg1:string,arg2:string):Promise<Array<store.Message>>;
+
 export function SearchNewIssues(arg1:string):Promise<service.SearchDiff>;
 
 export function SearchSlackChannels(arg1:string,arg2:string):Promise<Array<service.SlackChannelResult>>;
@@ -298,6 +300,24 @@ export function ToggleSlackDMConfigActive(arg1:string):Promise<slackstore.SlackD
 export function ToggleSlackThreadActive(arg1:string):Promise<slackstore.SlackThread>;
 
 export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploadedFile>;
+
+export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.ReasoningChainStep>>;
+
+export function SetCurrentAssignmentStep(arg1:string,arg2:string):Promise<store.PersonAssignment>;
+
+export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
+
+export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
+
+export function RegeneratePersonAssignment(arg1:string):Promise<store.PersonAssignment>;
+
+export function GetPendingMessages(arg1:string):Promise<Array<store.Message>>;
+
+export function MarkAssignmentsOutdated(arg1:string):Promise<{[key: string]: number}>;
+
+export function GenerateEventsFromMessages(arg1:string):Promise<void>;
 
 export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 
