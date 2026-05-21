@@ -397,6 +397,7 @@ func (p *PersonAssignmentProcessor) RunStep(ctx context.Context, inputState stri
 	}
 
 	step.PromptVersion = promptVer
+	step.LLMPrompt = prompt
 
 	resp, err := p.svc.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
@@ -1128,7 +1129,7 @@ func (s *Service) PreviewAssignmentStep(ctx context.Context, personAssignmentID 
 // CommitAssignmentStep saves a wizard-confirmed step to the PersonAssignment chain.
 // Truncates from stepIndex onward, re-creates this step with the given states.
 func (s *Service) CommitAssignmentStep(ctx context.Context, personAssignmentID string, stepIndex int, inputState, outputState string) (*appstore.ReasoningChainStep, error) {
-	return s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, inputState, outputState, s.paJudge)
+	return s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, inputState, outputState, "", s.paJudge)
 }
 
 // RunSingleAssignmentStep previews the AI output for one step without persisting anything.
@@ -1142,7 +1143,7 @@ func (s *Service) RunSingleAssignmentStep(ctx context.Context, personAssignmentI
 // Truncates from stepIndex onward, re-creates this step. If it's the last step,
 // promotes it to is_current and syncs PersonAssignment.body.
 func (s *Service) CommitStepOutput(ctx context.Context, personAssignmentID string, stepIndex int, inputState, outputState string) (*appstore.PersonAssignment, error) {
-	saved, err := s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, inputState, outputState, s.paJudge)
+	saved, err := s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, inputState, outputState, "", s.paJudge)
 	if err != nil {
 		return nil, fmt.Errorf("commit step: %w", err)
 	}
@@ -1152,6 +1153,64 @@ func (s *Service) CommitStepOutput(ctx context.Context, personAssignmentID strin
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, personAssignmentID, now)
+	}
+	return s.store.GetPersonAssignment(ctx, personAssignmentID)
+}
+
+// SaveAssignmentOutput saves a manually edited output body as a new active version
+// and syncs PersonAssignment.body.
+func (s *Service) SaveAssignmentOutput(ctx context.Context, personAssignmentID, body string) (*appstore.PersonAssignment, error) {
+	if err := s.store.UpdatePersonAssignmentBody(ctx, personAssignmentID, body); err != nil {
+		return nil, fmt.Errorf("update assignment body: %w", err)
+	}
+	if _, err := s.store.CreateAssignmentVersion(ctx, personAssignmentID, body, "", true); err != nil {
+		return nil, fmt.Errorf("create version: %w", err)
+	}
+	return s.store.GetPersonAssignment(ctx, personAssignmentID)
+}
+
+// RunAssignmentStepWithCustomPrompt runs the AI with customPrompt verbatim for the given step.
+// Does NOT write to the DB — returns the AI output for preview only.
+func (s *Service) RunAssignmentStepWithCustomPrompt(ctx context.Context, personAssignmentID string, stepIndex int, customPrompt string) (string, error) {
+	steps, err := s.store.ListChainSteps(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID)
+	if err != nil {
+		return "", fmt.Errorf("list steps: %w", err)
+	}
+	if stepIndex >= len(steps) {
+		return "", fmt.Errorf("step %d out of range (chain has %d steps)", stepIndex, len(steps))
+	}
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: customPrompt}})
+	if err != nil {
+		return "", fmt.Errorf("custom prompt AI call: %w", err)
+	}
+	return resp.Content, nil
+}
+
+// CommitAssignmentVersionFromCustomPrompt saves a new chain step using the given custom
+// prompt and output, creating a new active version of the assignment.
+func (s *Service) CommitAssignmentVersionFromCustomPrompt(ctx context.Context, personAssignmentID string, stepIndex int, customPrompt, outputState string) (*appstore.PersonAssignment, error) {
+	steps, err := s.store.ListChainSteps(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("list steps: %w", err)
+	}
+	if stepIndex >= len(steps) {
+		return nil, fmt.Errorf("step %d out of range (chain has %d steps)", stepIndex, len(steps))
+	}
+	originalInputState := steps[stepIndex].InputState
+
+	saved, err := s.chainSvc.CommitStep(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID, stepIndex, originalInputState, outputState, customPrompt, s.paJudge)
+	if err != nil {
+		return nil, fmt.Errorf("commit step: %w", err)
+	}
+	if saved.IsCurrent {
+		if err := s.store.UpdatePersonAssignmentBody(ctx, personAssignmentID, saved.OutputState); err != nil {
+			return nil, fmt.Errorf("sync assignment body: %w", err)
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, personAssignmentID, now)
+		if _, err := s.store.CreateAssignmentVersion(ctx, personAssignmentID, outputState, customPrompt, true); err != nil {
+			return nil, fmt.Errorf("create version: %w", err)
+		}
 	}
 	return s.store.GetPersonAssignment(ctx, personAssignmentID)
 }
