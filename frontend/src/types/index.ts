@@ -305,6 +305,7 @@ export interface ReasoningChainStep {
   compressedSummary: string;
   eventsSnapshot: string;
   promptVersion: string;
+  llmPrompt?: string;
   qualityScore?: number;
   qualityNotes?: string;
   isCurrent: boolean;
@@ -312,6 +313,15 @@ export interface ReasoningChainStep {
 }
 
 export type PersonAssignmentStep = ReasoningChainStep;
+
+export interface PersonAssignmentVersion {
+  id: string;
+  personAssignmentId: string;
+  body: string;
+  llmPrompt?: string;
+  isActive: boolean;
+  createdAt: string;
+}
 
 export interface ContextMessage {
   id: string;

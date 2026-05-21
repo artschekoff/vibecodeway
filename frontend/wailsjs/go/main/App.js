@@ -662,6 +662,26 @@ export function CommitStepOutput(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CommitStepOutput'](arg1, arg2, arg3, arg4);
 }
 
+export function SaveAssignmentOutput(arg1, arg2) {
+  return window['go']['main']['App']['SaveAssignmentOutput'](arg1, arg2);
+}
+
+export function RunAssignmentStepWithCustomPrompt(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunAssignmentStepWithCustomPrompt'](arg1, arg2, arg3);
+}
+
+export function CommitAssignmentVersionFromCustomPrompt(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CommitAssignmentVersionFromCustomPrompt'](arg1, arg2, arg3, arg4);
+}
+
+export function ListAssignmentVersions(arg1) {
+  return window['go']['main']['App']['ListAssignmentVersions'](arg1);
+}
+
+export function SetActiveAssignmentVersion(arg1, arg2) {
+  return window['go']['main']['App']['SetActiveAssignmentVersion'](arg1, arg2);
+}
+
 export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
   return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
 }

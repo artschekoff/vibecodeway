@@ -1176,6 +1176,9 @@ func (s *Service) RunAssignmentStepWithCustomPrompt(ctx context.Context, personA
 	if err != nil {
 		return "", fmt.Errorf("list steps: %w", err)
 	}
+	if stepIndex < 0 {
+		return "", fmt.Errorf("step index must be non-negative")
+	}
 	if stepIndex >= len(steps) {
 		return "", fmt.Errorf("step %d out of range (chain has %d steps)", stepIndex, len(steps))
 	}
@@ -1192,6 +1195,9 @@ func (s *Service) CommitAssignmentVersionFromCustomPrompt(ctx context.Context, p
 	steps, err := s.store.ListChainSteps(ctx, appstore.ChainEntityPersonAssignment, personAssignmentID)
 	if err != nil {
 		return nil, fmt.Errorf("list steps: %w", err)
+	}
+	if stepIndex < 0 {
+		return nil, fmt.Errorf("step index must be non-negative")
 	}
 	if stepIndex >= len(steps) {
 		return nil, fmt.Errorf("step %d out of range (chain has %d steps)", stepIndex, len(steps))
@@ -1213,6 +1219,11 @@ func (s *Service) CommitAssignmentVersionFromCustomPrompt(ctx context.Context, p
 		}
 	}
 	return s.store.GetPersonAssignment(ctx, personAssignmentID)
+}
+
+// ListAssignmentVersions returns all version records for a PersonAssignment, newest first.
+func (s *Service) ListAssignmentVersions(ctx context.Context, personAssignmentID string) ([]appstore.PersonAssignmentVersion, error) {
+	return s.store.ListAssignmentVersions(ctx, personAssignmentID)
 }
 
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns

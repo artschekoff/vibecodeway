@@ -309,6 +309,16 @@ export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Pro
 
 export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
 
+export function SaveAssignmentOutput(arg1:string,arg2:string):Promise<store.PersonAssignment>;
+
+export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function CommitAssignmentVersionFromCustomPrompt(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
+
+export function ListAssignmentVersions(arg1:string):Promise<Array<store.PersonAssignmentVersion>>;
+
+export function SetActiveAssignmentVersion(arg1:string,arg2:string):Promise<store.PersonAssignment>;
+
 export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
 
 export function RegeneratePersonAssignment(arg1:string):Promise<store.PersonAssignment>;
