@@ -269,10 +269,22 @@ type ReasoningChainStep struct {
 	CompressedSummary string   `json:"compressedSummary"`
 	EventsSnapshot    string   `json:"eventsSnapshot"`
 	PromptVersion     string   `json:"promptVersion"`
+	LLMPrompt         string   `json:"llmPrompt,omitempty"` // rendered prompt sent to LLM, loaded via JOIN from step_prompts table
 	QualityScore      *float64 `json:"qualityScore,omitempty"`
 	QualityNotes      string   `json:"qualityNotes,omitempty"`
 	IsCurrent         bool     `json:"isCurrent"`
 	CreatedAt         string   `json:"createdAt"`
+}
+
+// PersonAssignmentVersion is one versioned snapshot of a PersonAssignment's output body.
+// Exactly one version per person_assignment_id should have IsActive = true (maintained by application layer).
+type PersonAssignmentVersion struct {
+	ID                 string `json:"id"`
+	PersonAssignmentID string `json:"personAssignmentId"`
+	Body               string `json:"body"`
+	LLMPrompt          string `json:"llmPrompt,omitempty"`
+	IsActive           bool   `json:"isActive"`
+	CreatedAt          string `json:"createdAt"`
 }
 
 // MessageEmbedding stores a float32 embedding vector for a message as a raw BLOB.
