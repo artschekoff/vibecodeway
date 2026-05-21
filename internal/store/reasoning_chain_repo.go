@@ -81,21 +81,28 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 	if err != nil {
 		return nil, fmt.Errorf("append chain step: %w", err)
 	}
+	if step.LLMPrompt != "" {
+		if promptErr := s.InsertStepPrompt(ctx, step.ID, step.LLMPrompt); promptErr != nil {
+			return nil, fmt.Errorf("save step prompt: %w", promptErr)
+		}
+	}
 	return &step, nil
 }
 
 // ListChainSteps returns all steps for (entityType, entityID) ordered by step_index ASC.
 func (s *Store) ListChainSteps(ctx context.Context, entityType, entityID string) ([]ReasoningChainStep, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, entity_type, entity_id, step_index, source_type,
-		       COALESCE(message_id,''), message_content, COALESCE(user_instruction,''),
-		       input_state, output_state,
-		       COALESCE(compressed_summary,''), COALESCE(events_snapshot,''),
-		       COALESCE(prompt_version,'v1'), quality_score, COALESCE(quality_notes,''),
-		       is_current, created_at
-		FROM reasoning_chain_steps
-		WHERE entity_type = ? AND entity_id = ?
-		ORDER BY step_index ASC
+		SELECT r.id, r.entity_type, r.entity_id, r.step_index, r.source_type,
+		       COALESCE(r.message_id,''), r.message_content, COALESCE(r.user_instruction,''),
+		       r.input_state, r.output_state,
+		       COALESCE(r.compressed_summary,''), COALESCE(r.events_snapshot,''),
+		       COALESCE(r.prompt_version,'v1'), r.quality_score, COALESCE(r.quality_notes,''),
+		       r.is_current, r.created_at,
+		       COALESCE(sp.llm_prompt,'')
+		FROM reasoning_chain_steps r
+		LEFT JOIN step_prompts sp ON sp.step_id = r.id
+		WHERE r.entity_type = ? AND r.entity_id = ?
+		ORDER BY r.step_index ASC
 	`, entityType, entityID)
 	if err != nil {
 		return nil, fmt.Errorf("list chain steps: %w", err)
@@ -113,7 +120,7 @@ func (s *Store) ListChainSteps(ctx context.Context, entityType, entityID string)
 			&st.InputState, &st.OutputState,
 			&st.CompressedSummary, &st.EventsSnapshot,
 			&st.PromptVersion, &qualityScore, &st.QualityNotes,
-			&isCurrent, &st.CreatedAt,
+			&isCurrent, &st.CreatedAt, &st.LLMPrompt,
 		); err != nil {
 			return nil, fmt.Errorf("scan chain step: %w", err)
 		}
