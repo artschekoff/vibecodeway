@@ -102,3 +102,75 @@ describe("PersonAssignmentDetail", () => {
     expect(screen.getByText(/no reasoning steps available/i)).toBeInTheDocument();
   });
 });
+
+describe("PersonAssignmentDetail — prompt edit + modal", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("Edit button appears when llmPrompt exists", () => {
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
+  });
+
+  it("Edit button not present when llmPrompt is absent", () => {
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep({ llmPrompt: undefined })]} onUpdated={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+  });
+
+  it("clicking Edit shows prompt textarea with current prompt", () => {
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    const ta = screen.getByRole("textbox", { name: /prompt/i });
+    expect((ta as HTMLTextAreaElement).value).toBe("You are an analyst. Generate for Alice.");
+  });
+
+  it("Send button calls RunAssignmentStepWithCustomPrompt and shows modal", async () => {
+    (App.RunAssignmentStepWithCustomPrompt as ReturnType<typeof vi.fn>).mockResolvedValue("Preview output from LLM");
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByText("Preview output from LLM")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /confirm/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /cancel/i }).length).toBeGreaterThan(0);
+  });
+
+  it("Confirm saves version and calls onUpdated", async () => {
+    (App.RunAssignmentStepWithCustomPrompt as ReturnType<typeof vi.fn>).mockResolvedValue("Preview body");
+    (App.CommitAssignmentVersionFromCustomPrompt as ReturnType<typeof vi.fn>).mockResolvedValue(makePA({ body: "Preview body" }));
+    const onUpdated = vi.fn();
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={onUpdated} />);
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await screen.findByText("Preview body");
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    await waitFor(() => expect(App.CommitAssignmentVersionFromCustomPrompt).toHaveBeenCalledWith(
+      "pa-1", 0, "You are an analyst. Generate for Alice.", "Preview body"
+    ));
+    expect(onUpdated).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("Cancel on modal closes without saving", async () => {
+    (App.RunAssignmentStepWithCustomPrompt as ReturnType<typeof vi.fn>).mockResolvedValue("Preview body");
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await screen.findByRole("dialog");
+    // click the last cancel button (the one in the modal)
+    const cancelBtns = screen.getAllByRole("button", { name: /cancel/i });
+    fireEvent.click(cancelBtns[cancelBtns.length - 1]);
+    expect(App.CommitAssignmentVersionFromCustomPrompt).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("Cancel in edit mode returns to view without calling API", () => {
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    expect(screen.getByRole("textbox", { name: /prompt/i })).toBeInTheDocument();
+    // find the cancel button in the prompt edit area
+    const cancelBtns = screen.getAllByRole("button", { name: /cancel/i });
+    fireEvent.click(cancelBtns[0]);
+    expect(screen.queryByRole("textbox", { name: /prompt/i })).not.toBeInTheDocument();
+    expect(App.RunAssignmentStepWithCustomPrompt).not.toHaveBeenCalled();
+  });
+});
