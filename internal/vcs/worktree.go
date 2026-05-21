@@ -27,13 +27,28 @@ func ParseWorktreeListForTest(data []byte) []WorktreeInfo {
 }
 
 // GitWorktreeAdd creates a new worktree at worktreePath checked out to branch.
+// If the branch doesn't exist locally (remote-only), it fetches from origin and
+// creates a tracking branch automatically.
 func GitWorktreeAdd(baseDir, worktreePath, branch string) error {
 	cmd := exec.Command("git", "-C", baseDir, "worktree", "add", worktreePath, branch)
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git worktree add %s: %w\n%s", branch, err, out)
+	if err == nil {
+		return nil
 	}
-	return nil
+	// Branch may only exist on the remote. Fetch it and retry with a tracking branch.
+	if strings.Contains(string(out), "invalid reference") {
+		fetchOut, fetchErr := exec.Command("git", "-C", baseDir, "fetch", "origin", branch).CombinedOutput()
+		if fetchErr != nil {
+			return fmt.Errorf("git worktree add %s: branch not found locally and fetch failed: %w\n%s", branch, fetchErr, fetchOut)
+		}
+		cmd2 := exec.Command("git", "-C", baseDir, "worktree", "add", "--track", "-b", branch, worktreePath, "origin/"+branch)
+		out2, err2 := cmd2.CombinedOutput()
+		if err2 != nil {
+			return fmt.Errorf("git worktree add %s: %w\n%s", branch, err2, out2)
+		}
+		return nil
+	}
+	return fmt.Errorf("git worktree add %s: %w\n%s", branch, err, out)
 }
 
 // GitWorktreeRemove removes a worktree from the repo rooted at baseDir, forcing

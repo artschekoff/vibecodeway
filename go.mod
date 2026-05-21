@@ -12,6 +12,7 @@ require (
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.10.0
+	github.com/viterin/vek v0.4.3
 	github.com/wailsapp/wails/v2 v2.12.0
 	go.uber.org/zap v1.27.0
 	golang.design/x/hotkey v0.4.1
@@ -64,7 +65,6 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/viterin/partial v1.1.0 // indirect
-	github.com/viterin/vek v0.4.3 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect

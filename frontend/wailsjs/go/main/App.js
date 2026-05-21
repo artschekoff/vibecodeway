@@ -70,8 +70,16 @@ export function ClearAppLogs() {
   return window['go']['main']['App']['ClearAppLogs']();
 }
 
+export function CommitAssignmentStep(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CommitAssignmentStep'](arg1, arg2, arg3, arg4);
+}
+
 export function CommitPendingUploads(arg1, arg2) {
   return window['go']['main']['App']['CommitPendingUploads'](arg1, arg2);
+}
+
+export function CommitStepOutput(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CommitStepOutput'](arg1, arg2, arg3, arg4);
 }
 
 export function CreateContext(arg1, arg2) {
@@ -166,6 +174,10 @@ export function FindWorkspaceForBranch(arg1, arg2) {
   return window['go']['main']['App']['FindWorkspaceForBranch'](arg1, arg2);
 }
 
+export function GenerateEventsFromMessages(arg1) {
+  return window['go']['main']['App']['GenerateEventsFromMessages'](arg1);
+}
+
 export function GenerateHandoffPacket(arg1) {
   return window['go']['main']['App']['GenerateHandoffPacket'](arg1);
 }
@@ -222,8 +234,16 @@ export function GetPendingCodeReviews() {
   return window['go']['main']['App']['GetPendingCodeReviews']();
 }
 
+export function GetPendingMessages(arg1) {
+  return window['go']['main']['App']['GetPendingMessages'](arg1);
+}
+
 export function GetPendingText() {
   return window['go']['main']['App']['GetPendingText']();
+}
+
+export function GetPersonAssignmentSteps(arg1) {
+  return window['go']['main']['App']['GetPersonAssignmentSteps'](arg1);
 }
 
 export function GetPersonAssignments(arg1) {
@@ -350,6 +370,10 @@ export function LoadSlackContext(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['LoadSlackContext'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
+export function MarkAssignmentsOutdated(arg1) {
+  return window['go']['main']['App']['MarkAssignmentsOutdated'](arg1);
+}
+
 export function MarkBranchAllViewed(arg1) {
   return window['go']['main']['App']['MarkBranchAllViewed'](arg1);
 }
@@ -422,12 +446,20 @@ export function PickRepoDirectory() {
   return window['go']['main']['App']['PickRepoDirectory']();
 }
 
+export function PreviewAssignmentStep(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PreviewAssignmentStep'](arg1, arg2, arg3);
+}
+
 export function PreviewSlackDMs(arg1, arg2) {
   return window['go']['main']['App']['PreviewSlackDMs'](arg1, arg2);
 }
 
 export function QuickAttachText(arg1, arg2) {
   return window['go']['main']['App']['QuickAttachText'](arg1, arg2);
+}
+
+export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
 }
 
 export function RefinePersonAssignment(arg1, arg2, arg3) {
@@ -448,6 +480,10 @@ export function RefreshPendingReviews() {
 
 export function RefreshWorkspacesForRepo(arg1) {
   return window['go']['main']['App']['RefreshWorkspacesForRepo'](arg1);
+}
+
+export function RegeneratePersonAssignment(arg1) {
+  return window['go']['main']['App']['RegeneratePersonAssignment'](arg1);
 }
 
 export function ReloadAllContexts() {
@@ -482,6 +518,10 @@ export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
 }
 
+export function RunSingleAssignmentStep(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunSingleAssignmentStep'](arg1, arg2, arg3);
+}
+
 export function SavePersonAssignment(arg1, arg2) {
   return window['go']['main']['App']['SavePersonAssignment'](arg1, arg2);
 }
@@ -490,12 +530,12 @@ export function SearchContextIDs(arg1) {
   return window['go']['main']['App']['SearchContextIDs'](arg1);
 }
 
-export function SearchMessages(arg1, arg2) {
-  return window['go']['main']['App']['SearchMessages'](arg1, arg2);
-}
-
 export function SearchJQL(arg1) {
   return window['go']['main']['App']['SearchJQL'](arg1);
+}
+
+export function SearchMessages(arg1, arg2) {
+  return window['go']['main']['App']['SearchMessages'](arg1, arg2);
 }
 
 export function SearchNewIssues(arg1) {
@@ -520,6 +560,10 @@ export function SetContextOrg(arg1, arg2) {
 
 export function SetContextsOrder(arg1) {
   return window['go']['main']['App']['SetContextsOrder'](arg1);
+}
+
+export function SetCurrentAssignmentStep(arg1, arg2) {
+  return window['go']['main']['App']['SetCurrentAssignmentStep'](arg1, arg2);
 }
 
 export function SetJiraBaseURL(arg1, arg2) {
@@ -644,40 +688,4 @@ export function VCSLoginStart(arg1) {
 
 export function ValidateSlackPassphrase(arg1) {
   return window['go']['main']['App']['ValidateSlackPassphrase'](arg1);
-}
-
-export function GetPersonAssignmentSteps(arg1) {
-  return window['go']['main']['App']['GetPersonAssignmentSteps'](arg1);
-}
-
-export function SetCurrentAssignmentStep(arg1, arg2) {
-  return window['go']['main']['App']['SetCurrentAssignmentStep'](arg1, arg2);
-}
-
-export function RunSingleAssignmentStep(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RunSingleAssignmentStep'](arg1, arg2, arg3);
-}
-
-export function CommitStepOutput(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['CommitStepOutput'](arg1, arg2, arg3, arg4);
-}
-
-export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
-}
-
-export function RegeneratePersonAssignment(arg1) {
-  return window['go']['main']['App']['RegeneratePersonAssignment'](arg1);
-}
-
-export function GetPendingMessages(arg1) {
-  return window['go']['main']['App']['GetPendingMessages'](arg1);
-}
-
-export function MarkAssignmentsOutdated(arg1) {
-  return window['go']['main']['App']['MarkAssignmentsOutdated'](arg1);
-}
-
-export function GenerateEventsFromMessages(arg1) {
-  return window['go']['main']['App']['GenerateEventsFromMessages'](arg1);
 }
