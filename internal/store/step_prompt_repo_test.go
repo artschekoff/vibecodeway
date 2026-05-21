@@ -49,3 +49,25 @@ func TestStepPrompt_EmptyWhenNotSet(t *testing.T) {
 	require.Len(t, steps, 1)
 	assert.Equal(t, "", steps[0].LLMPrompt, "empty LLMPrompt must round-trip as empty string")
 }
+
+func TestStepPrompt_NonCurrentRoundTrip(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	step, err := s.AppendChainStep(ctx, ReasoningChainStep{
+		EntityType:  ChainEntityPersonAssignment,
+		EntityID:    "pa-test-3",
+		SourceType:  "message",
+		InputState:  "",
+		OutputState: "non-current output",
+		IsCurrent:   false,
+		LLMPrompt:   "Non-current step prompt text.",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Non-current step prompt text.", step.LLMPrompt)
+
+	steps, err := s.ListChainSteps(ctx, ChainEntityPersonAssignment, "pa-test-3")
+	require.NoError(t, err)
+	require.Len(t, steps, 1)
+	assert.Equal(t, "Non-current step prompt text.", steps[0].LLMPrompt)
+}

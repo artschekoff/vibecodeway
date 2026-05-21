@@ -46,6 +46,11 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 			step.InputState, step.OutputState,
 			step.CompressedSummary, step.EventsSnapshot, step.PromptVersion,
 			step.QualityScore, step.QualityNotes, 0, step.CreatedAt)
+		if err == nil && step.LLMPrompt != "" {
+			if promptErr := s.InsertStepPrompt(ctx, step.ID, step.LLMPrompt); promptErr != nil {
+				return nil, fmt.Errorf("save step prompt: %w", promptErr)
+			}
+		}
 	} else {
 		// Atomically clear other is_current flags then insert this step as current.
 		tx, txErr := s.db.BeginTx(ctx, nil)
@@ -74,17 +79,21 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 		); txErr != nil {
 			return nil, fmt.Errorf("insert chain step: %w", txErr)
 		}
+		if step.LLMPrompt != "" {
+			if _, txErr = tx.ExecContext(ctx, `
+				INSERT INTO step_prompts (id, step_id, llm_prompt, created_at)
+				VALUES (?, ?, ?, ?)
+				ON CONFLICT(step_id) DO UPDATE SET llm_prompt = excluded.llm_prompt
+			`, uuid.New().String(), step.ID, step.LLMPrompt, step.CreatedAt); txErr != nil {
+				return nil, fmt.Errorf("save step prompt in tx: %w", txErr)
+			}
+		}
 		if txErr = tx.Commit(); txErr != nil {
 			return nil, fmt.Errorf("commit append step: %w", txErr)
 		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("append chain step: %w", err)
-	}
-	if step.LLMPrompt != "" {
-		if promptErr := s.InsertStepPrompt(ctx, step.ID, step.LLMPrompt); promptErr != nil {
-			return nil, fmt.Errorf("save step prompt: %w", promptErr)
-		}
 	}
 	return &step, nil
 }

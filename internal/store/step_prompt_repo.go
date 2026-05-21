@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,8 +30,11 @@ func (s *Store) GetStepPrompt(ctx context.Context, stepID string) (string, error
 	err := s.db.QueryRowContext(ctx,
 		`SELECT COALESCE(llm_prompt,'') FROM step_prompts WHERE step_id = ?`, stepID,
 	).Scan(&prompt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
 	if err != nil {
-		return "", nil // not found — return empty
+		return "", fmt.Errorf("get step prompt: %w", err)
 	}
 	return prompt, nil
 }
