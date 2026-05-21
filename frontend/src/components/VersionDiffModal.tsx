@@ -39,7 +39,7 @@ export function VersionDiffModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="version-diff-title"
-      onClick={onCancel}
+      onClick={isConfirming ? undefined : onCancel}
       style={{
         position: "fixed",
         inset: 0,

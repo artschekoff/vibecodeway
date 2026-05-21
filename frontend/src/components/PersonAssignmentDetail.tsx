@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   SaveAssignmentOutput,
   RunAssignmentStepWithCustomPrompt,
@@ -30,6 +30,8 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [versionConfirmError, setVersionConfirmError] = useState<string | undefined>(undefined);
+  // Guard against double-sends while a handleSend call is still in flight.
+  const isSendInFlight = useRef(false);
 
   useEffect(() => {
     let ignored = false;
@@ -74,6 +76,8 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
 
   const handleSend = async () => {
     if (promptState.mode !== "editing") return;
+    if (isSendInFlight.current) return;
+    isSendInFlight.current = true;
     const draft = promptState.draftPrompt;
     const currentId = pa.id;
     setPromptState({ mode: "preview", draftPrompt: draft, previewOutput: "", isSending: true });
@@ -93,6 +97,8 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
         previewOutput: `(error: ${String(err)})`,
         isSending: false,
       });
+    } finally {
+      isSendInFlight.current = false;
     }
   };
 
@@ -266,7 +272,7 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
               <button
                 className="btn-primary"
                 style={{ fontSize: 11, padding: "4px 12px" }}
-                disabled={promptState.mode === "preview" && promptState.isSending}
+                disabled={promptState.mode === "preview"}
                 onClick={() => void handleSend()}
               >
                 Send

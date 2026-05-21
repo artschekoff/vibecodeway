@@ -1158,15 +1158,13 @@ func (s *Service) CommitStepOutput(ctx context.Context, personAssignmentID strin
 }
 
 // SaveAssignmentOutput saves a manually edited output body as a new active version
-// and syncs PersonAssignment.body.
+// and syncs PersonAssignment.body atomically.
 func (s *Service) SaveAssignmentOutput(ctx context.Context, personAssignmentID, body string) (*appstore.PersonAssignment, error) {
-	if err := s.store.UpdatePersonAssignmentBody(ctx, personAssignmentID, body); err != nil {
-		return nil, fmt.Errorf("update assignment body: %w", err)
+	pa, err := s.store.UpsertAssignmentBodyAndVersion(ctx, personAssignmentID, body, "")
+	if err != nil {
+		return nil, fmt.Errorf("save assignment output: %w", err)
 	}
-	if _, err := s.store.CreateAssignmentVersion(ctx, personAssignmentID, body, "", true); err != nil {
-		return nil, fmt.Errorf("create version: %w", err)
-	}
-	return s.store.GetPersonAssignment(ctx, personAssignmentID)
+	return pa, nil
 }
 
 // RunAssignmentStepWithCustomPrompt runs the AI with customPrompt verbatim for the given step.
@@ -1209,14 +1207,11 @@ func (s *Service) CommitAssignmentVersionFromCustomPrompt(ctx context.Context, p
 		return nil, fmt.Errorf("commit step: %w", err)
 	}
 	if saved.IsCurrent {
-		if err := s.store.UpdatePersonAssignmentBody(ctx, personAssignmentID, saved.OutputState); err != nil {
-			return nil, fmt.Errorf("sync assignment body: %w", err)
+		if _, err := s.store.UpsertAssignmentBodyAndVersion(ctx, personAssignmentID, saved.OutputState, customPrompt); err != nil {
+			return nil, fmt.Errorf("save assignment version: %w", err)
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		_ = s.store.SetPersonAssignmentAnalyzedThrough(ctx, personAssignmentID, now)
-		if _, err := s.store.CreateAssignmentVersion(ctx, personAssignmentID, outputState, customPrompt, true); err != nil {
-			return nil, fmt.Errorf("create version: %w", err)
-		}
 	}
 	return s.store.GetPersonAssignment(ctx, personAssignmentID)
 }

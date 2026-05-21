@@ -32,9 +32,15 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 		isCurrent = 1
 	}
 
-	var err error
 	if isCurrent == 0 {
-		_, err = s.db.ExecContext(ctx, `
+		// Wrap both writes in a transaction so an orphaned step row cannot result
+		// from a failure between the INSERT and the step_prompts upsert.
+		tx, txErr := s.db.BeginTx(ctx, nil)
+		if txErr != nil {
+			return nil, fmt.Errorf("begin append step tx: %w", txErr)
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, txErr = tx.ExecContext(ctx, `
 			INSERT INTO reasoning_chain_steps
 			  (id, entity_type, entity_id, step_index, source_type, message_id,
 			   message_content, user_instruction, input_state, output_state,
@@ -45,11 +51,20 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 			dbNullStr(step.MessageID), step.MessageContent, step.UserInstruction,
 			step.InputState, step.OutputState,
 			step.CompressedSummary, step.EventsSnapshot, step.PromptVersion,
-			step.QualityScore, step.QualityNotes, 0, step.CreatedAt)
-		if err == nil && step.LLMPrompt != "" {
-			if promptErr := s.InsertStepPrompt(ctx, step.ID, step.LLMPrompt); promptErr != nil {
-				return nil, fmt.Errorf("save step prompt: %w", promptErr)
+			step.QualityScore, step.QualityNotes, 0, step.CreatedAt); txErr != nil {
+			return nil, fmt.Errorf("insert step: %w", txErr)
+		}
+		if step.LLMPrompt != "" {
+			if _, txErr = tx.ExecContext(ctx, `
+				INSERT INTO step_prompts (id, step_id, llm_prompt, created_at)
+				VALUES (?, ?, ?, ?)
+				ON CONFLICT(step_id) DO UPDATE SET llm_prompt = excluded.llm_prompt
+			`, uuid.New().String(), step.ID, step.LLMPrompt, step.CreatedAt); txErr != nil {
+				return nil, fmt.Errorf("insert step prompt: %w", txErr)
 			}
+		}
+		if txErr = tx.Commit(); txErr != nil {
+			return nil, fmt.Errorf("commit append step: %w", txErr)
 		}
 	} else {
 		// Atomically clear other is_current flags then insert this step as current.
@@ -91,9 +106,6 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 		if txErr = tx.Commit(); txErr != nil {
 			return nil, fmt.Errorf("commit append step: %w", txErr)
 		}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("append chain step: %w", err)
 	}
 	return &step, nil
 }
