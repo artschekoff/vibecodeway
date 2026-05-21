@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PersonAssignmentDetail } from "./PersonAssignmentDetail";
-import type { PersonAssignment, ReasoningChainStep } from "../types/index";
+import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
 
 vi.mock("../../wailsjs/go/main/App", () => ({
   SaveAssignmentOutput: vi.fn(),
@@ -172,5 +172,80 @@ describe("PersonAssignmentDetail — prompt edit + modal", () => {
     fireEvent.click(cancelBtns[0]);
     expect(screen.queryByRole("textbox", { name: /prompt/i })).not.toBeInTheDocument();
     expect(App.RunAssignmentStepWithCustomPrompt).not.toHaveBeenCalled();
+  });
+});
+
+const makeVersion = (overrides: Partial<PersonAssignmentVersion> = {}): PersonAssignmentVersion => ({
+  id: "v-1",
+  personAssignmentId: "pa-1",
+  body: "Old assignment body",
+  isActive: false,
+  createdAt: "2024-01-01T00:00:00Z",
+  ...overrides,
+});
+
+describe("version selector", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("selector not rendered when no versions exist", async () => {
+    (App.ListAssignmentVersions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    await waitFor(() => expect(App.ListAssignmentVersions).toHaveBeenCalledWith("pa-1"));
+    expect(screen.queryByRole("combobox", { name: /versions/i })).not.toBeInTheDocument();
+  });
+
+  it("selector renders when versions exist", async () => {
+    const versions = [
+      makeVersion({ id: "v-1", createdAt: "2024-01-01T00:00:00Z" }),
+      makeVersion({ id: "v-2", createdAt: "2024-01-02T00:00:00Z" }),
+    ];
+    (App.ListAssignmentVersions as ReturnType<typeof vi.fn>).mockResolvedValue(versions);
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /versions/i })).toBeInTheDocument());
+  });
+
+  it("selecting a version opens diff modal", async () => {
+    const versions = [
+      makeVersion({ id: "v-1", body: "Old body", createdAt: "2024-01-01T00:00:00Z" }),
+    ];
+    (App.ListAssignmentVersions as ReturnType<typeof vi.fn>).mockResolvedValue(versions);
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /versions/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByRole("combobox", { name: /versions/i }), { target: { value: "v-1" } });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("confirm calls SetActiveAssignmentVersion and closes modal", async () => {
+    const versions = [
+      makeVersion({ id: "v-1", body: "Old body", createdAt: "2024-01-01T00:00:00Z" }),
+    ];
+    (App.ListAssignmentVersions as ReturnType<typeof vi.fn>).mockResolvedValue(versions);
+    const updatedPA = makePA({ body: "Old body" });
+    (App.SetActiveAssignmentVersion as ReturnType<typeof vi.fn>).mockResolvedValue(updatedPA);
+    const onUpdated = vi.fn();
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={onUpdated} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /versions/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByRole("combobox", { name: /versions/i }), { target: { value: "v-1" } });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    await waitFor(() => expect(App.SetActiveAssignmentVersion).toHaveBeenCalledWith("pa-1", "v-1"));
+    expect(onUpdated).toHaveBeenCalledWith(updatedPA);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("cancel closes modal without calling SetActiveAssignmentVersion", async () => {
+    const versions = [
+      makeVersion({ id: "v-1", body: "Old body", createdAt: "2024-01-01T00:00:00Z" }),
+    ];
+    (App.ListAssignmentVersions as ReturnType<typeof vi.fn>).mockResolvedValue(versions);
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /versions/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByRole("combobox", { name: /versions/i }), { target: { value: "v-1" } });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // cancel button in the diff modal
+    const cancelBtns = screen.getAllByRole("button", { name: /cancel/i });
+    fireEvent.click(cancelBtns[cancelBtns.length - 1]);
+    expect(App.SetActiveAssignmentVersion).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });

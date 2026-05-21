@@ -3,8 +3,11 @@ import {
   SaveAssignmentOutput,
   RunAssignmentStepWithCustomPrompt,
   CommitAssignmentVersionFromCustomPrompt,
+  ListAssignmentVersions,
+  SetActiveAssignmentVersion,
 } from "../../wailsjs/go/main/App";
-import type { PersonAssignment, ReasoningChainStep } from "../types/index";
+import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
+import { VersionDiffModal } from "./VersionDiffModal";
 
 interface Props {
   pa: PersonAssignment;
@@ -22,9 +25,16 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [promptState, setPromptState] = useState<PromptEditState>({ mode: "view" });
+  const [versions, setVersions] = useState<PersonAssignmentVersion[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [versionConfirmError, setVersionConfirmError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     setOutputDraft(pa.body);
+    setSelectedVersionId(null);
+    setVersions([]);
+    void ListAssignmentVersions(pa.id).then((vs) => setVersions(vs as PersonAssignmentVersion[]));
   }, [pa.id]);
 
   // Use the current step for PROMPT and SOURCE. Fall back to last step if no isCurrent.
@@ -81,6 +91,25 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
       );
     }
   };
+
+  const handleVersionConfirm = async () => {
+    if (!selectedVersionId) return;
+    setIsConfirming(true);
+    setVersionConfirmError(undefined);
+    try {
+      const result = (await SetActiveAssignmentVersion(pa.id, selectedVersionId)) as PersonAssignment;
+      onUpdated(result);
+      setSelectedVersionId(null);
+    } catch (err) {
+      setVersionConfirmError(String(err));
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const selectedVersion = selectedVersionId
+    ? versions.find((v) => v.id === selectedVersionId) ?? null
+    : null;
 
   if (!steps.length) {
     return (
@@ -352,6 +381,57 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
           onChange={(e) => setOutputDraft(e.target.value)}
         />
       </section>
+
+      {/* VERSION SELECTOR */}
+      {versions.length > 0 && (
+        <section>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginBottom: 6,
+            }}
+          >
+            Versions
+          </div>
+          <select
+            aria-label="Versions"
+            style={{
+              fontSize: 12,
+              padding: "4px 8px",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              color: "var(--text)",
+              width: "100%",
+            }}
+            value={selectedVersionId ?? ""}
+            onChange={(e) => setSelectedVersionId(e.target.value || null)}
+          >
+            <option value="">Select version…</option>
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.createdAt}
+              </option>
+            ))}
+          </select>
+        </section>
+      )}
+
+      {/* VERSION DIFF MODAL */}
+      {selectedVersion && (
+        <VersionDiffModal
+          currentBody={pa.body}
+          selectedVersion={selectedVersion}
+          onConfirm={handleVersionConfirm}
+          onCancel={() => setSelectedVersionId(null)}
+          isConfirming={isConfirming}
+          confirmError={versionConfirmError}
+        />
+      )}
     </div>
   );
 }
