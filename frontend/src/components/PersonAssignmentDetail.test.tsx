@@ -131,7 +131,7 @@ describe("PersonAssignmentDetail — prompt edit + modal", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(await screen.findByText("Preview output from LLM")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirm/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /cancel/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /cancel preview/i })).toBeInTheDocument();
   });
 
   it("Confirm saves version and calls onUpdated", async () => {
@@ -156,9 +156,7 @@ describe("PersonAssignmentDetail — prompt edit + modal", () => {
     fireEvent.click(screen.getByRole("button", { name: /edit/i }));
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await screen.findByRole("dialog");
-    // click the last cancel button (the one in the modal)
-    const cancelBtns = screen.getAllByRole("button", { name: /cancel/i });
-    fireEvent.click(cancelBtns[cancelBtns.length - 1]);
+    fireEvent.click(screen.getByRole("button", { name: /cancel preview/i }));
     expect(App.CommitAssignmentVersionFromCustomPrompt).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
@@ -167,9 +165,7 @@ describe("PersonAssignmentDetail — prompt edit + modal", () => {
     render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /edit/i }));
     expect(screen.getByRole("textbox", { name: /prompt/i })).toBeInTheDocument();
-    // find the cancel button in the prompt edit area
-    const cancelBtns = screen.getAllByRole("button", { name: /cancel/i });
-    fireEvent.click(cancelBtns[0]);
+    fireEvent.click(screen.getByRole("button", { name: /cancel prompt edit/i }));
     expect(screen.queryByRole("textbox", { name: /prompt/i })).not.toBeInTheDocument();
     expect(App.RunAssignmentStepWithCustomPrompt).not.toHaveBeenCalled();
   });
@@ -242,10 +238,18 @@ describe("version selector", () => {
     await waitFor(() => expect(screen.getByRole("combobox", { name: /versions/i })).toBeInTheDocument());
     fireEvent.change(screen.getByRole("combobox", { name: /versions/i }), { target: { value: "v-1" } });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    // cancel button in the diff modal
-    const cancelBtns = screen.getAllByRole("button", { name: /cancel/i });
-    fireEvent.click(cancelBtns[cancelBtns.length - 1]);
+    fireEvent.click(screen.getByRole("button", { name: /cancel version restore/i }));
     expect(App.SetActiveAssignmentVersion).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("shows error message when ListAssignmentVersions rejects", async () => {
+    (App.ListAssignmentVersions as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("network failure"));
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toBeInTheDocument()
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/failed to load versions/i);
+    expect(screen.queryByRole("combobox", { name: /versions/i })).not.toBeInTheDocument();
   });
 });

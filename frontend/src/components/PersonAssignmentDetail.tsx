@@ -26,16 +26,35 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [promptState, setPromptState] = useState<PromptEditState>({ mode: "view" });
   const [versions, setVersions] = useState<PersonAssignmentVersion[]>([]);
+  const [versionsError, setVersionsError] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [versionConfirmError, setVersionConfirmError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    let ignored = false;
     setOutputDraft(pa.body);
     setSelectedVersionId(null);
     setVersions([]);
-    void ListAssignmentVersions(pa.id).then((vs) => setVersions(vs as PersonAssignmentVersion[]));
+    setVersionsError(null);
+    void ListAssignmentVersions(pa.id).then((vs) => {
+      if (!ignored) setVersions(vs as PersonAssignmentVersion[]);
+    }).catch((err: unknown) => {
+      if (!ignored) setVersionsError(String(err));
+    });
+    return () => { ignored = true; };
   }, [pa.id]);
+
+  // Escape key handler for preview dialog
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && promptState.mode === "preview" && !promptState.isSending) {
+        setPromptState({ mode: "view" });
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [promptState]);
 
   // Use the current step for PROMPT and SOURCE. Fall back to last step if no isCurrent.
   const currentStep = steps.find((s) => s.isCurrent) ?? steps[steps.length - 1];
@@ -56,6 +75,7 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   const handleSend = async () => {
     if (promptState.mode !== "editing") return;
     const draft = promptState.draftPrompt;
+    const currentId = pa.id;
     setPromptState({ mode: "preview", draftPrompt: draft, previewOutput: "", isSending: true });
     try {
       const output = (await RunAssignmentStepWithCustomPrompt(
@@ -63,8 +83,10 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
         currentStep.stepIndex,
         draft
       )) as string;
+      if (pa.id !== currentId) return;
       setPromptState({ mode: "preview", draftPrompt: draft, previewOutput: output, isSending: false });
     } catch (err) {
+      if (pa.id !== currentId) return;
       setPromptState({
         mode: "preview",
         draftPrompt: draft,
@@ -250,6 +272,7 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
                 Send
               </button>
               <button
+                aria-label="Cancel prompt edit"
                 className="btn-secondary"
                 style={{ fontSize: 11, padding: "4px 10px" }}
                 onClick={() => setPromptState({ mode: "view" })}
@@ -266,6 +289,10 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="preview-dialog-title"
+          onClick={() => {
+            if (!promptState.isSending) setPromptState({ mode: "view" });
+          }}
           style={{
             position: "fixed",
             inset: 0,
@@ -277,6 +304,7 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               background: "var(--surface)",
               border: "1px solid var(--border)",
@@ -288,7 +316,7 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
               overflowY: "auto",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
+            <div id="preview-dialog-title" style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
               New output preview
             </div>
             <pre
@@ -315,6 +343,7 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
                 Confirm
               </button>
               <button
+                aria-label="Cancel preview"
                 className="btn-secondary"
                 style={{ fontSize: 11, padding: "4px 10px" }}
                 onClick={() => setPromptState({ mode: "view" })}
@@ -383,6 +412,11 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
       </section>
 
       {/* VERSION SELECTOR */}
+      {versionsError && (
+        <div style={{ fontSize: 11, color: "#dc2626" }} role="alert">
+          Failed to load versions: {versionsError}
+        </div>
+      )}
       {versions.length > 0 && (
         <section>
           <div

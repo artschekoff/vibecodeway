@@ -1,3 +1,4 @@
+import { useMemo, useEffect } from "react";
 import { diffWords } from "diff";
 import type { PersonAssignmentVersion } from "../types/index";
 
@@ -18,12 +19,27 @@ export function VersionDiffModal({
   isConfirming,
   confirmError,
 }: Props) {
-  const parts = diffWords(currentBody, selectedVersion.body);
+  const parts = useMemo(
+    () => diffWords(currentBody, selectedVersion.body),
+    [currentBody, selectedVersion.body]
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isConfirming) {
+        onCancel();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel, isConfirming]);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="version-diff-title"
+      onClick={onCancel}
       style={{
         position: "fixed",
         inset: 0,
@@ -35,6 +51,7 @@ export function VersionDiffModal({
       }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
@@ -46,7 +63,7 @@ export function VersionDiffModal({
           overflowY: "auto",
         }}
       >
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
+        <div id="version-diff-title" style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
           Restore version from {selectedVersion.createdAt}
         </div>
         <pre
@@ -63,7 +80,7 @@ export function VersionDiffModal({
             if (part.removed) {
               return (
                 <del
-                  key={i}
+                  key={`${i}-del`}
                   style={{ background: "#fecaca", textDecoration: "line-through" }}
                 >
                   {part.value}
@@ -73,14 +90,14 @@ export function VersionDiffModal({
             if (part.added) {
               return (
                 <ins
-                  key={i}
+                  key={`${i}-add`}
                   style={{ background: "#bbf7d0", textDecoration: "none" }}
                 >
                   {part.value}
                 </ins>
               );
             }
-            return <span key={i}>{part.value}</span>;
+            return <span key={`${i}-eq`}>{part.value}</span>;
           })}
         </pre>
         {confirmError && (
@@ -96,6 +113,7 @@ export function VersionDiffModal({
             {isConfirming ? "Restoring…" : "Confirm"}
           </button>
           <button
+            aria-label="Cancel version restore"
             className="btn-secondary"
             style={{ fontSize: 11, padding: "4px 10px" }}
             onClick={onCancel}
