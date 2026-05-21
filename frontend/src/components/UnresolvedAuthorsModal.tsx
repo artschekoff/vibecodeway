@@ -80,16 +80,14 @@ export function UnresolvedAuthorsModal({ contextID, orgID, onClose }: Props) {
   if (unresolved.length === 0) { onClose(); return null; }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
-          <h2 className="text-base font-semibold">Assign Unknown Authors</h2>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            {unresolved.length} author{unresolved.length !== 1 ? "s" : ""} found in this context with no org assignment.
-          </p>
-        </div>
+    <div className="modal-overlay">
+      <div className="modal" style={{ width: 520 }}>
+        <h2>Assign Unknown Authors</h2>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: -12, marginBottom: 16 }}>
+          {unresolved.length} author{unresolved.length !== 1 ? "s" : ""} found in this context with no org assignment.
+        </p>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="modal-scroll-body">
           {unresolved.map((author) => (
             <AuthorRow
               key={key(author)}
@@ -101,17 +99,14 @@ export function UnresolvedAuthorsModal({ contextID, orgID, onClose }: Props) {
           ))}
         </div>
 
-        <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 text-sm rounded-lg border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-          >
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn-secondary">
             Skip all
           </button>
           <button
             onClick={() => void handleConfirm()}
             disabled={saving}
-            className="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="btn-primary"
           >
             {saving ? "Saving…" : "Confirm"}
           </button>
@@ -134,27 +129,52 @@ function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
   const [newEmail, setNewEmail] = useState("");
 
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-zinc-400 w-14 shrink-0">
+    <div style={{
+      border: "1px solid var(--border)",
+      borderRadius: "var(--radius-sm)",
+      padding: "10px 12px",
+      marginBottom: 10,
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{
+          fontSize: 10,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: "var(--text-muted)",
+          width: 40,
+          flexShrink: 0,
+        }}>
           {author.sourceLabel}
         </span>
-        <span className="font-medium text-sm">{author.rawAuthor}</span>
-        <span className="ml-auto text-xs text-zinc-400">
+        <span style={{ fontWeight: 500, fontSize: 13 }}>{author.rawAuthor}</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)" }}>
           {author.messageCount} msg{author.messageCount !== 1 ? "s" : ""}
         </span>
       </div>
 
-      <div className="flex gap-2 text-xs">
+      <div style={{ display: "flex", gap: 6 }}>
         <button
           onClick={() => setMode("select")}
-          className={`px-2 py-0.5 rounded ${mode === "select" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300" : "text-zinc-500 hover:text-zinc-700"}`}
+          style={{
+            padding: "2px 10px",
+            fontSize: 12,
+            background: mode === "select" ? "var(--accent)" : "var(--surface2)",
+            color: mode === "select" ? "#fff" : "var(--text-muted)",
+          }}
         >
           Assign existing
         </button>
         <button
           onClick={() => setMode("create")}
-          className={`px-2 py-0.5 rounded ${mode === "create" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300" : "text-zinc-500 hover:text-zinc-700"}`}
+          style={{
+            padding: "2px 10px",
+            fontSize: 12,
+            background: mode === "create" ? "var(--accent)" : "var(--surface2)",
+            color: mode === "create" ? "#fff" : "var(--text-muted)",
+          }}
         >
           Create new
         </button>
@@ -162,7 +182,7 @@ function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
 
       {mode === "select" && (
         <select
-          className="w-full text-sm rounded border border-zinc-300 dark:border-zinc-600 px-2 py-1 bg-white dark:bg-zinc-800"
+          style={{ width: "100%" }}
           value={resolution?.type === "existing" ? resolution.userID : ""}
           onChange={(e) =>
             e.target.value
@@ -181,9 +201,8 @@ function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
       )}
 
       {mode === "create" && (
-        <div className="space-y-1">
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <input
-            className="w-full text-sm rounded border border-zinc-300 dark:border-zinc-600 px-2 py-1 bg-white dark:bg-zinc-800"
             placeholder="Display name"
             value={newName}
             onChange={(e) => {
@@ -192,7 +211,6 @@ function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
             }}
           />
           <input
-            className="w-full text-sm rounded border border-zinc-300 dark:border-zinc-600 px-2 py-1 bg-white dark:bg-zinc-800"
             placeholder="Email (optional)"
             value={newEmail}
             onChange={(e) => {
