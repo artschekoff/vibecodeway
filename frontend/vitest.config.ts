@@ -2,13 +2,20 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
+const worktreeRoot = path.resolve(__dirname, '../../../..');
+const mainFrontend = path.resolve(worktreeRoot, 'frontend/node_modules');
+
 export default defineConfig({
   resolve: {
     alias: [
       { find: /.*\/wailsjs\/go\/main\/App/, replacement: path.resolve(__dirname, 'src/__mocks__/wailsjs-app.ts') },
       { find: '@', replacement: path.resolve(__dirname, './src') },
-      { find: 'react', replacement: path.resolve(__dirname, '../node_modules/react') },
-      { find: 'react-dom', replacement: path.resolve(__dirname, '../node_modules/react-dom') },
+      // Pin react, react-dom, and lucide-react to the main project's copies to avoid dual-React issues
+      { find: /^react\/(.+)$/, replacement: path.resolve(mainFrontend, 'react/$1') },
+      { find: /^react$/, replacement: path.resolve(mainFrontend, 'react') },
+      { find: /^react-dom\/(.+)$/, replacement: path.resolve(mainFrontend, 'react-dom/$1') },
+      { find: /^react-dom$/, replacement: path.resolve(mainFrontend, 'react-dom') },
+      { find: /^lucide-react$/, replacement: path.resolve(mainFrontend, 'lucide-react') },
     ],
   },
   test: {

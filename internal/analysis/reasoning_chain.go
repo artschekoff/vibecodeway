@@ -96,7 +96,7 @@ func (s *ReasoningChainService) PreviewStep(ctx context.Context, entityType, ent
 // Truncates from stepIndex onward, re-creates this step with the given inputState/outputState.
 // If it was the last step, promotes it to is_current.
 // judge may be nil to skip quality scoring for this step.
-func (s *ReasoningChainService) CommitStep(ctx context.Context, entityType, entityID string, stepIndex int, inputState, outputState string, judge QualityJudge) (*appstore.ReasoningChainStep, error) {
+func (s *ReasoningChainService) CommitStep(ctx context.Context, entityType, entityID string, stepIndex int, inputState, outputState, llmPrompt string, judge QualityJudge) (*appstore.ReasoningChainStep, error) {
 	steps, err := s.store.ListChainSteps(ctx, entityType, entityID)
 	if err != nil {
 		return nil, fmt.Errorf("list steps: %w", err)
@@ -125,6 +125,7 @@ func (s *ReasoningChainService) CommitStep(ctx context.Context, entityType, enti
 		InputState:        inputState,
 		OutputState:       outputState,
 		IsCurrent:         isLast,
+		LLMPrompt:         llmPrompt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("append committed step: %w", err)

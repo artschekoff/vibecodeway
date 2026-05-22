@@ -947,7 +947,16 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       <div className="topbar">
         <button className="back-btn" onClick={() => navigateBack(_tabId)}><ArrowLeft size={16} /> Back</button>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <h1 style={{ fontSize: 16, margin: 0, whiteSpace: "nowrap" }}>{context.key}</h1>
+          <h1 style={{ fontSize: 16, margin: 0, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+            {context.key}
+            <button
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", lineHeight: 1 }}
+              title="Copy context name"
+              onClick={() => { void navigator.clipboard.writeText(context.key); showToast("Copied!"); }}
+            >
+              <Copy size={13} />
+            </button>
+          </h1>
           <span className={`badge badge-${context.status}`}>{context.status}</span>
           <span className="topbar-counts">
             {[
