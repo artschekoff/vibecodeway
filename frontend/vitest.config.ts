@@ -2,8 +2,7 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-const worktreeRoot = path.resolve(__dirname, '../../../..');
-const mainFrontend = path.resolve(worktreeRoot, 'frontend/node_modules');
+const mainFrontend = path.resolve(__dirname, 'node_modules');
 
 export default defineConfig({
   resolve: {
