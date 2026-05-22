@@ -32,9 +32,15 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 		isCurrent = 1
 	}
 
-	var err error
 	if isCurrent == 0 {
-		_, err = s.db.ExecContext(ctx, `
+		// Wrap both writes in a transaction so an orphaned step row cannot result
+		// from a failure between the INSERT and the step_prompts upsert.
+		tx, txErr := s.db.BeginTx(ctx, nil)
+		if txErr != nil {
+			return nil, fmt.Errorf("begin append step tx: %w", txErr)
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, txErr = tx.ExecContext(ctx, `
 			INSERT INTO reasoning_chain_steps
 			  (id, entity_type, entity_id, step_index, source_type, message_id,
 			   message_content, user_instruction, input_state, output_state,
@@ -45,7 +51,21 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 			dbNullStr(step.MessageID), step.MessageContent, step.UserInstruction,
 			step.InputState, step.OutputState,
 			step.CompressedSummary, step.EventsSnapshot, step.PromptVersion,
-			step.QualityScore, step.QualityNotes, 0, step.CreatedAt)
+			step.QualityScore, step.QualityNotes, 0, step.CreatedAt); txErr != nil {
+			return nil, fmt.Errorf("insert step: %w", txErr)
+		}
+		if step.LLMPrompt != "" {
+			if _, txErr = tx.ExecContext(ctx, `
+				INSERT INTO step_prompts (id, step_id, llm_prompt, created_at)
+				VALUES (?, ?, ?, ?)
+				ON CONFLICT(step_id) DO UPDATE SET llm_prompt = excluded.llm_prompt
+			`, uuid.New().String(), step.ID, step.LLMPrompt, step.CreatedAt); txErr != nil {
+				return nil, fmt.Errorf("insert step prompt: %w", txErr)
+			}
+		}
+		if txErr = tx.Commit(); txErr != nil {
+			return nil, fmt.Errorf("commit append step: %w", txErr)
+		}
 	} else {
 		// Atomically clear other is_current flags then insert this step as current.
 		tx, txErr := s.db.BeginTx(ctx, nil)
@@ -74,12 +94,18 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 		); txErr != nil {
 			return nil, fmt.Errorf("insert chain step: %w", txErr)
 		}
+		if step.LLMPrompt != "" {
+			if _, txErr = tx.ExecContext(ctx, `
+				INSERT INTO step_prompts (id, step_id, llm_prompt, created_at)
+				VALUES (?, ?, ?, ?)
+				ON CONFLICT(step_id) DO UPDATE SET llm_prompt = excluded.llm_prompt
+			`, uuid.New().String(), step.ID, step.LLMPrompt, step.CreatedAt); txErr != nil {
+				return nil, fmt.Errorf("save step prompt in tx: %w", txErr)
+			}
+		}
 		if txErr = tx.Commit(); txErr != nil {
 			return nil, fmt.Errorf("commit append step: %w", txErr)
 		}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("append chain step: %w", err)
 	}
 	return &step, nil
 }
@@ -87,15 +113,17 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 // ListChainSteps returns all steps for (entityType, entityID) ordered by step_index ASC.
 func (s *Store) ListChainSteps(ctx context.Context, entityType, entityID string) ([]ReasoningChainStep, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, entity_type, entity_id, step_index, source_type,
-		       COALESCE(message_id,''), message_content, COALESCE(user_instruction,''),
-		       input_state, output_state,
-		       COALESCE(compressed_summary,''), COALESCE(events_snapshot,''),
-		       COALESCE(prompt_version,'v1'), quality_score, COALESCE(quality_notes,''),
-		       is_current, created_at
-		FROM reasoning_chain_steps
-		WHERE entity_type = ? AND entity_id = ?
-		ORDER BY step_index ASC
+		SELECT r.id, r.entity_type, r.entity_id, r.step_index, r.source_type,
+		       COALESCE(r.message_id,''), r.message_content, COALESCE(r.user_instruction,''),
+		       r.input_state, r.output_state,
+		       COALESCE(r.compressed_summary,''), COALESCE(r.events_snapshot,''),
+		       COALESCE(r.prompt_version,'v1'), r.quality_score, COALESCE(r.quality_notes,''),
+		       r.is_current, r.created_at,
+		       COALESCE(sp.llm_prompt,'')
+		FROM reasoning_chain_steps r
+		LEFT JOIN step_prompts sp ON sp.step_id = r.id
+		WHERE r.entity_type = ? AND r.entity_id = ?
+		ORDER BY r.step_index ASC
 	`, entityType, entityID)
 	if err != nil {
 		return nil, fmt.Errorf("list chain steps: %w", err)
@@ -113,7 +141,7 @@ func (s *Store) ListChainSteps(ctx context.Context, entityType, entityID string)
 			&st.InputState, &st.OutputState,
 			&st.CompressedSummary, &st.EventsSnapshot,
 			&st.PromptVersion, &qualityScore, &st.QualityNotes,
-			&isCurrent, &st.CreatedAt,
+			&isCurrent, &st.CreatedAt, &st.LLMPrompt,
 		); err != nil {
 			return nil, fmt.Errorf("scan chain step: %w", err)
 		}

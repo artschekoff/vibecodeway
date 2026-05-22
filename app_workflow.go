@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
@@ -220,6 +221,47 @@ func (a *App) RunSingleAssignmentStep(personAssignmentID string, stepIndex int, 
 // CommitStepOutput saves a confirmed step output and truncates downstream stale steps.
 func (a *App) CommitStepOutput(personAssignmentID string, stepIndex int, inputState, outputState string) (*appstore.PersonAssignment, error) {
 	return a.analysisSvc.CommitStepOutput(a.ctx, personAssignmentID, stepIndex, inputState, outputState)
+}
+
+// SaveAssignmentOutput saves a manually edited output body as a new active version.
+func (a *App) SaveAssignmentOutput(personAssignmentID, body string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.SaveAssignmentOutput(a.ctx, personAssignmentID, body)
+}
+
+// RunAssignmentStepWithCustomPrompt runs the AI with customPrompt verbatim for preview.
+// Does not write to the DB.
+func (a *App) RunAssignmentStepWithCustomPrompt(personAssignmentID string, stepIndex int, customPrompt string) (string, error) {
+	return a.analysisSvc.RunAssignmentStepWithCustomPrompt(a.ctx, personAssignmentID, stepIndex, customPrompt)
+}
+
+// CommitAssignmentVersionFromCustomPrompt saves a new step with a custom prompt and output.
+// When the step is the last in the chain (isCurrent), it also creates a new active version
+// and syncs PersonAssignment.body. Returns the updated PersonAssignment.
+func (a *App) CommitAssignmentVersionFromCustomPrompt(personAssignmentID string, stepIndex int, customPrompt, outputState string) (*appstore.PersonAssignment, error) {
+	return a.analysisSvc.CommitAssignmentVersionFromCustomPrompt(a.ctx, personAssignmentID, stepIndex, customPrompt, outputState)
+}
+
+// ListAssignmentVersions returns all versions for a person assignment, newest first.
+func (a *App) ListAssignmentVersions(personAssignmentID string) ([]appstore.PersonAssignmentVersion, error) {
+	return a.analysisSvc.ListAssignmentVersions(a.ctx, personAssignmentID)
+}
+
+// SetActiveAssignmentVersion activates the given version and syncs PersonAssignment.body.
+func (a *App) SetActiveAssignmentVersion(personAssignmentID, versionID string) (*appstore.PersonAssignment, error) {
+	if err := a.db.SetActiveAssignmentVersion(a.ctx, personAssignmentID, versionID); err != nil {
+		return nil, err
+	}
+	ver, err := a.db.GetActiveAssignmentVersion(a.ctx, personAssignmentID)
+	if err != nil {
+		return nil, err
+	}
+	if ver == nil {
+		return nil, fmt.Errorf("active version not found after activating %s", versionID)
+	}
+	if err := a.db.UpdatePersonAssignmentBody(a.ctx, personAssignmentID, ver.Body); err != nil {
+		return nil, err
+	}
+	return a.db.GetPersonAssignment(a.ctx, personAssignmentID)
 }
 
 // --- Workflow statuses (enum table — unchanged) ---
