@@ -74,6 +74,10 @@ export function CommitAssignmentStep(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CommitAssignmentStep'](arg1, arg2, arg3, arg4);
 }
 
+export function CommitAssignmentVersionFromCustomPrompt(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CommitAssignmentVersionFromCustomPrompt'](arg1, arg2, arg3, arg4);
+}
+
 export function CommitPendingUploads(arg1, arg2) {
   return window['go']['main']['App']['CommitPendingUploads'](arg1, arg2);
 }
@@ -284,6 +288,10 @@ export function ListAllContexts() {
 
 export function ListAllWorkspaces() {
   return window['go']['main']['App']['ListAllWorkspaces']();
+}
+
+export function ListAssignmentVersions(arg1) {
+  return window['go']['main']['App']['ListAssignmentVersions'](arg1);
 }
 
 export function ListContextTexts(arg1) {
@@ -518,8 +526,16 @@ export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
 }
 
+export function RunAssignmentStepWithCustomPrompt(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunAssignmentStepWithCustomPrompt'](arg1, arg2, arg3);
+}
+
 export function RunSingleAssignmentStep(arg1, arg2, arg3) {
   return window['go']['main']['App']['RunSingleAssignmentStep'](arg1, arg2, arg3);
+}
+
+export function SaveAssignmentOutput(arg1, arg2) {
+  return window['go']['main']['App']['SaveAssignmentOutput'](arg1, arg2);
 }
 
 export function SavePersonAssignment(arg1, arg2) {
@@ -548,6 +564,10 @@ export function SearchSlackChannels(arg1, arg2) {
 
 export function SetAISettings(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['SetAISettings'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function SetActiveAssignmentVersion(arg1, arg2) {
+  return window['go']['main']['App']['SetActiveAssignmentVersion'](arg1, arg2);
 }
 
 export function SetAppSettings(arg1, arg2, arg3, arg4, arg5) {
@@ -688,60 +708,4 @@ export function VCSLoginStart(arg1) {
 
 export function ValidateSlackPassphrase(arg1) {
   return window['go']['main']['App']['ValidateSlackPassphrase'](arg1);
-}
-
-export function GetPersonAssignmentSteps(arg1) {
-  return window['go']['main']['App']['GetPersonAssignmentSteps'](arg1);
-}
-
-export function SetCurrentAssignmentStep(arg1, arg2) {
-  return window['go']['main']['App']['SetCurrentAssignmentStep'](arg1, arg2);
-}
-
-export function RunSingleAssignmentStep(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RunSingleAssignmentStep'](arg1, arg2, arg3);
-}
-
-export function CommitStepOutput(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['CommitStepOutput'](arg1, arg2, arg3, arg4);
-}
-
-export function SaveAssignmentOutput(arg1, arg2) {
-  return window['go']['main']['App']['SaveAssignmentOutput'](arg1, arg2);
-}
-
-export function RunAssignmentStepWithCustomPrompt(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RunAssignmentStepWithCustomPrompt'](arg1, arg2, arg3);
-}
-
-export function CommitAssignmentVersionFromCustomPrompt(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['CommitAssignmentVersionFromCustomPrompt'](arg1, arg2, arg3, arg4);
-}
-
-export function ListAssignmentVersions(arg1) {
-  return window['go']['main']['App']['ListAssignmentVersions'](arg1);
-}
-
-export function SetActiveAssignmentVersion(arg1, arg2) {
-  return window['go']['main']['App']['SetActiveAssignmentVersion'](arg1, arg2);
-}
-
-export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
-}
-
-export function RegeneratePersonAssignment(arg1) {
-  return window['go']['main']['App']['RegeneratePersonAssignment'](arg1);
-}
-
-export function GetPendingMessages(arg1) {
-  return window['go']['main']['App']['GetPendingMessages'](arg1);
-}
-
-export function MarkAssignmentsOutdated(arg1) {
-  return window['go']['main']['App']['MarkAssignmentsOutdated'](arg1);
-}
-
-export function GenerateEventsFromMessages(arg1) {
-  return window['go']['main']['App']['GenerateEventsFromMessages'](arg1);
 }
