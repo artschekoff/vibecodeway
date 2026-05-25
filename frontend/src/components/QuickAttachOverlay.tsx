@@ -129,7 +129,6 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
             await QuickAttachText(contextID, text);
           }
       }
-      DismissPicker().catch(() => {});
       onAttach(contextKey, contextID);
     },
     [kind, text, destination, logDraft, onAttach],
@@ -145,6 +144,10 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
     try {
       const ctx = contexts.find((c) => c.id === selectedId);
       await attachTo(selectedId, ctx?.key ?? selectedId);
+      // Dismiss after onAttach has queued setPicker(false) — wait one animation
+      // frame so React has unmounted the modal before [NSApp hide:nil] fires,
+      // preventing the macOS hide animation from capturing a half-rendered modal.
+      requestAnimationFrame(() => DismissPicker().catch(() => {}));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

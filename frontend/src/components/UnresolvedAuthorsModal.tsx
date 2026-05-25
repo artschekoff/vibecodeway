@@ -92,9 +92,11 @@ export function UnresolvedAuthorsModal({ contextID, orgID, onClose }: Props) {
             <AuthorRow
               key={key(author)}
               author={author}
+              orgID={orgID}
               orgUsers={orgUsers}
               resolution={resolutions[key(author)]}
               onChange={(r) => setResolution(author, r)}
+              onUserCreated={(u) => setOrgUsers((prev) => [...prev, u])}
             />
           ))}
         </div>
@@ -118,15 +120,19 @@ export function UnresolvedAuthorsModal({ contextID, orgID, onClose }: Props) {
 
 interface AuthorRowProps {
   author: store.UnresolvedAuthor;
+  orgID: string;
   orgUsers: store.User[];
   resolution: Resolution | undefined;
   onChange: (r: Resolution) => void;
+  onUserCreated: (user: store.User) => void;
 }
 
-function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
+function AuthorRow({ author, orgID, orgUsers, resolution, onChange, onUserCreated }: AuthorRowProps) {
   const [mode, setMode] = useState<"select" | "create">("select");
   const [newName, setNewName] = useState(author.rawAuthor);
   const [newEmail, setNewEmail] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(false);
 
   return (
     <div style={{
@@ -157,7 +163,10 @@ function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
 
       <div style={{ display: "flex", gap: 6 }}>
         <button
-          onClick={() => setMode("select")}
+          onClick={() => {
+            setMode("select");
+            if (!resolution || resolution.type === "new") onChange({ type: "skip" });
+          }}
           style={{
             padding: "2px 10px",
             fontSize: 12,
@@ -168,7 +177,10 @@ function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
           Assign existing
         </button>
         <button
-          onClick={() => setMode("create")}
+          onClick={() => {
+            setMode("create");
+            onChange({ type: "new", displayName: newName, email: newEmail });
+          }}
           style={{
             padding: "2px 10px",
             fontSize: 12,
@@ -202,22 +214,55 @@ function AuthorRow({ author, orgUsers, resolution, onChange }: AuthorRowProps) {
 
       {mode === "create" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <input
-            placeholder="Display name"
-            value={newName}
-            onChange={(e) => {
-              setNewName(e.target.value);
-              onChange({ type: "new", displayName: e.target.value, email: newEmail });
-            }}
-          />
-          <input
-            placeholder="Email (optional)"
-            value={newEmail}
-            onChange={(e) => {
-              setNewEmail(e.target.value);
-              onChange({ type: "new", displayName: newName, email: e.target.value });
-            }}
-          />
+          {created ? (
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              ✓ Created
+            </span>
+          ) : (
+            <>
+              <input
+                placeholder="Display name"
+                value={newName}
+                disabled={creating}
+                onChange={(e) => {
+                  setNewName(e.target.value);
+                  onChange({ type: "new", displayName: e.target.value, email: newEmail });
+                }}
+              />
+              <input
+                placeholder="Email (optional)"
+                value={newEmail}
+                disabled={creating}
+                onChange={(e) => {
+                  setNewEmail(e.target.value);
+                  onChange({ type: "new", displayName: newName, email: e.target.value });
+                }}
+              />
+              <button
+                className="btn-primary"
+                style={{ alignSelf: "flex-end", padding: "3px 14px", fontSize: 12 }}
+                disabled={creating || !newName.trim()}
+                onClick={async () => {
+                  setCreating(true);
+                  const newUser = await CreateUserAndAssign(
+                    newName.trim(),
+                    newEmail,
+                    orgID,
+                    author.sourceId,
+                    author.rawAuthor,
+                  );
+                  if (newUser) {
+                    onUserCreated(newUser);
+                    onChange({ type: "skip" });
+                    setCreated(true);
+                  }
+                  setCreating(false);
+                }}
+              >
+                {creating ? "Creating…" : "Create"}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -40,9 +40,12 @@ interface Props {
   onMarkIssueViewed?: (id: string) => void;
   onMarkCommentViewed?: (id: string) => void;
   jiraBaseUrl?: string;
+  onCheckoutBranch?: (branchName: string, repoName: string) => void;
 }
 
-export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl }: Props) {
+const BRANCH_CREATED_RE = /^Branch (\S+) created in (\S+) from /i;
+
+export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl, onCheckoutBranch }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmIssue, setConfirmIssue] = useState(false);
@@ -141,6 +144,21 @@ export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteCom
                       <span className="comment-date">{formatDate(c.jiraCreated)}</span>
                     </div>
                     <div className="card-actions">
+                      {(() => {
+                        if (!onCheckoutBranch) return null;
+                        const m = BRANCH_CREATED_RE.exec(c.body);
+                        if (!m) return null;
+                        return (
+                          <button
+                            className="vcs-checkout-btn"
+                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            onClick={() => onCheckoutBranch(m[1], m[2])}
+                            title={`Checkout ${m[1]}`}
+                          >
+                            Checkout
+                          </button>
+                        );
+                      })()}
                       {!c.viewedAt && onMarkCommentViewed && (
                         <button className="mark-viewed-btn" onClick={() => onMarkCommentViewed(c.id)} title="Mark as viewed"><Check size={13} /></button>
                       )}

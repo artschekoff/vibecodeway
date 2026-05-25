@@ -392,8 +392,39 @@ func ensureWorktreesIgnored(baseDir string) error {
 
 // FindWorkspaceForBranch returns an existing worktree workspace for the given repo and branch.
 // Returns nil, nil if no workspace exists.
+// Falls back to scanning registered local paths via git worktree list when no DB record exists,
+// and auto-persists any discovered worktree so future lookups are instant.
 func (a *App) FindWorkspaceForBranch(repoID, branch string) (*vcsstore.VCSWorkspace, error) {
-	return a.vcsStore.Workspaces.FindByBranch(a.ctx, repoID, branch)
+	// Fast path: DB record exists.
+	if ws, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, repoID, branch); err != nil || ws != nil {
+		return ws, err
+	}
+	// Fallback: scan all registered local paths for an existing git worktree.
+	paths, err := a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
+	if err != nil || len(paths) == 0 {
+		return nil, nil
+	}
+	for _, rp := range paths {
+		worktrees, wErr := vcs.GitWorktreeList(rp.Path)
+		if wErr != nil {
+			continue
+		}
+		for _, wt := range worktrees {
+			if wt.Branch != branch || wt.Path == rp.Path {
+				continue
+			}
+			ws := &vcsstore.VCSWorkspace{
+				RepoPathID:   rp.ID,
+				RepoID:       repoID,
+				Branch:       branch,
+				WorktreePath: wt.Path,
+				Status:       "active",
+			}
+			_ = a.vcsStore.Workspaces.Create(a.ctx, ws)
+			return ws, nil
+		}
+	}
+	return nil, nil
 }
 
 // CheckoutInWorkspace creates a git worktree for branch at the given repo path and opens terminal.

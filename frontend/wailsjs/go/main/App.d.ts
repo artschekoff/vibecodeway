@@ -43,7 +43,13 @@ export function CheckoutLocalBranch(arg1:string,arg2:string):Promise<void>;
 
 export function ClearAppLogs():Promise<void>;
 
+export function CommitAssignmentStep(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.ReasoningChainStep>;
+
+export function CommitAssignmentVersionFromCustomPrompt(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
+
 export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Array<store.ContextUploadedFile>>;
+
+export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
 
 export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
@@ -91,6 +97,8 @@ export function FetchPruneRepoPath(arg1:string):Promise<void>;
 
 export function FindWorkspaceForBranch(arg1:string,arg2:string):Promise<vcsstore.VCSWorkspace>;
 
+export function GenerateEventsFromMessages(arg1:string):Promise<Array<store.Event>>;
+
 export function GenerateHandoffPacket(arg1:string):Promise<store.InferredRequirementsPacket>;
 
 export function GeneratePersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
@@ -119,7 +127,11 @@ export function GetLatestHandoffPacket(arg1:string):Promise<store.InferredRequir
 
 export function GetPendingCodeReviews():Promise<Array<vcsstore.ReviewRequest>>;
 
+export function GetPendingMessages(arg1:string):Promise<Array<store.Message>>;
+
 export function GetPendingText():Promise<string>;
+
+export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.ReasoningChainStep>>;
 
 export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
@@ -140,6 +152,8 @@ export function ListAIPrompts():Promise<Array<store.AIPrompt>>;
 export function ListAllContexts():Promise<Array<store.Context>>;
 
 export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;
+
+export function ListAssignmentVersions(arg1:string):Promise<Array<store.PersonAssignmentVersion>>;
 
 export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 
@@ -183,6 +197,8 @@ export function ListWorkspaces(arg1:string):Promise<Array<vcsstore.VCSWorkspace>
 
 export function LoadSlackContext(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string):Promise<void>;
 
+export function MarkAssignmentsOutdated(arg1:string):Promise<Record<string, number>>;
+
 export function MarkBranchAllViewed(arg1:string):Promise<void>;
 
 export function MarkCommentViewed(arg1:string):Promise<void>;
@@ -219,9 +235,13 @@ export function PickAndExtractFilesPreview():Promise<main.UploadPreviewBatchResu
 
 export function PickRepoDirectory():Promise<string>;
 
+export function PreviewAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
+
 export function PreviewSlackDMs(arg1:string,arg2:string):Promise<string>;
 
 export function QuickAttachText(arg1:string,arg2:string):Promise<store.ContextText>;
+
+export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
 
 export function RefinePersonAssignment(arg1:string,arg2:string,arg3:string):Promise<store.PersonAssignment>;
 
@@ -232,6 +252,8 @@ export function RefreshContext(arg1:string):Promise<service.RefreshResult>;
 export function RefreshPendingReviews():Promise<void>;
 
 export function RefreshWorkspacesForRepo(arg1:string):Promise<void>;
+
+export function RegeneratePersonAssignment(arg1:string):Promise<store.PersonAssignment>;
 
 export function ReloadAllContexts():Promise<Array<service.ReloadAllResult>>;
 
@@ -249,6 +271,12 @@ export function RemoveVCSBranch(arg1:string):Promise<void>;
 
 export function ResetAIPrompt(arg1:string):Promise<void>;
 
+export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function SaveAssignmentOutput(arg1:string,arg2:string):Promise<store.PersonAssignment>;
+
 export function SavePersonAssignment(arg1:string,arg2:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
@@ -263,11 +291,15 @@ export function SearchSlackChannels(arg1:string,arg2:string):Promise<Array<servi
 
 export function SetAISettings(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
+export function SetActiveAssignmentVersion(arg1:string,arg2:string):Promise<store.PersonAssignment>;
+
 export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number,arg5:string):Promise<void>;
 
 export function SetContextOrg(arg1:string,arg2:string):Promise<void>;
 
 export function SetContextsOrder(arg1:Array<string>):Promise<void>;
+
+export function SetCurrentAssignmentStep(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
 export function SetJiraBaseURL(arg1:string,arg2:string):Promise<void>;
 
@@ -300,34 +332,6 @@ export function ToggleSlackDMConfigActive(arg1:string):Promise<slackstore.SlackD
 export function ToggleSlackThreadActive(arg1:string):Promise<slackstore.SlackThread>;
 
 export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploadedFile>;
-
-export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.ReasoningChainStep>>;
-
-export function SetCurrentAssignmentStep(arg1:string,arg2:string):Promise<store.PersonAssignment>;
-
-export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
-
-export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
-
-export function SaveAssignmentOutput(arg1:string,arg2:string):Promise<store.PersonAssignment>;
-
-export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:string):Promise<string>;
-
-export function CommitAssignmentVersionFromCustomPrompt(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
-
-export function ListAssignmentVersions(arg1:string):Promise<Array<store.PersonAssignmentVersion>>;
-
-export function SetActiveAssignmentVersion(arg1:string,arg2:string):Promise<store.PersonAssignment>;
-
-export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
-
-export function RegeneratePersonAssignment(arg1:string):Promise<store.PersonAssignment>;
-
-export function GetPendingMessages(arg1:string):Promise<Array<store.Message>>;
-
-export function MarkAssignmentsOutdated(arg1:string):Promise<{[key: string]: number}>;
-
-export function GenerateEventsFromMessages(arg1:string):Promise<void>;
 
 export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 
