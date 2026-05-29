@@ -374,6 +374,7 @@ export interface AppSettings {
   reviewsRefetchEnabled: boolean;
   reviewsRefetchIntervalMin: number;
   terminalAppPath: string;
+  codingAgentApp: string;
   updatedAt: string;
 }
 
