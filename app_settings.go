@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ func (a *App) SetAppSettings(
 	if reviewsIntervalMin < 1 {
 		reviewsIntervalMin = 1
 	}
+	codingAgentApp = strings.TrimSpace(codingAgentApp)
 	settings := appstore.AppSettings{
 		ContextRefetchEnabled:     contextEnabled,
 		ContextRefetchIntervalMin: contextIntervalMin,

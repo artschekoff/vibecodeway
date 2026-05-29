@@ -159,9 +159,7 @@ export default function SettingsPage() {
     setSavingRefetch(true);
     setRefetchMessage("");
     try {
-      await (SetAppSettings as (
-        a: boolean, b: number, c: boolean, d: number, e: string, f: string
-      ) => Promise<void>)(
+      await SetAppSettings(
         contextRefetchEnabled,
         Math.max(1, contextRefetchInterval),
         reviewsRefetchEnabled,
@@ -185,9 +183,7 @@ export default function SettingsPage() {
     setSavingTerminal(true);
     setTerminalMessage("");
     try {
-      await (SetAppSettings as (
-        a: boolean, b: number, c: boolean, d: number, e: string, f: string
-      ) => Promise<void>)(
+      await SetAppSettings(
         contextRefetchEnabled,
         Math.max(1, contextRefetchInterval),
         reviewsRefetchEnabled,

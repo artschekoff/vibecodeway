@@ -408,6 +408,7 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 
 	cmd := exec.Command("open", "-a", terminalApp, scriptFile.Name())
 	if err := cmd.Start(); err != nil {
+		_ = os.Remove(scriptFile.Name())
 		a.logger.Sugar().Warnf("open terminal failed: app=%s err=%v", terminalApp, err)
 	}
 	return nil
