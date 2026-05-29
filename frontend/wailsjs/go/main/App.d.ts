@@ -293,7 +293,7 @@ export function SetAISettings(arg1:string,arg2:string,arg3:string,arg4:string,ar
 
 export function SetActiveAssignmentVersion(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
-export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number,arg5:string):Promise<void>;
+export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number,arg5:string,arg6:string):Promise<void>;
 
 export function SetContextOrg(arg1:string,arg2:string):Promise<void>;
 

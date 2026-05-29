@@ -32,6 +32,7 @@ func (a *App) SetAppSettings(
 	contextEnabled bool, contextIntervalMin int,
 	reviewsEnabled bool, reviewsIntervalMin int,
 	terminalAppPath string,
+	codingAgentApp string,
 ) error {
 	if contextIntervalMin < 1 {
 		contextIntervalMin = 1
@@ -45,6 +46,7 @@ func (a *App) SetAppSettings(
 		ReviewsRefetchEnabled:     reviewsEnabled,
 		ReviewsRefetchIntervalMin: reviewsIntervalMin,
 		TerminalAppPath:           terminalAppPath,
+		CodingAgentApp:            codingAgentApp,
 	}
 	if err := a.db.SetAppSettings(a.ctx, settings); err != nil {
 		return err
