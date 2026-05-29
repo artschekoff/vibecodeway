@@ -129,6 +129,7 @@ type AppSettings struct {
 	ReviewsRefetchEnabled     bool   `json:"reviewsRefetchEnabled"`
 	ReviewsRefetchIntervalMin int    `json:"reviewsRefetchIntervalMin"`
 	TerminalAppPath           string `json:"terminalAppPath"`
+	CodingAgentApp            string `json:"codingAgentApp"`
 	UpdatedAt                 string `json:"updatedAt"`
 }
 
