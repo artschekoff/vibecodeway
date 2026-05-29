@@ -52,6 +52,7 @@ func TestAppSettings_Terminal(t *testing.T) {
 			ReviewsRefetchEnabled:     false,
 			ReviewsRefetchIntervalMin: 30,
 			TerminalAppPath:           "kitty",
+			CodingAgentApp:            "cursor",
 		})
 		require.NoError(t, err)
 
