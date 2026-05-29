@@ -387,7 +387,7 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 	}
 
 	// Terminal configured: compose a script and open it inside the terminal window.
-	script := a.buildCheckoutScript(onCheckoutCommand, agentApp, path)
+	script := buildCheckoutScript(onCheckoutCommand, agentApp, path)
 	scriptFile, err := os.CreateTemp("", "jiro-checkout-*.sh")
 	if err != nil {
 		a.logger.Sugar().Warnf("openWithCheckout: failed to create temp script: %v", err)
@@ -395,11 +395,13 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 	}
 	if _, err := scriptFile.WriteString(script); err != nil {
 		_ = scriptFile.Close()
+		_ = os.Remove(scriptFile.Name())
 		a.logger.Sugar().Warnf("openWithCheckout: failed to write temp script: %v", err)
 		return nil
 	}
 	_ = scriptFile.Close()
 	if err := os.Chmod(scriptFile.Name(), 0o755); err != nil {
+		_ = os.Remove(scriptFile.Name())
 		a.logger.Sugar().Warnf("openWithCheckout: chmod failed: %v", err)
 		return nil
 	}
@@ -414,10 +416,11 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 // buildCheckoutScript returns the content of the temp shell script that the
 // terminal will execute. The script: cds into path, runs onCheckoutCommand
 // (if set), then launches agentApp (if set). It deletes itself on exit.
-func (a *App) buildCheckoutScript(onCheckoutCommand, agentApp, path string) string {
+func buildCheckoutScript(onCheckoutCommand, agentApp, path string) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
 	b.WriteString("set -e\n")
+	b.WriteString("trap 'rm -f \"$0\"' EXIT\n")
 	fmt.Fprintf(&b, "cd %q\n", path)
 	if onCheckoutCommand != "" {
 		b.WriteString(onCheckoutCommand)
@@ -427,8 +430,6 @@ func (a *App) buildCheckoutScript(onCheckoutCommand, agentApp, path string) stri
 		agentBin := resolveAgentPath(agentApp)
 		fmt.Fprintf(&b, "%q %q\n", agentBin, path)
 	}
-	// Self-cleanup so /tmp doesn't accumulate scripts.
-	b.WriteString(`rm -- "$0"` + "\n")
 	return b.String()
 }
 
@@ -633,7 +634,12 @@ func (a *App) CheckoutLocalBranch(repoPathID, branch string) error {
 	}
 	existing, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, rp.RepoID, branch)
 	if err == nil && existing != nil {
-		return a.openWithCheckout("", existing.WorktreePath)
+		repo, rErr := a.vcsStore.Repos.GetRepo(a.ctx, rp.RepoID)
+		onCheckout := ""
+		if rErr == nil {
+			onCheckout = repo.OnCheckoutCommand
+		}
+		return a.openWithCheckout(onCheckout, existing.WorktreePath)
 	}
 	return a.CheckoutInWorkspace(repoPathID, branch)
 }
