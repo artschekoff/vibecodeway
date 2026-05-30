@@ -331,38 +331,107 @@ func (a *App) CheckoutBranch(localPath, branch string) error {
 	if err := vcs.GitCheckout(localPath, branch); err != nil {
 		return err
 	}
-	return a.openTerminalAt(localPath)
+	return a.openWithCheckout("", localPath)
 }
 
-// openTerminalAt opens the configured terminal app at path.
-// A missing or unconfigured terminal is silently ignored.
-func (a *App) openTerminalAt(path string) error {
+// knownAgentDirs is the minimal set of directories checked when the app's
+// PATH doesn't include Homebrew or user-local installs.
+var knownAgentDirs = []string{
+	"/opt/homebrew/bin",
+	"/usr/local/bin",
+	"/usr/bin",
+}
+
+// resolveAgentPath resolves a coding agent executable name to an absolute path,
+// checking known extra dirs when exec.LookPath fails (Wails apps have a stripped PATH).
+func resolveAgentPath(name string) string {
+	if path, err := exec.LookPath(name); err == nil {
+		return path
+	}
+	for _, dir := range knownAgentDirs {
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return name
+}
+
+// openWithCheckout runs onCheckoutCommand (if set) and opens the configured
+// coding agent at path. When a terminal is configured the command and agent
+// launch are bundled into a temp script that is executed inside the terminal
+// window so the user can see output. Falls back to launching the agent directly
+// when no terminal is configured.
+func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 	settings, err := a.db.GetAppSettings(a.ctx)
 	if err != nil {
-		a.logger.Sugar().Warnf("openTerminalAt: failed to load settings: %v", err)
+		a.logger.Sugar().Warnf("openWithCheckout: failed to load settings: %v", err)
 		return nil
 	}
-	if settings.TerminalAppPath == "" {
+
+	terminalApp := settings.TerminalAppPath
+	agentApp := settings.CodingAgentApp
+
+	if terminalApp == "" && agentApp == "" {
 		return nil
 	}
-	cmd := exec.Command("open", "-a", settings.TerminalAppPath, path)
+
+	// No terminal configured: launch coding agent directly.
+	if terminalApp == "" {
+		agentBin := resolveAgentPath(agentApp)
+		cmd := exec.Command(agentBin, path)
+		if err := cmd.Start(); err != nil {
+			a.logger.Sugar().Warnf("open coding agent failed: app=%s err=%v", agentApp, err)
+		}
+		return nil
+	}
+
+	// Terminal configured: compose a script and open it inside the terminal window.
+	script := buildCheckoutScript(onCheckoutCommand, agentApp, path)
+	scriptFile, err := os.CreateTemp("", "jiro-checkout-*.sh")
+	if err != nil {
+		a.logger.Sugar().Warnf("openWithCheckout: failed to create temp script: %v", err)
+		return nil
+	}
+	if _, err := scriptFile.WriteString(script); err != nil {
+		_ = scriptFile.Close()
+		_ = os.Remove(scriptFile.Name())
+		a.logger.Sugar().Warnf("openWithCheckout: failed to write temp script: %v", err)
+		return nil
+	}
+	_ = scriptFile.Close()
+	if err := os.Chmod(scriptFile.Name(), 0o755); err != nil {
+		_ = os.Remove(scriptFile.Name())
+		a.logger.Sugar().Warnf("openWithCheckout: chmod failed: %v", err)
+		return nil
+	}
+
+	cmd := exec.Command("open", "-a", terminalApp, scriptFile.Name())
 	if err := cmd.Start(); err != nil {
-		a.logger.Sugar().Warnf("open terminal failed: app=%s err=%v", settings.TerminalAppPath, err)
+		_ = os.Remove(scriptFile.Name())
+		a.logger.Sugar().Warnf("open terminal failed: app=%s err=%v", terminalApp, err)
 	}
 	return nil
 }
 
-// runOnCheckoutCommand executes command in workDir using the user's shell and waits for it to finish.
-func (a *App) runOnCheckoutCommand(command, workDir string) {
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "sh"
+// buildCheckoutScript returns the content of the temp shell script that the
+// terminal will execute. The script: cds into path, runs onCheckoutCommand
+// (if set), then launches agentApp (if set). It deletes itself on exit.
+func buildCheckoutScript(onCheckoutCommand, agentApp, path string) string {
+	var b strings.Builder
+	b.WriteString("#!/bin/sh\n")
+	b.WriteString("set -e\n")
+	b.WriteString("trap 'rm -f \"$0\"' EXIT\n")
+	fmt.Fprintf(&b, "cd %q\n", path)
+	if onCheckoutCommand != "" {
+		b.WriteString(onCheckoutCommand)
+		b.WriteString("\n")
 	}
-	cmd := exec.Command(shell, "-c", command)
-	cmd.Dir = workDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		a.logger.Sugar().Warnf("on_checkout_command failed: cmd=%q workDir=%q err=%v output=%s", command, workDir, err, out)
+	if agentApp != "" {
+		agentBin := resolveAgentPath(agentApp)
+		fmt.Fprintf(&b, "%q %q\n", agentBin, path)
 	}
+	return b.String()
 }
 
 // ensureWorktreesIgnored appends ".worktrees" to baseDir/.gitignore if not already present.
@@ -456,10 +525,11 @@ func (a *App) CheckoutInWorkspace(repoPathID, branch string) error {
 				// Best-effort: record the workspace if not already tracked.
 				_ = a.vcsStore.Workspaces.Create(a.ctx, ws)
 				repo, err := a.vcsStore.Repos.GetRepo(a.ctx, repoPath.RepoID)
-				if err == nil && repo.OnCheckoutCommand != "" {
-					a.runOnCheckoutCommand(repo.OnCheckoutCommand, wt.Path)
+				onCheckout := ""
+				if err == nil {
+					onCheckout = repo.OnCheckoutCommand
 				}
-				return a.openTerminalAt(wt.Path)
+				return a.openWithCheckout(onCheckout, wt.Path)
 			}
 		}
 	}
@@ -480,10 +550,11 @@ func (a *App) CheckoutInWorkspace(repoPathID, branch string) error {
 		return fmt.Errorf("storing workspace record: %w", err)
 	}
 	repo, err := a.vcsStore.Repos.GetRepo(a.ctx, repoPath.RepoID)
-	if err == nil && repo.OnCheckoutCommand != "" {
-		a.runOnCheckoutCommand(repo.OnCheckoutCommand, worktreePath)
+	onCheckout := ""
+	if err == nil {
+		onCheckout = repo.OnCheckoutCommand
 	}
-	return a.openTerminalAt(worktreePath)
+	return a.openWithCheckout(onCheckout, worktreePath)
 }
 
 // OpenWorkspaceTerminal runs on_checkout_command (if configured) and opens terminal at the workspace path.
@@ -493,10 +564,11 @@ func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
 		return fmt.Errorf("workspace not found: %w", err)
 	}
 	repo, err := a.vcsStore.Repos.GetRepo(a.ctx, w.RepoID)
-	if err == nil && repo.OnCheckoutCommand != "" {
-		a.runOnCheckoutCommand(repo.OnCheckoutCommand, w.WorktreePath)
+	onCheckout := ""
+	if err == nil {
+		onCheckout = repo.OnCheckoutCommand
 	}
-	return a.openTerminalAt(w.WorktreePath)
+	return a.openWithCheckout(onCheckout, w.WorktreePath)
 }
 
 // OpenRepoPathTerminal opens the configured terminal at the given repo local path.
@@ -505,7 +577,7 @@ func (a *App) OpenRepoPathTerminal(pathID string) error {
 	if err != nil {
 		return fmt.Errorf("repo path not found: %w", err)
 	}
-	return a.openTerminalAt(rp.Path)
+	return a.openWithCheckout("", rp.Path)
 }
 
 // FetchPruneRepoPath runs `git fetch --prune` for the given repo path.
@@ -563,7 +635,12 @@ func (a *App) CheckoutLocalBranch(repoPathID, branch string) error {
 	}
 	existing, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, rp.RepoID, branch)
 	if err == nil && existing != nil {
-		return a.openTerminalAt(existing.WorktreePath)
+		repo, rErr := a.vcsStore.Repos.GetRepo(a.ctx, rp.RepoID)
+		onCheckout := ""
+		if rErr == nil {
+			onCheckout = repo.OnCheckoutCommand
+		}
+		return a.openWithCheckout(onCheckout, existing.WorktreePath)
 	}
 	return a.CheckoutInWorkspace(repoPathID, branch)
 }

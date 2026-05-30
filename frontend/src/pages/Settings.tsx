@@ -68,8 +68,11 @@ export default function SettingsPage() {
   const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
   const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
   const [terminalAppPath, setTerminalAppPath] = useState("");
+  const [codingAgentApp, setCodingAgentApp] = useState("cursor");
   const [savingRefetch, setSavingRefetch] = useState(false);
   const [refetchMessage, setRefetchMessage] = useState("");
+  const [savingTerminal, setSavingTerminal] = useState(false);
+  const [terminalMessage, setTerminalMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +100,7 @@ export default function SettingsPage() {
           setReviewsRefetchEnabled(typedAppS.reviewsRefetchEnabled);
           setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
           setTerminalAppPath(typedAppS.terminalAppPath ?? "");
+          setCodingAgentApp(typedAppS.codingAgentApp ?? "cursor");
         }
 
         const typedPlats = (plats ?? []) as VCSPlatformInfo[];
@@ -155,22 +159,47 @@ export default function SettingsPage() {
     setSavingRefetch(true);
     setRefetchMessage("");
     try {
-      // SetAppSettings binding accepts 5th arg (terminalAppPath) once regenerated
-      await (SetAppSettings as (a: boolean, b: number, c: boolean, d: number, e: string) => Promise<void>)(
+      await SetAppSettings(
         contextRefetchEnabled,
         Math.max(1, contextRefetchInterval),
         reviewsRefetchEnabled,
         Math.max(1, reviewsRefetchInterval),
         terminalAppPath.trim(),
+        codingAgentApp.trim(),
       );
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
       setTerminalAppPath(updated.terminalAppPath ?? "");
+      setCodingAgentApp(updated.codingAgentApp ?? "cursor");
       setRefetchMessage("Saved.");
     } catch (e) {
       setError(String(e));
     } finally {
       setSavingRefetch(false);
+    }
+  };
+
+  const handleSaveTerminal = async () => {
+    setSavingTerminal(true);
+    setTerminalMessage("");
+    try {
+      await SetAppSettings(
+        contextRefetchEnabled,
+        Math.max(1, contextRefetchInterval),
+        reviewsRefetchEnabled,
+        Math.max(1, reviewsRefetchInterval),
+        terminalAppPath.trim(),
+        codingAgentApp.trim(),
+      );
+      const updated = await GetAppSettings() as unknown as AppSettings;
+      setAppSettings(updated);
+      setTerminalAppPath(updated.terminalAppPath ?? "");
+      setCodingAgentApp(updated.codingAgentApp ?? "cursor");
+      setTerminalMessage("Saved.");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingTerminal(false);
     }
   };
 
@@ -214,26 +243,34 @@ export default function SettingsPage() {
           <div className="detail-section-header">
             <span className="detail-section-title">Keyboard Shortcuts</span>
           </div>
-          <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
-            {keybindings.map((kb) => (
-              <KeybindingRow
-                key={kb.id}
-                binding={kb}
-                onSave={async (command, modifierKeys, keyCode) => {
-                  try {
-                    await UpdateKeybinding(command, modifierKeys, keyCode);
-                    setKeybindings((prev) =>
-                      prev.map((b) =>
-                        b.command === command ? { ...b, modifierKeys, keyCode } : b
-                      )
-                    );
-                  } catch (e) {
-                    console.error("Failed to update keybinding", e);
-                  }
-                }}
-              />
-            ))}
-          </div>
+          <table className="keybindings-table">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Shortcut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {keybindings.map((kb) => (
+                <KeybindingRow
+                  key={kb.id}
+                  binding={kb}
+                  onSave={async (command, modifierKeys, keyCode) => {
+                    try {
+                      await UpdateKeybinding(command, modifierKeys, keyCode);
+                      setKeybindings((prev) =>
+                        prev.map((b) =>
+                          b.command === command ? { ...b, modifierKeys, keyCode } : b
+                        )
+                      );
+                    } catch (e) {
+                      console.error("Failed to update keybinding", e);
+                    }
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
         </section>
 
         {platforms.length > 0 && (
@@ -385,6 +422,7 @@ export default function SettingsPage() {
             <span className="detail-section-title">Terminal</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 14px" }}>
+            {terminalMessage && <div className="toast toast--success" style={{ position: "static", margin: 0 }}>{terminalMessage}</div>}
             <div>
               <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
                 Terminal app name or .app path
@@ -398,8 +436,33 @@ export default function SettingsPage() {
               />
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                 Used when checking out a branch. Enter an app name (e.g. <code>kitty</code>,{" "}
-                <code>iTerm</code>, <code>Terminal</code>) or full .app path. Saved with the Background Refresh Save button above.
+                <code>iTerm</code>, <code>Terminal</code>) or full .app path.
               </div>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                Coding agent executable
+              </label>
+              <input
+                className="passphrase-input"
+                placeholder="cursor"
+                value={codingAgentApp}
+                onChange={(e) => setCodingAgentApp(e.target.value)}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                Opened at the repo path after checkout. CLI executable name (e.g. <code>cursor</code>,{" "}
+                <code>code</code>, <code>windsurf</code>).
+              </div>
+            </div>
+            <div>
+              <button
+                className="btn-primary"
+                onClick={() => void handleSaveTerminal()}
+                disabled={savingTerminal}
+              >
+                {savingTerminal ? "Saving…" : "Save"}
+              </button>
             </div>
           </div>
         </section>

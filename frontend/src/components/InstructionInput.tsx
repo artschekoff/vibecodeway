@@ -84,14 +84,22 @@ export function InstructionInput({ contextId, value, onChange, onApply, onCancel
     e.target.value = "";
   };
 
+  const [localLoading, setLocalLoading] = useState(false);
+  const isApplying = isLoading || localLoading;
+
   const handleApply = async () => {
     const parts = [
       ...attachedMessages.map(m => `[${m.sourceLabel || m.sourceId}: ${m.title}]\n${m.body}`),
       ...attachedFiles.map(f => `[File: ${f.name}]\n${f.content}`),
     ];
     const full = parts.length ? `${parts.join("\n\n")}\n\n${value}` : value;
-    await onApply(full);
-    setAttachedMessages([]); setAttachedFiles([]);
+    setLocalLoading(true);
+    try {
+      await onApply(full);
+      setAttachedMessages([]); setAttachedFiles([]);
+    } finally {
+      setLocalLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -119,7 +127,7 @@ export function InstructionInput({ contextId, value, onChange, onApply, onCancel
           style={{ width: "100%", minHeight: 72, resize: "vertical", fontFamily: "inherit", fontSize: 12, textAlign: "left", padding: "8px 10px", lineHeight: 1.5, boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", outline: "none" }}
           placeholder="Your instruction… (type @ to reference a context message)"
           value={value} onChange={handleChange} onKeyDown={handleKeyDown}
-          disabled={disabled || isLoading} autoFocus
+          disabled={disabled || isApplying} autoFocus
         />
         {showDropdown && (
           <div ref={dropdownRef} style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.18)", maxHeight: 200, overflowY: "auto" }}>
@@ -137,13 +145,13 @@ export function InstructionInput({ contextId, value, onChange, onApply, onCancel
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <button className="btn-primary" style={{ fontSize: 12, padding: "3px 12px" }} disabled={!value.trim() || disabled || isLoading} onClick={() => void handleApply()}>
-          {isLoading
-            ? <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", display: "inline-block", animation: "spin 0.6s linear infinite" }} />Applying…</span>
+        <button className="btn-primary" style={{ fontSize: 12, padding: "3px 12px", minWidth: 72 }} disabled={!value.trim() || disabled || isApplying} onClick={() => void handleApply()}>
+          {isApplying
+            ? <><span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", display: "inline-block", animation: "spin 0.6s linear infinite", flexShrink: 0 }} />Applying…</>
             : "Apply"}
         </button>
-        <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 10px" }} onClick={onCancel} disabled={isLoading}>Cancel</button>
-        <button className="btn-secondary" style={{ fontSize: 11, padding: "3px 8px", marginLeft: "auto" }} onClick={() => fileInputRef.current?.click()} disabled={isLoading} title="Attach files">📎</button>
+        <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 10px" }} onClick={onCancel} disabled={isApplying}>Cancel</button>
+        <button className="btn-secondary" style={{ fontSize: 11, padding: "3px 8px", marginLeft: "auto" }} onClick={() => fileInputRef.current?.click()} disabled={isApplying} title="Attach files">📎</button>
         <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFiles} />
       </div>
     </div>
