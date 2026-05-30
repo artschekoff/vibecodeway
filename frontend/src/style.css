@@ -4722,6 +4722,80 @@ select {
   flex: 1;
 }
 
+.keybindings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.keybindings-table thead th {
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+
+.keybinding-row td {
+  padding: 9px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.keybinding-row:last-child td {
+  border-bottom: none;
+}
+
+.keybinding-row__info {
+  width: 60%;
+}
+
+.keybinding-row__label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.keybinding-row__desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.keybinding-row__cell {
+  width: 40%;
+}
+
+.keybinding-row__combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keybinding-row__keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.keybinding-row__listening {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.keybinding-row__change-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: var(--text-muted);
+}
+
+.keybinding-row:hover .keybinding-row__change-btn {
+  opacity: 1;
+}
+
 /* sub-item style in hamburger menu */
 .app-menu-item--sub {
   padding-left: 24px;
@@ -5145,8 +5219,9 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  align-self: stretch;
+  width: 14px;
+  height: 14px;
+  align-self: center;
   flex-shrink: 0;
   margin-left: auto;
 }

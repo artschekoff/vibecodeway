@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { arrayMove } from "@dnd-kit/sortable";
 import type { Tab } from "../types";
 
 const TAB_STORAGE_KEY = "context-consolidator:tabs-v1";
@@ -27,6 +28,7 @@ interface TabContextValue {
   setActiveTab: (tabId: string) => void;
   updateTabTitle: (tabId: string, title: string) => void;
   navigateBack: (tabId: string) => void;
+  reorderTabs: (activeId: string, overId: string) => void;
 }
 
 const TabContext = createContext<TabContextValue | null>(null);
@@ -230,6 +232,15 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const reorderTabs = useCallback((activeId: string, overId: string) => {
+    setTabs((prev) => {
+      const from = prev.findIndex((t) => t.id === activeId);
+      const to = prev.findIndex((t) => t.id === overId);
+      if (from === -1 || to === -1) return prev;
+      return arrayMove(prev, from, to);
+    });
+  }, []);
+
   const navigateBack = useCallback(
     (tabId: string) => {
       setTabs((prev) => {
@@ -294,6 +305,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         setActiveTab,
         updateTabTitle,
         navigateBack,
+        reorderTabs,
       }}
     >
       {children}

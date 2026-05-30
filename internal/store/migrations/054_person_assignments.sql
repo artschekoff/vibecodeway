@@ -17,9 +17,13 @@ DELETE FROM ai_prompts WHERE id IN ('task_assignment', 'task_assignment_refine')
 INSERT OR IGNORE INTO ai_prompts (id, label, body, default_body, updated_at) VALUES (
 'person_assignment',
 'Person Assignment Generator',
-'You are an AI analyst generating detailed, technical task assignments for each participant in a project.
+'You are an AI analyst generating task assignments for each participant in a project.
 
 ## Context key: {{context_key}}
+
+## Org team members
+The following people are the confirmed members of this organisation. Generate an assignment entry for EACH of them (do not add extra people):
+{{org_users}}
 
 ## Jira issues and activity
 {{raw_content}}
@@ -28,19 +32,17 @@ INSERT OR IGNORE INTO ai_prompts (id, label, body, default_body, updated_at) VAL
 {{events}}
 {{custom_instructions}}
 ## Task
-Identify every person who is an assignee or has commented in the Jira issues above.
-For each person produce an entry in the JSON array below.
+For each person listed in "Org team members" produce an entry in the JSON array below.
+If a person has no relevant work found in the source data, still include them with a brief "No active tasks found" body.
 
-The "body" field must be rich Markdown covering ALL of the following that are relevant:
+The "body" field must be Markdown covering ALL of the following that are relevant:
 - **Current assignment**: which specific Jira issues/subtasks they own, their status
-- **Technical context**: exact service names, API endpoints, DB tables, functions, modules, branches, PRs relevant to their work
-- **Infrastructure details**: cloud services, queues, cron jobs, feature flags, env vars they need to touch
+- **Technical context**: which features, services, or domain areas they need to work in — named at the capability level (e.g. "authentication service", "notification feature") — do NOT name specific file paths, function names, class names, or directory paths
 - **Business entities & rules**: domain objects, business logic constraints, data contracts they must respect
-- **Methods & approaches**: specific algorithms, patterns, or architectural decisions already agreed on
-- **Next concrete actions**: step-by-step tasks derived from issue state and event log
+- **Next concrete actions**: step-by-step tasks described as behaviors or outcomes (e.g. "add pagination to the user list") — do NOT reference specific file locations or function signatures
 - **Blockers & dependencies**: open questions or blockers that directly affect them
 
-Do NOT summarise vaguely. Include exact names, IDs, values, and references found in the source data.
+Do NOT include specific file paths, directory paths, function names, class names, or component paths. Describe work at the feature and behavior level.
 
 Return ONLY valid JSON — no markdown fences, no preamble:
 [
@@ -49,9 +51,13 @@ Return ONLY valid JSON — no markdown fences, no preamble:
     "body": "## Person Name\n\n### Current Assignment\n...\n\n### Technical Context\n..."
   }
 ]',
-'You are an AI analyst generating detailed, technical task assignments for each participant in a project.
+'You are an AI analyst generating task assignments for each participant in a project.
 
 ## Context key: {{context_key}}
+
+## Org team members
+The following people are the confirmed members of this organisation. Generate an assignment entry for EACH of them (do not add extra people):
+{{org_users}}
 
 ## Jira issues and activity
 {{raw_content}}
@@ -60,19 +66,17 @@ Return ONLY valid JSON — no markdown fences, no preamble:
 {{events}}
 {{custom_instructions}}
 ## Task
-Identify every person who is an assignee or has commented in the Jira issues above.
-For each person produce an entry in the JSON array below.
+For each person listed in "Org team members" produce an entry in the JSON array below.
+If a person has no relevant work found in the source data, still include them with a brief "No active tasks found" body.
 
-The "body" field must be rich Markdown covering ALL of the following that are relevant:
+The "body" field must be Markdown covering ALL of the following that are relevant:
 - **Current assignment**: which specific Jira issues/subtasks they own, their status
-- **Technical context**: exact service names, API endpoints, DB tables, functions, modules, branches, PRs relevant to their work
-- **Infrastructure details**: cloud services, queues, cron jobs, feature flags, env vars they need to touch
+- **Technical context**: which features, services, or domain areas they need to work in — named at the capability level (e.g. "authentication service", "notification feature") — do NOT name specific file paths, function names, class names, or directory paths
 - **Business entities & rules**: domain objects, business logic constraints, data contracts they must respect
-- **Methods & approaches**: specific algorithms, patterns, or architectural decisions already agreed on
-- **Next concrete actions**: step-by-step tasks derived from issue state and event log
+- **Next concrete actions**: step-by-step tasks described as behaviors or outcomes (e.g. "add pagination to the user list") — do NOT reference specific file locations or function signatures
 - **Blockers & dependencies**: open questions or blockers that directly affect them
 
-Do NOT summarise vaguely. Include exact names, IDs, values, and references found in the source data.
+Do NOT include specific file paths, directory paths, function names, class names, or component paths. Describe work at the feature and behavior level.
 
 Return ONLY valid JSON — no markdown fences, no preamble:
 [
@@ -81,7 +85,7 @@ Return ONLY valid JSON — no markdown fences, no preamble:
     "body": "## Person Name\n\n### Current Assignment\n...\n\n### Technical Context\n..."
   }
 ]',
-'2026-01-01T00:00:00Z'
+'2026-05-27T00:00:00Z'
 );
 
 INSERT OR IGNORE INTO ai_prompts (id, label, body, default_body, updated_at) VALUES (
@@ -103,7 +107,8 @@ INSERT OR IGNORE INTO ai_prompts (id, label, body, default_body, updated_at) VAL
 ## Event log (for reference)
 {{events}}
 
-Apply the user instruction. Preserve all technical details (service names, endpoints, DB tables, methods, infrastructure specifics) unless the instruction explicitly says to remove them.
+Apply the user instruction. Preserve business and task details (Jira issue keys, acceptance criteria, blockers, deadlines, domain rules).
+Do NOT add or preserve specific file paths, directory paths, function names, class names, or component paths.
 Return ONLY the updated Markdown for this person''s body — no JSON, no preamble.',
 'You are refining a single person''s task assignment document.
 
@@ -121,9 +126,10 @@ Return ONLY the updated Markdown for this person''s body — no JSON, no preambl
 ## Event log (for reference)
 {{events}}
 
-Apply the user instruction. Preserve all technical details (service names, endpoints, DB tables, methods, infrastructure specifics) unless the instruction explicitly says to remove them.
+Apply the user instruction. Preserve business and task details (Jira issue keys, acceptance criteria, blockers, deadlines, domain rules).
+Do NOT add or preserve specific file paths, directory paths, function names, class names, or component paths.
 Return ONLY the updated Markdown for this person''s body — no JSON, no preamble.',
-'2026-01-01T00:00:00Z'
+'2026-05-27T00:00:00Z'
 );
 
 -- +goose Down

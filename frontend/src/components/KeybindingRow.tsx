@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pencil } from "lucide-react";
 import type { Keybinding } from "../types";
 
 interface Props {
@@ -90,34 +91,37 @@ export default function KeybindingRow({ binding, onSave }: Props) {
   const displayKey = formatKey(pending ? pending.keyCode : binding.keyCode);
 
   return (
-    <div className="keybinding-row">
-      <div className="keybinding-row__info">
+    <tr className="keybinding-row">
+      <td className="keybinding-row__info">
         <div className="keybinding-row__label">{binding.label}</div>
         {binding.description && (
           <div className="keybinding-row__desc">{binding.description}</div>
         )}
-      </div>
-      <div className="keybinding-row__controls">
+      </td>
+      <td className="keybinding-row__cell">
         {listening ? (
           <span className="keybinding-row__listening">Press a key combination…</span>
         ) : (
-          <div className="keybinding-row__keys">
-            {displayMods.map((sym) => (
-              <kbd key={sym} className="hotkey-kbd">{sym}</kbd>
-            ))}
-            <kbd className="hotkey-kbd">{displayKey}</kbd>
+          <div className="keybinding-row__combo">
+            <div className="keybinding-row__keys">
+              {displayMods.map((sym) => (
+                <kbd key={sym} className="hotkey-kbd">{sym}</kbd>
+              ))}
+              <kbd className="hotkey-kbd">{displayKey}</kbd>
+            </div>
+            {pending ? (
+              <>
+                <button className="btn-primary" style={{ fontSize: 12, padding: "3px 10px" }} onClick={handleSave}>Save</button>
+                <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 10px" }} onClick={handleCancel}>Cancel</button>
+              </>
+            ) : (
+              <button className="btn-icon keybinding-row__change-btn" title="Change shortcut" onClick={handleChange}>
+                <Pencil size={13} />
+              </button>
+            )}
           </div>
         )}
-        {pending && !listening && (
-          <>
-            <button className="btn-small" onClick={handleSave}>Save</button>
-            <button className="btn-small btn-small--secondary" onClick={handleCancel}>Cancel</button>
-          </>
-        )}
-        {!pending && !listening && (
-          <button className="btn-small btn-small--secondary" onClick={handleChange}>Change</button>
-        )}
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }

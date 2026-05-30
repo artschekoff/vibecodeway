@@ -1,0 +1,33 @@
+{
+  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
+  "targets": [
+    "copilot",
+    "cursor",
+    "claudecode",
+    "codexcli"
+  ],
+  "features": [
+    "rules",
+    "ignore",
+    "mcp",
+    "commands",
+    "subagents",
+    "skills",
+    "hooks"
+  ],
+  "baseDirs": [
+    "."
+  ],
+  "delete": true,
+  "verbose": false,
+  "silent": false,
+  "global": false,
+  "simulateCommands": false,
+  "simulateSubagents": false,
+  "simulateSkills": false,
+  "ca_rules": {
+    "base": "9c3f2da38d55ffb7d12a7c494908cc901e901b3a",
+    "projects/juna": "ff2c4ffd2554f5547f95c01310dbac83ae569eff",
+    "stacks/tauri-react-rust": "1ab8a7bd65be1ee28bc33d3c4b60e2feead246a0"
+  }
+}
