@@ -396,6 +396,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [isGeneratingAssignments, setIsGeneratingAssignments] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [editPersonBody, setEditPersonBody] = useState("");
+  const [isSavingPerson, setIsSavingPerson] = useState(false);
   const [refiningPersonId, setRefiningPersonId] = useState<string | null>(null);
   const [personAiPrompt, setPersonAiPrompt] = useState("");
   const [isRefiningPerson, setIsRefiningPerson] = useState(false);
@@ -1305,8 +1306,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                 {editingPersonId === pa.id ? (
                                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                     <textarea
-                                      className="passphrase-input"
-                                      style={{ fontSize: 12, minHeight: 180, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                                      style={{ fontSize: 12, minHeight: 180, resize: "vertical", width: "100%", fontFamily: "inherit", color: "var(--text-muted)", lineHeight: 1.5, margin: 0, textAlign: "left", letterSpacing: "normal" }}
                                       value={editPersonBody}
                                       onChange={(e) => setEditPersonBody(e.target.value)}
                                       autoFocus
@@ -1314,16 +1314,22 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                     <div style={{ display: "flex", gap: 4 }}>
                                       <button
                                         className="btn-primary"
-                                        style={{ fontSize: 12, padding: "2px 10px" }}
+                                        style={{ fontSize: 12, padding: "2px 10px", minWidth: 52 }}
+                                        disabled={isSavingPerson}
                                         onClick={async () => {
-                                          await SavePersonAssignment(pa.id, editPersonBody);
-                                          setPersonAssignments((prev) => prev.map((p) => p.id === pa.id ? { ...p, body: editPersonBody } : p));
-                                          setEditingPersonId(null);
+                                          setIsSavingPerson(true);
+                                          try {
+                                            await SavePersonAssignment(pa.id, editPersonBody);
+                                            setPersonAssignments((prev) => prev.map((p) => p.id === pa.id ? { ...p, body: editPersonBody } : p));
+                                            setEditingPersonId(null);
+                                          } finally {
+                                            setIsSavingPerson(false);
+                                          }
                                         }}
                                       >
-                                        Save
+                                        {isSavingPerson ? "Saving…" : "Save"}
                                       </button>
-                                      <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 10px" }} onClick={() => setEditingPersonId(null)}>Cancel</button>
+                                      <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 10px" }} disabled={isSavingPerson} onClick={() => setEditingPersonId(null)}>Cancel</button>
                                     </div>
                                   </div>
                                 ) : refiningPersonId === pa.id ? (
