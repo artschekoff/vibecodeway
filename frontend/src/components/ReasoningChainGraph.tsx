@@ -220,7 +220,7 @@ export function ReasoningChainGraph({ personAssignment, steps, onClose, onStepsC
         display: "flex", flexDirection: "column",
       }}>
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px 14px 52px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>
             Reasoning Chain — {personAssignment.name}
           </div>
@@ -259,7 +259,7 @@ export function ReasoningChainGraph({ personAssignment, steps, onClose, onStepsC
                     </span>
                   )}
                   {step.promptVersion && (
-                    <span style={{ fontSize: 9, color: "var(--text-muted)", fontFamily: "monospace" }}>
+                    <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, background: "rgba(148,163,184,0.12)", padding: "1px 6px", borderRadius: 3, fontFamily: "monospace" }}>
                       {step.promptVersion}
                     </span>
                   )}

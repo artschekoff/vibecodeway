@@ -175,8 +175,9 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
       setShowNewCtx(false);
       setNewCtxKey("");
       setNewCtxOrgId("");
-      // Attach immediately after creating.
+      // Attach immediately after creating, then dismiss (same pattern as handleAttach).
       await attachTo(ctx.id, ctx.key);
+      requestAnimationFrame(() => DismissPicker().catch(() => {}));
     } catch (e) {
       setNewCtxError(e instanceof Error ? e.message : String(e));
     } finally {

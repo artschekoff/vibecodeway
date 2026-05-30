@@ -130,7 +130,7 @@ Produce a JSON object with exactly this structure. Return ONLY valid JSON, no ma
   "extraction_notes": null
 }`
 
-	defaultPersonAssignmentPrompt = `You are an AI analyst generating detailed, technical task assignments for each participant in a project.
+	defaultPersonAssignmentPrompt = `You are an AI analyst generating task assignments for each participant in a project.
 
 ## Context key: {{context_key}}
 
@@ -148,16 +148,14 @@ The following people are the confirmed members of this organisation. Generate an
 For each person listed in "Org team members" produce an entry in the JSON array below.
 If a person has no relevant work found in the source data, still include them with a brief "No active tasks found" body.
 
-The "body" field must be rich Markdown covering ALL of the following that are relevant:
+The "body" field must be Markdown covering ALL of the following that are relevant:
 - **Current assignment**: which specific Jira issues/subtasks they own, their status
-- **Technical context**: exact service names, API endpoints, DB tables, functions, modules, branches, PRs relevant to their work
-- **Infrastructure details**: cloud services, queues, cron jobs, feature flags, env vars they need to touch
+- **Technical context**: which features, services, or domain areas they need to work in — named at the capability level (e.g. "authentication service", "notification feature") — do NOT name specific file paths, function names, class names, or directory paths
 - **Business entities & rules**: domain objects, business logic constraints, data contracts they must respect
-- **Methods & approaches**: specific algorithms, patterns, or architectural decisions already agreed on
-- **Next concrete actions**: step-by-step tasks derived from issue state and event log
+- **Next concrete actions**: step-by-step tasks described as behaviors or outcomes (e.g. "add pagination to the user list") — do NOT reference specific file locations or function signatures
 - **Blockers & dependencies**: open questions or blockers that directly affect them
 
-Do NOT summarise vaguely. Include exact names, IDs, values, and references found in the source data.
+Do NOT include specific file paths, directory paths, function names, class names, or component paths. Describe work at the feature and behavior level.
 
 Return ONLY valid JSON — no markdown fences, no preamble:
 [
@@ -167,8 +165,8 @@ Return ONLY valid JSON — no markdown fences, no preamble:
   }
 ]`
 
-	defaultSinglePersonAssignmentPrompt = `You are a senior technical lead writing an implementation-ready task assignment for a single developer.
-The document must be detailed enough that a coding agent can execute the work without asking any clarifying questions.
+	defaultSinglePersonAssignmentPrompt = `You are a senior technical lead writing a task assignment for a single developer.
+The document must be detailed enough for a coding agent to execute the work, but must NOT contain specific file paths, function names, class names, or directory structures — the agent resolves those from the codebase itself.
 
 ## Context key: {{context_key}}
 
@@ -181,43 +179,35 @@ The document must be detailed enough that a coding agent can execute the work wi
 {{events}}
 {{custom_prompt}}
 ## Task
-Write a comprehensive technical implementation assignment for **{{person_name}} only**.
+Write a comprehensive task assignment for **{{person_name}} only**.
 Focus exclusively on what this person owns or has commented on.
 
 Include ALL sections below. Write "N/A" in any section with no data — do not omit sections.
-Use the exact names, keys, IDs, values, and identifiers found in the source data.
 
 ### Current Assignment
 - Exact Jira issue keys, summaries, and current statuses they own
 - Acceptance criteria extracted from issue descriptions and comments
 
 ### Technical Context
-- Exact service, package, and module names to work in
-- Specific API endpoints, HTTP methods, request/response field names and types
-- Database table names, columns, indices, foreign keys involved
-- Function and method names to create, modify, or call
-- Relevant file paths, directory structure, module boundaries
-- Active branch name(s) and open PR URLs or numbers
+- Which features, services, or domain areas to work in (named at the capability level, e.g. "authentication service", "dashboard feature")
+- API endpoints, HTTP methods, request/response field names and types (only if found in the source data)
+- Data entities, field names, validation rules, business logic constraints (only if found in the source data)
+- Active branch name(s) and open PR numbers or URLs (if mentioned)
+- Do NOT name specific file paths, directory paths, function names, class names, or module paths
 
 ### Implementation Steps
-Numbered step-by-step guide. For each step write:
-1. What file / module / function to open or create
-2. Exactly what logic to add or change (describe the algorithm or behavior explicitly)
-3. Expected output, return value, or observable side effect
-
-### Data Contracts
-- Request/response bodies with field names and data types
-- New or modified DB schema (DDL if applicable)
-- Validation rules, nullable constraints, business logic rules
+Numbered step-by-step guide. For each step describe:
+1. What capability, behavior, or feature area to work on
+2. What outcome the change should produce (describe the behavior — do NOT specify file locations or function signatures)
+3. Expected observable result or acceptance signal
 
 ### Infrastructure & Configuration
-- Environment variables and feature flags required
-- External services, queues, webhooks, or cron jobs to configure
-- Required DB migrations or deployment actions
+- Environment variables and feature flags required (if found in source data)
+- External services, queues, webhooks, or cron jobs to configure (if mentioned)
+- Required DB migrations or deployment actions (if mentioned)
 
 ### Testing Requirements
-- Unit tests to write (list the functions/scenarios to cover)
-- Integration or E2E test scenarios
+- Behaviors and scenarios to cover with tests
 - How to verify the full implementation is correct end-to-end
 
 ### Blockers & Dependencies
@@ -242,10 +232,11 @@ Return ONLY the Markdown body — no JSON wrapper, no preamble.`
 ## Event log (for reference)
 {{events}}
 
-Apply the user instruction. Preserve all technical details (service names, endpoints, DB tables, methods, infrastructure specifics) unless the instruction explicitly says to remove them.
+Apply the user instruction. Preserve business and task details (Jira issue keys, acceptance criteria, blockers, deadlines, domain rules).
+Do NOT add or preserve specific file paths, directory paths, function names, class names, or component paths.
 Return ONLY the updated Markdown for this person's body — no JSON, no preamble.`
 
-	defaultPersonAssignmentIncrementalPrompt = `You are updating a developer's technical task assignment based on new context.
+	defaultPersonAssignmentIncrementalPrompt = `You are updating a developer's task assignment based on new context.
 Maximum output: {{max_tokens_hint}} words. Be surgical — only modify sections directly affected by the new messages.
 
 ## Developer: {{person_name}}
@@ -265,16 +256,17 @@ EXAMPLE (do not copy verbatim — illustrates edit style):
 New message: "[Slack] @alice: API deadline moved to Friday, need auth endpoint done by EOD Thursday"
 
 Before excerpt:
-### Auth Service
+### Authentication Feature
 - Implement login endpoint (timeline: next sprint)
 
 After excerpt:
-### Auth Service
+### Authentication Feature
 - Implement login endpoint (**deadline: Thursday EOD** — Slack update from @alice)
 
 ---
 
-Update the assignment. Preserve all unchanged sections verbatim. Return ONLY the updated Markdown body.`
+Update the assignment. Preserve all unchanged sections verbatim. Do NOT add specific file paths, function names, class names, or directory paths.
+Return ONLY the updated Markdown body.`
 
 	defaultPersonAssignmentSummaryPrompt = `Compress the following task assignment into a concise summary (max 150 words).
 Preserve: assignee name, key responsibilities, blockers, deadlines.
