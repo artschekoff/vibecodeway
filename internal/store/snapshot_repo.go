@@ -53,6 +53,12 @@ func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnap
 	if estimatedCompletionDate.Valid {
 		sn.EstimatedCompletionDate = &estimatedCompletionDate.String
 	}
+	// Attach latest status log entry
+	latest, err := s.GetLatestStatusLogEntry(ctx, contextID)
+	if err != nil {
+		return nil, err
+	}
+	sn.LatestStatusLogEntry = latest
 	return &sn, nil
 }
 
@@ -160,6 +166,20 @@ func (s *Store) OverrideCurrentStep(ctx context.Context, contextID, description 
 	`, contextID, description)
 	if err != nil {
 		return fmt.Errorf("override current step: %w", err)
+	}
+	return nil
+}
+
+// SetSnapshotStatus updates only the status field on a context snapshot.
+// Creates a minimal snapshot row if none exists yet.
+func (s *Store) SetSnapshotStatus(ctx context.Context, contextID, slug string) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO context_snapshots (context_id, status)
+		VALUES (?, ?)
+		ON CONFLICT(context_id) DO UPDATE SET status = excluded.status
+	`, contextID, slug)
+	if err != nil {
+		return fmt.Errorf("set snapshot status: %w", err)
 	}
 	return nil
 }
