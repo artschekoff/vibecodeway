@@ -19,7 +19,7 @@ interface Props {
   visible: boolean;
   text: string;
   orgId?: string;
-  onAttach: (contextKey: string, contextId: string) => void;
+  onAttach: (contextKey: string, contextId: string, orgId?: string, orgName?: string) => void;
   onDismiss: () => void;
 }
 
@@ -129,9 +129,11 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
             await QuickAttachText(contextID, text);
           }
       }
-      onAttach(contextKey, contextID);
+      const ctx = contexts.find((c) => c.id === contextID);
+      const ctxOrgName = orgs.find((o) => o.id === ctx?.orgId)?.name;
+      onAttach(contextKey, contextID, ctx?.orgId, ctxOrgName);
     },
-    [kind, text, destination, logDraft, onAttach],
+    [kind, text, destination, logDraft, onAttach, contexts, orgs],
   );
 
   const handleAttach = useCallback(async () => {

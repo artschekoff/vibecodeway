@@ -11,9 +11,10 @@ import (
 // ListContextRelations returns all relations originating from contextID, enriched with the target context key.
 func (s *Store) ListContextRelations(ctx context.Context, contextID string) ([]ContextRelation, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT cr.id, cr.context_id, cr.target_id, c.key, cr.relation_type, cr.created_at
+		SELECT cr.id, cr.context_id, cr.target_id, c.key, c.org_id, COALESCE(o.name, ''), cr.relation_type, cr.created_at
 		FROM context_relations cr
 		JOIN contexts c ON c.id = cr.target_id
+		LEFT JOIN organizations o ON o.id = c.org_id
 		WHERE cr.context_id = ?
 		ORDER BY cr.created_at ASC
 	`, contextID)
@@ -25,7 +26,7 @@ func (s *Store) ListContextRelations(ctx context.Context, contextID string) ([]C
 	var relations []ContextRelation
 	for rows.Next() {
 		var r ContextRelation
-		if err := rows.Scan(&r.ID, &r.ContextID, &r.TargetID, &r.TargetKey, &r.RelationType, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.ContextID, &r.TargetID, &r.TargetKey, &r.TargetOrgID, &r.TargetOrgName, &r.RelationType, &r.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scanning context relation: %w", err)
 		}
 		relations = append(relations, r)
@@ -51,7 +52,12 @@ func (s *Store) AddContextRelation(ctx context.Context, contextID, targetID, rel
 	if err != nil {
 		return nil, fmt.Errorf("adding context relation: %w", err)
 	}
-	if err := s.db.QueryRowContext(ctx, `SELECT key FROM contexts WHERE id = ?`, targetID).Scan(&r.TargetKey); err != nil {
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT c.key, c.org_id, COALESCE(o.name, '')
+		FROM contexts c
+		LEFT JOIN organizations o ON o.id = c.org_id
+		WHERE c.id = ?
+	`, targetID).Scan(&r.TargetKey, &r.TargetOrgID, &r.TargetOrgName); err != nil {
 		return nil, fmt.Errorf("fetching target key: %w", err)
 	}
 	return r, nil

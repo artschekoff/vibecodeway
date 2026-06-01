@@ -114,11 +114,11 @@ function AppShell() {
   }, []); // intentionally run once on mount only
 
   const handleAttach = useCallback(
-    (contextKey: string, contextId: string) => {
+    (contextKey: string, contextId: string, orgId?: string, orgName?: string) => {
       setPicker({ visible: false, text: "" });
       showToast(`Attached to "${contextKey}"`);
       window.dispatchEvent(new CustomEvent("context:updated", { detail: { id: contextId } }));
-      openContextTab(contextId, contextKey);
+      openContextTab(contextId, contextKey, orgName, orgId);
       SendNotification({
         id: `quick-attach-${Date.now()}`,
         title: "Attached",
