@@ -272,13 +272,13 @@ func (a *App) ListWorkflowStatuses() ([]appstore.WorkflowStatus, error) {
 }
 
 // CreateWorkflowStatus adds a new custom workflow status.
-func (a *App) CreateWorkflowStatus(slug, label string) (*appstore.WorkflowStatus, error) {
-	return a.db.CreateWorkflowStatus(context.Background(), slug, label)
+func (a *App) CreateWorkflowStatus(slug, label, aiHint string) (*appstore.WorkflowStatus, error) {
+	return a.db.CreateWorkflowStatus(context.Background(), slug, label, aiHint)
 }
 
-// UpdateWorkflowStatus renames the display label of a status.
-func (a *App) UpdateWorkflowStatus(id, label string) (*appstore.WorkflowStatus, error) {
-	return a.db.UpdateWorkflowStatus(context.Background(), id, label)
+// UpdateWorkflowStatus renames the display label and ai_hint of a status.
+func (a *App) UpdateWorkflowStatus(id, slug, label, aiHint string) (*appstore.WorkflowStatus, error) {
+	return a.db.UpdateWorkflowStatus(context.Background(), id, label, aiHint)
 }
 
 // DeleteWorkflowStatus removes a custom status.

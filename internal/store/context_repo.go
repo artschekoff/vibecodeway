@@ -73,15 +73,13 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
-		LEFT JOIN (
-		    SELECT context_id, comment
-		    FROM context_status_log
-		    WHERE (context_id, created_at) IN (
-		        SELECT context_id, MAX(created_at)
-		        FROM context_status_log
-		        GROUP BY context_id
+		LEFT JOIN context_status_log latest_log
+		    ON latest_log.id = (
+		        SELECT id FROM context_status_log
+		        WHERE context_id = c.id
+		        ORDER BY created_at DESC
+		        LIMIT 1
 		    )
-		) AS latest_log ON latest_log.context_id = c.id
 		WHERE (? OR c.status = 'active')
 		GROUP BY c.id
 		ORDER BY c.sort_order ASC NULLS LAST, c.updated_at DESC
@@ -103,15 +101,13 @@ func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
 		FROM contexts c
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
-		LEFT JOIN (
-		    SELECT context_id, comment
-		    FROM context_status_log
-		    WHERE (context_id, created_at) IN (
-		        SELECT context_id, MAX(created_at)
-		        FROM context_status_log
-		        GROUP BY context_id
+		LEFT JOIN context_status_log latest_log
+		    ON latest_log.id = (
+		        SELECT id FROM context_status_log
+		        WHERE context_id = c.id
+		        ORDER BY created_at DESC
+		        LIMIT 1
 		    )
-		) AS latest_log ON latest_log.context_id = c.id
 		WHERE c.id = ?`,
 		id,
 	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
@@ -136,15 +132,13 @@ func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, erro
 		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
 		FROM contexts c
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
-		LEFT JOIN (
-		    SELECT context_id, comment
-		    FROM context_status_log
-		    WHERE (context_id, created_at) IN (
-		        SELECT context_id, MAX(created_at)
-		        FROM context_status_log
-		        GROUP BY context_id
+		LEFT JOIN context_status_log latest_log
+		    ON latest_log.id = (
+		        SELECT id FROM context_status_log
+		        WHERE context_id = c.id
+		        ORDER BY created_at DESC
+		        LIMIT 1
 		    )
-		) AS latest_log ON latest_log.context_id = c.id
 		WHERE c.key = ?`,
 		key,
 	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,

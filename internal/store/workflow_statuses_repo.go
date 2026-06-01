@@ -74,7 +74,7 @@ func (s *Store) CreateWorkflowStatus(ctx context.Context, slug, label, aiHint st
 }
 
 // UpdateWorkflowStatus changes the display label and ai_hint of a status (slug is immutable).
-func (s *Store) UpdateWorkflowStatus(ctx context.Context, id, slug, label, aiHint string) (*WorkflowStatus, error) {
+func (s *Store) UpdateWorkflowStatus(ctx context.Context, id, label, aiHint string) (*WorkflowStatus, error) {
 	res, err := s.db.ExecContext(ctx, `UPDATE workflow_statuses SET label = ?, ai_hint = ? WHERE id = ?`, label, aiHint, id)
 	if err != nil {
 		return nil, fmt.Errorf("update workflow status: %w", err)
