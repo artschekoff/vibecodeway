@@ -73,13 +73,12 @@ import {
   MarkAssignmentsOutdated,
   GenerateEventsFromMessages,
   SetContextWorkflowStatus,
-  GetStatusLog,
   ListWorkflowStatuses,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, StatusLogEntry, WorkflowStatus } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, WorkflowStatus } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -391,7 +390,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [markingAllViewed, setMarkingAllViewed] = useState(false);
   const [snapshot, setSnapshot] = useState<ContextSnapshot | null>(null);
   const [workflowStatuses, setWorkflowStatuses] = useState<WorkflowStatus[]>([]);
-  const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const [showStatusChanger, setShowStatusChanger] = useState(false);
   const [statusChangeSlug, setStatusChangeSlug] = useState("");
   const [statusChangeComment, setStatusChangeComment] = useState("");
@@ -519,8 +517,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     try {
       const updated = await SetContextWorkflowStatus(id, statusChangeSlug, statusChangeComment);
       if (updated) setSnapshot(updated as ContextSnapshot);
-      const log = await GetStatusLog(id);
-      setStatusLog((log ?? []) as StatusLogEntry[]);
       setShowStatusChanger(false);
       setStatusChangeSlug("");
       setStatusChangeComment("");
@@ -579,7 +575,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
 
   useEffect(() => {
     void ListWorkflowStatuses().then((ss) => setWorkflowStatuses(ss ?? []));
-    void GetStatusLog(id).then((log) => setStatusLog((log ?? []) as StatusLogEntry[]));
   }, [id]);
 
   const handleRefresh = async () => {

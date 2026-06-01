@@ -35,9 +35,9 @@ export default function WorkflowStatusManager() {
     ListWorkflowStatuses().then(setStatuses).catch(console.error);
   }, []);
 
-  async function saveEdit(id: string, slug: string) {
+  async function saveEdit(id: string) {
     try {
-      const updated = await UpdateWorkflowStatus(id, slug, editLabel.trim(), editAiHint.trim());
+      const updated = await UpdateWorkflowStatus(id, editLabel.trim(), editAiHint.trim());
       setStatuses((prev) => prev.map((s) => (s.id === id ? updated : s)));
       setEditingId(null);
       setError("");
@@ -100,7 +100,7 @@ export default function WorkflowStatusManager() {
                   value={editLabel}
                   onChange={(e) => setEditLabel(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") saveEdit(st.id, st.slug);
+                    if (e.key === "Enter") saveEdit(st.id);
                     if (e.key === "Escape") setEditingId(null);
                   }}
                   autoFocus
@@ -112,7 +112,7 @@ export default function WorkflowStatusManager() {
                   value={editAiHint}
                   onChange={(e) => setEditAiHint(e.target.value)}
                 />
-                <button className="icon-btn" onClick={() => saveEdit(st.id, st.slug)} title="Save">
+                <button className="icon-btn" onClick={() => saveEdit(st.id)} title="Save">
                   <Check size={14} />
                 </button>
                 <button className="icon-btn" onClick={() => setEditingId(null)} title="Cancel">

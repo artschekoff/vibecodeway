@@ -694,8 +694,8 @@ export function UpdateVCSRepoMeta(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateVCSRepoMeta'](arg1, arg2, arg3);
 }
 
-export function UpdateWorkflowStatus(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['UpdateWorkflowStatus'](arg1, arg2, arg3, arg4);
+export function UpdateWorkflowStatus(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateWorkflowStatus'](arg1, arg2, arg3);
 }
 
 export function UpsertContextText(arg1, arg2, arg3, arg4) {

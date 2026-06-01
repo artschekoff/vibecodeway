@@ -53,7 +53,10 @@ func (a *App) SetContextWorkflowStatus(contextID, slug, comment string) (*appsto
 	if err := a.db.SetSnapshotStatus(ctx, contextID, slug); err != nil {
 		return nil, err
 	}
-	prev, _ := a.db.GetLatestStatusLogEntry(ctx, contextID)
+	prev, err := a.db.GetLatestStatusLogEntry(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("get latest status log entry: %w", err)
+	}
 	var prevID *string
 	if prev != nil {
 		prevID = &prev.ID
@@ -307,7 +310,7 @@ func (a *App) CreateWorkflowStatus(slug, label, aiHint string) (*appstore.Workfl
 }
 
 // UpdateWorkflowStatus renames the display label and ai_hint of a status.
-func (a *App) UpdateWorkflowStatus(id, slug, label, aiHint string) (*appstore.WorkflowStatus, error) {
+func (a *App) UpdateWorkflowStatus(id, label, aiHint string) (*appstore.WorkflowStatus, error) {
 	return a.db.UpdateWorkflowStatus(context.Background(), id, label, aiHint)
 }
 

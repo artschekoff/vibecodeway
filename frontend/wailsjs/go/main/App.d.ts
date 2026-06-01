@@ -355,7 +355,7 @@ export function UpdateVCSBranchLabel(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateVCSRepoMeta(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function UpdateWorkflowStatus(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.WorkflowStatus>;
+export function UpdateWorkflowStatus(arg1:string,arg2:string,arg3:string):Promise<store.WorkflowStatus>;
 
 export function UpsertContextText(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.ContextText>;
 
