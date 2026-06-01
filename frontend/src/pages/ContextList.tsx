@@ -72,6 +72,7 @@ import {
   AddContextRelation,
   // @ts-ignore
   RemoveContextRelation,
+  ListWorkflowStatuses,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type {
@@ -79,6 +80,7 @@ import type {
   SlackSavePayload, TextFilesPayload, UploadedFile,
   ReviewRequest, VCSRepo, VCSPlatform, VCSPlatformInfo,
   ContextRelation, RelationsPayload, Organization, VCSRepoPath, VCSWorkspace, LocalBranch,
+  WorkflowStatus,
 } from "../types";
 import { effectiveStatus } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
@@ -263,6 +265,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const initialFetchPruneDone = useRef(false);
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [workflowStatuses, setWorkflowStatuses] = useState<WorkflowStatus[]>([]);
 
   // ── Reviews state ──
   const [repoGroups, setRepoGroups] = useState<RepoGroup[]>([]);
@@ -415,6 +418,10 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
 
   useEffect(() => {
     ListOrganizations().then((list: Organization[]) => setOrgs(list ?? [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void ListWorkflowStatuses().then((ss) => setWorkflowStatuses(ss ?? []));
   }, []);
 
   // ── Background refresh event listeners ──
@@ -1068,6 +1075,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                   <WorkflowStatusBadge
                                     status={effectiveStatus(c)}
                                     isAI={false}
+                                    statuses={workflowStatuses}
+                                    title={c.snapshotStatusComment || undefined}
                                   />
                                 </td>
                                 <td>
