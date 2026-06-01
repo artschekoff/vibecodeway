@@ -68,10 +68,20 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		       (EXISTS(SELECT 1 FROM context_texts WHERE context_id = c.id)
 		        OR EXISTS(SELECT 1 FROM context_uploaded_files WHERE context_id = c.id)) AS has_files,
 		       COALESCE(sn.status, 'not_started') AS snapshot_status,
-		       COALESCE(sn.is_stale, 0) AS snapshot_is_stale
+		       COALESCE(sn.is_stale, 0) AS snapshot_is_stale,
+		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
+		LEFT JOIN (
+		    SELECT context_id, comment
+		    FROM context_status_log
+		    WHERE (context_id, created_at) IN (
+		        SELECT context_id, MAX(created_at)
+		        FROM context_status_log
+		        GROUP BY context_id
+		    )
+		) AS latest_log ON latest_log.context_id = c.id
 		WHERE (? OR c.status = 'active')
 		GROUP BY c.id
 		ORDER BY c.sort_order ASC NULLS LAST, c.updated_at DESC
@@ -89,13 +99,23 @@ func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 	var isStaleInt int
 	err := s.db.QueryRowContext(ctx,
 		`SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
-		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0)
+		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0),
+		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
 		FROM contexts c
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
+		LEFT JOIN (
+		    SELECT context_id, comment
+		    FROM context_status_log
+		    WHERE (context_id, created_at) IN (
+		        SELECT context_id, MAX(created_at)
+		        FROM context_status_log
+		        GROUP BY context_id
+		    )
+		) AS latest_log ON latest_log.context_id = c.id
 		WHERE c.id = ?`,
 		id,
 	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
-		&c.SnapshotStatus, &isStaleInt)
+		&c.SnapshotStatus, &isStaleInt, &c.SnapshotStatusComment)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -112,13 +132,23 @@ func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, erro
 	var isStaleInt int
 	err := s.db.QueryRowContext(ctx,
 		`SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
-		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0)
+		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0),
+		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
 		FROM contexts c
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
+		LEFT JOIN (
+		    SELECT context_id, comment
+		    FROM context_status_log
+		    WHERE (context_id, created_at) IN (
+		        SELECT context_id, MAX(created_at)
+		        FROM context_status_log
+		        GROUP BY context_id
+		    )
+		) AS latest_log ON latest_log.context_id = c.id
 		WHERE c.key = ?`,
 		key,
 	).Scan(&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
-		&c.SnapshotStatus, &isStaleInt)
+		&c.SnapshotStatus, &isStaleInt, &c.SnapshotStatusComment)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -379,7 +409,7 @@ func scanContextRows(rows *sql.Rows) ([]Context, error) {
 			&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
 			&c.IssueCount, &c.LastItemAt, &c.UnviewedCount,
 			&c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles,
-			&c.SnapshotStatus, &isStaleInt,
+			&c.SnapshotStatus, &isStaleInt, &c.SnapshotStatusComment,
 		); err != nil {
 			return nil, fmt.Errorf("scanning context: %w", err)
 		}
