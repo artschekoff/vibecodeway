@@ -22,6 +22,7 @@ export default function WorkflowStatusManager() {
   const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [editAiHint, setEditAiHint] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adding, setAdding] = useState(false);
@@ -36,7 +37,7 @@ export default function WorkflowStatusManager() {
 
   async function saveEdit(id: string, slug: string) {
     try {
-      const updated = await UpdateWorkflowStatus(id, slug, editLabel.trim(), "");
+      const updated = await UpdateWorkflowStatus(id, slug, editLabel.trim(), editAiHint.trim());
       setStatuses((prev) => prev.map((s) => (s.id === id ? updated : s)));
       setEditingId(null);
       setError("");
@@ -104,6 +105,13 @@ export default function WorkflowStatusManager() {
                   }}
                   autoFocus
                 />
+                <textarea
+                  className="form-control"
+                  style={{ fontSize: 11, resize: "vertical", minHeight: 56, marginTop: 4 }}
+                  placeholder="AI hint: when to use this status and what signals a transition…"
+                  value={editAiHint}
+                  onChange={(e) => setEditAiHint(e.target.value)}
+                />
                 <button className="icon-btn" onClick={() => saveEdit(st.id, st.slug)} title="Save">
                   <Check size={14} />
                 </button>
@@ -114,12 +122,18 @@ export default function WorkflowStatusManager() {
             ) : (
               <>
                 <span className="workflow-status-label">{st.label}</span>
+                {st.aiHint && (
+                  <details style={{ marginTop: 3 }}>
+                    <summary style={{ fontSize: 11, cursor: "pointer", color: "var(--text-muted)" }}>AI hint</summary>
+                    <p style={{ fontSize: 11, margin: "3px 0 0", color: "var(--text-muted)", lineHeight: 1.4 }}>{st.aiHint}</p>
+                  </details>
+                )}
                 <span className="workflow-status-slug">{st.slug}</span>
                 {st.isSystem && <span className="workflow-status-system-badge">system</span>}
                 <div className="workflow-status-actions">
                   <button
                     className="icon-btn"
-                    onClick={() => { setEditingId(st.id); setEditLabel(st.label); setError(""); }}
+                    onClick={() => { setEditingId(st.id); setEditLabel(st.label); setEditAiHint(st.aiHint ?? ""); setError(""); }}
                     title="Edit label"
                   >
                     <Pencil size={14} />
