@@ -16,7 +16,7 @@ WHERE slug = 'needs_attention';
 UPDATE workflow_statuses SET ai_hint = 'Use when all work is complete and no open issues remain. Terminal status.'
 WHERE slug = 'ready';
 
-INSERT INTO workflow_statuses (id, slug, label, is_system, ai_hint) VALUES (
+INSERT OR IGNORE INTO workflow_statuses (id, slug, label, is_system, ai_hint) VALUES (
     lower(hex(randomblob(16))), 'blocked', 'Blocked', 1,
     'Use when the context cannot proceed because it is waiting for an external prerequisite: another service to be built, a decision to be made, or a dependency to be resolved. Always state the specific blocker in status_comment. Transition to needs_attention when new artifacts show the blocker has been resolved.'
 );
