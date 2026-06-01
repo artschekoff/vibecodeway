@@ -72,11 +72,14 @@ import {
   GetPendingMessages,
   MarkAssignmentsOutdated,
   GenerateEventsFromMessages,
+  SetContextWorkflowStatus,
+  GetStatusLog,
+  ListWorkflowStatuses,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import type { service } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, StatusLogEntry, WorkflowStatus } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -91,6 +94,7 @@ import { InstructionInput } from "../components/InstructionInput";
 import { ReasoningChainGraph } from "../components/ReasoningChainGraph";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
+import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 
 function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string }) {
   const isMerged = status === "merged";
@@ -386,6 +390,12 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [breakdown, setBreakdown] = useState<UnviewedBreakdown | null>(null);
   const [markingAllViewed, setMarkingAllViewed] = useState(false);
   const [snapshot, setSnapshot] = useState<ContextSnapshot | null>(null);
+  const [workflowStatuses, setWorkflowStatuses] = useState<WorkflowStatus[]>([]);
+  const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
+  const [showStatusChanger, setShowStatusChanger] = useState(false);
+  const [statusChangeSlug, setStatusChangeSlug] = useState("");
+  const [statusChangeComment, setStatusChangeComment] = useState("");
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [estimationHistory, setEstimationHistory] = useState<EstimationLog[]>([]);
   const [events, setEvents] = useState<ContextEvent[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -503,6 +513,22 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }
   };
 
+  const handleStatusChange = async () => {
+    if (!statusChangeSlug) return;
+    setIsChangingStatus(true);
+    try {
+      const updated = await SetContextWorkflowStatus(id, statusChangeSlug, statusChangeComment);
+      if (updated) setSnapshot(updated as ContextSnapshot);
+      const log = await GetStatusLog(id);
+      setStatusLog((log ?? []) as StatusLogEntry[]);
+      setShowStatusChanger(false);
+      setStatusChangeSlug("");
+      setStatusChangeComment("");
+    } finally {
+      setIsChangingStatus(false);
+    }
+  };
+
   const load = useCallback(async (silent = false) => {
     if (!id) return;
     if (!silent) setLoading(true);
@@ -550,6 +576,11 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   useEffect(() => {
     GetJiraInstanceURL().then(setJiraInstanceUrl).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    void ListWorkflowStatuses().then((ss) => setWorkflowStatuses(ss ?? []));
+    void GetStatusLog(id).then((log) => setStatusLog((log ?? []) as StatusLogEntry[]));
+  }, [id]);
 
   const handleRefresh = async () => {
     if (!id) return;
@@ -1044,7 +1075,63 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 </div>
                 <div>
                   <strong>Status:</strong>{" "}
-                  <span className={`workflow-badge workflow-badge--${snapshot.status}`}>{snapshot.status.replace(/_/g, " ")}</span>
+                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                    <WorkflowStatusBadge status={snapshot.status} statuses={workflowStatuses} />
+                    {snapshot.latestStatusLogEntry?.comment && (
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        — {snapshot.latestStatusLogEntry.comment}
+                      </span>
+                    )}
+                    <button
+                      className="btn-ghost"
+                      style={{ fontSize: 11, padding: "1px 7px" }}
+                      onClick={() => {
+                        setStatusChangeSlug(snapshot.status);
+                        setStatusChangeComment("");
+                        setShowStatusChanger((v) => !v);
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                  {showStatusChanger && (
+                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <select
+                        className="form-control"
+                        style={{ fontSize: 12 }}
+                        value={statusChangeSlug}
+                        onChange={(e) => setStatusChangeSlug(e.target.value)}
+                      >
+                        {workflowStatuses.map((st) => (
+                          <option key={st.slug} value={st.slug}>{st.label}</option>
+                        ))}
+                      </select>
+                      <input
+                        className="form-control"
+                        style={{ fontSize: 12 }}
+                        placeholder="Reason for this status change…"
+                        value={statusChangeComment}
+                        onChange={(e) => setStatusChangeComment(e.target.value)}
+                      />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn-primary"
+                          style={{ fontSize: 12 }}
+                          disabled={!statusChangeSlug || isChangingStatus}
+                          onClick={() => void handleStatusChange()}
+                        >
+                          {isChangingStatus ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          className="btn-ghost"
+                          style={{ fontSize: 12 }}
+                          onClick={() => setShowStatusChanger(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {snapshot.sectionOperational && (
                   <details open>
@@ -1825,7 +1912,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       <button
                         type="button"
                         className="btn-ghost relation-link"
-                        onClick={() => openContextTab(rel.targetId, rel.targetKey)}
+                        onClick={() => openContextTab(rel.targetId, rel.targetKey, rel.targetOrgName, rel.targetOrgId)}
                       >
                         {rel.targetKey}
                       </button>
