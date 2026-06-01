@@ -39,6 +39,36 @@ func (a *App) GetContextSnapshot(contextID string) (*appstore.ContextSnapshot, e
 	return a.db.GetSnapshot(context.Background(), contextID)
 }
 
+// SetContextWorkflowStatus manually overrides the workflow status for a context
+// and records the change in the status log.
+func (a *App) SetContextWorkflowStatus(contextID, slug, comment string) (*appstore.ContextSnapshot, error) {
+	ctx := context.Background()
+	ok, err := a.db.IsValidWorkflowStatus(ctx, slug)
+	if err != nil {
+		return nil, fmt.Errorf("validating status: %w", err)
+	}
+	if !ok {
+		return nil, fmt.Errorf("unknown status %q", slug)
+	}
+	if err := a.db.SetSnapshotStatus(ctx, contextID, slug); err != nil {
+		return nil, err
+	}
+	prev, _ := a.db.GetLatestStatusLogEntry(ctx, contextID)
+	var prevID *string
+	if prev != nil {
+		prevID = &prev.ID
+	}
+	if _, err := a.db.AppendStatusLog(ctx, contextID, slug, comment, "user", prevID); err != nil {
+		return nil, err
+	}
+	return a.db.GetSnapshot(ctx, contextID)
+}
+
+// GetStatusLog returns the full status log for a context in chronological order.
+func (a *App) GetStatusLog(contextID string) ([]appstore.StatusLogEntry, error) {
+	return a.db.ListStatusLog(context.Background(), contextID)
+}
+
 // UpdateUserNextSteps saves user-written next-step notes by time horizon.
 // These are always visible without re-analysis and are passed as hints on next Analyze run.
 func (a *App) UpdateUserNextSteps(contextID, short, mid, long string) error {
