@@ -555,7 +555,28 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 		return nil, fmt.Errorf("list events: %w", err)
 	}
 
-	newSnapshot, err := s.buildSnapshot(ctx, ctxRow.Key, allEvents, userHints)
+	// Load workflow statuses for dynamic status definitions
+	workflowStatuses, err := s.store.ListWorkflowStatuses(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load workflow statuses: %w", err)
+	}
+	var statusDefsB strings.Builder
+	for _, st := range workflowStatuses {
+		fmt.Fprintf(&statusDefsB, "- %s (%s): %s\n", st.Slug, st.Label, st.AIHint)
+	}
+	statusDefs := strings.TrimRight(statusDefsB.String(), "\n")
+
+	// Load latest status log entry for prior-status context
+	latestLog, err := s.store.GetLatestStatusLogEntry(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("load latest status log: %w", err)
+	}
+	currentStatusLogEntry := "No prior status entry."
+	if latestLog != nil {
+		currentStatusLogEntry = fmt.Sprintf("Status: %s — Reason: %s", latestLog.StatusSlug, latestLog.Comment)
+	}
+
+	newSnapshot, err := s.buildSnapshot(ctx, ctxRow.Key, allEvents, userHints, statusDefs, currentStatusLogEntry)
 	if err != nil {
 		return nil, fmt.Errorf("build snapshot: %w", err)
 	}
@@ -585,6 +606,18 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 	if err := s.store.UpsertSnapshot(ctx, newSnapshot); err != nil {
 		return nil, fmt.Errorf("upsert snapshot: %w", err)
 	}
+
+	// Append status log entry — record the AI's status decision + reason
+	prevLogEntry, _ := s.store.GetLatestStatusLogEntry(ctx, contextID)
+	var prevLogID *string
+	if prevLogEntry != nil {
+		prevLogID = &prevLogEntry.ID
+	}
+	statusComment := newSnapshot.StatusComment
+	if statusComment == "" {
+		statusComment = "Status determined by AI analysis."
+	}
+	_, _ = s.store.AppendStatusLog(ctx, contextID, newSnapshot.Status, statusComment, "ai", prevLogID)
 
 	// Log estimation change when hours were produced.
 	if newSnapshot.EstimatedHours != nil {
@@ -1240,7 +1273,7 @@ func (s *Service) extractEvents(ctx context.Context, contextKey, rawContent stri
 }
 
 // buildSnapshot calls the AI to build the three-section snapshot from events.
-func (s *Service) buildSnapshot(ctx context.Context, contextKey string, events []appstore.Event, hints nextStepsForPrompt) (*appstore.ContextSnapshot, error) {
+func (s *Service) buildSnapshot(ctx context.Context, contextKey string, events []appstore.Event, hints nextStepsForPrompt, statusDefs, currentStatusLogEntry string) (*appstore.ContextSnapshot, error) {
 	prompts := make([]eventForPrompt, 0, len(events))
 	for _, e := range events {
 		prompts = append(prompts, eventForPrompt{
@@ -1254,7 +1287,7 @@ func (s *Service) buildSnapshot(ctx context.Context, contextKey string, events [
 	}
 
 	tmpl := s.loadPrompt(ctx, "snapshot_build", defaultSnapshotBuildPrompt)
-	prompt := snapshotBuildPrompt(tmpl, contextKey, prompts, hints)
+	prompt := snapshotBuildPrompt(tmpl, contextKey, prompts, hints, statusDefs, currentStatusLogEntry)
 	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{
 		{Role: "user", Content: prompt},
 	})
@@ -1311,6 +1344,7 @@ func parseSnapshotResponse(content string) (*appstore.ContextSnapshot, error) {
 			FromEventIDs []string `json:"from_event_ids"`
 		} `json:"current_step"`
 		Status             string `json:"status"`
+		StatusComment      string `json:"status_comment"`
 		SectionOperational string `json:"section_operational"`
 		SectionNarrative   string `json:"section_narrative"`
 		SectionEngineering string `json:"section_engineering"`
@@ -1343,6 +1377,7 @@ func parseSnapshotResponse(content string) (*appstore.ContextSnapshot, error) {
 		SectionNarrative:      raw.SectionNarrative,
 		SectionEngineering:    raw.SectionEngineering,
 		Status:                status,
+		StatusComment:         raw.StatusComment,
 		AINextStepsShort:      raw.AINextStepsShort,
 		AINextStepsMid:        raw.AINextStepsMid,
 		AINextStepsLong:       raw.AINextStepsLong,

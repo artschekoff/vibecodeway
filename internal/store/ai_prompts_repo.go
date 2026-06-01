@@ -19,6 +19,8 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "next_steps_short", Description: "User short-term hints (~1 day)"},
 		{Name: "next_steps_mid", Description: "User mid-term hints (~1 week)"},
 		{Name: "next_steps_long", Description: "User long-term hints (~1 month)"},
+		{Name: "status_definitions",       Description: "Available workflow statuses with AI hints — injected automatically"},
+		{Name: "current_status_log_entry", Description: "Latest status log entry (current status + reason) — injected automatically"},
 	},
 	"handoff_packet": {
 		{Name: "context_key", Description: "Project/module key"},

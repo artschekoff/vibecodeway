@@ -42,13 +42,15 @@ func eventExtractionPrompt(tmpl, contextKey, rawContent, userNextStepsHints stri
 
 // snapshotBuildPrompt builds the prompt for generating the three-section snapshot from events.
 // tmpl is loaded from the DB (ai_prompts.body for id="snapshot_build").
-func snapshotBuildPrompt(tmpl, contextKey string, events []eventForPrompt, userNextSteps nextStepsForPrompt) string {
+func snapshotBuildPrompt(tmpl, contextKey string, events []eventForPrompt, userNextSteps nextStepsForPrompt, statusDefs, currentStatusLogEntry string) string {
 	return applyPlaceholders(tmpl, map[string]string{
-		"context_key":      contextKey,
-		"events":           formatEventsForPrompt(events),
-		"next_steps_short": userNextSteps.Short,
-		"next_steps_mid":   userNextSteps.Mid,
-		"next_steps_long":  userNextSteps.Long,
+		"context_key":              contextKey,
+		"events":                   formatEventsForPrompt(events),
+		"next_steps_short":         userNextSteps.Short,
+		"next_steps_mid":           userNextSteps.Mid,
+		"next_steps_long":          userNextSteps.Long,
+		"status_definitions":       statusDefs,
+		"current_status_log_entry": currentStatusLogEntry,
 	})
 }
 

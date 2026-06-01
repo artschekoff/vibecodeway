@@ -218,6 +218,7 @@ type ContextSnapshot struct {
 	SectionNarrative      string `json:"sectionNarrative"`
 	SectionEngineering    string `json:"sectionEngineering"`
 	Status                string `json:"status"` // slug from workflow_statuses, e.g. "in_progress"
+	StatusComment         string `json:"statusComment,omitempty"` // transient: AI's one-sentence reason for the chosen status
 
 	// AI-generated next-step recommendations by time horizon (rebuilt on each analysis).
 	AINextStepsShort string `json:"aiNextStepsShort"` // ~1 day
