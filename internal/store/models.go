@@ -24,6 +24,9 @@ type Context struct {
 	// Populated from context_snapshots.status via LEFT JOIN in list queries.
 	SnapshotStatus  string `json:"snapshotStatus"`
 	SnapshotIsStale bool   `json:"snapshotIsStale"`
+	// SnapshotStatusComment is the comment from the latest status log entry.
+	// Denormalized from context_status_log in list/get queries for tooltip display.
+	SnapshotStatusComment string `json:"snapshotStatusComment,omitempty"`
 }
 
 // WorkflowStatus is a user-configurable status option for context workflow.
@@ -32,8 +35,21 @@ type WorkflowStatus struct {
 	ID        string `json:"id"`
 	Slug      string `json:"slug"`
 	Label     string `json:"label"`
+	AIHint    string `json:"aiHint"`
 	IsSystem  bool   `json:"isSystem"`
 	CreatedAt string `json:"createdAt"`
+}
+
+// StatusLogEntry is one node in the per-context status history log.
+// PrevID links to the entry that preceded this one (nil for the first entry).
+type StatusLogEntry struct {
+	ID         string  `json:"id"`
+	ContextID  string  `json:"contextId"`
+	StatusSlug string  `json:"statusSlug"`
+	Comment    string  `json:"comment"`
+	Source     string  `json:"source"` // "ai" | "user"
+	PrevID     *string `json:"prevId,omitempty"`
+	CreatedAt  string  `json:"createdAt"`
 }
 
 // UnviewedBreakdown reports how many unread items exist per item type for a context.
@@ -92,14 +108,16 @@ type ContextUploadedFile struct {
 }
 
 // ContextRelation is a typed directional link from one context to another.
-// TargetKey is denormalized from the target context row for display.
+// TargetKey, TargetOrgID, and TargetOrgName are denormalized from the target context row for display.
 type ContextRelation struct {
-	ID           string `json:"id"`
-	ContextID    string `json:"contextId"`
-	TargetID     string `json:"targetId"`
-	TargetKey    string `json:"targetKey"`
-	RelationType string `json:"relationType"`
-	CreatedAt    string `json:"createdAt"`
+	ID             string `json:"id"`
+	ContextID      string `json:"contextId"`
+	TargetID       string `json:"targetId"`
+	TargetKey      string `json:"targetKey"`
+	TargetOrgID    string `json:"targetOrgId"`
+	TargetOrgName  string `json:"targetOrgName"`
+	RelationType   string `json:"relationType"`
+	CreatedAt      string `json:"createdAt"`
 }
 
 // AISettings holds multi-provider AI configuration stored in the local database.
@@ -216,6 +234,9 @@ type ContextSnapshot struct {
 	AnalyzedAt            *string `json:"analyzedAt,omitempty"`
 	IsStale               bool    `json:"isStale"`
 	Version               int     `json:"version"`
+
+	// LatestStatusLogEntry is the most recent status log node, populated by GetSnapshot.
+	LatestStatusLogEntry *StatusLogEntry `json:"latestStatusLogEntry,omitempty"`
 
 	// AI-predicted effort remaining and completion date (updated on each AnalyzeContext run).
 	EstimatedHours          *float64 `json:"estimatedHours,omitempty"`
