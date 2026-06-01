@@ -15,6 +15,7 @@ export interface Context {
   // Snapshot fields
   snapshotStatus: string;      // from context_snapshots.status
   snapshotIsStale: boolean;    // true when new data needs re-analysis
+  snapshotStatusComment?: string;
 }
 
 // Derived helper
@@ -264,6 +265,7 @@ export interface ContextSnapshot {
   estimatedCompletionDate?: string;
   estimationConfidence: string;   // "high" | "medium" | "low" | ""
   estimationBasis: string;
+  latestStatusLogEntry?: StatusLogEntry;
 }
 
 export interface EstimationLog {
@@ -529,6 +531,8 @@ export interface ContextRelation {
   contextId: string;
   targetId: string;
   targetKey: string;
+  targetOrgId?: string;
+  targetOrgName?: string;
   relationType: ContextRelationType;
   createdAt: string;
 }
@@ -547,7 +551,18 @@ export interface WorkflowStatus {
   id: string;
   slug: string;
   label: string;
+  aiHint: string;
   isSystem: boolean;
+  createdAt: string;
+}
+
+export interface StatusLogEntry {
+  id: string;
+  contextId: string;
+  statusSlug: string;
+  comment: string;
+  source: 'ai' | 'user';
+  prevId?: string;
   createdAt: string;
 }
 

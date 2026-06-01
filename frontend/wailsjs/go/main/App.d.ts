@@ -59,7 +59,7 @@ export function CreateOrganization(arg1:string):Promise<store.Organization>;
 
 export function CreateUserAndAssign(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<store.User>;
 
-export function CreateWorkflowStatus(arg1:string,arg2:string):Promise<store.WorkflowStatus>;
+export function CreateWorkflowStatus(arg1:string,arg2:string,arg3:string):Promise<store.WorkflowStatus>;
 
 export function DeleteContext(arg1:string):Promise<void>;
 
@@ -134,6 +134,8 @@ export function GetPendingText():Promise<string>;
 export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.ReasoningChainStep>>;
 
 export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
+
+export function GetStatusLog(arg1:string):Promise<Array<store.StatusLogEntry>>;
 
 export function GetSupportedPlatforms():Promise<Array<vcsstore.VCSPlatformInfo>>;
 
@@ -297,6 +299,8 @@ export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number
 
 export function SetContextOrg(arg1:string,arg2:string):Promise<void>;
 
+export function SetContextWorkflowStatus(arg1:string,arg2:string,arg3:string):Promise<store.ContextSnapshot>;
+
 export function SetContextsOrder(arg1:Array<string>):Promise<void>;
 
 export function SetCurrentAssignmentStep(arg1:string,arg2:string):Promise<store.PersonAssignment>;
@@ -351,7 +355,7 @@ export function UpdateVCSBranchLabel(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateVCSRepoMeta(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function UpdateWorkflowStatus(arg1:string,arg2:string):Promise<store.WorkflowStatus>;
+export function UpdateWorkflowStatus(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.WorkflowStatus>;
 
 export function UpsertContextText(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.ContextText>;
 
