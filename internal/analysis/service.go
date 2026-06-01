@@ -608,16 +608,17 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 	}
 
 	// Append status log entry — record the AI's status decision + reason
-	prevLogEntry, _ := s.store.GetLatestStatusLogEntry(ctx, contextID)
 	var prevLogID *string
-	if prevLogEntry != nil {
-		prevLogID = &prevLogEntry.ID
+	if latestLog != nil {
+		prevLogID = &latestLog.ID
 	}
 	statusComment := newSnapshot.StatusComment
 	if statusComment == "" {
 		statusComment = "Status determined by AI analysis."
 	}
-	_, _ = s.store.AppendStatusLog(ctx, contextID, newSnapshot.Status, statusComment, "ai", prevLogID)
+	if _, logErr := s.store.AppendStatusLog(ctx, contextID, newSnapshot.Status, statusComment, "ai", prevLogID); logErr != nil {
+		s.logger.Warn("analysis: append status log failed", zap.String("contextID", contextID), zap.Error(logErr))
+	}
 
 	// Log estimation change when hours were produced.
 	if newSnapshot.EstimatedHours != nil {
