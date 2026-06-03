@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
@@ -47,49 +49,65 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 		return provider.Stats{}, fmt.Errorf("loading issues: %w", err)
 	}
 
-	stats := provider.Stats{}
-
-	for _, issue := range issues {
-		detail, err := p.jira.ViewIssue(ctx, issue.JiraKey)
-		if err != nil {
-			p.logger.Warn("jira refresh: view issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
-			continue
-		}
-		issueID, err := p.jiraRepo.UpsertIssue(ctx, contextID,
-			detail.Key, detail.Summary, detail.Status, detail.Assignee,
-			detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
-		)
-		if err != nil {
-			p.logger.Warn("jira refresh: upsert issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
-			continue
-		}
-		if p.msgWriter != nil {
-			authorID := p.msgWriter.ResolveAuthor(ctx, "jira", detail.Assignee)
-			msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
-				ContextID:  contextID,
-				SourceID:   "jira",
-				ExternalID: detail.Key,
-				Title:      detail.Summary,
-				Body:       detail.Description,
-				RawAuthor:  detail.Assignee,
-				AuthorID:   authorID,
-				CreatedAt:  detail.Updated,
-				UpdatedAt:  detail.Updated,
-			})
-			if msgID != "" {
-				_ = p.jiraRepo.SetIssueMessageID(ctx, issueID, msgID)
-			}
-		}
-		stats.ItemsRefreshed++
+	if len(issues) == 0 {
+		return provider.Stats{}, nil
 	}
+
+	workers := min(5, len(issues))
+	jobs := make(chan jirastore.Issue, len(issues))
+	for _, iss := range issues {
+		jobs <- iss
+	}
+	close(jobs)
+
+	var refreshed atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for issue := range jobs {
+				detail, err := p.jira.ViewIssue(ctx, issue.JiraKey)
+				if err != nil {
+					p.logger.Warn("jira refresh: view issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
+					continue
+				}
+				issueID, err := p.jiraRepo.UpsertIssue(ctx, contextID,
+					detail.Key, detail.Summary, detail.Status, detail.Assignee,
+					detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
+				)
+				if err != nil {
+					p.logger.Warn("jira refresh: upsert issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
+					continue
+				}
+				if p.msgWriter != nil {
+					authorID := p.msgWriter.ResolveAuthor(ctx, "jira", detail.Assignee)
+					msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+						ContextID:  contextID,
+						SourceID:   "jira",
+						ExternalID: detail.Key,
+						Title:      detail.Summary,
+						Body:       detail.Description,
+						RawAuthor:  detail.Assignee,
+						AuthorID:   authorID,
+						CreatedAt:  detail.Updated,
+						UpdatedAt:  detail.Updated,
+					})
+					if msgID != "" {
+						_ = p.jiraRepo.SetIssueMessageID(ctx, issueID, msgID)
+					}
+				}
+				refreshed.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
 
 	newComments, err := p.syncComments(ctx, contextID, issues)
 	if err != nil {
 		p.logger.Warn("jira refresh: sync comments failed", zap.String("contextID", contextID), zap.Error(err))
 	}
-	stats.NewItems = newComments
-
-	return stats, nil
+	return provider.Stats{ItemsRefreshed: int(refreshed.Load()), NewItems: newComments}, nil
 }
 
 // Reload runs the context's saved JQL query, adds newly found issues, then refreshes all.
@@ -191,50 +209,68 @@ func (p *JiraProvider) syncComments(ctx context.Context, contextID string, issue
 		return syncIssueComments(ctx, p.jira, p.jiraRepo, issues, p.logger)
 	}
 
-	total := 0
-	for _, issue := range issues {
-		comments, err := p.jira.ListComments(ctx, issue.JiraKey)
-		if err != nil {
-			p.logger.Warn("sync comments: list failed", zap.String("key", issue.JiraKey), zap.Error(err))
-			continue
-		}
+	if len(issues) == 0 {
+		return 0, nil
+	}
 
-		// Resolve the parent message ID for this issue so comments can reference it.
-		var issueMsgID string
-		if issue.MessageID != nil {
-			issueMsgID = *issue.MessageID
-		}
+	workers := min(5, len(issues))
+	jobs := make(chan jirastore.Issue, len(issues))
+	for _, iss := range issues {
+		jobs <- iss
+	}
+	close(jobs)
 
-		for _, c := range comments {
-			commentID, err := p.jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
-			if err != nil {
-				p.logger.Warn("sync comments: upsert failed",
-					zap.String("issue", issue.JiraKey), zap.String("jiraID", c.ID), zap.Error(err))
-				continue
-			}
-			if commentID != "" {
-				total++
-				if issueMsgID != "" {
-					cAuthorID := p.msgWriter.ResolveAuthor(ctx, "jira", c.Author)
-					cMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
-						ContextID:  contextID,
-						SourceID:   "jira",
-						ExternalID: c.ID,
-						ParentID:   issueMsgID,
-						Body:       c.Body,
-						RawAuthor:  c.Author,
-						AuthorID:   cAuthorID,
-						CreatedAt:  c.Created,
-						UpdatedAt:  c.Created,
-					})
-					if cMsgID != "" {
-						_ = p.jiraRepo.SetCommentMessageID(ctx, commentID, cMsgID)
+	var total atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for issue := range jobs {
+				comments, err := p.jira.ListComments(ctx, issue.JiraKey)
+				if err != nil {
+					p.logger.Warn("sync comments: list failed", zap.String("key", issue.JiraKey), zap.Error(err))
+					continue
+				}
+
+				var issueMsgID string
+				if issue.MessageID != nil {
+					issueMsgID = *issue.MessageID
+				}
+
+				for _, c := range comments {
+					commentID, err := p.jiraRepo.UpsertComment(ctx, issue.ID, c.ID, c.Author, c.Body, c.Created)
+					if err != nil {
+						p.logger.Warn("sync comments: upsert failed",
+							zap.String("issue", issue.JiraKey), zap.String("jiraID", c.ID), zap.Error(err))
+						continue
+					}
+					if commentID != "" {
+						total.Add(1)
+						if issueMsgID != "" {
+							cAuthorID := p.msgWriter.ResolveAuthor(ctx, "jira", c.Author)
+							cMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+								ContextID:  contextID,
+								SourceID:   "jira",
+								ExternalID: c.ID,
+								ParentID:   issueMsgID,
+								Body:       c.Body,
+								RawAuthor:  c.Author,
+								AuthorID:   cAuthorID,
+								CreatedAt:  c.Created,
+								UpdatedAt:  c.Created,
+							})
+							if cMsgID != "" {
+								_ = p.jiraRepo.SetCommentMessageID(ctx, commentID, cMsgID)
+							}
+						}
 					}
 				}
 			}
-		}
+		}()
 	}
-	return total, nil
+	wg.Wait()
+	return int(total.Load()), nil
 }
 
 func buildJiraItems(issues []jirastore.Issue, startAt time.Time) []provider.Item {

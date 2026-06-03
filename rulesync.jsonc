@@ -26,8 +26,8 @@
   "simulateSubagents": false,
   "simulateSkills": false,
   "ca_rules": {
-    "base": "a0eab1f5383e32fbbe7e4c5ec7e346ff7bb98134",
-    "projects/juna": "3c69be27e317d230f21bbee4bf7286f11680cd71",
+    "base": "5d58be2d15400ddf843aa74e1ef56d67ffb84602",
+    "projects/juna": "f1146696197ef1ef732f5f7ef7c417ed5410524b",
     "stacks/tauri-react-rust": "3cd425e3789ffe3561fa11a3f6621a8c52337a5b"
   }
 }

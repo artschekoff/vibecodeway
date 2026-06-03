@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/provider"
@@ -71,45 +73,62 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 	if err != nil {
 		p.logger.Warn("slack refresh: listing dm configs failed", zap.String("contextID", contextID), zap.Error(err))
 	}
-	for _, cfg := range dmConfigs {
-		flags := []string{cfg.Workspace, "--with-messages"}
-		if cfg.StartFrom != "" {
-			flags = append(flags, "--start-from", cfg.StartFrom)
+	if len(dmConfigs) > 0 {
+		var newItems atomic.Int64
+		dmJobs := make(chan slackstore.SlackDMConfig, len(dmConfigs))
+		for _, cfg := range dmConfigs {
+			dmJobs <- cfg
 		}
-		raw, err := p.slack.Run(ctx, []string{"list-dms"}, flags)
-		if err != nil {
-			p.logger.Warn("slack refresh: list-dms failed",
-				zap.String("contextID", contextID), zap.String("workspace", cfg.Workspace), zap.Error(err))
-			continue
+		close(dmJobs)
+		var dmWg sync.WaitGroup
+		dmWg.Add(min(5, len(dmConfigs)))
+		for range min(5, len(dmConfigs)) {
+			go func() {
+				defer dmWg.Done()
+				for cfg := range dmJobs {
+					flags := []string{cfg.Workspace, "--with-messages"}
+					if cfg.StartFrom != "" {
+						flags = append(flags, "--start-from", cfg.StartFrom)
+					}
+					raw, err := p.slack.Run(ctx, []string{"list-dms"}, flags)
+					if err != nil {
+						p.logger.Warn("slack refresh: list-dms failed",
+							zap.String("contextID", contextID), zap.String("workspace", cfg.Workspace), zap.Error(err))
+						continue
+					}
+					content := formatDMContent(raw)
+					if content == "" {
+						continue
+					}
+					if err := p.slackRepo.UpdateSlackDMConfigContent(ctx, cfg.ID, content); err != nil {
+						p.logger.Warn("slack refresh: updating dm config content failed",
+							zap.String("contextID", contextID), zap.Error(err))
+						continue
+					}
+					if p.msgWriter != nil {
+						externalID := "dm:" + cfg.Workspace
+						authorID := p.msgWriter.ResolveAuthor(ctx, "slack", "")
+						msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+							ContextID:  contextID,
+							SourceID:   "slack",
+							ExternalID: externalID,
+							Title:      "DMs (" + cfg.Workspace + ")",
+							Body:       content,
+							RawAuthor:  "",
+							AuthorID:   authorID,
+							CreatedAt:  cfg.CreatedAt,
+							UpdatedAt:  cfg.UpdatedAt,
+						})
+						if msgID != "" {
+							_ = p.slackRepo.SetDMConfigMessageID(ctx, cfg.ID, msgID)
+						}
+					}
+					newItems.Add(1)
+				}
+			}()
 		}
-		content := formatDMContent(raw)
-		if content == "" {
-			continue
-		}
-		if err := p.slackRepo.UpdateSlackDMConfigContent(ctx, cfg.ID, content); err != nil {
-			p.logger.Warn("slack refresh: updating dm config content failed",
-				zap.String("contextID", contextID), zap.Error(err))
-			continue
-		}
-		if p.msgWriter != nil {
-			externalID := "dm:" + cfg.Workspace
-			authorID := p.msgWriter.ResolveAuthor(ctx, "slack", "")
-			msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
-				ContextID:  contextID,
-				SourceID:   "slack",
-				ExternalID: externalID,
-				Title:      "DMs (" + cfg.Workspace + ")",
-				Body:       content,
-				RawAuthor:  "",
-				AuthorID:   authorID,
-				CreatedAt:  cfg.CreatedAt,
-				UpdatedAt:  cfg.UpdatedAt,
-			})
-			if msgID != "" {
-				_ = p.slackRepo.SetDMConfigMessageID(ctx, cfg.ID, msgID)
-			}
-		}
-		stats.NewItems++
+		dmWg.Wait()
+		stats.NewItems = int(newItems.Load())
 	}
 
 	// ── Refresh user-added threads (search_query or permalink set) ───────────
@@ -127,72 +146,109 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 		channelByID[ch.ChannelID] = ch
 	}
 
+	// Channel per-message records (slackChannelID set) are handled by refreshChannelMessages.
+	// Old blobs (threadTS="") are cleaned up by refreshChannelMessages.
+	var standaloneThreads []slackstore.SlackThread
 	for _, t := range threads {
-		// Channel per-message records (slackChannelID set) are handled by refreshChannelMessages.
-		// Old blobs (threadTS="") are cleaned up by refreshChannelMessages.
-		if t.SlackChannelID != "" || t.ThreadTS == "" {
-			continue
+		if t.SlackChannelID == "" && t.ThreadTS != "" {
+			standaloneThreads = append(standaloneThreads, t)
 		}
-		chStartFrom := channelByID[t.ChannelID].StartFrom
-		flags := []string{t.Workspace, t.ChannelID, t.ThreadTS}
-		if t.ChannelName != "" {
-			flags = append(flags, "--channel-name", t.ChannelName)
+	}
+	if len(standaloneThreads) > 0 {
+		var itemsRefreshed atomic.Int64
+		tJobs := make(chan slackstore.SlackThread, len(standaloneThreads))
+		for _, t := range standaloneThreads {
+			tJobs <- t
 		}
-		if t.Permalink != "" {
-			flags = append(flags, "--permalink", t.Permalink)
+		close(tJobs)
+		var tWg sync.WaitGroup
+		tWg.Add(min(5, len(standaloneThreads)))
+		for range min(5, len(standaloneThreads)) {
+			go func() {
+				defer tWg.Done()
+				for t := range tJobs {
+					chStartFrom := channelByID[t.ChannelID].StartFrom
+					flags := []string{t.Workspace, t.ChannelID, t.ThreadTS}
+					if t.ChannelName != "" {
+						flags = append(flags, "--channel-name", t.ChannelName)
+					}
+					if t.Permalink != "" {
+						flags = append(flags, "--permalink", t.Permalink)
+					}
+					if t.SearchQuery != "" {
+						flags = append(flags, "--search-query", t.SearchQuery)
+					}
+					if chStartFrom != "" {
+						flags = append(flags, "--start-from", chStartFrom)
+					}
+					content, fetchErr := p.slack.Run(ctx, []string{"load-context"}, flags)
+					if fetchErr != nil {
+						p.logger.Warn("slack refresh: load context failed",
+							zap.String("contextID", contextID), zap.String("channel", t.ChannelID), zap.Error(fetchErr))
+						continue
+					}
+					if content == "" {
+						continue
+					}
+					thread, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
+						Workspace:   t.Workspace,
+						ChannelID:   t.ChannelID,
+						ThreadTS:    t.ThreadTS,
+						ChannelName: t.ChannelName,
+						Permalink:   t.Permalink,
+						SearchQuery: t.SearchQuery,
+						Content:     content,
+					})
+					if upsertErr != nil {
+						p.logger.Warn("slack refresh: upsert thread failed",
+							zap.String("contextID", contextID), zap.Error(upsertErr))
+						continue
+					}
+					if p.msgWriter != nil && thread != nil {
+						authorID := p.msgWriter.ResolveAuthor(ctx, "slack", "")
+						msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+							ContextID:  contextID,
+							SourceID:   "slack",
+							ExternalID: t.ThreadTS,
+							Title:      t.ChannelName,
+							Body:       content,
+							RawAuthor:  "",
+							AuthorID:   authorID,
+							CreatedAt:  slackTSToRFC3339(t.ThreadTS),
+							UpdatedAt:  slackTSToRFC3339(t.ThreadTS),
+						})
+						if msgID != "" {
+							_ = p.slackRepo.SetThreadMessageID(ctx, thread.ID, msgID)
+						}
+					}
+					itemsRefreshed.Add(1)
+				}
+			}()
 		}
-		if t.SearchQuery != "" {
-			flags = append(flags, "--search-query", t.SearchQuery)
-		}
-		if chStartFrom != "" {
-			flags = append(flags, "--start-from", chStartFrom)
-		}
-		content, fetchErr := p.slack.Run(ctx, []string{"load-context"}, flags)
-		if fetchErr != nil {
-			p.logger.Warn("slack refresh: load context failed",
-				zap.String("contextID", contextID), zap.String("channel", t.ChannelID), zap.Error(fetchErr))
-			continue
-		}
-		if content == "" {
-			continue
-		}
-		thread, upsertErr := p.slackRepo.UpsertSlackThread(ctx, contextID, slackstore.UpsertSlackThreadArgs{
-			Workspace:   t.Workspace,
-			ChannelID:   t.ChannelID,
-			ThreadTS:    t.ThreadTS,
-			ChannelName: t.ChannelName,
-			Permalink:   t.Permalink,
-			SearchQuery: t.SearchQuery,
-			Content:     content,
-		})
-		if upsertErr != nil {
-			p.logger.Warn("slack refresh: upsert thread failed",
-				zap.String("contextID", contextID), zap.Error(upsertErr))
-			continue
-		}
-		if p.msgWriter != nil && thread != nil {
-			authorID := p.msgWriter.ResolveAuthor(ctx, "slack", "")
-			msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
-				ContextID:  contextID,
-				SourceID:   "slack",
-				ExternalID: t.ThreadTS,
-				Title:      t.ChannelName,
-				Body:       content,
-				RawAuthor:  "",
-				AuthorID:   authorID,
-				CreatedAt:  slackTSToRFC3339(t.ThreadTS),
-				UpdatedAt:  slackTSToRFC3339(t.ThreadTS),
-			})
-			if msgID != "" {
-				_ = p.slackRepo.SetThreadMessageID(ctx, thread.ID, msgID)
-			}
-		}
-		stats.ItemsRefreshed++
+		tWg.Wait()
+		stats.ItemsRefreshed += int(itemsRefreshed.Load())
 	}
 
 	// ── Refresh channel messages: one slack_thread record per message ────────
-	for _, ch := range channels {
-		p.refreshChannelMessages(ctx, contextID, ch, &stats)
+	if len(channels) > 0 {
+		var chRefreshed atomic.Int64
+		chJobs := make(chan slackstore.SlackChannel, len(channels))
+		for _, ch := range channels {
+			chJobs <- ch
+		}
+		close(chJobs)
+		var chWg sync.WaitGroup
+		chWg.Add(min(4, len(channels)))
+		for range min(4, len(channels)) {
+			go func() {
+				defer chWg.Done()
+				for ch := range chJobs {
+					chRefreshed.Add(int64(p.refreshChannelMessages(ctx, contextID, ch)))
+				}
+			}()
+		}
+		chWg.Wait()
+		stats.ItemsRefreshed += int(chRefreshed.Load())
 	}
 
 	return stats, nil
@@ -200,11 +256,12 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 
 // refreshChannelMessages fetches all messages for ch via search-channels, upserts one
 // slack_thread record per top-level message, and deletes any old single-blob records.
-func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID string, ch slackstore.SlackChannel, stats *provider.Stats) {
+// Returns the number of upserted records.
+func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID string, ch slackstore.SlackChannel) int {
 	if ch.ChannelName == "" {
 		p.logger.Warn("slack refresh: skipping channel with empty name",
 			zap.String("channelID", ch.ChannelID))
-		return
+		return 0
 	}
 	flags := []string{ch.Workspace, ch.ChannelName}
 	if ch.StartFrom != "" {
@@ -214,14 +271,14 @@ func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID st
 	if err != nil {
 		p.logger.Warn("slack refresh: search-channels failed",
 			zap.String("channel", ch.ChannelName), zap.Error(err))
-		return
+		return 0
 	}
 
 	msgs := parseChannelMessages(raw, ch.ChannelID)
 	if len(msgs) == 0 {
 		p.logger.Warn("slack refresh: no messages returned for channel",
 			zap.String("channel", ch.ChannelName))
-		return
+		return 0
 	}
 
 	upserted := 0
@@ -312,7 +369,7 @@ func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID st
 	}
 
 	if upserted == 0 {
-		return
+		return 0
 	}
 
 	// Delete old single-blob records (thread_ts="") now that per-message records exist.
@@ -320,7 +377,7 @@ func (p *SlackProvider) refreshChannelMessages(ctx context.Context, contextID st
 		p.logger.Warn("slack refresh: delete channel blobs failed",
 			zap.String("channel", ch.ChannelName), zap.Error(err))
 	}
-	stats.ItemsRefreshed += upserted
+	return upserted
 }
 
 // formatSingleMessage renders one Slack message as plain text (no replies).

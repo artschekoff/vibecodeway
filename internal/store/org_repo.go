@@ -151,10 +151,18 @@ func (s *Store) ListContextsByOrg(ctx context.Context, orgID string) ([]Context,
 		       (EXISTS(SELECT 1 FROM context_texts WHERE context_id = c.id)
 		        OR EXISTS(SELECT 1 FROM context_uploaded_files WHERE context_id = c.id)),
 		       COALESCE(sn.status, 'not_started'),
-		       COALESCE(sn.is_stale, 0)
+		       COALESCE(sn.is_stale, 0),
+		       COALESCE(latest_log.comment, '')
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
+		LEFT JOIN context_status_log latest_log
+		    ON latest_log.id = (
+		        SELECT id FROM context_status_log
+		        WHERE context_id = c.id
+		        ORDER BY created_at DESC
+		        LIMIT 1
+		    )
 		WHERE c.org_id = ?
 		GROUP BY c.id
 		ORDER BY c.sort_order ASC NULLS LAST, c.updated_at DESC

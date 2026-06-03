@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -1018,6 +1018,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               {markingAllViewed ? "Marking…" : <><CheckCheck size={16} /> Mark all viewed ({breakdown.total})</>}
             </button>
           )}
+          <button
+            className="btn-secondary"
+            onClick={() => setShowAuthorModal(true)}
+            title="Assign unknown authors"
+          >
+            <UserCheck size={16} />
+          </button>
           <button
             className="btn-secondary"
             onClick={() => void openEditForm()}

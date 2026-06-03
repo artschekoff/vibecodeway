@@ -61,9 +61,7 @@ function AppShell() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { openContextTab, tabs, activeTabId, forceCloseTab } = useTabContext();
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const activeOrgId = activeTab?.type === "org" ? activeTab.orgId
-    : activeTab?.type === "context" ? activeTab.orgId
-    : tabs.find((t) => t.type === "org")?.orgId;
+  const activeOrgId = activeTab?.type === "org" ? activeTab.orgId : undefined;
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);

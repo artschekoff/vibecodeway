@@ -357,11 +357,8 @@ func resolveAgentPath(name string) string {
 	return name
 }
 
-// openWithCheckout runs onCheckoutCommand (if set) and opens the configured
-// coding agent at path. When a terminal is configured the command and agent
-// launch are bundled into a temp script that is executed inside the terminal
-// window so the user can see output. Falls back to launching the agent directly
-// when no terminal is configured.
+// openWithCheckout runs onCheckoutCommand (if set) via the user's shell, then
+// opens the configured terminal at path and/or the coding agent directly.
 func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 	settings, err := a.db.GetAppSettings(a.ctx)
 	if err != nil {
@@ -376,6 +373,20 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 		return nil
 	}
 
+	// Run the checkout command to completion before opening the agent so the
+	// environment is ready (e.g. deps installed) when the editor opens.
+	if onCheckoutCommand != "" {
+		shell := os.Getenv("SHELL")
+		if shell == "" {
+			shell = "sh"
+		}
+		cmd := exec.Command(shell, "-c", onCheckoutCommand)
+		cmd.Dir = path
+		if out, err := cmd.CombinedOutput(); err != nil {
+			a.logger.Sugar().Warnf("on_checkout_command failed: cmd=%q workDir=%q err=%v output=%s", onCheckoutCommand, path, err, out)
+		}
+	}
+
 	// No terminal configured: launch coding agent directly.
 	if terminalApp == "" {
 		agentBin := resolveAgentPath(agentApp)
@@ -386,52 +397,23 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 		return nil
 	}
 
-	// Terminal configured: compose a script and open it inside the terminal window.
-	script := buildCheckoutScript(onCheckoutCommand, agentApp, path)
-	scriptFile, err := os.CreateTemp("", "jiro-checkout-*.sh")
-	if err != nil {
-		a.logger.Sugar().Warnf("openWithCheckout: failed to create temp script: %v", err)
-		return nil
-	}
-	if _, err := scriptFile.WriteString(script); err != nil {
-		_ = scriptFile.Close()
-		_ = os.Remove(scriptFile.Name())
-		a.logger.Sugar().Warnf("openWithCheckout: failed to write temp script: %v", err)
-		return nil
-	}
-	_ = scriptFile.Close()
-	if err := os.Chmod(scriptFile.Name(), 0o755); err != nil {
-		_ = os.Remove(scriptFile.Name())
-		a.logger.Sugar().Warnf("openWithCheckout: chmod failed: %v", err)
-		return nil
-	}
-
-	cmd := exec.Command("open", "-a", terminalApp, scriptFile.Name())
-	if err := cmd.Start(); err != nil {
-		_ = os.Remove(scriptFile.Name())
+	// Open terminal at the directory. Passing a directory (not a script file)
+	// works across terminal apps — each opens a new window at that path.
+	termCmd := exec.Command("open", "-a", terminalApp, path)
+	if err := termCmd.Start(); err != nil {
 		a.logger.Sugar().Warnf("open terminal failed: app=%s err=%v", terminalApp, err)
 	}
-	return nil
-}
 
-// buildCheckoutScript returns the content of the temp shell script that the
-// terminal will execute. The script: cds into path, runs onCheckoutCommand
-// (if set), then launches agentApp (if set). It deletes itself on exit.
-func buildCheckoutScript(onCheckoutCommand, agentApp, path string) string {
-	var b strings.Builder
-	b.WriteString("#!/bin/sh\n")
-	b.WriteString("set -e\n")
-	b.WriteString("trap 'rm -f \"$0\"' EXIT\n")
-	fmt.Fprintf(&b, "cd %q\n", path)
-	if onCheckoutCommand != "" {
-		b.WriteString(onCheckoutCommand)
-		b.WriteString("\n")
-	}
+	// Open coding agent separately if configured.
 	if agentApp != "" {
 		agentBin := resolveAgentPath(agentApp)
-		fmt.Fprintf(&b, "%q %q\n", agentBin, path)
+		agentCmd := exec.Command(agentBin, path)
+		if err := agentCmd.Start(); err != nil {
+			a.logger.Sugar().Warnf("open coding agent failed: app=%s err=%v", agentApp, err)
+		}
 	}
-	return b.String()
+
+	return nil
 }
 
 // ensureWorktreesIgnored appends ".worktrees" to baseDir/.gitignore if not already present.

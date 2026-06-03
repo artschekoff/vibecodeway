@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/artschekoff/context-consolidator/internal/provider"
@@ -91,160 +92,195 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 		return provider.Stats{}, fmt.Errorf("vcs sync: list branches: %w", err)
 	}
 
-	stats := provider.Stats{}
-	for _, branch := range branches {
-		if branch.Repo == nil {
-			continue
-		}
-		platform := vcs.Platform(branch.Repo.Platform)
-		runner, ok := p.runners[platform]
-		if !ok {
-			p.logger.Warn("vcs sync: no runner for platform",
-				zap.String("platform", string(platform)),
-				zap.String("repo", branch.Repo.FullName()),
-			)
-			continue
-		}
+	if len(branches) == 0 {
+		return provider.Stats{}, nil
+	}
 
-		prs, err := runner.ListPRsForBranch(ctx, branch.Repo.Owner, branch.Repo.Name, branch.Branch)
-		if err != nil {
-			p.logger.Warn("vcs sync: list PRs failed",
-				zap.String("repo", branch.Repo.FullName()),
-				zap.String("branch", branch.Branch),
-				zap.Error(err),
-			)
-			continue
-		}
+	var (
+		mu    sync.Mutex
+		stats provider.Stats
+		wg    sync.WaitGroup
+	)
 
-		for _, pr := range prs {
-			res, err := p.store.PullRequests.UpsertPR(ctx,
-				branch.RepoID, branch.ID, pr.Number,
-				pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
-				pr.Mergeable, pr.CIStatus,
-				pr.CreatedAt, pr.UpdatedAt,
-			)
-			if err != nil {
-				p.logger.Warn("vcs sync: upsert PR failed",
-					zap.Int("pr", pr.Number), zap.Error(err))
-				continue
-			}
-			stats.ItemsRefreshed++
+	workers := min(4, len(branches))
+	jobs := make(chan vcsstore.ContextVCSBranch, len(branches))
+	for _, b := range branches {
+		jobs <- b
+	}
+	close(jobs)
 
-			var prMsgID string
-			if p.msgWriter != nil {
-				prExtID := branch.Repo.Owner + "/" + branch.Repo.Name + "#" + fmt.Sprint(pr.Number)
-				prAuthorID := p.msgWriter.ResolveAuthor(ctx, "github", pr.Author)
-				prMsgID, _ = p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
-					ContextID:  contextID,
-					SourceID:   "github",
-					ExternalID: prExtID,
-					Title:      pr.Title,
-					RawAuthor:  pr.Author,
-					AuthorID:   prAuthorID,
-					CreatedAt:  pr.CreatedAt,
-					UpdatedAt:  pr.UpdatedAt,
-				})
-				if prMsgID != "" {
-					_ = p.store.PullRequests.SetPRMessageID(ctx, res.ID, prMsgID)
-				}
-			}
-
-			if p.notify != nil && !res.IsNew {
-				// PR was merged or closed.
-				if res.StateChanged && (pr.State == "merged" || pr.State == "closed") {
-					eventType := "pr_" + pr.State // pr_merged | pr_closed
-					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
-						eventType, res.OldState, pr.State); notifyErr != nil {
-						p.logger.Warn("vcs sync: create state notification failed", zap.Error(notifyErr))
-					} else {
-						stats.NewNotifications++
-					}
-				}
-				// PR newly became un-mergeable.
-				if res.MergeableChanged && pr.Mergeable == "CONFLICTING" {
-					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
-						"pr_conflict", res.OldMergeable, pr.Mergeable); notifyErr != nil {
-						p.logger.Warn("vcs sync: create conflict notification failed", zap.Error(notifyErr))
-					} else {
-						stats.NewNotifications++
-					}
-				}
-				// Review status changed (approved, changes_requested, …).
-				if res.ReviewStatusChanged && pr.ReviewStatus != "" {
-					// If everything is now green, use ready_to_merge instead.
-					eventType := "pr_review_changed"
-					if pr.ReviewStatus == "approved" &&
-						pr.Mergeable == "MERGEABLE" &&
-						(pr.CIStatus == "SUCCESS" || pr.CIStatus == "") {
-						eventType = "ready_to_merge"
-					}
-					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
-						eventType, res.OldReviewStatus, pr.ReviewStatus); notifyErr != nil {
-						p.logger.Warn("vcs sync: create review notification failed", zap.Error(notifyErr))
-					} else {
-						stats.NewNotifications++
-					}
-				}
-				// CI status changed.
-				if res.CIStatusChanged && pr.CIStatus != "" {
-					eventType := "ci_" + strings.ToLower(pr.CIStatus) // ci_success, ci_failure, ci_pending
-					// Upgrade to ready_to_merge if all conditions are now met.
-					if pr.CIStatus == "SUCCESS" &&
-						pr.ReviewStatus == "approved" &&
-						pr.Mergeable == "MERGEABLE" {
-						eventType = "ready_to_merge"
-					}
-					if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
-						eventType, res.OldCIStatus, pr.CIStatus); notifyErr != nil {
-						p.logger.Warn("vcs sync: create CI notification failed", zap.Error(notifyErr))
-					} else {
-						stats.NewNotifications++
-					}
-				}
-			}
-
-			prID := res.ID
-
-			comments, err := runner.GetPRComments(ctx, branch.Repo.Owner, branch.Repo.Name, pr.Number)
-			if err != nil {
-				p.logger.Warn("vcs sync: get comments failed",
-					zap.Int("pr", pr.Number), zap.Error(err))
-				continue
-			}
-
-			for _, c := range comments {
-				cID, err := p.store.PullRequests.UpsertComment(ctx,
-					prID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
-					c.Path, c.Line, c.IsResolved, c.InReplyToID,
-					c.CreatedAt, c.UpdatedAt,
-				)
-				if err != nil {
-					p.logger.Warn("vcs sync: upsert comment failed",
-						zap.String("externalID", c.ExternalID), zap.Error(err))
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for branch := range jobs {
+				if branch.Repo == nil {
 					continue
 				}
-				stats.NewItems++
+				platform := vcs.Platform(branch.Repo.Platform)
+				runner, ok := p.runners[platform]
+				if !ok {
+					p.logger.Warn("vcs sync: no runner for platform",
+						zap.String("platform", string(platform)),
+						zap.String("repo", branch.Repo.FullName()),
+					)
+					continue
+				}
 
-				if p.msgWriter != nil && cID != "" && prMsgID != "" {
-					cAuthorID := p.msgWriter.ResolveAuthor(ctx, "github", c.Author)
-					cMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
-						ContextID:  contextID,
-						SourceID:   "github",
-						ExternalID: c.ExternalID,
-						ParentID:   prMsgID,
-						Body:       c.Body,
-						RawAuthor:  c.Author,
-						AuthorID:   cAuthorID,
-						CreatedAt:  c.CreatedAt,
-						UpdatedAt:  c.UpdatedAt,
-					})
-					if cMsgID != "" {
-						_ = p.store.PullRequests.SetPRCommentMessageID(ctx, cID, cMsgID)
+				prs, err := runner.ListPRsForBranch(ctx, branch.Repo.Owner, branch.Repo.Name, branch.Branch)
+				if err != nil {
+					p.logger.Warn("vcs sync: list PRs failed",
+						zap.String("repo", branch.Repo.FullName()),
+						zap.String("branch", branch.Branch),
+						zap.Error(err),
+					)
+					continue
+				}
+
+				for _, pr := range prs {
+					res, err := p.store.PullRequests.UpsertPR(ctx,
+						branch.RepoID, branch.ID, pr.Number,
+						pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
+						pr.Mergeable, pr.CIStatus,
+						pr.CreatedAt, pr.UpdatedAt,
+					)
+					if err != nil {
+						p.logger.Warn("vcs sync: upsert PR failed",
+							zap.Int("pr", pr.Number), zap.Error(err))
+						continue
+					}
+					mu.Lock()
+					stats.ItemsRefreshed++
+					mu.Unlock()
+
+					var prMsgID string
+					if p.msgWriter != nil {
+						prExtID := branch.Repo.Owner + "/" + branch.Repo.Name + "#" + fmt.Sprint(pr.Number)
+						prAuthorID := p.msgWriter.ResolveAuthor(ctx, "github", pr.Author)
+						prMsgID, _ = p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+							ContextID:  contextID,
+							SourceID:   "github",
+							ExternalID: prExtID,
+							Title:      pr.Title,
+							RawAuthor:  pr.Author,
+							AuthorID:   prAuthorID,
+							CreatedAt:  pr.CreatedAt,
+							UpdatedAt:  pr.UpdatedAt,
+						})
+						if prMsgID != "" {
+							_ = p.store.PullRequests.SetPRMessageID(ctx, res.ID, prMsgID)
+						}
+					}
+
+					if p.notify != nil && !res.IsNew {
+						// PR was merged or closed.
+						if res.StateChanged && (pr.State == "merged" || pr.State == "closed") {
+							eventType := "pr_" + pr.State // pr_merged | pr_closed
+							if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+								eventType, res.OldState, pr.State); notifyErr != nil {
+								p.logger.Warn("vcs sync: create state notification failed", zap.Error(notifyErr))
+							} else {
+								mu.Lock()
+								stats.NewNotifications++
+								mu.Unlock()
+							}
+						}
+						// PR newly became un-mergeable.
+						if res.MergeableChanged && pr.Mergeable == "CONFLICTING" {
+							if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+								"pr_conflict", res.OldMergeable, pr.Mergeable); notifyErr != nil {
+								p.logger.Warn("vcs sync: create conflict notification failed", zap.Error(notifyErr))
+							} else {
+								mu.Lock()
+								stats.NewNotifications++
+								mu.Unlock()
+							}
+						}
+						// Review status changed (approved, changes_requested, …).
+						if res.ReviewStatusChanged && pr.ReviewStatus != "" {
+							// If everything is now green, use ready_to_merge instead.
+							eventType := "pr_review_changed"
+							if pr.ReviewStatus == "approved" &&
+								pr.Mergeable == "MERGEABLE" &&
+								(pr.CIStatus == "SUCCESS" || pr.CIStatus == "") {
+								eventType = "ready_to_merge"
+							}
+							if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+								eventType, res.OldReviewStatus, pr.ReviewStatus); notifyErr != nil {
+								p.logger.Warn("vcs sync: create review notification failed", zap.Error(notifyErr))
+							} else {
+								mu.Lock()
+								stats.NewNotifications++
+								mu.Unlock()
+							}
+						}
+						// CI status changed.
+						if res.CIStatusChanged && pr.CIStatus != "" {
+							eventType := "ci_" + strings.ToLower(pr.CIStatus) // ci_success, ci_failure, ci_pending
+							// Upgrade to ready_to_merge if all conditions are now met.
+							if pr.CIStatus == "SUCCESS" &&
+								pr.ReviewStatus == "approved" &&
+								pr.Mergeable == "MERGEABLE" {
+								eventType = "ready_to_merge"
+							}
+							if notifyErr := p.notify(ctx, contextID, "pull_request", res.ID,
+								eventType, res.OldCIStatus, pr.CIStatus); notifyErr != nil {
+								p.logger.Warn("vcs sync: create CI notification failed", zap.Error(notifyErr))
+							} else {
+								mu.Lock()
+								stats.NewNotifications++
+								mu.Unlock()
+							}
+						}
+					}
+
+					prID := res.ID
+
+					comments, err := runner.GetPRComments(ctx, branch.Repo.Owner, branch.Repo.Name, pr.Number)
+					if err != nil {
+						p.logger.Warn("vcs sync: get comments failed",
+							zap.Int("pr", pr.Number), zap.Error(err))
+						continue
+					}
+
+					for _, c := range comments {
+						cID, err := p.store.PullRequests.UpsertComment(ctx,
+							prID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
+							c.Path, c.Line, c.IsResolved, c.InReplyToID,
+							c.CreatedAt, c.UpdatedAt,
+						)
+						if err != nil {
+							p.logger.Warn("vcs sync: upsert comment failed",
+								zap.String("externalID", c.ExternalID), zap.Error(err))
+							continue
+						}
+						mu.Lock()
+						stats.NewItems++
+						mu.Unlock()
+
+						if p.msgWriter != nil && cID != "" && prMsgID != "" {
+							cAuthorID := p.msgWriter.ResolveAuthor(ctx, "github", c.Author)
+							cMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+								ContextID:  contextID,
+								SourceID:   "github",
+								ExternalID: c.ExternalID,
+								ParentID:   prMsgID,
+								Body:       c.Body,
+								RawAuthor:  c.Author,
+								AuthorID:   cAuthorID,
+								CreatedAt:  c.CreatedAt,
+								UpdatedAt:  c.UpdatedAt,
+							})
+							if cMsgID != "" {
+								_ = p.store.PullRequests.SetPRCommentMessageID(ctx, cID, cMsgID)
+							}
+						}
 					}
 				}
 			}
-		}
+		}()
 	}
+	wg.Wait()
 	return stats, nil
 }
 
