@@ -30,7 +30,6 @@ import {
   ListSlackDMConfigs,
   AddVCSBranch,
   RemoveVCSBranch,
-  CheckoutBranch,
   ListAllWorkspaces,
   DeleteWorkspace,
   MarkWorkspaceShouldDelete,
@@ -74,6 +73,7 @@ import {
   GenerateEventsFromMessages,
   SetContextWorkflowStatus,
   ListWorkflowStatuses,
+  GetUnresolvedAuthors,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
@@ -622,7 +622,10 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       showToast(msg);
       load(true);
       void loadSnapshot();
-      setShowAuthorModal(true);
+      GetUnresolvedAuthors(id).then((authors) => {
+        if (authors && authors.length > 0) setShowAuthorModal(true);
+      }).catch(() => {});
+
       try {
         const [pendingCounts] = await Promise.all([
           MarkAssignmentsOutdated(id) as Promise<Record<string, number> | null>,
@@ -1284,7 +1287,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                 <button
                                   style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1, fontSize: 11 }}
                                   title="Re-generate"
-                                  disabled={generatingForPerson === pa.name}
+                                  disabled={generatingForPerson === pa.name || regeneratingFor === pa.id}
                                   onClick={async () => {
                                     setGeneratingForPerson(pa.name);
                                     try {
@@ -1293,7 +1296,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                     } finally { setGeneratingForPerson(null); }
                                   }}
                                 >
-                                  {generatingForPerson === pa.name ? "…" : "↻"}
+                                  {generatingForPerson === pa.name || regeneratingFor === pa.id ? "…" : "↻"}
                                 </button>
                                 <button
                                   style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)", lineHeight: 1 }}
@@ -1374,7 +1377,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                     <button
                                       className="btn-primary"
                                       style={{ fontSize: 10, padding: "2px 8px", marginLeft: "auto" }}
-                                      disabled={regeneratingFor === pa.id}
+                                      disabled={regeneratingFor === pa.id || generatingForPerson === pa.name}
                                       onClick={async () => {
                                         setRegeneratingFor(pa.id);
                                         try {

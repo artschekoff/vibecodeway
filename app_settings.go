@@ -162,9 +162,27 @@ func (a *App) backgroundRefreshLoop(ctx context.Context, settings appstore.AppSe
 
 		case <-ctxC:
 			a.logger.Info("background refresh: refreshing all contexts")
-			if _, err := a.svc.RefreshAllContexts(ctx, nil); err != nil {
+			runtime.EventsEmit(a.ctx, "bg-refresh:contexts:start", nil)
+			results, err := a.svc.RefreshAllContexts(ctx, func(idx, total int, contextKey, _ string) {
+				runtime.EventsEmit(a.ctx, "bg-refresh:contexts:progress", map[string]interface{}{
+					"current":    idx,
+					"total":      total,
+					"contextKey": contextKey,
+				})
+			})
+			if err != nil {
 				a.logger.Warn("background refresh: contexts error", zap.Error(err))
 			}
+			errCount := 0
+			for _, r := range results {
+				if r.Error != "" {
+					errCount++
+				}
+			}
+			runtime.EventsEmit(a.ctx, "bg-refresh:contexts:done", map[string]interface{}{
+				"total":  len(results),
+				"errors": errCount,
+			})
 			runtime.EventsEmit(a.ctx, "bg-refresh:contexts")
 
 		case <-reviewsC:

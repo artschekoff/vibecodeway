@@ -36,6 +36,10 @@ export function UnresolvedAuthorsModal({ contextID, orgID, onClose }: Props) {
     });
   }, [contextID, orgID]);
 
+  useEffect(() => {
+    if (!loading && unresolved.length === 0) onClose();
+  }, [loading, unresolved.length, onClose]);
+
   const key = (a: store.UnresolvedAuthor) => `${a.sourceId}::${a.rawAuthor}`;
 
   const setResolution = (a: store.UnresolvedAuthor, r: Resolution) =>
@@ -76,8 +80,7 @@ export function UnresolvedAuthorsModal({ contextID, orgID, onClose }: Props) {
     onClose();
   };
 
-  if (loading) return null;
-  if (unresolved.length === 0) { onClose(); return null; }
+  if (loading || unresolved.length === 0) return null;
 
   return (
     <div className="modal-overlay">

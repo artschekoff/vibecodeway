@@ -11,7 +11,6 @@ import {
   DismissReviewRequest,
   PickRepoDirectory,
   SetTrackedRepoPath,
-  CheckoutBranch,
   ListAllWorkspaces,
   DeleteWorkspace,
   MarkWorkspaceShouldDelete,

@@ -108,7 +108,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
   }, [showNewCtx]);
 
   const attachTo = useCallback(
-    async (contextID: string, contextKey: string) => {
+    async (contextID: string, contextKey: string, knownOrgId?: string) => {
       switch (kind.type) {
         case "jira":
           // Ensure the jira_provider row exists first, then set base URL and add the issue.
@@ -130,8 +130,9 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
           }
       }
       const ctx = contexts.find((c) => c.id === contextID);
-      const ctxOrgName = orgs.find((o) => o.id === ctx?.orgId)?.name;
-      onAttach(contextKey, contextID, ctx?.orgId, ctxOrgName);
+      const resolvedOrgId = knownOrgId ?? ctx?.orgId;
+      const ctxOrgName = orgs.find((o) => o.id === resolvedOrgId)?.name;
+      onAttach(contextKey, contextID, resolvedOrgId, ctxOrgName);
     },
     [kind, text, destination, logDraft, onAttach, contexts, orgs],
   );
@@ -178,7 +179,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
       setNewCtxKey("");
       setNewCtxOrgId("");
       // Attach immediately after creating, then dismiss (same pattern as handleAttach).
-      await attachTo(ctx.id, ctx.key);
+      await attachTo(ctx.id, ctx.key, resolvedOrgId);
       requestAnimationFrame(() => DismissPicker().catch(() => {}));
     } catch (e) {
       setNewCtxError(e instanceof Error ? e.message : String(e));

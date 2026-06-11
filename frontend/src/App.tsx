@@ -13,6 +13,7 @@ import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
 import { AccessibilityBanner } from "./components/AccessibilityBanner";
+import { BgRefreshToast } from "./components/BgRefreshToast";
 import { EventsOn, EventsOff, SendNotification, InitializeNotifications } from "../wailsjs/runtime/runtime";
 import "./style.css";
 
@@ -147,6 +148,7 @@ function AppShell() {
         onDismiss={() => setPicker({ visible: false, text: "" })}
       />
       {toastMsg && <div className="toast toast--success">{toastMsg}</div>}
+      <BgRefreshToast />
     </ProgressProvider>
   );
 }
