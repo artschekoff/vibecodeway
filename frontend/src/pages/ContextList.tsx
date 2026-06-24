@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2 } from "lucide-react";
+import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -801,12 +801,20 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     }
   };
 
+  const [checkingOutKey, setCheckingOutKey] = useState<string | null>(null);
+  const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null);
+
   const handleCheckoutLocalBranch = async (pathId: string, branch: string, repoId: string) => {
+    const key = `${pathId}:${branch}`;
+    if (checkingOutKey) return;
+    setCheckingOutKey(key);
     try {
       await CheckoutLocalBranch(pathId, branch);
       await loadWorkspacesForRepo(repoId);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setCheckingOutKey(null);
     }
   };
 
@@ -1399,9 +1407,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                     <button
                                       className="repo-path-open"
                                       title={`Open ${w.worktreePath} in terminal`}
-                                      onClick={() => void OpenWorkspaceTerminal(w.id).catch(() => {})}
+                                      disabled={openingWorkspaceId === w.id}
+                                      onClick={() => {
+                                        setOpeningWorkspaceId(w.id);
+                                        void OpenWorkspaceTerminal(w.id).catch(() => {}).finally(() => setOpeningWorkspaceId(null));
+                                      }}
                                     >
-                                      <ExternalLink size={11} /> Checkout
+                                      {openingWorkspaceId === w.id ? <Spinner size={11} /> : <ExternalLink size={11} />} Checkout
                                     </button>
                                     {w.status === "active" && (
                                       <button
@@ -1457,8 +1469,12 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                       className="repo-path-open"
                                       title={`Checkout ${b.name}`}
                                       onClick={() => void handleCheckoutLocalBranch(p.id, b.name, repo.id)}
+                                      disabled={checkingOutKey !== null}
                                     >
-                                      <ExternalLink size={11} /> Checkout
+                                      {checkingOutKey === `${p.id}:${b.name}`
+                                        ? <Loader2 size={11} style={{ animation: "progress-spin 1s linear infinite" }} />
+                                        : <ExternalLink size={11} />
+                                      } Checkout
                                     </button>
                                     <button
                                       className="repo-path-open repo-path-open--danger"
@@ -1599,7 +1615,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
             ) : (
               <div className="reload-results-list">
                 {reloadResults.map((r) => {
-                  const hasNew = r.newIssues > 0 || r.newComments > 0 || r.threadsRefreshed > 0 || r.dmsRefreshed > 0 || r.prsRefreshed > 0 || r.newPRComments > 0 || r.newNotifications > 0;
+                  const hasNew = r.newIssues > 0 || r.newComments > 0 || r.threadsRefreshed > 0 || r.dmsRefreshed > 0 || r.prsRefreshed > 0 || r.newPRComments > 0 || r.newNotifications > 0 || r.newJiraStatusChanges > 0;
                   return (
                     <div
                       key={r.contextId}
@@ -1624,6 +1640,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                             {r.prsRefreshed > 0 && <span className="reload-result-badge">{r.prsRefreshed} PR{r.prsRefreshed !== 1 ? "s" : ""} synced</span>}
                             {r.newPRComments > 0 && <span className="reload-result-badge">{r.newPRComments} PR comment{r.newPRComments !== 1 ? "s" : ""}</span>}
                             {r.newNotifications > 0 && <span className="reload-result-badge">{r.newNotifications} notification{r.newNotifications !== 1 ? "s" : ""}</span>}
+                            {r.newJiraStatusChanges > 0 && <span className="reload-result-badge">{r.newJiraStatusChanges} Jira status change{r.newJiraStatusChanges !== 1 ? "s" : ""}</span>}
                           </>
                         ) : (
                           <span className="reload-result-none">No new items</span>
@@ -1648,12 +1665,15 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
               Choose which local clone to use for checking out <strong>{reviewCheckoutTarget.branch}</strong>:
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "12px 0" }}>
-              {reviewCheckoutPaths.map((p) => (
+              {reviewCheckoutLoading ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", fontSize: 12, color: "var(--text-muted)" }}>
+                  <Spinner size={14} /> Checking out…
+                </div>
+              ) : reviewCheckoutPaths.map((p) => (
                 <button
                   key={p.id}
                   className="btn-secondary"
                   style={{ textAlign: "left", padding: "8px 12px", fontSize: 12 }}
-                  disabled={reviewCheckoutLoading}
                   onClick={() => void handleReviewCheckoutWithPath(p.id)}
                 >
                   {p.path}
