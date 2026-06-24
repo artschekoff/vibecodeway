@@ -335,6 +335,14 @@ export interface ContextMessage {
   createdAt: string;
 }
 
+export interface MentionItem {
+  id: string;
+  title: string;      // shown as bold label in dropdown
+  subtitle: string;   // shown as muted secondary label
+  content: string;    // prepended to the AI prompt on Apply
+  kind: 'text' | 'file' | 'event' | 'message';
+}
+
 export interface Keybinding {
   id: string;
   command: string;
@@ -452,6 +460,7 @@ export interface PullRequest {
   title: string;
   author: string;
   state: "open" | "closed" | "merged" | string;
+  isDraft?: boolean;
   reviewStatus: "approved" | "changes_requested" | "review_required" | "commented" | string;
   /** GitHub mergeability: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | "" */
   mergeable?: string;
@@ -552,6 +561,7 @@ export interface WorkflowStatus {
   slug: string;
   label: string;
   aiHint: string;
+  color: string;
   isSystem: boolean;
   createdAt: string;
 }
