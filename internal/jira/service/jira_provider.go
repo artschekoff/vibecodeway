@@ -15,18 +15,26 @@ import (
 	"go.uber.org/zap"
 )
 
+// JiraNotifyFunc is called when a tracked Jira issue changes status.
+// Same signature as vcsservice.NotifyFunc so app.go can share a factory.
+type JiraNotifyFunc func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error
+
 // JiraProvider implements provider.Provider for Atlassian Jira.
 type JiraProvider struct {
 	jiraRepo  *jirastore.Repo
 	jira      JiraAPI
 	logger    *zap.Logger
 	msgWriter appstore.MessageWriter
+	notify    JiraNotifyFunc
 }
 
 // NewJiraProvider constructs a JiraProvider.
 func NewJiraProvider(jiraRepo *jirastore.Repo, jiraClient JiraAPI, logger *zap.Logger, msgWriter appstore.MessageWriter) *JiraProvider {
 	return &JiraProvider{jiraRepo: jiraRepo, jira: jiraClient, logger: logger, msgWriter: msgWriter}
 }
+
+// WithNotifyFunc sets the callback invoked on Jira issue status changes.
+func (p *JiraProvider) WithNotifyFunc(fn JiraNotifyFunc) { p.notify = fn }
 
 // Name implements provider.Provider.
 func (p *JiraProvider) Name() string { return "jira" }
@@ -61,6 +69,7 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 	close(jobs)
 
 	var refreshed atomic.Int64
+	var notifications atomic.Int64
 	var wg sync.WaitGroup
 	wg.Add(workers)
 	for range workers {
@@ -72,13 +81,22 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 					p.logger.Warn("jira refresh: view issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
 					continue
 				}
-				issueID, err := p.jiraRepo.UpsertIssue(ctx, contextID,
+				res, err := p.jiraRepo.UpsertIssue(ctx, contextID,
 					detail.Key, detail.Summary, detail.Status, detail.Assignee,
 					detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
 				)
 				if err != nil {
 					p.logger.Warn("jira refresh: upsert issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
 					continue
+				}
+				if res.StatusChanged && p.notify != nil {
+					if notifyErr := p.notify(ctx, contextID, "jira_issue", res.ID,
+						"jira_status_changed", res.OldStatus, detail.Status); notifyErr != nil {
+						p.logger.Warn("jira refresh: status notification failed",
+							zap.String("key", detail.Key), zap.Error(notifyErr))
+					} else {
+						notifications.Add(1)
+					}
 				}
 				if p.msgWriter != nil {
 					authorID := p.msgWriter.ResolveAuthor(ctx, "jira", detail.Assignee)
@@ -94,7 +112,7 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 						UpdatedAt:  detail.Updated,
 					})
 					if msgID != "" {
-						_ = p.jiraRepo.SetIssueMessageID(ctx, issueID, msgID)
+						_ = p.jiraRepo.SetIssueMessageID(ctx, res.ID, msgID)
 					}
 				}
 				refreshed.Add(1)
@@ -107,7 +125,11 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 	if err != nil {
 		p.logger.Warn("jira refresh: sync comments failed", zap.String("contextID", contextID), zap.Error(err))
 	}
-	return provider.Stats{ItemsRefreshed: int(refreshed.Load()), NewItems: newComments}, nil
+	return provider.Stats{
+		ItemsRefreshed:   int(refreshed.Load()),
+		NewItems:         newComments,
+		NewNotifications: int(notifications.Load()),
+	}, nil
 }
 
 // Reload runs the context's saved JQL query, adds newly found issues, then refreshes all.
@@ -127,22 +149,44 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 		p.logger.Warn("jira reload: search failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 
-	existingKeys, err := p.jiraRepo.GetIssueJiraKeys(ctx, contextID)
+	// Load stored issues to detect status changes on existing ones.
+	storedIssues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, false)
 	if err != nil {
-		return provider.Stats{}, fmt.Errorf("loading existing keys: %w", err)
+		return provider.Stats{}, fmt.Errorf("loading existing issues: %w", err)
+	}
+	existingByKey := make(map[string]*jirastore.Issue, len(storedIssues))
+	for i := range storedIssues {
+		existingByKey[storedIssues[i].JiraKey] = &storedIssues[i]
 	}
 
 	stats := provider.Stats{}
 	for _, r := range results {
-		if existingKeys[r.Key] {
+		if stored, exists := existingByKey[r.Key]; exists {
+			// Existing issue: check if status changed using search result status.
+			if r.Status != stored.Status {
+				res, uErr := p.jiraRepo.UpsertIssue(ctx, contextID,
+					r.Key, r.Summary, r.Status, r.Assignee, r.IssueType,
+					stored.Description, stored.JiraUpdated, stored.ParentKey)
+				if uErr != nil {
+					p.logger.Warn("jira reload: update status failed", zap.String("key", r.Key), zap.Error(uErr))
+				} else if res.StatusChanged && p.notify != nil {
+					if notifyErr := p.notify(ctx, contextID, "jira_issue", res.ID,
+						"jira_status_changed", res.OldStatus, r.Status); notifyErr != nil {
+						p.logger.Warn("jira reload: status notification failed", zap.Error(notifyErr))
+					} else {
+						stats.NewNotifications++
+					}
+				}
+			}
 			continue
 		}
+		// New issue: fetch full details.
 		detail, err := p.jira.ViewIssue(ctx, r.Key)
 		if err != nil {
 			p.logger.Warn("jira reload: view issue failed", zap.String("key", r.Key), zap.Error(err))
 			continue
 		}
-		issueID, err := p.jiraRepo.UpsertIssue(ctx, contextID,
+		reloadRes, err := p.jiraRepo.UpsertIssue(ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
 			detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
 		)
@@ -164,7 +208,7 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 				UpdatedAt:  detail.Updated,
 			})
 			if msgID != "" {
-				_ = p.jiraRepo.SetIssueMessageID(ctx, issueID, msgID)
+				_ = p.jiraRepo.SetIssueMessageID(ctx, reloadRes.ID, msgID)
 			}
 		}
 		stats.ItemsRefreshed++
