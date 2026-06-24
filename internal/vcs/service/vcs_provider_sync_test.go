@@ -48,8 +48,11 @@ func (m *mockRunner) StartDeviceAuth(_ context.Context) (*vcs.DeviceCodeInfo, er
 func (m *mockRunner) CompleteDeviceAuth(_ context.Context, _ string, _ int) (vcs.AuthResult, error) {
 	return vcs.AuthResult{}, nil
 }
-func (m *mockRunner) GetAuthUser(_ context.Context) (string, error) { return "me", nil }
-func (m *mockRunner) SetToken(_ string)                              {}
+func (m *mockRunner) GetAuthUser(_ context.Context) (string, error)          { return "me", nil }
+func (m *mockRunner) SetToken(_ string)                                        {}
+func (m *mockRunner) GetRepoDescription(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
 func (m *mockRunner) GetPRByNumber(_ context.Context, _, _ string, _ int) (*vcs.PRData, error) {
 	return nil, nil
 }

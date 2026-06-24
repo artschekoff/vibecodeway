@@ -138,6 +138,7 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 		"feat/oauth2",
 		"mergeable",
 		"passed",
+		false,
 		time.Now().Add(-24*time.Hour).UTC().Format(time.RFC3339),
 		time.Now().Add(-2*time.Hour).UTC().Format(time.RFC3339),
 	)
@@ -353,6 +354,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 		"feat_JH-477_task_JH-2210_pr",
 		"mergeable",
 		"passed",
+		false,
 		time.Now().Add(-3*24*time.Hour).UTC().Format(time.RFC3339),
 		time.Now().Add(-12*time.Hour).UTC().Format(time.RFC3339),
 	)

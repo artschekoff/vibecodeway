@@ -43,13 +43,13 @@ func TestListCommentsForPRs(t *testing.T) {
 	// Create two PRs
 	pr1Result, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 1,
 		"PR 1", "alice", "open", "approved", "https://example.com/pr/1",
-		"feature-1", "mergeable", "success", now, now)
+		"feature-1", "mergeable", "success", false, now, now)
 	require.NoError(t, err)
 	pr1ID := pr1Result.ID
 
 	pr2Result, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 2,
 		"PR 2", "bob", "open", "pending", "https://example.com/pr/2",
-		"feature-2", "mergeable", "success", now, now)
+		"feature-2", "mergeable", "success", false, now, now)
 	require.NoError(t, err)
 	pr2ID := pr2Result.ID
 
