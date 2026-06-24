@@ -156,6 +156,7 @@ type ReloadAllResult struct {
 	PRsRefreshed     int    `json:"prsRefreshed"`
 	NewPRComments    int    `json:"newPRComments"`
 	NewNotifications int    `json:"newNotifications"`
+	NewJiraStatusChanges int `json:"newJiraStatusChanges"`
 	Error            string `json:"error,omitempty"`
 }
 
@@ -1120,6 +1121,7 @@ func (svc *ContextService) ReloadAllContexts(ctx context.Context, onProgress ...
 				case providerJira:
 					r.NewIssues += res.stats.ItemsRefreshed // new issues found by JQL
 					r.NewComments += res.stats.NewItems     // new comments
+					r.NewJiraStatusChanges += res.stats.NewNotifications
 				case providerSlack:
 					r.ThreadsRefreshed += res.stats.ItemsRefreshed
 					r.DMsRefreshed += res.stats.NewItems
