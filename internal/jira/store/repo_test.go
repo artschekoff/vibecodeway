@@ -95,9 +95,9 @@ func TestUpsertAndGetIssues(t *testing.T) {
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Fix login", "Open", "alice", "Bug", "desc", "", "")
+	res, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Fix login", "Open", "alice", "Bug", "desc", "", "")
 	require.NoError(t, err)
-	assert.NotEmpty(t, issueID)
+	assert.NotEmpty(t, res.ID)
 
 	issues, err := repo.GetIssuesByContext(ctx, c.ID, false)
 	require.NoError(t, err)
@@ -115,12 +115,12 @@ func TestUpsertIssueUpdatesOnDuplicate(t *testing.T) {
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
 
-	id1, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "original", "Open", "alice", "Bug", "", "", "")
+	r1, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "original", "Open", "alice", "Bug", "", "", "")
 	require.NoError(t, err)
 
-	id2, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "updated", "Closed", "bob", "Story", "new desc", "2024-06-01T12:00:00Z", "")
+	r2, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "updated", "Closed", "bob", "Story", "new desc", "2024-06-01T12:00:00Z", "")
 	require.NoError(t, err)
-	assert.Equal(t, id1, id2, "same ID on duplicate upsert")
+	assert.Equal(t, r1.ID, r2.ID, "same ID on duplicate upsert")
 
 	issues, err := repo.GetIssuesByContext(ctx, c.ID, false)
 	require.NoError(t, err)
@@ -139,8 +139,9 @@ func TestUpsertAndGetComments(t *testing.T) {
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "alice", "Bug", "", "", "")
+	issueRes, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "alice", "Bug", "", "", "")
 	require.NoError(t, err)
+	issueID := issueRes.ID
 
 	commentID, err := repo.UpsertComment(ctx, issueID, "jira-cmt-1", "bob", "looks good", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
@@ -183,14 +184,14 @@ func TestToggleIssueActive(t *testing.T) {
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
-	id, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
+	toggleRes, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
 
-	issue, err := repo.ToggleIssueActive(ctx, id)
+	issue, err := repo.ToggleIssueActive(ctx, toggleRes.ID)
 	require.NoError(t, err)
 	assert.False(t, issue.IsActive)
 
-	issue, err = repo.ToggleIssueActive(ctx, id)
+	issue, err = repo.ToggleIssueActive(ctx, toggleRes.ID)
 	require.NoError(t, err)
 	assert.True(t, issue.IsActive)
 }
@@ -209,8 +210,9 @@ func TestCommentActiveByDefault(t *testing.T) {
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
+	commentActiveRes, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
+	issueID := commentActiveRes.ID
 	_, err = repo.UpsertComment(ctx, issueID, "cmt-1", "alice", "body", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
 
@@ -228,8 +230,9 @@ func TestToggleCommentActive(t *testing.T) {
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
-	issueID, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
+	toggleCommentRes, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "")
 	require.NoError(t, err)
+	issueID := toggleCommentRes.ID
 	_, err = repo.UpsertComment(ctx, issueID, "cmt-1", "alice", "body", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
 
@@ -261,10 +264,12 @@ func TestGetCommentsByIssues(t *testing.T) {
 	c, err := s.CreateContext(ctx, "ctx1", org.ID)
 	require.NoError(t, err)
 
-	issue1, err := repo.UpsertIssue(ctx, c.ID, "PROJ-1", "issue 1", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
+	res1, err := repo.UpsertIssue(ctx, c.ID, "PROJ-1", "issue 1", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
 	require.NoError(t, err)
-	issue2, err := repo.UpsertIssue(ctx, c.ID, "PROJ-2", "issue 2", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
+	issue1 := res1.ID
+	res2, err := repo.UpsertIssue(ctx, c.ID, "PROJ-2", "issue 2", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
 	require.NoError(t, err)
+	issue2 := res2.ID
 
 	_, err = repo.UpsertComment(ctx, issue1, "jira-1", "alice", "first comment", "2024-01-01T00:00:00Z")
 	require.NoError(t, err)
@@ -337,4 +342,39 @@ func TestFindContextsByJiraKeys(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, got)
 	})
+}
+
+func TestUpsertIssue_StatusChange(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ctx", org.ID)
+	require.NoError(t, err)
+
+	// Insert initial issue with status "In Progress"
+	res1, err := repo.UpsertIssue(ctx, c.ID,
+		"PROJ-1", "Summary", "In Progress", "alice", "Story", "desc", "2024-01-01", "")
+	require.NoError(t, err)
+	assert.True(t, res1.IsNew)
+	assert.False(t, res1.StatusChanged)
+	assert.NotEmpty(t, res1.ID)
+
+	// Update with same status — no change
+	res2, err := repo.UpsertIssue(ctx, c.ID,
+		"PROJ-1", "Summary", "In Progress", "alice", "Story", "desc", "2024-01-01", "")
+	require.NoError(t, err)
+	assert.False(t, res2.IsNew)
+	assert.False(t, res2.StatusChanged)
+	assert.Equal(t, res1.ID, res2.ID)
+
+	// Update with different status — change detected
+	res3, err := repo.UpsertIssue(ctx, c.ID,
+		"PROJ-1", "Summary", "Done", "alice", "Story", "desc", "2024-01-02", "")
+	require.NoError(t, err)
+	assert.False(t, res3.IsNew)
+	assert.True(t, res3.StatusChanged)
+	assert.Equal(t, "In Progress", res3.OldStatus)
+	assert.Equal(t, res1.ID, res3.ID)
 }

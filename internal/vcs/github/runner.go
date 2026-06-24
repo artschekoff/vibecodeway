@@ -294,7 +294,7 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 		"pr", "list",
 		"--repo", owner + "/" + repo,
 		"--state", "all",
-		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "50",
 	}
 	if branch != "" {
@@ -347,7 +347,7 @@ func (r *Runner) GetPRByNumber(ctx context.Context, owner, repo string, prNumber
 	out, err := r.run(ctx, []string{
 		"pr", "view", strconv.Itoa(prNumber),
 		"--repo", owner + "/" + repo,
-		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gh pr view %d: %w", prNumber, err)
@@ -365,6 +365,7 @@ type ghPR struct {
 	Title          string         `json:"title"`
 	Author         struct{ Login string } `json:"author"`
 	State          string         `json:"state"`
+	IsDraft        bool           `json:"isDraft"`
 	ReviewDecision string         `json:"reviewDecision"`
 	URL            string         `json:"url"`
 	HeadRefName    string         `json:"headRefName"`
@@ -393,6 +394,7 @@ func parseGHPRList(data []byte, errLabel string) ([]vcs.PRData, error) {
 			Title:        p.Title,
 			Author:       p.Author.Login,
 			State:        strings.ToLower(p.State),
+			IsDraft:      p.IsDraft,
 			ReviewStatus: mapReviewDecision(p.ReviewDecision),
 			URL:          p.URL,
 			HeadBranch:   p.HeadRefName,
@@ -421,6 +423,7 @@ func parseGHPRSingle(data []byte) (vcs.PRData, error) {
 		Title:        p.Title,
 		Author:       p.Author.Login,
 		State:        strings.ToLower(p.State),
+		IsDraft:      p.IsDraft,
 		ReviewStatus: mapReviewDecision(p.ReviewDecision),
 		URL:          p.URL,
 		HeadBranch:   p.HeadRefName,
@@ -462,6 +465,21 @@ func (r *Runner) ListChangesRequestedByUser(ctx context.Context, owner, repo str
 		return nil, fmt.Errorf("gh pr list changes-requested-by-me: %w", err)
 	}
 	return parseGHPRList(out, "changes requested PRs")
+}
+
+// GetRepoDescription fetches the description field from `gh repo view`.
+func (r *Runner) GetRepoDescription(ctx context.Context, owner, repo string) (string, error) {
+	out, err := r.run(ctx, []string{"repo", "view", owner + "/" + repo, "--json", "description"})
+	if err != nil {
+		return "", fmt.Errorf("gh repo view description: %w", err)
+	}
+	var result struct {
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(out, &result); err != nil {
+		return "", fmt.Errorf("parsing repo description: %w", err)
+	}
+	return result.Description, nil
 }
 
 // ListRepoBranches returns up to 100 branch names for the given repository.

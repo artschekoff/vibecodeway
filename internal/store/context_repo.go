@@ -328,8 +328,12 @@ func (s *Store) RebuildSearchIndex(ctx context.Context) error {
 	stmts := []string{
 		`INSERT INTO context_search_fts (context_id, source, body) SELECT id, 'key', key FROM contexts`,
 		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'jira', summary FROM jira_issues WHERE summary != ''`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'jira_key', jira_key FROM jira_issues WHERE jira_key != ''`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'jira_desc', description FROM jira_issues WHERE description != ''`,
 		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'slack', channel_name FROM slack_channels WHERE channel_name != ''`,
 		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'branch', branch FROM context_vcs_branches WHERE branch != ''`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT DISTINCT cvb.context_id, 'repo', vr.owner || '/' || vr.name FROM context_vcs_branches cvb JOIN vcs_repos vr ON vr.id = cvb.repo_id`,
+		`INSERT INTO context_search_fts (context_id, source, body) SELECT DISTINCT cvb.context_id, 'repo_desc', vr.description FROM context_vcs_branches cvb JOIN vcs_repos vr ON vr.id = cvb.repo_id WHERE vr.description != ''`,
 		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'text', name FROM context_texts WHERE name != ''`,
 		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'file', original_name FROM context_uploaded_files WHERE original_name != ''`,
 	}
@@ -380,7 +384,45 @@ func (s *Store) SearchContextIDs(ctx context.Context, query string) ([]string, e
 		return nil, fmt.Errorf("fts search: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
+	if len(ids) > 0 {
+		return ids, nil
+	}
+
+	// ponytail: LIKE fallback for short queries or tokens FTS5 skips (e.g. "pa", "ENG-")
+	return s.searchContextIDsLike(ctx, query)
+}
+
+// searchContextIDsLike is a substring fallback used when FTS5 returns nothing.
+// Searches context key, jira key/summary, and repo owner+name.
+func (s *Store) searchContextIDsLike(ctx context.Context, query string) ([]string, error) {
+	q := "%" + query + "%"
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT id FROM contexts WHERE key LIKE ?
+		UNION
+		SELECT DISTINCT context_id FROM jira_issues
+		  WHERE jira_key LIKE ? OR summary LIKE ?
+		UNION
+		SELECT DISTINCT cvb.context_id
+		  FROM context_vcs_branches cvb
+		  JOIN vcs_repos vr ON vr.id = cvb.repo_id
+		  WHERE (vr.owner || '/' || vr.name) LIKE ? OR vr.description LIKE ?
+	`, q, q, q, q, q)
+	if err != nil {
+		return nil, fmt.Errorf("like search: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
 	var ids []string
 	for rows.Next() {
 		var id string

@@ -128,16 +128,24 @@ func (r *Repo) DeleteIssue(ctx context.Context, id string) error {
 	return nil
 }
 
+// IssueUpsertResult holds the outcome of an UpsertIssue call.
+type IssueUpsertResult struct {
+	ID            string
+	IsNew         bool
+	StatusChanged bool
+	OldStatus     string
+}
+
 // UpsertIssue inserts or updates an issue (dedup on context_id + jira_key).
-// Returns the internal ID of the issue (new or existing).
-func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summary, status, assignee, issueType, description, jiraUpdated, parentKey string) (string, error) {
+// Returns IssueUpsertResult describing what changed.
+func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summary, status, assignee, issueType, description, jiraUpdated, parentKey string) (IssueUpsertResult, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	var existing string
+	var existing, oldStatus string
 	err := r.db.QueryRowContext(ctx,
-		"SELECT id FROM jira_issues WHERE context_id = ? AND jira_key = ?",
+		"SELECT id, status FROM jira_issues WHERE context_id = ? AND jira_key = ?",
 		contextID, jiraKey,
-	).Scan(&existing)
+	).Scan(&existing, &oldStatus)
 
 	if err == nil {
 		_, err = r.db.ExecContext(ctx, `
@@ -146,13 +154,18 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 			WHERE id = ?
 		`, summary, status, assignee, issueType, description, jiraUpdated, parentKey, existing)
 		if err != nil {
-			return "", fmt.Errorf("updating issue: %w", err)
+			return IssueUpsertResult{}, fmt.Errorf("updating issue: %w", err)
 		}
-		return existing, nil
+		return IssueUpsertResult{
+			ID:            existing,
+			IsNew:         false,
+			StatusChanged: status != oldStatus,
+			OldStatus:     oldStatus,
+		}, nil
 	}
 
 	if !errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("querying issue: %w", err)
+		return IssueUpsertResult{}, fmt.Errorf("querying issue: %w", err)
 	}
 
 	id := uuid.New().String()
@@ -162,9 +175,9 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, id, contextID, jiraKey, summary, status, assignee, issueType, description, jiraUpdated, parentKey, now)
 	if err != nil {
-		return "", fmt.Errorf("inserting issue: %w", err)
+		return IssueUpsertResult{}, fmt.Errorf("inserting issue: %w", err)
 	}
-	return id, nil
+	return IssueUpsertResult{ID: id, IsNew: true}, nil
 }
 
 // SetIssueMessageID sets the message_id FK on a jira_issues row.

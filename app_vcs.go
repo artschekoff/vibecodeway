@@ -150,7 +150,7 @@ func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int)
 	res, err := a.vcsStore.PullRequests.UpsertPR(a.ctx,
 		repo.ID, branch.ID, pr.Number,
 		pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
-		pr.Mergeable, pr.CIStatus, pr.CreatedAt, pr.UpdatedAt,
+		pr.Mergeable, pr.CIStatus, pr.IsDraft, pr.CreatedAt, pr.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("storing PR #%d: %w", prNumber, err)
@@ -224,7 +224,24 @@ func (a *App) AddTrackedRepo(platform, ownerRepo string) (*vcsstore.VCSRepo, err
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return nil, fmt.Errorf("ownerRepo must be in 'owner/repo' format, got %q", ownerRepo)
 	}
-	return a.vcsStore.Repos.EnsureRepo(a.ctx, platform, parts[0], parts[1])
+	owner, name := parts[0], parts[1]
+
+	repo, err := a.vcsStore.Repos.EnsureRepo(a.ctx, platform, owner, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Best-effort: populate description from GitHub. Never blocks or errors the caller.
+	if repo.Description == "" {
+		if runner, err := a.vcsSvc.RunnerFor(p); err == nil {
+			if desc, err := runner.GetRepoDescription(a.ctx, owner, name); err == nil && desc != "" {
+				if updateErr := a.vcsStore.Repos.UpdateRepoMeta(a.ctx, repo.ID, repo.Label, desc, repo.OnCheckoutCommand); updateErr == nil {
+					repo.Description = desc
+				}
+			}
+		}
+	}
+	return repo, nil
 }
 
 // RemoveTrackedRepo removes a tracked repo and all its review requests.
