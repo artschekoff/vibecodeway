@@ -147,6 +147,16 @@ func (a *App) startup(ctx context.Context) {
 	slackRepo := slackstore.NewRepo(s.DB())
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
+	jiraProvider.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+		if err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
+			return err
+		}
+		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
+			a.logger.Warn("jira notify: set snapshot status failed",
+				zap.String("contextID", contextID), zap.Error(err))
+		}
+		return nil
+	})
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger, s)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
@@ -159,7 +169,14 @@ func (a *App) startup(ctx context.Context) {
 		ghRunner.SetToken(auth.Token)
 	}
 	a.vcsSvc.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		return s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+		if err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
+			return err
+		}
+		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
+			a.logger.Warn("vcs notify: set snapshot status failed",
+				zap.String("contextID", contextID), zap.Error(err))
+		}
+		return nil
 	})
 	vcsProvider := a.vcsSvc
 
