@@ -29,6 +29,23 @@ type Context struct {
 	SnapshotStatusComment string `json:"snapshotStatusComment,omitempty"`
 }
 
+// ContextUpdateAction is the AI-determined action to apply to a context
+// in response to a user's free-form Quick Update text.
+type ContextUpdateAction struct {
+	// "add_event" or "set_status"
+	Action string `json:"action"`
+	// For action="add_event": one of the EventType* constants
+	EventType string `json:"eventType,omitempty"`
+	// For action="add_event": 1-2 sentence summary
+	Summary string `json:"summary,omitempty"`
+	// For action="set_status": workflow status slug
+	StatusSlug string `json:"statusSlug,omitempty"`
+	// For action="set_status": reason for the change
+	StatusComment string `json:"statusComment,omitempty"`
+	// Human-readable description shown as preview to the user
+	Description string `json:"description"`
+}
+
 // WorkflowStatus is a user-configurable status option for context workflow.
 // System statuses (IsSystem = true) are seeded on first run and cannot be deleted.
 type WorkflowStatus struct {

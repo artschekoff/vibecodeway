@@ -286,6 +286,10 @@ export function HasSlackPassphrase() {
   return window['go']['main']['App']['HasSlackPassphrase']();
 }
 
+export function InterpretContextUpdate(arg1, arg2) {
+  return window['go']['main']['App']['InterpretContextUpdate'](arg1, arg2);
+}
+
 export function ListAIPrompts() {
   return window['go']['main']['App']['ListAIPrompts']();
 }

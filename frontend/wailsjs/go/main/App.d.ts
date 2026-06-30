@@ -151,6 +151,8 @@ export function GetVCSPRsForContext(arg1:string):Promise<Array<vcsstore.PullRequ
 
 export function HasSlackPassphrase():Promise<boolean>;
 
+export function InterpretContextUpdate(arg1:string,arg2:string):Promise<store.ContextUpdateAction>;
+
 export function ListAIPrompts():Promise<Array<store.AIPrompt>>;
 
 export function ListAllContexts():Promise<Array<store.Context>>;

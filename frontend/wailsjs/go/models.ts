@@ -1679,6 +1679,28 @@ export namespace store {
 	        this.myOpenPRs = source["myOpenPRs"] ? source["myOpenPRs"].map((p: any) => BoardPR.createFrom(p)) : [];
 	    }
 	}
+	export class ContextUpdateAction {
+	    action: string;
+	    eventType: string;
+	    summary: string;
+	    statusSlug: string;
+	    statusComment: string;
+	    description: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ContextUpdateAction(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.action = source["action"];
+	        this.eventType = source["eventType"];
+	        this.summary = source["summary"];
+	        this.statusSlug = source["statusSlug"];
+	        this.statusComment = source["statusComment"];
+	        this.description = source["description"];
+	    }
+	}
 
 }
 
