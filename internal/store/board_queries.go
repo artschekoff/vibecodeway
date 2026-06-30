@@ -122,7 +122,7 @@ func (s *Store) ListBoardPRsByAuthor(ctx context.Context, author string) ([]Boar
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, b.context_id, c.key, r.name,
 		       p.pr_number, p.title, p.url, p.head_branch,
-		       p.review_status, p.ci_status, p.mergeable, 0, p.state, p.pr_updated_at
+		       p.review_status, p.ci_status, p.mergeable, 0 /* TODO: replace with p.is_draft once migration 068_pr_is_draft is applied */, p.state, p.pr_updated_at
 		FROM vcs_pull_requests p
 		JOIN context_vcs_branches b ON b.id = p.branch_id
 		JOIN contexts c ON c.id = b.context_id
