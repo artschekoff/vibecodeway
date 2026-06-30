@@ -1177,74 +1177,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     </div>
                   )}
                 </div>
-                {/* Quick Update */}
-                <div className="quick-update-wrap">
-                  {!quickUpdateOpen ? (
-                    <button
-                      className="quick-update-btn"
-                      onClick={() => setQuickUpdateOpen(true)}
-                      title="Quick Update — describe a change in plain text"
-                    >
-                      ✏️ Quick Update
-                    </button>
-                  ) : (
-                    <div className="quick-update-panel">
-                      <textarea
-                        className="quick-update-input"
-                        value={quickUpdateText}
-                        onChange={(e) => setQuickUpdateText(e.target.value)}
-                        placeholder='e.g. "blocker resolved — PR merged" or "moving to in review"'
-                        rows={3}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") {
-                            setQuickUpdateOpen(false);
-                            setQuickUpdateText("");
-                            setQuickUpdateAction(null);
-                          }
-                        }}
-                      />
-                      <div className="quick-update-actions">
-                        <button
-                          className="quick-update-interpret-btn"
-                          onClick={() => void handleQuickUpdate()}
-                          disabled={quickUpdateLoading || !quickUpdateText.trim()}
-                        >
-                          {quickUpdateLoading ? "Interpreting…" : "Interpret"}
-                        </button>
-                        <button
-                          className="quick-update-cancel-btn"
-                          onClick={() => {
-                            setQuickUpdateOpen(false);
-                            setQuickUpdateText("");
-                            setQuickUpdateAction(null);
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {quickUpdateAction && (
-                        <div className="quick-update-preview">
-                          <div className="quick-update-preview-desc">{quickUpdateAction.description}</div>
-                          <div className="quick-update-preview-btns">
-                            <button
-                              className="quick-update-confirm-btn"
-                              onClick={() => void handleQuickUpdateConfirm()}
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              className="quick-update-discard-btn"
-                              onClick={() => setQuickUpdateAction(null)}
-                            >
-                              Try again
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
                 {snapshot.sectionOperational && (
                   <details open>
                     <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Operational</summary>
@@ -1702,6 +1634,74 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               </div>
             ) : (
               <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No analysis yet. Click Analyze to start.</div>
+            )}
+          </div>
+          {/* Quick Update — available even without a snapshot */}
+          <div className="quick-update-wrap" style={{ padding: "0 14px 8px" }}>
+            {!quickUpdateOpen ? (
+              <button
+                className="quick-update-btn"
+                onClick={() => setQuickUpdateOpen(true)}
+                title="Quick Update — describe a change in plain text"
+              >
+                ✏️ Quick Update
+              </button>
+            ) : (
+              <div className="quick-update-panel">
+                <textarea
+                  className="quick-update-input"
+                  value={quickUpdateText}
+                  onChange={(e) => setQuickUpdateText(e.target.value)}
+                  placeholder='e.g. "blocker resolved — PR merged" or "moving to in review"'
+                  rows={3}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setQuickUpdateOpen(false);
+                      setQuickUpdateText("");
+                      setQuickUpdateAction(null);
+                    }
+                  }}
+                />
+                <div className="quick-update-actions">
+                  <button
+                    className="quick-update-interpret-btn"
+                    onClick={() => void handleQuickUpdate()}
+                    disabled={quickUpdateLoading || !quickUpdateText.trim()}
+                  >
+                    {quickUpdateLoading ? "Interpreting…" : "Interpret"}
+                  </button>
+                  <button
+                    className="quick-update-cancel-btn"
+                    onClick={() => {
+                      setQuickUpdateOpen(false);
+                      setQuickUpdateText("");
+                      setQuickUpdateAction(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {quickUpdateAction && (
+                  <div className="quick-update-preview">
+                    <div className="quick-update-preview-desc">{quickUpdateAction.description}</div>
+                    <div className="quick-update-preview-btns">
+                      <button
+                        className="quick-update-confirm-btn"
+                        onClick={() => void handleQuickUpdateConfirm()}
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        className="quick-update-discard-btn"
+                        onClick={() => setQuickUpdateAction(null)}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
