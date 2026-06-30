@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { X, Pin } from "lucide-react";
+import { X, Pin, LayoutDashboard } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -90,7 +90,10 @@ function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; org
       {...attributes}
       {...listeners}
     >
-      <span className={`tab-item__title${isOrg ? " tab-item__title--org" : ""}`}>{displayTitle}</span>
+      <span className={`tab-item__title${isOrg ? " tab-item__title--org" : ""}`}>
+        {tab.type === "board" && <LayoutDashboard size={13} style={{ marginRight: 4, verticalAlign: "middle" }} />}
+        {displayTitle}
+      </span>
       <span className="tab-item__close-zone">
         {tab.pinned ? (
           <button
