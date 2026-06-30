@@ -1087,6 +1087,33 @@ func (a *App) ClearAppLogs() error {
 	return a.appLogRepo.Clear(a.ctx)
 }
 
+// GetMyBoard returns aggregated personal board data: blockers, assignments for personName,
+// and open PRs authored by personName.
+// personName is matched against person_assignments.name and vcs_pull_requests.author.
+// Pass empty string to see all assignments.
+func (a *App) GetMyBoard(personName string) (*appstore.MyBoardData, error) {
+	blockers, err := a.db.ListBoardBlockers(a.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("board blockers: %w", err)
+	}
+
+	assignments, err := a.db.ListBoardAssignments(a.ctx, personName)
+	if err != nil {
+		return nil, fmt.Errorf("board assignments: %w", err)
+	}
+
+	prs, err := a.db.ListBoardPRsByAuthor(a.ctx, personName)
+	if err != nil {
+		return nil, fmt.Errorf("board prs: %w", err)
+	}
+
+	return &appstore.MyBoardData{
+		Blockers:      blockers,
+		MyAssignments: assignments,
+		MyOpenPRs:     prs,
+	}, nil
+}
+
 func logFilePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {

@@ -234,6 +234,10 @@ export function GetLatestHandoffPacket(arg1) {
   return window['go']['main']['App']['GetLatestHandoffPacket'](arg1);
 }
 
+export function GetMyBoard(arg1) {
+  return window['go']['main']['App']['GetMyBoard'](arg1);
+}
+
 export function GetPendingCodeReviews() {
   return window['go']['main']['App']['GetPendingCodeReviews']();
 }
