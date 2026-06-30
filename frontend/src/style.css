@@ -6177,3 +6177,19 @@ select {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Quick Update (Context Detail) ───────────────────────────────────────── */
+.quick-update-wrap { margin: 8px 0; }
+.quick-update-btn { font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--text-muted); cursor: pointer; }
+.quick-update-btn:hover { background: var(--surface2); color: var(--text); }
+.quick-update-panel { display: flex; flex-direction: column; gap: 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+.quick-update-input { font-size: 12px; font-family: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); resize: vertical; width: 100%; box-sizing: border-box; }
+.quick-update-actions { display: flex; gap: 6px; }
+.quick-update-interpret-btn { font-size: 12px; padding: 4px 12px; border: none; border-radius: 4px; background: var(--accent, #6366f1); color: #fff; cursor: pointer; }
+.quick-update-interpret-btn:disabled { opacity: 0.5; cursor: default; }
+.quick-update-cancel-btn { font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--text-muted); cursor: pointer; }
+.quick-update-preview { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.quick-update-preview-desc { font-size: 13px; color: var(--text); }
+.quick-update-preview-btns { display: flex; gap: 6px; }
+.quick-update-confirm-btn { font-size: 12px; padding: 4px 12px; border: none; border-radius: 4px; background: #22c55e; color: #fff; cursor: pointer; }
+.quick-update-discard-btn { font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--text-muted); cursor: pointer; }
