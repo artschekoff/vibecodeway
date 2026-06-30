@@ -142,7 +142,7 @@ function renderTextWithFileRefs(text: string): React.ReactNode[] {
         key={match.index}
         className="task-file-ref"
         title={`Click to copy: ${ref}`}
-        onClick={() => navigator.clipboard.writeText(ref).catch(() => {})}
+        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(ref).catch(() => {}); }}
       >
         {ref}
       </span>
@@ -160,6 +160,7 @@ function TaskListBody({
   pa: { id: string; body: string };
   onSave: (id: string, newBody: string) => Promise<void>;
 }) {
+  const [saving, setSaving] = useState(false);
   const lines = parseTaskLines(pa.body);
   const hasAnyTask = lines.some((l) => l.isTask);
 
@@ -169,20 +170,27 @@ function TaskListBody({
   }
 
   const handleToggle = async (lineIndex: number) => {
-    const newBody = toggleTaskLine(pa.body, lineIndex);
-    await onSave(pa.id, newBody);
+    if (saving) return;
+    setSaving(true);
+    try {
+      const newBody = toggleTaskLine(pa.body, lineIndex);
+      await onSave(pa.id, newBody);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="task-list">
+    <div className={`task-list${saving ? " task-list--saving" : ""}`}>
       {lines.map((line) =>
         line.isTask ? (
-          <label key={line.lineIndex} className="task-list-item">
+          <label key={line.lineIndex} className="task-list-item" onClick={(e) => e.stopPropagation()}>
             <input
               type="checkbox"
               checked={line.checked}
               onChange={() => void handleToggle(line.lineIndex)}
               className="task-list-checkbox"
+              disabled={saving}
             />
             <span className={`task-list-text${line.checked ? " task-list-text--done" : ""}`}>
               {renderTextWithFileRefs(line.text)}

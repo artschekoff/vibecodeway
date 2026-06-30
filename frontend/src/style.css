@@ -6219,6 +6219,7 @@ select {
 .task-list-text--done { text-decoration: line-through; color: var(--text-muted); }
 .task-list-prose { color: var(--text-muted); font-size: 12px; padding-left: 4px; }
 .task-list-spacer { height: 6px; }
+.task-list--saving { opacity: 0.7; pointer-events: none; }
 .task-file-ref { font-family: monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; cursor: pointer; color: var(--accent, #6366f1); }
 .task-file-ref:hover { text-decoration: underline; }
 .assignment-body-plain { font-size: 12px; white-space: pre-wrap; color: var(--text); }
