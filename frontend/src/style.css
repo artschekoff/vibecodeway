@@ -6183,7 +6183,7 @@ select {
 .board-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .board-title { font-size: 15px; font-weight: 600; flex: 1; }
 .board-name-row { display: flex; gap: 6px; }
-.board-name-input { font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface1); color: var(--text); width: 180px; }
+.board-name-input { font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); width: 180px; }
 .board-name-save { font-size: 11px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: var(--surface2); color: var(--text); }
 .board-refresh-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; display: flex; }
 .board-error { color: var(--error, #ef4444); font-size: 12px; }
@@ -6193,7 +6193,7 @@ select {
 .board-section-count { background: var(--surface2); border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
 .board-section-empty { font-size: 12px; color: var(--text-muted); padding: 6px 0; }
 .board-section-items { display: flex; flex-direction: column; gap: 6px; }
-.board-card { background: var(--surface1); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.board-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
 .board-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .board-card-context { font-size: 11px; color: var(--accent, #6366f1); cursor: pointer; font-weight: 500; }
 .board-card-context:hover { text-decoration: underline; }
