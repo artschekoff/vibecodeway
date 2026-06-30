@@ -1552,11 +1552,12 @@ export namespace store {
 	    color: string;
 	    isSystem: boolean;
 	    createdAt: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new WorkflowStatus(source);
 	    }
-	
+
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1566,6 +1567,116 @@ export namespace store {
 	        this.color = source["color"];
 	        this.isSystem = source["isSystem"];
 	        this.createdAt = source["createdAt"];
+	    }
+	}
+
+	export class BoardBlocker {
+	    eventId: string;
+	    contextId: string;
+	    contextKey: string;
+	    author: string;
+	    summary: string;
+	    timestamp: string;
+	    createdAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new BoardBlocker(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.eventId = source["eventId"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.author = source["author"];
+	        this.summary = source["summary"];
+	        this.timestamp = source["timestamp"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+
+	export class BoardAssignment {
+	    id: string;
+	    contextId: string;
+	    contextKey: string;
+	    name: string;
+	    body: string;
+	    generatedAt?: string;
+	    analyzedThrough?: string;
+	    isOutdated: boolean;
+	    updatedAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new BoardAssignment(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.name = source["name"];
+	        this.body = source["body"];
+	        this.generatedAt = source["generatedAt"];
+	        this.analyzedThrough = source["analyzedThrough"];
+	        this.isOutdated = source["isOutdated"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+
+	export class BoardPR {
+	    id: string;
+	    contextId: string;
+	    contextKey: string;
+	    repoName: string;
+	    prNumber: number;
+	    title: string;
+	    url: string;
+	    headBranch: string;
+	    reviewStatus: string;
+	    ciStatus: string;
+	    mergeable: string;
+	    isDraft: boolean;
+	    state: string;
+	    prUpdatedAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new BoardPR(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.repoName = source["repoName"];
+	        this.prNumber = source["prNumber"];
+	        this.title = source["title"];
+	        this.url = source["url"];
+	        this.headBranch = source["headBranch"];
+	        this.reviewStatus = source["reviewStatus"];
+	        this.ciStatus = source["ciStatus"];
+	        this.mergeable = source["mergeable"];
+	        this.isDraft = source["isDraft"];
+	        this.state = source["state"];
+	        this.prUpdatedAt = source["prUpdatedAt"];
+	    }
+	}
+
+	export class MyBoardData {
+	    blockers: BoardBlocker[];
+	    myAssignments: BoardAssignment[];
+	    myOpenPRs: BoardPR[];
+
+	    static createFrom(source: any = {}) {
+	        return new MyBoardData(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.blockers = source["blockers"] ? source["blockers"].map((b: any) => BoardBlocker.createFrom(b)) : [];
+	        this.myAssignments = source["myAssignments"] ? source["myAssignments"].map((a: any) => BoardAssignment.createFrom(a)) : [];
+	        this.myOpenPRs = source["myOpenPRs"] ? source["myOpenPRs"].map((p: any) => BoardPR.createFrom(p)) : [];
 	    }
 	}
 

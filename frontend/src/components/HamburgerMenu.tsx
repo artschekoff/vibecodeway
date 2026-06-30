@@ -16,7 +16,7 @@ export default function HamburgerMenu() {
   const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<string | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, tabs, closeTab } = useTabContext();
+  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, openBoardTab, tabs, closeTab } = useTabContext();
 
   const loadOrgs = useCallback(async () => {
     try {
@@ -84,6 +84,14 @@ export default function HamburgerMenu() {
 
         {open && (
           <div className="app-menu-dropdown">
+            <button
+              className="app-menu-item"
+              onClick={() => { openBoardTab(); setOpen(false); }}
+            >
+              My Board
+            </button>
+            <div className="app-menu-divider" />
+
             {/* Organizations section */}
             <div className="app-menu-section-header">
               <span>Organizations</span>

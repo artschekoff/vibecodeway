@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { X, Pin, Globe, FileCode2, Settings, ScrollText, Sparkles } from "lucide-react";
+import { X, Pin, Globe, FileCode2, Settings, ScrollText, Sparkles, LayoutDashboard } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -59,6 +59,7 @@ function TabIcon({ tab, orgColor }: { tab: Tab; orgColor?: string }) {
   if (tab.type === "settings") return <Settings size={20} />;
   if (tab.type === "logs") return <ScrollText size={20} />;
   if (tab.type === "prompts") return <Sparkles size={20} />;
+  if (tab.type === "board") return <LayoutDashboard size={20} />;
   return <Globe size={20} />;
 }
 
@@ -66,6 +67,7 @@ function shortLabel(tab: Tab): string {
   if (tab.type === "settings") return "Settings";
   if (tab.type === "logs") return "Logs";
   if (tab.type === "prompts") return "Prompts";
+  if (tab.type === "board") return "My Board";
   return tab.contextKey ?? tab.title ?? "…";
 }
 

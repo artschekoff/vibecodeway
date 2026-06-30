@@ -125,6 +125,8 @@ export function GetKeybindings():Promise<Array<store.Keybinding>>;
 
 export function GetLatestHandoffPacket(arg1:string):Promise<store.InferredRequirementsPacket>;
 
+export function GetMyBoard(arg1:string):Promise<store.MyBoardData>;
+
 export function GetPendingCodeReviews():Promise<Array<vcsstore.ReviewRequest>>;
 
 export function GetPendingMessages(arg1:string):Promise<Array<store.Message>>;
