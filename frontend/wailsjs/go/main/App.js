@@ -102,8 +102,8 @@ export function CreateUserAndAssign(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['CreateUserAndAssign'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function CreateWorkflowStatus(arg1, arg2, arg3) {
-  return window['go']['main']['App']['CreateWorkflowStatus'](arg1, arg2, arg3);
+export function CreateWorkflowStatus(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CreateWorkflowStatus'](arg1, arg2, arg3, arg4);
 }
 
 export function DeleteContext(arg1) {
@@ -694,8 +694,8 @@ export function UpdateVCSRepoMeta(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateVCSRepoMeta'](arg1, arg2, arg3);
 }
 
-export function UpdateWorkflowStatus(arg1, arg2, arg3) {
-  return window['go']['main']['App']['UpdateWorkflowStatus'](arg1, arg2, arg3);
+export function UpdateWorkflowStatus(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateWorkflowStatus'](arg1, arg2, arg3, arg4);
 }
 
 export function UpsertContextText(arg1, arg2, arg3, arg4) {

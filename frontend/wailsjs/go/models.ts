@@ -389,7 +389,7 @@ export namespace service {
 	        this.prsRefreshed = source["prsRefreshed"];
 	        this.newPRComments = source["newPRComments"];
 	        this.newNotifications = source["newNotifications"];
-	        this.newJiraStatusChanges = source["newJiraStatusChanges"] ?? 0;
+	        this.newJiraStatusChanges = source["newJiraStatusChanges"];
 	        this.error = source["error"];
 	    }
 	}

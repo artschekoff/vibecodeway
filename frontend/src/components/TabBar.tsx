@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { X, Pin } from "lucide-react";
+import { X, Pin, Globe, FileCode2, Settings, ScrollText, Sparkles } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  horizontalListSortingStrategy,
+  verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -18,14 +18,14 @@ import { useTabContext } from "../contexts/TabContext";
 import type { Tab } from "../types";
 
 const ORG_COLORS = [
-  "#F5A040",  // amber
-  "#7CD4E7",  // cyan
-  "#82D9A0",  // green
-  "#B49CF5",  // purple
-  "#E07878",  // red
-  "#F5C97C",  // yellow
-  "#F57CA0",  // pink
-  "#C9E882",  // lime
+  "#F5A040",
+  "#7CD4E7",
+  "#82D9A0",
+  "#B49CF5",
+  "#E07878",
+  "#F5C97C",
+  "#F57CA0",
+  "#C9E882",
 ];
 
 function useOrgColorMap(tabs: Tab[]): Map<string, string> {
@@ -43,8 +43,34 @@ function useOrgColorMap(tabs: Tab[]): Map<string, string> {
   }, [tabs]);
 }
 
+function TabIcon({ tab, orgColor }: { tab: Tab; orgColor?: string }) {
+  if (tab.type === "org") {
+    const letter = (tab.title ?? "?")[0].toUpperCase();
+    return (
+      <span
+        className="tab-item__org-dot"
+        style={{ background: orgColor ?? "var(--surface2)" }}
+      >
+        {letter}
+      </span>
+    );
+  }
+  if (tab.type === "context") return <FileCode2 size={20} />;
+  if (tab.type === "settings") return <Settings size={20} />;
+  if (tab.type === "logs") return <ScrollText size={20} />;
+  if (tab.type === "prompts") return <Sparkles size={20} />;
+  return <Globe size={20} />;
+}
+
+function shortLabel(tab: Tab): string {
+  if (tab.type === "settings") return "Settings";
+  if (tab.type === "logs") return "Logs";
+  if (tab.type === "prompts") return "Prompts";
+  return tab.contextKey ?? tab.title ?? "…";
+}
+
 function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; orgColor?: string }) {
-  const { tabs, setActiveTab, closeTab, pinTab, unpinTab } = useTabContext();
+  const { setActiveTab, closeTab, pinTab, unpinTab } = useTabContext();
   const {
     attributes,
     listeners,
@@ -54,19 +80,7 @@ function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; org
     isDragging,
   } = useSortable({ id: tab.id });
 
-  const displayTitle = useMemo(() => {
-    if (tab.type !== "context") return tab.title;
-    const orgName = tab.orgName
-      ?? tabs.find((t) => t.type === "org" && t.orgId === tab.orgId)?.title;
-    const key = tab.contextKey ?? tab.title;
-    return orgName ? `${orgName} / ${key}` : key;
-  }, [tab, tabs]);
-
   const isOrg = tab.type === "org";
-
-  const colorVars: React.CSSProperties = orgColor
-    ? ({ "--tab-org-color": orgColor } as React.CSSProperties)
-    : {};
 
   const dragStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -76,39 +90,46 @@ function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; org
     cursor: isDragging ? "grabbing" : "grab",
   };
 
+  const label = shortLabel(tab);
+
   return (
     <div
       ref={setNodeRef}
       className={`tab-item${isActive ? " tab-item--active" : ""}${isOrg ? " tab-item--org" : ""}${tab.pinned ? " tab-item--pinned" : ""}${orgColor ? " tab-item--colored" : ""}`}
-      style={{ ...colorVars, ...dragStyle }}
+      style={dragStyle}
       onClick={() => setActiveTab(tab.id)}
       onContextMenu={(e) => {
         e.preventDefault();
         tab.pinned ? unpinTab(tab.id) : pinTab(tab.id);
       }}
-      title={tab.pinned ? `${displayTitle} (pinned — right-click to unpin)` : `${displayTitle} (right-click to pin)`}
+      title={tab.pinned ? `${label} (pinned)` : label}
       {...attributes}
       {...listeners}
     >
-      <span className={`tab-item__title${isOrg ? " tab-item__title--org" : ""}`}>{displayTitle}</span>
+      <div className="tab-item__icon">
+        <TabIcon tab={tab} orgColor={orgColor} />
+      </div>
+      <span className={`tab-item__title${isOrg ? " tab-item__title--org" : ""}`}>
+        {label}
+      </span>
       <span className="tab-item__close-zone">
         {tab.pinned ? (
           <button
             className="tab-item__action"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); unpinTab(tab.id); }}
-            title="Unpin tab"
+            title="Unpin"
           >
-            <Pin size={11} />
+            <Pin size={9} />
           </button>
         ) : (
           <button
             className="tab-item__action"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-            title="Close tab"
+            title="Close"
           >
-            <X size={11} />
+            <X size={9} />
           </button>
         )}
       </span>
@@ -136,7 +157,7 @@ export default function TabBar() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
+      <SortableContext items={tabIds} strategy={verticalListSortingStrategy}>
         <div className="tab-bar">
           {tabs.map((tab) => {
             const orgId = tab.type === "org" ? tab.orgId : tab.type === "context" ? tab.orgId : undefined;

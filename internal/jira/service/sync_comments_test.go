@@ -41,9 +41,9 @@ func TestSyncIssueComments_AllIssuesFetched(t *testing.T) {
 	require.NoError(t, err)
 	issues := make([]jirastore.Issue, 20)
 	for i := range issues {
-		id, err := repo.UpsertIssue(ctx, c.ID, fmt.Sprintf("PROJ-%d", i+1), "summary", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
+		upserted, err := repo.UpsertIssue(ctx, c.ID, fmt.Sprintf("PROJ-%d", i+1), "summary", "open", "", "task", "", "2024-01-01T00:00:00Z", "")
 		require.NoError(t, err)
-		issues[i] = jirastore.Issue{ID: id, JiraKey: fmt.Sprintf("PROJ-%d", i+1)}
+		issues[i] = jirastore.Issue{ID: upserted.ID, JiraKey: fmt.Sprintf("PROJ-%d", i+1)}
 	}
 
 	stub := &stubCommentLister{}

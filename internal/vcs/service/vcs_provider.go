@@ -141,7 +141,7 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 					res, err := p.store.PullRequests.UpsertPR(ctx,
 						branch.RepoID, branch.ID, pr.Number,
 						pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
-						pr.Mergeable, pr.CIStatus,
+						pr.Mergeable, pr.CIStatus, pr.IsDraft,
 						pr.CreatedAt, pr.UpdatedAt,
 					)
 					if err != nil {

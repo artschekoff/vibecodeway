@@ -131,10 +131,10 @@ function AppShell() {
     <ProgressProvider>
       <ProgressModal />
       <div className="app-shell">
-        <div className="app-topbar">
+        <div className="app-sidebar">
           <HamburgerMenu />
+          <TabBar />
         </div>
-        <TabBar />
         <div className="app-content">
           <TabContent />
         </div>

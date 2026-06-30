@@ -23,11 +23,14 @@ export default function WorkflowStatusManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editAiHint, setEditAiHint] = useState("");
+  const [editColor, setEditColor] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adding, setAdding] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newSlug, setNewSlug] = useState("");
+  const [newAiHint, setNewAiHint] = useState("");
+  const [newColor, setNewColor] = useState("");
   const [slugManual, setSlugManual] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,7 +40,7 @@ export default function WorkflowStatusManager() {
 
   async function saveEdit(id: string) {
     try {
-      const updated = await UpdateWorkflowStatus(id, editLabel.trim(), editAiHint.trim());
+      const updated = await UpdateWorkflowStatus(id, editLabel.trim(), editAiHint.trim(), editColor);
       setStatuses((prev) => prev.map((s) => (s.id === id ? updated : s)));
       setEditingId(null);
       setError("");
@@ -73,11 +76,13 @@ export default function WorkflowStatusManager() {
       return;
     }
     try {
-      const created = await CreateWorkflowStatus(slug, label, "");
+      const created = await CreateWorkflowStatus(slug, label, newAiHint.trim(), newColor);
       setStatuses((prev) => [...prev, created]);
       setAdding(false);
       setNewLabel("");
       setNewSlug("");
+      setNewAiHint("");
+      setNewColor("");
       setSlugManual(false);
       setError("");
     } catch (e) {
@@ -95,23 +100,30 @@ export default function WorkflowStatusManager() {
           <li key={st.id} className="workflow-status-item">
             {editingId === st.id ? (
               <>
-                <input
-                  className="workflow-status-input"
-                  value={editLabel}
-                  onChange={(e) => setEditLabel(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveEdit(st.id);
-                    if (e.key === "Escape") setEditingId(null);
-                  }}
-                  autoFocus
-                />
-                <textarea
-                  className="form-control"
-                  style={{ fontSize: 11, resize: "vertical", minHeight: 56, marginTop: 4 }}
-                  placeholder="AI hint: when to use this status and what signals a transition…"
-                  value={editAiHint}
-                  onChange={(e) => setEditAiHint(e.target.value)}
-                />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <input
+                    className="workflow-status-input"
+                    value={editLabel}
+                    onChange={(e) => setEditLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit(st.id);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    autoFocus
+                  />
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+                    <input type="color" value={editColor || "#6366f1"} onChange={(e) => setEditColor(e.target.value)} style={{ width: 24, height: 20, padding: 0, border: "none", cursor: "pointer", background: "none" }} />
+                    Color
+                    {editColor && <button type="button" style={{ fontSize: 10, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }} onClick={() => setEditColor("")}>clear</button>}
+                  </label>
+                  <textarea
+                    className="form-control"
+                    style={{ fontSize: 11, resize: "vertical", minHeight: 56 }}
+                    placeholder="AI hint: when to use this status and what signals a transition…"
+                    value={editAiHint}
+                    onChange={(e) => setEditAiHint(e.target.value)}
+                  />
+                </div>
                 <button className="icon-btn" onClick={() => saveEdit(st.id)} title="Save">
                   <Check size={14} />
                 </button>
@@ -133,7 +145,7 @@ export default function WorkflowStatusManager() {
                 <div className="workflow-status-actions">
                   <button
                     className="icon-btn"
-                    onClick={() => { setEditingId(st.id); setEditLabel(st.label); setEditAiHint(st.aiHint ?? ""); setError(""); }}
+                    onClick={() => { setEditingId(st.id); setEditLabel(st.label); setEditAiHint(st.aiHint ?? ""); setEditColor(st.color ?? ""); setError(""); }}
                     title="Edit label"
                   >
                     <Pencil size={14} />
@@ -177,6 +189,18 @@ export default function WorkflowStatusManager() {
               value={newSlug}
               onChange={(e) => { setNewSlug(e.target.value); setSlugManual(true); }}
             />
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+              <input type="color" value={newColor || "#6366f1"} onChange={(e) => setNewColor(e.target.value)} style={{ width: 24, height: 20, padding: 0, border: "none", cursor: "pointer", background: "none" }} />
+              Color (optional)
+              {newColor && <button type="button" style={{ fontSize: 10, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }} onClick={() => setNewColor("")}>clear</button>}
+            </label>
+            <textarea
+              className="form-control"
+              style={{ fontSize: 11, resize: "vertical", minHeight: 56 }}
+              placeholder="AI hint (optional): when to use this status and what signals a transition…"
+              value={newAiHint}
+              onChange={(e) => setNewAiHint(e.target.value)}
+            />
           </div>
           <div className="workflow-status-add-actions">
             <button className="btn btn--primary" onClick={handleAdd}>Add</button>
@@ -186,6 +210,8 @@ export default function WorkflowStatusManager() {
                 setAdding(false);
                 setNewLabel("");
                 setNewSlug("");
+                setNewAiHint("");
+                setNewColor("");
                 setSlugManual(false);
                 setError("");
               }}

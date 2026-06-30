@@ -35,7 +35,7 @@ type PRUpsertResult struct {
 
 // UpsertPR creates or updates a pull request row identified by (repoID, prNumber).
 // Returns a PRUpsertResult describing what changed.
-func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber int, title, author, state, reviewStatus, url, headBranch, mergeable, ciStatus, prCreatedAt, prUpdatedAt string) (PRUpsertResult, error) {
+func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber int, title, author, state, reviewStatus, url, headBranch, mergeable, ciStatus string, isDraft bool, prCreatedAt, prUpdatedAt string) (PRUpsertResult, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing, oldState, oldMergeable, oldReviewStatus, oldCIStatus string
@@ -45,13 +45,17 @@ func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber
 	).Scan(&existing, &oldState, &oldMergeable, &oldReviewStatus, &oldCIStatus)
 
 	if err == nil {
+		isDraftInt := 0
+		if isDraft {
+			isDraftInt = 1
+		}
 		_, err = r.db.ExecContext(ctx, `
 			UPDATE vcs_pull_requests
-			SET branch_id = ?, title = ?, author = ?, state = ?, review_status = ?,
+			SET branch_id = ?, title = ?, author = ?, state = ?, is_draft = ?, review_status = ?,
 			    url = ?, head_branch = ?, mergeable = ?, ci_status = ?,
 			    pr_created_at = ?, pr_updated_at = ?, fetched_at = ?
 			WHERE id = ?
-		`, branchID, title, author, state, reviewStatus, url, headBranch, mergeable, ciStatus,
+		`, branchID, title, author, state, isDraftInt, reviewStatus, url, headBranch, mergeable, ciStatus,
 			prCreatedAt, prUpdatedAt, now, existing)
 		if err != nil {
 			return PRUpsertResult{}, fmt.Errorf("update vcs pr: %w", err)
@@ -73,12 +77,16 @@ func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber
 	}
 
 	id := uuid.New().String()
+	isDraftInt := 0
+	if isDraft {
+		isDraftInt = 1
+	}
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO vcs_pull_requests
-			(id, repo_id, branch_id, pr_number, title, author, state, review_status, url,
+			(id, repo_id, branch_id, pr_number, title, author, state, is_draft, review_status, url,
 			 head_branch, mergeable, ci_status, pr_created_at, pr_updated_at, fetched_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, repoID, branchID, prNumber, title, author, state, reviewStatus, url,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, repoID, branchID, prNumber, title, author, state, isDraftInt, reviewStatus, url,
 		headBranch, mergeable, ciStatus, prCreatedAt, prUpdatedAt, now)
 	if err != nil {
 		return PRUpsertResult{}, fmt.Errorf("insert vcs pr: %w", err)
@@ -89,7 +97,7 @@ func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber
 // ListPRsForBranch returns all PRs for a branch, ordered by pr_number.
 func (r *PRRepo) ListPRsForBranch(ctx context.Context, branchID string) ([]PullRequest, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, repo_id, branch_id, pr_number, title, author, state, review_status, url,
+		SELECT id, repo_id, branch_id, pr_number, title, author, state, is_draft, review_status, url,
 		       head_branch, mergeable, ci_status, pr_created_at, pr_updated_at, fetched_at, viewed_at, ai_processed_at
 		FROM vcs_pull_requests
 		WHERE branch_id = ?
@@ -105,7 +113,7 @@ func (r *PRRepo) ListPRsForBranch(ctx context.Context, branchID string) ([]PullR
 // ListPRsForContext returns all PRs for all branches of a context (via join).
 func (r *PRRepo) ListPRsForContext(ctx context.Context, contextID string) ([]PullRequest, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT p.id, p.repo_id, p.branch_id, p.pr_number, p.title, p.author, p.state,
+		SELECT p.id, p.repo_id, p.branch_id, p.pr_number, p.title, p.author, p.state, p.is_draft,
 		       p.review_status, p.url, p.head_branch, p.mergeable, p.ci_status,
 		       p.pr_created_at, p.pr_updated_at, p.fetched_at, p.viewed_at, p.ai_processed_at
 		FROM vcs_pull_requests p
@@ -123,15 +131,17 @@ func (r *PRRepo) ListPRsForContext(ctx context.Context, contextID string) ([]Pul
 // GetPRByRepoAndNumber returns a PR by repo + PR number.
 func (r *PRRepo) GetPRByRepoAndNumber(ctx context.Context, repoID string, prNumber int) (*PullRequest, error) {
 	var pr PullRequest
+	var isDraftInt int
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, repo_id, branch_id, pr_number, title, author, state, review_status, url,
+		SELECT id, repo_id, branch_id, pr_number, title, author, state, is_draft, review_status, url,
 		       head_branch, mergeable, ci_status, pr_created_at, pr_updated_at, fetched_at, viewed_at, ai_processed_at
 		FROM vcs_pull_requests WHERE repo_id = ? AND pr_number = ?
 	`, repoID, prNumber).Scan(
 		&pr.ID, &pr.RepoID, &pr.BranchID, &pr.PRNumber, &pr.Title, &pr.Author,
-		&pr.State, &pr.ReviewStatus, &pr.URL, &pr.HeadBranch, &pr.Mergeable, &pr.CIStatus,
+		&pr.State, &isDraftInt, &pr.ReviewStatus, &pr.URL, &pr.HeadBranch, &pr.Mergeable, &pr.CIStatus,
 		&pr.PRCreatedAt, &pr.PRUpdatedAt, &pr.FetchedAt, &pr.ViewedAt, &pr.AiProcessedAt,
 	)
+	pr.IsDraft = isDraftInt == 1
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -172,13 +182,15 @@ func (r *PRRepo) scanPRs(rows *sql.Rows) ([]PullRequest, error) {
 	var result []PullRequest
 	for rows.Next() {
 		var pr PullRequest
+		var isDraftInt int
 		if err := rows.Scan(
 			&pr.ID, &pr.RepoID, &pr.BranchID, &pr.PRNumber, &pr.Title, &pr.Author,
-			&pr.State, &pr.ReviewStatus, &pr.URL, &pr.HeadBranch, &pr.Mergeable, &pr.CIStatus,
+			&pr.State, &isDraftInt, &pr.ReviewStatus, &pr.URL, &pr.HeadBranch, &pr.Mergeable, &pr.CIStatus,
 			&pr.PRCreatedAt, &pr.PRUpdatedAt, &pr.FetchedAt, &pr.ViewedAt, &pr.AiProcessedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan vcs pr: %w", err)
 		}
+		pr.IsDraft = isDraftInt == 1
 		result = append(result, pr)
 	}
 	return result, rows.Err()

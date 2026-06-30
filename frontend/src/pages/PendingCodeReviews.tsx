@@ -84,7 +84,7 @@ function ReviewCard({
                 disabled={checkoutLoading}
                 onClick={() => onCheckout(review.headBranch!, review.repoId)}
               >
-                {workspace ? "Open workspace" : "Checkout"}
+                {checkoutLoading ? <Spinner size={11} /> : (workspace ? "Open workspace" : "Checkout")}
               </button>
               {workspace && (
                 <>
@@ -446,12 +446,15 @@ export default function PendingCodeReviews() {
               Choose which local clone to use for checking out <strong>{checkoutTarget.branch}</strong>:
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "12px 0" }}>
-              {checkoutPaths.map((p) => (
+              {checkoutLoading ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", fontSize: 12, color: "var(--text-muted)" }}>
+                  <Spinner size={14} /> Checking out…
+                </div>
+              ) : checkoutPaths.map((p) => (
                 <button
                   key={p.id}
                   className="btn-secondary"
                   style={{ textAlign: "left", padding: "8px 12px", fontSize: 12 }}
-                  disabled={checkoutLoading}
                   onClick={() => void handleCheckoutWithPath(p.id)}
                 >
                   {p.path}

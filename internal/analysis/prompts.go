@@ -42,9 +42,20 @@ func eventExtractionPrompt(tmpl, contextKey, rawContent, userNextStepsHints stri
 
 // snapshotBuildPrompt builds the prompt for generating the three-section snapshot from events.
 // tmpl is loaded from the DB (ai_prompts.body for id="snapshot_build").
-func snapshotBuildPrompt(tmpl, contextKey string, events []eventForPrompt, userNextSteps nextStepsForPrompt, statusDefs, currentStatusLogEntry string) string {
+// When prevSnapshot is non-nil, its sections are injected as prior state so the AI only needs new events.
+func snapshotBuildPrompt(tmpl, contextKey string, events []eventForPrompt, userNextSteps nextStepsForPrompt, statusDefs, currentStatusLogEntry string, prevSnapshot *appstore.ContextSnapshot) string {
+	priorSnapshotSection := ""
+	if prevSnapshot != nil {
+		priorSnapshotSection = fmt.Sprintf(
+			"## Prior snapshot (already-analyzed base — update with new events below)\n%s\n\n%s\n\n%s\n",
+			prevSnapshot.SectionOperational,
+			prevSnapshot.SectionNarrative,
+			prevSnapshot.SectionEngineering,
+		)
+	}
 	return applyPlaceholders(tmpl, map[string]string{
 		"context_key":              contextKey,
+		"prior_snapshot":           priorSnapshotSection,
 		"events":                   formatEventsForPrompt(events),
 		"next_steps_short":         userNextSteps.Short,
 		"next_steps_mid":           userNextSteps.Mid,

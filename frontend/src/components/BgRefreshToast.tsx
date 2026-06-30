@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 
+const isWailsContext = () =>
+  typeof (window as unknown as Record<string, unknown>)["go"] !== "undefined";
+
 interface ProgressPayload {
   current: number;
   total: number;
@@ -22,6 +25,7 @@ export function BgRefreshToast() {
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!isWailsContext()) return;
     const offStart = EventsOn("bg-refresh:contexts:start", () => {
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
       setState({ phase: "running", current: 0, total: 0, contextKey: "" });

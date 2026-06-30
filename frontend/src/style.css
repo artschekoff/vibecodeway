@@ -5,21 +5,24 @@
 }
 
 :root {
-  --bg:         #0f0f0f;
-  --surface:    #1a1a1a;
-  --surface2:   #242424;
-  --border:     #2e2e2e;
-  --text:       #e8e8e8;
-  --text-muted: #888;
-  --accent:     #4f8ef7;
-  --accent-hover: #3a7ae8;
-  --danger:     #e05252;
+  --bg:           #0c0b27;
+  --surface:      #171639;
+  --surface2:     #201e4a;
+  --border:       rgba(255,255,255,0.08);
+  --text:         #ffffff;
+  --text-muted:   #8a88be;
+  --accent:       #e4408c;
+  --accent-hover: #cd3680;
+  --danger:       #e05252;
   --danger-hover: #c94040;
-  --success:    #4caf7d;
-  --warning:    #d4a017;
-  --radius:     8px;
-  --radius-sm:  4px;
-  --shadow:     0 2px 8px rgba(0,0,0,0.4);
+  --success:      #4caf7d;
+  --warning:      #f0a500;
+  --radius:       14px;
+  --radius-sm:    8px;
+  --shadow:       0 4px 24px rgba(0,0,0,0.6);
+  --sidebar-bg:   #090820;
+  --bg-secondary: #0f0e2e;
+  --bg-tertiary:  #18174a;
 }
 
 html, body, #root {
@@ -55,6 +58,8 @@ button:disabled {
 .btn-primary {
   background: var(--accent);
   color: #fff;
+  border-radius: 20px;
+  padding: 6px 18px;
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 
@@ -3507,13 +3512,13 @@ select {
 
 /* Hamburger menu */
 .app-menu {
-  position: fixed;
-  top: 0;
-  left: 10px;
-  z-index: 9000;
-  height: 48px;
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
+  height: 52px;
+  flex-shrink: 0;
+  z-index: 9000;
 }
 
 .app-menu-btn {
@@ -3521,18 +3526,18 @@ select {
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  width: 32px;
-  height: 32px;
-  padding: 6px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .app-menu-btn:hover {
-  background: var(--surface2);
+  background: var(--surface);
 }
 
 .app-menu-icon {
@@ -3545,13 +3550,13 @@ select {
 
 .app-menu-dropdown {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 200px;
+  top: 0;
+  left: calc(100% + 4px);
+  min-width: 220px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   padding: 6px 0;
   animation: expand-fade-in 0.18s ease;
 }
@@ -4071,6 +4076,11 @@ select {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.pr-status-badge--draft {
+  background: rgba(110, 118, 129, 0.15);
+  color: #8b949e;
 }
 
 .pr-status-badge--open {
@@ -5177,19 +5187,16 @@ select {
   color: var(--text, #111827);
 }
 
-/* ─── Tab Bar ─────────────────────────────────────────────────────────────── */
+/* ─── Tab Bar (vertical sidebar) ──────────────────────────────────────────── */
 
 .tab-bar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 2px;
-  padding: 0 8px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  min-height: 36px;
-  overflow-x: auto;
+  padding: 8px 6px;
+  flex: 1;
+  overflow-y: auto;
   scrollbar-width: none;
-  flex-shrink: 0;
 }
 
 .tab-bar::-webkit-scrollbar {
@@ -5198,90 +5205,87 @@ select {
 
 .tab-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 0 10px 0 12px;
-  height: 28px;
-  border-radius: 6px 6px 0 0;
-  font-size: 12px;
+  padding: 8px 4px 6px;
+  height: 64px;
+  border-radius: 10px;
+  font-size: 10px;
   color: var(--text-muted);
   cursor: pointer;
-  white-space: nowrap;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-top-width: 2px;
-  transition: background 0.1s, color 0.1s;
   user-select: none;
+  border: none;
+  position: relative;
+  transition: background 0.15s, color 0.15s;
 }
 
 .tab-item:hover {
-  background: var(--bg-tertiary);
+  background: var(--surface);
   color: var(--text);
 }
 
 .tab-item--active {
-  background: var(--bg);
+  background: var(--surface2);
   color: var(--text);
-  border-color: var(--border);
-  border-top-color: var(--accent);
 }
 
-.tab-item--colored {
-  border-top-color: var(--tab-org-color, var(--accent));
+.tab-item__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  transition: background 0.15s;
 }
 
-.tab-item--colored.tab-item--active {
-  border-top-color: var(--tab-org-color, var(--accent));
+.tab-item--active .tab-item__icon {
+  background: rgba(255,255,255,0.1);
 }
 
-.tab-item--org {
-  opacity: 0.85;
+.tab-item__org-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
 }
 
-.tab-item--org.tab-item--active {
-  opacity: 1;
-}
-
-.tab-item--org.tab-item--colored {
-  background: color-mix(in srgb, var(--tab-org-color) 28%, var(--surface));
-  border-top-color: var(--tab-org-color);
-  opacity: 1;
-}
-
-.tab-item--org.tab-item--colored:hover {
-  background: color-mix(in srgb, var(--tab-org-color) 36%, var(--surface2));
-}
-
-.tab-item--org.tab-item--colored.tab-item--active {
-  background: color-mix(in srgb, var(--tab-org-color) 32%, var(--bg));
-  border-top-color: var(--tab-org-color);
+.tab-item__title {
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.2;
+  font-size: 10px;
 }
 
 .tab-item__title--org {
   font-weight: 600;
 }
 
-.tab-item__title {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tab-item__star {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
 .tab-item__close-zone {
-  display: flex;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 14px;
   height: 14px;
-  align-self: center;
-  flex-shrink: 0;
-  margin-left: auto;
+}
+
+.tab-item:hover .tab-item__close-zone {
+  display: flex;
 }
 
 .tab-item__action {
@@ -5290,31 +5294,24 @@ select {
   justify-content: center;
   width: 14px;
   height: 14px;
-  border-radius: 2px;
+  border-radius: 3px;
   color: var(--text-muted);
-  background: transparent;
+  background: var(--surface2);
   border: none;
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.1s, background 0.1s;
-  flex-shrink: 0;
-}
-
-.tab-item__close-zone:hover .tab-item__action {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.tab-item__close-zone:focus-within .tab-item__action {
-  opacity: 1;
-  pointer-events: auto;
+  transition: background 0.1s, color 0.1s;
+  padding: 0;
 }
 
 .tab-item__action:hover {
-  background: var(--bg-tertiary);
+  background: var(--border);
   color: var(--text);
 }
+
+.tab-item--org { opacity: 0.9; }
+.tab-item--org.tab-item--active { opacity: 1; }
+.tab-item--colored { /* color via inline style on org dot */ }
+.tab-item__star { display: none; }
 
 /* ─── Org menu section in HamburgerMenu ───────────────────────────────────── */
 
@@ -5377,17 +5374,26 @@ select {
 
 .app-shell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
   overflow: hidden;
 }
 
-.app-topbar {
-  display: flex;
-  align-items: center;
-  height: 40px;
+.app-sidebar {
+  width: 72px;
   flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding-top: 52px;
+  overflow: visible;
   position: relative;
+  z-index: 100;
+}
+
+.app-topbar {
+  display: none;
 }
 
 .app-content {

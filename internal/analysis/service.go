@@ -74,7 +74,8 @@ jira | slack | github | chat | user
 
 ## Context key: {{context_key}}
 
-## Full event log (chronological)
+{{prior_snapshot}}
+## New events since last analysis (chronological)
 {{events}}
 
 ## User-provided next-step hints
@@ -528,12 +529,14 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 	}
 
 	// 1. Extract new events from the delta content.
+	var newEvents []appstore.Event
 	if rawContent != "" {
-		newEvents, err := s.extractEvents(ctx, ctxRow.Key, rawContent, userHints, snapshot)
+		extracted, err := s.extractEvents(ctx, ctxRow.Key, rawContent, userHints, snapshot)
 		if err != nil {
 			s.logger.Warn("analysis: event extraction failed", zap.String("contextID", contextID), zap.Error(err))
 			// Continue — we can still rebuild snapshot from existing events.
 		} else {
+			newEvents = extracted
 			// Tag each new event with contextID and the latest session.
 			var sessionIDPtr *string
 			if latestSessionID != "" {
@@ -553,6 +556,12 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 	allEvents, err := s.store.ListEvents(ctx, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("list events: %w", err)
+	}
+	// On re-analysis, only send new events + prior snapshot — saves tokens vs. sending full history.
+	// ponytail: falls back to allEvents on first analysis (no prior snapshot).
+	eventsForBuild := allEvents
+	if snapshot != nil && len(newEvents) > 0 {
+		eventsForBuild = newEvents
 	}
 
 	// Load workflow statuses for dynamic status definitions
@@ -576,7 +585,7 @@ func (s *Service) AnalyzeContext(ctx context.Context, contextID string) (*appsto
 		currentStatusLogEntry = fmt.Sprintf("Status: %s — Reason: %s", latestLog.StatusSlug, latestLog.Comment)
 	}
 
-	newSnapshot, err := s.buildSnapshot(ctx, ctxRow.Key, allEvents, userHints, statusDefs, currentStatusLogEntry)
+	newSnapshot, err := s.buildSnapshot(ctx, ctxRow.Key, eventsForBuild, userHints, statusDefs, currentStatusLogEntry, snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("build snapshot: %w", err)
 	}
@@ -1274,7 +1283,7 @@ func (s *Service) extractEvents(ctx context.Context, contextKey, rawContent stri
 }
 
 // buildSnapshot calls the AI to build the three-section snapshot from events.
-func (s *Service) buildSnapshot(ctx context.Context, contextKey string, events []appstore.Event, hints nextStepsForPrompt, statusDefs, currentStatusLogEntry string) (*appstore.ContextSnapshot, error) {
+func (s *Service) buildSnapshot(ctx context.Context, contextKey string, events []appstore.Event, hints nextStepsForPrompt, statusDefs, currentStatusLogEntry string, prevSnapshot *appstore.ContextSnapshot) (*appstore.ContextSnapshot, error) {
 	prompts := make([]eventForPrompt, 0, len(events))
 	for _, e := range events {
 		prompts = append(prompts, eventForPrompt{
@@ -1288,7 +1297,7 @@ func (s *Service) buildSnapshot(ctx context.Context, contextKey string, events [
 	}
 
 	tmpl := s.loadPrompt(ctx, "snapshot_build", defaultSnapshotBuildPrompt)
-	prompt := snapshotBuildPrompt(tmpl, contextKey, prompts, hints, statusDefs, currentStatusLogEntry)
+	prompt := snapshotBuildPrompt(tmpl, contextKey, prompts, hints, statusDefs, currentStatusLogEntry, prevSnapshot)
 	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{
 		{Role: "user", Content: prompt},
 	})

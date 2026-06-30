@@ -95,7 +95,7 @@ import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 
-function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string }) {
+function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus, isDraft }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string; isDraft?: boolean }) {
   const isMerged = status === "merged";
   const isClosed = status === "closed";
 
@@ -111,6 +111,7 @@ function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: 
 
   return (
     <div className="pr-badges">
+      {isDraft && <span className="pr-status-badge pr-status-badge--draft">Draft</span>}
       <span className={`pr-status-badge pr-status-badge--${status}`}>{status}</span>
       {reviewLabel && (
         <span className={`pr-status-badge pr-review-badge${reviewStatus === "changes_requested" ? " pr-status--changes-requested" : reviewStatus === "approved" ? " pr-status--approved" : ""}`}>
@@ -248,7 +249,7 @@ function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed, checkout
             <span className="pr-branch-chip"><GitBranch size={11} /> {pr.headBranch}</span>
           )
         )}
-        <PRStatusBadge status={pr.state} reviewStatus={pr.reviewStatus} mergeable={pr.mergeable} ciStatus={pr.ciStatus} />
+        <PRStatusBadge status={pr.state} reviewStatus={pr.reviewStatus} mergeable={pr.mergeable} ciStatus={pr.ciStatus} isDraft={pr.isDraft} />
       </div>
 
       {expanded && (
@@ -309,7 +310,7 @@ function WorkspaceMenu({
         <span className={`workspace-status-badge workspace-status-badge--${workspace.status}`}>
           {workspace.status === "should_delete" ? "done" : "active"}
         </span>
-        <ChevronDown size={10} />
+        {checkoutLoading ? <Spinner size={10} /> : <ChevronDown size={10} />}
       </button>
       {open && (
         <div className="workspace-menu-dropdown">
@@ -2144,12 +2145,15 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               Choose which local clone to use for checking out <strong>{checkoutTarget.branch}</strong>:
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "12px 0" }}>
-              {checkoutPaths.map((p) => (
+              {checkoutLoading ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", fontSize: 12, color: "var(--text-muted)" }}>
+                  <Spinner size={14} /> Checking out…
+                </div>
+              ) : checkoutPaths.map((p) => (
                 <button
                   key={p.id}
                   className="btn-secondary"
                   style={{ textAlign: "left", padding: "8px 12px", fontSize: 12 }}
-                  disabled={checkoutLoading}
                   onClick={() => void handleCheckoutWithPath(p.id)}
                 >
                   {p.path}

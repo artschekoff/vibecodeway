@@ -147,10 +147,11 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
     try {
       const ctx = contexts.find((c) => c.id === selectedId);
       await attachTo(selectedId, ctx?.key ?? selectedId);
-      // Dismiss after onAttach has queued setPicker(false) — wait one animation
-      // frame so React has unmounted the modal before [NSApp hide:nil] fires,
-      // preventing the macOS hide animation from capturing a half-rendered modal.
-      requestAnimationFrame(() => DismissPicker().catch(() => {}));
+      // Dismiss the native macOS picker layer first, then let onAttach (called
+      // inside attachTo) trigger the React unmount via setPicker(false).
+      // This order prevents the compositor from capturing a half-rendered frame
+      // with the loading button still painted over the newly-visible page below.
+      await DismissPicker().catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -164,7 +165,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
       setNewCtxError("Context name is required.");
       return;
     }
-    const resolvedOrgId = orgId ?? newCtxOrgId;
+    const resolvedOrgId = newCtxOrgId || orgId;
     if (!resolvedOrgId) {
       setNewCtxError("Select an organization.");
       return;
@@ -333,10 +334,10 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
         {/* "+ New Context" form */}
         {showNewCtx ? (
           <div className="quick-attach-new-ctx">
-            {!orgId && orgs.length > 0 && (
+            {orgs.length > 1 && (
               <select
                 className="field-input quick-attach-new-ctx-org"
-                value={newCtxOrgId}
+                value={newCtxOrgId || orgId || ""}
                 onChange={(e) => setNewCtxOrgId(e.target.value)}
                 disabled={creatingCtx}
               >
@@ -409,7 +410,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
                 <path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             )}
-            {attaching ? `${attachLabel}ing…` : attachLabel}
+            {attaching ? "Adding…" : attachLabel}
           </button>
         </div>
       </div>

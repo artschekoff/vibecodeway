@@ -23,7 +23,7 @@ func TestListWorkflowStatuses_ReturnsSeedDefaults(t *testing.T) {
 func TestListWorkflowStatuses_SystemFirstThenCustom(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	_, err := s.CreateWorkflowStatus(ctx, "custom_one", "Custom One", "")
+	_, err := s.CreateWorkflowStatus(ctx, "custom_one", "Custom One", "", "")
 	require.NoError(t, err)
 
 	statuses, err := s.ListWorkflowStatuses(ctx)
@@ -38,25 +38,25 @@ func TestListWorkflowStatuses_SystemFirstThenCustom(t *testing.T) {
 
 func TestCreateWorkflowStatus_RejectsInvalidSlug(t *testing.T) {
 	s := openTestStore(t)
-	_, err := s.CreateWorkflowStatus(context.Background(), "has space", "Has Space", "")
+	_, err := s.CreateWorkflowStatus(context.Background(), "has space", "Has Space", "", "")
 	assert.Error(t, err)
 
-	_, err = s.CreateWorkflowStatus(context.Background(), "HasUpper", "Has Upper", "")
+	_, err = s.CreateWorkflowStatus(context.Background(), "HasUpper", "Has Upper", "", "")
 	assert.Error(t, err)
 
-	_, err = s.CreateWorkflowStatus(context.Background(), "_leading", "Leading underscore", "")
+	_, err = s.CreateWorkflowStatus(context.Background(), "_leading", "Leading underscore", "", "")
 	assert.Error(t, err)
 }
 
 func TestCreateWorkflowStatus_RejectsDuplicateSlug(t *testing.T) {
 	s := openTestStore(t)
-	_, err := s.CreateWorkflowStatus(context.Background(), "not_started", "Duplicate", "")
+	_, err := s.CreateWorkflowStatus(context.Background(), "not_started", "Duplicate", "", "")
 	assert.Error(t, err)
 }
 
 func TestCreateWorkflowStatus_AcceptsValidSlug(t *testing.T) {
 	s := openTestStore(t)
-	st, err := s.CreateWorkflowStatus(context.Background(), "custom_blocked", "Blocked", "")
+	st, err := s.CreateWorkflowStatus(context.Background(), "custom_blocked", "Blocked", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "custom_blocked", st.Slug)
 	assert.Equal(t, "Blocked", st.Label)
@@ -67,10 +67,10 @@ func TestCreateWorkflowStatus_AcceptsValidSlug(t *testing.T) {
 func TestUpdateWorkflowStatus_ChangesLabel(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	st, err := s.CreateWorkflowStatus(ctx, "paused", "Paused", "")
+	st, err := s.CreateWorkflowStatus(ctx, "paused", "Paused", "", "")
 	require.NoError(t, err)
 
-	updated, err := s.UpdateWorkflowStatus(ctx, st.ID, "On Hold", "")
+	updated, err := s.UpdateWorkflowStatus(ctx, st.ID, "On Hold", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "On Hold", updated.Label)
 	assert.Equal(t, "paused", updated.Slug) // slug unchanged
@@ -78,7 +78,7 @@ func TestUpdateWorkflowStatus_ChangesLabel(t *testing.T) {
 
 func TestUpdateWorkflowStatus_NotFound(t *testing.T) {
 	s := openTestStore(t)
-	_, err := s.UpdateWorkflowStatus(context.Background(), "non-existent-id", "Label", "")
+	_, err := s.UpdateWorkflowStatus(context.Background(), "non-existent-id", "Label", "", "")
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
@@ -101,7 +101,7 @@ func TestDeleteWorkflowStatus_RejectsSystemStatus(t *testing.T) {
 func TestDeleteWorkflowStatus_RemovesCustomStatus(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	st, err := s.CreateWorkflowStatus(ctx, "custom_done", "Custom Done", "")
+	st, err := s.CreateWorkflowStatus(ctx, "custom_done", "Custom Done", "", "")
 	require.NoError(t, err)
 
 	require.NoError(t, s.DeleteWorkflowStatus(ctx, st.ID))
@@ -117,7 +117,7 @@ func TestDeleteWorkflowStatus_ResetsSnapshotStatus(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	st, err := s.CreateWorkflowStatus(ctx, "custom_done", "Custom Done", "")
+	st, err := s.CreateWorkflowStatus(ctx, "custom_done", "Custom Done", "", "")
 	require.NoError(t, err)
 
 	org, err := s.CreateOrganization(ctx, "test-org")

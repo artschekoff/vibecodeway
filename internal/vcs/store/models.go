@@ -56,6 +56,7 @@ type PullRequest struct {
 	Title         string      `json:"title"`
 	Author        string      `json:"author"`
 	State         string      `json:"state"`
+	IsDraft       bool        `json:"isDraft"`
 	ReviewStatus  string      `json:"reviewStatus"`
 	URL           string      `json:"url"`
 	HeadBranch    string      `json:"headBranch"`

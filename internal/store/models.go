@@ -36,6 +36,7 @@ type WorkflowStatus struct {
 	Slug      string `json:"slug"`
 	Label     string `json:"label"`
 	AIHint    string `json:"aiHint"`
+	Color     string `json:"color"`
 	IsSystem  bool   `json:"isSystem"`
 	CreatedAt string `json:"createdAt"`
 }
