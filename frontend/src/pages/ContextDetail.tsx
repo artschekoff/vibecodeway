@@ -95,6 +95,111 @@ import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 
+// ── Task list helpers ────────────────────────────────────────────────────────
+
+interface TaskLine {
+  raw: string;
+  lineIndex: number;
+  isTask: boolean;
+  checked: boolean;
+  text: string;
+}
+
+function parseTaskLines(body: string): TaskLine[] {
+  return body.split("\n").map((raw, lineIndex) => {
+    const match = raw.match(/^(\s*)-\s+\[([ x])\]\s+(.*)/i);
+    if (match) {
+      return { raw, lineIndex, isTask: true, checked: match[2].toLowerCase() === "x", text: match[3] };
+    }
+    return { raw, lineIndex, isTask: false, checked: false, text: raw };
+  });
+}
+
+function toggleTaskLine(body: string, lineIndex: number): string {
+  const lines = body.split("\n");
+  const line = lines[lineIndex] ?? "";
+  if (/^(\s*)-\s+\[ \]/.test(line)) {
+    lines[lineIndex] = line.replace("- [ ]", "- [x]");
+  } else if (/^(\s*)-\s+\[x\]/i.test(line)) {
+    lines[lineIndex] = line.replace(/- \[x\]/i, "- [ ]");
+  }
+  return lines.join("\n");
+}
+
+// Matches inline code like `path/to/file.go:42` — renders as copy-on-click
+const FILE_REF_RE = /`([^`]+\.[a-z]+(?::\d+)?)`/g;
+
+function renderTextWithFileRefs(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  FILE_REF_RE.lastIndex = 0;
+  while ((match = FILE_REF_RE.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const ref = match[1];
+    parts.push(
+      <span
+        key={match.index}
+        className="task-file-ref"
+        title={`Click to copy: ${ref}`}
+        onClick={() => navigator.clipboard.writeText(ref).catch(() => {})}
+      >
+        {ref}
+      </span>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function TaskListBody({
+  pa,
+  onSave,
+}: {
+  pa: { id: string; body: string };
+  onSave: (id: string, newBody: string) => Promise<void>;
+}) {
+  const lines = parseTaskLines(pa.body);
+  const hasAnyTask = lines.some((l) => l.isTask);
+
+  if (!hasAnyTask) {
+    // Fallback: no task lines — render as plain preformatted text
+    return <pre className="assignment-body-plain">{pa.body}</pre>;
+  }
+
+  const handleToggle = async (lineIndex: number) => {
+    const newBody = toggleTaskLine(pa.body, lineIndex);
+    await onSave(pa.id, newBody);
+  };
+
+  return (
+    <div className="task-list">
+      {lines.map((line) =>
+        line.isTask ? (
+          <label key={line.lineIndex} className="task-list-item">
+            <input
+              type="checkbox"
+              checked={line.checked}
+              onChange={() => void handleToggle(line.lineIndex)}
+              className="task-list-checkbox"
+            />
+            <span className={`task-list-text${line.checked ? " task-list-text--done" : ""}`}>
+              {renderTextWithFileRefs(line.text)}
+            </span>
+          </label>
+        ) : line.text.trim() ? (
+          <div key={line.lineIndex} className="task-list-prose">
+            {line.text}
+          </div>
+        ) : (
+          <div key={line.lineIndex} className="task-list-spacer" />
+        )
+      )}
+    </div>
+  );
+}
+
 function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus }: { status: string; reviewStatus: string; mergeable?: string; ciStatus?: string }) {
   const isMerged = status === "merged";
   const isClosed = status === "closed";
@@ -1449,13 +1554,21 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                     </pre>
                                   </div>
                                 ) : (
-                                  <pre
-                                    style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, color: "var(--text-muted)", lineHeight: 1.5, cursor: "text" }}
+                                  <div
                                     title="Click to edit"
                                     onClick={() => { setEditingPersonId(pa.id); setEditPersonBody(pa.body); }}
+                                    style={{ cursor: "text" }}
                                   >
-                                    {pa.body}
-                                  </pre>
+                                    <TaskListBody
+                                      pa={pa}
+                                      onSave={async (id, newBody) => {
+                                        await SavePersonAssignment(id, newBody);
+                                        setPersonAssignments((prev) =>
+                                          prev.map((p) => (p.id === id ? { ...p, body: newBody } : p))
+                                        );
+                                      }}
+                                    />
+                                  </div>
                                 )}
 
                                 {/* Reasoning chain */}
