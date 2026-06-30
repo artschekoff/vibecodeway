@@ -1247,6 +1247,50 @@ func (s *Service) ListAssignmentVersions(ctx context.Context, personAssignmentID
 	return s.store.ListAssignmentVersions(ctx, personAssignmentID)
 }
 
+// InterpretContextUpdate parses userText using AI and returns a suggested action
+// (add_event or set_status) for the given context.
+func (s *Service) InterpretContextUpdate(ctx context.Context, contextID, userText string) (*appstore.ContextUpdateAction, error) {
+	ctxRow, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("get context: %w", err)
+	}
+
+	statuses, err := s.store.ListWorkflowStatuses(ctx)
+	if err != nil {
+		// non-fatal: proceed without status list
+		s.logger.Warn("context updater: list workflow statuses failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		statuses = nil
+	}
+
+	slugLines := make([]string, 0, len(statuses))
+	for _, st := range statuses {
+		slugLines = append(slugLines, st.Slug+" ("+st.Label+")")
+	}
+
+	currentStatus := ctxRow.SnapshotStatus
+	if currentStatus == "" {
+		currentStatus = "not_started"
+	}
+
+	tmpl := s.loadPrompt(ctx, "context_updater", defaultContextUpdaterPrompt)
+	prompt := contextUpdaterPrompt(tmpl, ctxRow.Key, currentStatus, userText, slugLines)
+
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return nil, fmt.Errorf("ai completion: %w", err)
+	}
+
+	var action appstore.ContextUpdateAction
+	if err := json.Unmarshal([]byte(resp.Content), &action); err != nil {
+		return nil, fmt.Errorf("parse ai response (raw: %.200s): %w", resp.Content, err)
+	}
+	if action.Action != "add_event" && action.Action != "set_status" {
+		return nil, fmt.Errorf("unknown action %q from AI", action.Action)
+	}
+	return &action, nil
+}
+
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
 // the fallback string on error so analysis can continue even if the DB row is missing.
 func (s *Service) loadPrompt(ctx context.Context, id, fallback string) string {

@@ -7,6 +7,8 @@ import (
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 )
 
+const defaultContextUpdaterPrompt = "" // loaded from migration 069 — seed value is in DB
+
 // applyPlaceholders replaces all {{key}} tokens in tmpl with the values from vars.
 func applyPlaceholders(tmpl string, vars map[string]string) string {
 	for k, v := range vars {
@@ -89,4 +91,21 @@ func formatEventsForPrompt(events []eventForPrompt) string {
 	}
 	out += "]"
 	return out
+}
+
+// contextUpdaterPrompt builds the prompt for interpreting a user's free-form Quick Update text.
+func contextUpdaterPrompt(tmpl, contextKey, currentStatus, userText string, workflowStatuses []string) string {
+	statusList := ""
+	for _, s := range workflowStatuses {
+		statusList += "- " + s + "\n"
+	}
+	if statusList == "" {
+		statusList = "(none configured)"
+	}
+	return applyPlaceholders(tmpl, map[string]string{
+		"context_key":       contextKey,
+		"current_status":    currentStatus,
+		"workflow_statuses": statusList,
+		"user_text":         userText,
+	})
 }
