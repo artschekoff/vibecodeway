@@ -940,7 +940,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         const evts = await ListEvents(id) as ContextEvent[];
         if (evts) setEvents(evts);
       } else if (quickUpdateAction.action === "set_status") {
-        const updated = await SetContextWorkflowStatus(id, quickUpdateAction.statusSlug, quickUpdateAction.statusComment) as ContextSnapshot;
+        const updated = await SetContextWorkflowStatus(id, quickUpdateAction.statusSlug ?? "", quickUpdateAction.statusComment ?? "") as ContextSnapshot;
         if (updated) setSnapshot(updated);
       }
       setQuickUpdateOpen(false);
