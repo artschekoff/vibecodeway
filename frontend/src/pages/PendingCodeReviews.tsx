@@ -142,6 +142,7 @@ export default function PendingCodeReviews() {
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
   const {
     checkout: handleCheckout,
     checkoutWithPath: handleCheckoutWithPath,
@@ -272,6 +273,16 @@ export default function PendingCodeReviews() {
 
   if (loading) return <div className="loading"><Spinner /> Loading…</div>;
 
+  const matchesFilter = (review: ReviewRequest): boolean => {
+    if (!filterQuery.trim()) return true;
+    const q = filterQuery.trim().toLowerCase();
+    return (
+      review.prNumber.toString().includes(q) ||
+      (review.prTitle ?? "").toLowerCase().includes(q) ||
+      (review.prAuthor ?? "").toLowerCase().includes(q)
+    );
+  };
+
   const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt).length, 0);
 
   return (
@@ -286,6 +297,13 @@ export default function PendingCodeReviews() {
             )}
           </h1>
         </div>
+        <input
+          className="passphrase-input"
+          style={{ width: 220, fontSize: 12, padding: "3px 10px" }}
+          placeholder="Filter by #, title, or author…"
+          value={filterQuery}
+          onChange={(e) => setFilterQuery(e.target.value)}
+        />
         <button
           className="btn-secondary"
           onClick={() => void handleRefresh()}
@@ -387,8 +405,8 @@ export default function PendingCodeReviews() {
         ) : (
           repoGroups.map(({ repo, reviews }) => {
             const url = repoUrl(repo);
-            const pending = reviews.filter((r) => !r.reviewedAt);
-            const waiting = reviews.filter((r) => !!r.reviewedAt);
+            const pending = reviews.filter((r) => !r.reviewedAt && matchesFilter(r));
+            const waiting = reviews.filter((r) => !!r.reviewedAt && matchesFilter(r));
             if (pending.length === 0 && waiting.length === 0) return null;
             return (
               <section key={repo.id} className="detail-section review-repo-section">
