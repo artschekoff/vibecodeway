@@ -17,7 +17,7 @@ description: >-
 Run:
 
 ```bash
-./cli context-list
+context-consolidator-cli context-list
 ```
 
 ### Step 2: Present contexts and ask which to load
@@ -45,7 +45,7 @@ If only one context exists, skip asking and proceed with it.
 Use the context UUID from step 1 output:
 
 ```bash
-./cli text-list --context-id <uuid>
+context-consolidator-cli text-list --context-id <uuid>
 ```
 
 ### Step 4: Present the data

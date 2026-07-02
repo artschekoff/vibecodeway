@@ -17,7 +17,7 @@ description: >-
 Run:
 
 ```bash
-./cli context-list
+context-consolidator-cli context-list
 ```
 
 ### Step 2: Present contexts and ask which to load
@@ -46,7 +46,7 @@ If only one context exists, still confirm with the user before loading.
 Run with the chosen context's key:
 
 ```bash
-./cli context-get --context-key <selected_key>
+context-consolidator-cli context-get --context-key <selected_key>
 ```
 
 ### Step 4: Present the context data
@@ -57,7 +57,7 @@ Summarize the loaded context for the user:
 2. **Issue list** — for each issue show key, summary, status, and comment count.
 3. **Offer next steps** — ask if the user wants to:
    - Analyze/summarize the context
-   - Search for new issues to add (`./cli jira-search`)
+   - Search for new issues to add (`context-consolidator-cli jira-search`)
    - Work with a specific issue
 
 Keep the summary concise. The full data is now in your context window — do not
