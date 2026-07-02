@@ -271,8 +271,6 @@ export default function PendingCodeReviews() {
     }
   };
 
-  if (loading) return <div className="loading"><Spinner /> Loading…</div>;
-
   const matchesFilter = (review: ReviewRequest): boolean => {
     if (!filterQuery.trim()) return true;
     const q = filterQuery.trim().toLowerCase();
@@ -283,7 +281,15 @@ export default function PendingCodeReviews() {
     );
   };
 
-  const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt).length, 0);
+  if (loading) return <div className="loading"><Spinner /> Loading…</div>;
+
+  const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt && matchesFilter(r)).length, 0);
+
+  const hasVisibleGroups = repoGroups.some(({ reviews }) => {
+    const pending = reviews.filter((r) => !r.reviewedAt && matchesFilter(r));
+    const waiting = reviews.filter((r) => !!r.reviewedAt && matchesFilter(r));
+    return pending.length > 0 || waiting.length > 0;
+  });
 
   return (
     <div className="page">
@@ -301,6 +307,7 @@ export default function PendingCodeReviews() {
           className="passphrase-input"
           style={{ width: 220, fontSize: 12, padding: "3px 10px" }}
           placeholder="Filter by #, title, or author…"
+          aria-label="Filter reviews by number, title, or author"
           value={filterQuery}
           onChange={(e) => setFilterQuery(e.target.value)}
         />
@@ -402,6 +409,8 @@ export default function PendingCodeReviews() {
               ? "Add repositories above, then click Refresh to load pending reviews."
               : "No pending code reviews. Click Refresh to check."}
           </div>
+        ) : !hasVisibleGroups ? (
+          <div className="detail-empty" style={{ marginTop: 32 }}>No reviews match your filter.</div>
         ) : (
           repoGroups.map(({ repo, reviews }) => {
             const url = repoUrl(repo);
