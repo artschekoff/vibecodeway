@@ -3,6 +3,7 @@
 import {store} from '../models';
 import {vcsstore} from '../models';
 import {slackstore} from '../models';
+import {agent} from '../models';
 import {main} from '../models';
 import {service} from '../models';
 import {vcs} from '../models';
@@ -26,6 +27,8 @@ export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.
 export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<vcsstore.ContextVCSBranch>;
 
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
+
+export function AskAI(arg1:string,arg2:string):Promise<agent.Answer>;
 
 export function AssignAuthorBatch(arg1:Array<store.AuthorAssignment>):Promise<void>;
 
@@ -286,6 +289,8 @@ export function SaveAssignmentOutput(arg1:string,arg2:string):Promise<store.Pers
 export function SavePersonAssignment(arg1:string,arg2:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
+
+export function SearchContextItems(arg1:string,arg2:string):Promise<store.ContextItemMatches>;
 
 export function SearchJQL(arg1:string):Promise<Array<jira.SearchResult>>;
 

@@ -13,6 +13,14 @@ func newJiraSearchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-search",
 		Short: "Run context's saved JQL and return new vs existing issues",
+		Long: `Run the context's saved JQL query against Jira and return a diff of new vs existing
+issues. Call this before jira-add to see what would be imported.
+
+Provide either --context-id or --context-key.
+
+Output: JSON {new: [...], existing: [...]} where each item has key, summary, status.`,
+		Example: `  context-consolidator-cli jira-search --context-key sprint-42
+  context-consolidator-cli jira-search --context-id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			env, err := openServiceEnv()
@@ -42,6 +50,12 @@ func newJiraAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-add",
 		Short: "Add Jira issues to a context by key",
+		Long: `Add one or more Jira issues to a context by their Jira keys, then sync comments.
+
+Required: --context-id, --jira-keys (comma-separated, e.g. "JH-1,JH-5")
+
+Output: JSON {"added": N, "newComments": N}.`,
+		Example: `  context-consolidator-cli jira-add --context-id <uuid> --jira-keys JH-1,JH-5,JH-12`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if contextID == "" {
 				return fmt.Errorf("--context-id is required")
@@ -80,6 +94,12 @@ func newJiraSyncCommentsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-sync-comments",
 		Short: "Sync all comments for all issues in a context",
+		Long: `Fetch new comments from Jira for all issues already stored in a context.
+
+Required: --context-id
+
+Output: JSON {"newComments": N}.`,
+		Example: `  context-consolidator-cli jira-sync-comments --context-id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if contextID == "" {
 				return fmt.Errorf("--context-id is required")
@@ -108,6 +128,13 @@ func newJiraSearchJQLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-search-jql",
 		Short: "Run an arbitrary JQL query",
+		Long: `Run an arbitrary JQL query against Jira and return matching issues.
+Does not modify any context data.
+
+Required: --jql
+
+Output: JSON array of Jira issue objects (key, summary, status, assignee, etc.).`,
+		Example: `  context-consolidator-cli jira-search-jql --jql "project = JH AND status = 'In Progress'"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if jql == "" {
 				return fmt.Errorf("--jql is required")
@@ -136,6 +163,12 @@ func newJiraRefreshCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-refresh",
 		Short: "Refresh all items in a context from Jira and Slack",
+		Long: `Re-fetch all Jira issues and Slack data for a context from their upstream sources.
+
+Required: --context-id
+
+Output: JSON refresh result with updated/new counts per source.`,
+		Example: `  context-consolidator-cli jira-refresh --context-id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if contextID == "" {
 				return fmt.Errorf("--context-id is required")
@@ -164,6 +197,13 @@ func newJiraDeleteIssueCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-delete-issue",
 		Short: "Remove a Jira issue from a context",
+		Long: `Remove a Jira issue and its comments from local storage. The issue is not modified
+in Jira. Use context-get to find the internal UUID for a given Jira key.
+
+Required: --id (internal UUID, not the Jira key like JH-1)
+
+Output: JSON {"deleted": "<uuid>"}.`,
+		Example: `  context-consolidator-cli jira-delete-issue --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -191,6 +231,12 @@ func newJiraDeleteCommentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-delete-comment",
 		Short: "Remove a Jira comment",
+		Long: `Remove a Jira comment from local storage. The comment is not modified in Jira.
+
+Required: --id (internal UUID)
+
+Output: JSON {"deleted": "<uuid>"}.`,
+		Example: `  context-consolidator-cli jira-delete-comment --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -218,6 +264,12 @@ func newJiraToggleIssueCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-toggle-issue",
 		Short: "Toggle is_active for a Jira issue",
+		Long: `Toggle is_active for a Jira issue. Inactive issues are excluded from context loads.
+
+Required: --id
+
+Output: JSON issue object with updated isActive.`,
+		Example: `  context-consolidator-cli jira-toggle-issue --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -246,6 +298,12 @@ func newJiraToggleCommentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jira-toggle-comment",
 		Short: "Toggle is_active for a Jira comment",
+		Long: `Toggle is_active for a Jira comment. Inactive comments are excluded from context loads.
+
+Required: --id
+
+Output: JSON comment object with updated isActive.`,
+		Example: `  context-consolidator-cli jira-toggle-comment --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -273,6 +331,11 @@ func newReloadAllCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "reload-all",
 		Short: "Re-fetch data for every active context from Jira and Slack",
+		Long: `Re-fetch data for every active context from Jira and Slack. Runs a refresh for
+each context sequentially. Useful for scheduled background sync.
+
+Output: JSON array of per-context refresh results.`,
+		Example: `  context-consolidator-cli reload-all`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			env, err := openServiceEnv()

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/artschekoff/context-consolidator/internal/agent"
 	"github.com/artschekoff/context-consolidator/internal/analysis"
 	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
 	"github.com/artschekoff/context-consolidator/internal/extract"
@@ -87,6 +88,7 @@ type App struct {
 	ctx           context.Context
 	svc           *jiraservice.ContextService
 	analysisSvc   *analysis.Service
+	agent         *agent.Agent
 	openAI        *openaiclient.Client
 	db            *appstore.Store
 	logger        *zap.Logger
@@ -186,6 +188,7 @@ func (a *App) startup(ctx context.Context) {
 	openAI := openaiclient.NewClient(s, logger)
 	a.openAI = openAI
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
+	a.agent = agent.New(openAI, s, a.svc, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)
 	{
@@ -283,10 +286,25 @@ func (a *App) ListAllContexts() ([]appstore.Context, error) {
 	return a.cliRunner.ListContexts(a.ctx, true)
 }
 
-// SearchContextIDs returns IDs of contexts matching the query across key, Jira summaries,
-// Slack channel names, VCS branches, text file names, and uploaded file names.
+// SearchContextIDs returns IDs of contexts matching the query across all indexed
+// text: keys, Jira summaries/descriptions/comments, Slack channels & thread
+// content, VCS branches/repos, text names & bodies, and uploaded file text.
 func (a *App) SearchContextIDs(query string) ([]string, error) {
 	return a.db.SearchContextIDs(a.ctx, query)
+}
+
+// SearchContextItems returns the elements inside a single context whose indexed
+// text matches the query, grouped by element type. Powers the in-context filter.
+func (a *App) SearchContextItems(contextID, query string) (*appstore.ContextItemMatches, error) {
+	return a.db.SearchContextItems(a.ctx, contextID, query)
+}
+
+// AskAI answers a natural-language question by letting an LLM agent navigate the
+// stored contexts through read-only tools (cross-context search, drill-down,
+// full-text read, and relation following). Returns the answer plus the tool trace.
+// orgID restricts search to one organisation; empty string searches all.
+func (a *App) AskAI(question, orgID string) (*agent.Answer, error) {
+	return a.agent.Ask(a.ctx, question, orgID)
 }
 
 // ToggleContextStatus flips a context between "active" and "archived".

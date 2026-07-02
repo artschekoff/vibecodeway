@@ -39,6 +39,16 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "raw_content", Description: "Formatted Jira issues and activity (reference)"},
 		{Name: "events", Description: "Full event log (reference)"},
 	},
+	"person_assignment_summary": {
+		{Name: "body", Description: "The full task assignment body to compress"},
+	},
+	"person_assignment_judge": {
+		{Name: "output_state", Description: "The updated assignment being evaluated"},
+		{Name: "message_content", Description: "The message that triggered the update"},
+	},
+	"ask_ai": {
+		// The Ask AI agent system prompt takes no placeholders; it drives tool use.
+	},
 }
 
 // ListAIPrompts returns all prompt templates with their placeholder definitions.

@@ -22,6 +22,7 @@ interface TabContextValue {
   openLogsTab: () => void;
   openPromptsTab: () => void;
   openBoardTab: () => void;
+  openAskTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
   pinTab: (tabId: string) => void;
@@ -188,6 +189,13 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, [focusOrOpen]);
 
+  const openAskTab = useCallback(() => {
+    focusOrOpen(
+      (t) => t.type === "ask",
+      () => ({ id: newTabId(), type: "ask" as const, title: "Ask AI", pinned: false })
+    );
+  }, [focusOrOpen]);
+
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId);
@@ -307,6 +315,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openLogsTab,
         openPromptsTab,
         openBoardTab,
+        openAskTab,
         closeTab,
         forceCloseTab,
         pinTab,

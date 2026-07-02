@@ -66,6 +66,39 @@ func TestSearchContextIDs_JiraKeyAndRepo(t *testing.T) {
 	}
 }
 
+func TestSearchContextItems_ContentAndBuckets(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-feature", org.ID)
+	require.NoError(t, err)
+
+	jiraRepo := jirastore.NewRepo(s.DB())
+	res, err := jiraRepo.UpsertIssue(ctx, c.ID, "ENG-1", "Login page", "todo", "", "bug", "nothing special here", "", "")
+	require.NoError(t, err)
+	// The searchable term lives only in a comment body -> exercises comment indexing.
+	_, err = jiraRepo.UpsertComment(ctx, res.ID, "c1", "alice", "we should add zephyrflux handling", "")
+	require.NoError(t, err)
+
+	// A context text whose term lives only in the body (not the name).
+	_, err = s.UpsertContextText(ctx, "", c.ID, "Runbook", "deploy via zephyrflux pipeline")
+	require.NoError(t, err)
+
+	m, err := s.SearchContextItems(ctx, c.ID, "zephyrflux")
+	require.NoError(t, err)
+
+	require.Contains(t, m.IssueIDs, res.ID, "issue should match via its comment body")
+	require.Len(t, m.TextIDs, 1, "text should match via its content body")
+
+	// Non-matching query yields empty buckets.
+	empty, err := s.SearchContextItems(ctx, c.ID, "zzznomatch")
+	require.NoError(t, err)
+	require.Empty(t, empty.IssueIDs)
+	require.Empty(t, empty.TextIDs)
+}
+
 func TestSearchContextIDs_LikeFallback(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

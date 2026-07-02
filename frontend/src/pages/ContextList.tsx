@@ -273,6 +273,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [platforms, setPlatforms] = useState<VCSPlatformInfo[]>([]);
   const [totalReviews, setTotalReviews] = useState(0);
   const [refreshingReviews, setRefreshingReviews] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState("");
   const [showAddRepo, setShowAddRepo] = useState(false);
   const [addPlatform, setAddPlatform] = useState<VCSPlatform>("github");
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
@@ -969,6 +970,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
 
         {activeTab === "reviews" && (
           <div className="topbar-actions">
+            <input
+              className="context-search-input"
+              style={{ width: 200, fontSize: 12 }}
+              placeholder="Filter by #, title, or author…"
+              value={reviewFilter}
+              onChange={(e) => setReviewFilter(e.target.value)}
+            />
             <button className="btn-ghost topbar-settings-btn" onClick={() => openSettingsTab()} title="Settings">
               <Settings size={20} />
             </button>
@@ -1182,11 +1190,18 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   ? "Add repositories in the Repositories tab, then click Refresh to load pending reviews."
                   : "No pending code reviews. Click Refresh to check."}
               </div>
+            ) : reviewFilter.trim() && !repoGroups.some(({ reviews }) => {
+                const q = reviewFilter.trim().toLowerCase();
+                return reviews.some((r) => r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q));
+              }) ? (
+              <div className="detail-empty" style={{ marginTop: 32 }}>No reviews match your filter.</div>
             ) : (
               repoGroups.map(({ repo, reviews }) => {
                 const url = repoUrl(repo);
-                const pending = reviews.filter((r) => !r.reviewedAt);
-                const waiting = reviews.filter((r) => !!r.reviewedAt);
+                const q = reviewFilter.trim().toLowerCase();
+                const match = (r: ReviewRequest) => !q || r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q);
+                const pending = reviews.filter((r) => !r.reviewedAt && match(r));
+                const waiting = reviews.filter((r) => !!r.reviewedAt && match(r));
                 if (pending.length === 0 && waiting.length === 0) return null;
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">

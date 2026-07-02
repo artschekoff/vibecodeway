@@ -39,9 +39,14 @@ const (
 var ErrNotConfigured = errors.New("llm not configured — set an API key in Settings")
 
 // Message mirrors a chat-completion message at the package boundary.
+// For tool calling: an assistant message may carry ToolCalls, and a tool-result
+// message uses Role "tool" with ToolCallID (and optionally Name) set.
 type Message struct {
-	Role    string
-	Content string
+	Role       string
+	Content    string
+	ToolCalls  []ToolCall // assistant messages requesting tool invocations
+	ToolCallID string     // tool-result messages: the call this answers
+	Name       string     // tool-result messages: the tool name (optional)
 }
 
 // Usage mirrors the token usage returned by OpenAI.
@@ -52,11 +57,13 @@ type Usage struct {
 }
 
 // Response bundles the completion text with metadata for logging.
+// ToolCalls is populated when the model asks to invoke one or more tools.
 type Response struct {
-	Content string
-	Model   string
-	Usage   Usage
-	Source  Source
+	Content   string
+	Model     string
+	Usage     Usage
+	Source    Source
+	ToolCalls []ToolCall
 }
 
 // Client performs chat completions against OpenAI.
@@ -128,7 +135,7 @@ func (c *Client) DescribeSettings(ctx context.Context) (*appstore.AISettings, So
 }
 
 // callOpenAI dispatches to the OpenAI-compatible API (used for "openai" and "local" providers).
-func (c *Client) callOpenAI(ctx context.Context, apiKey, model, baseURL string, messages []Message) (*Response, error) {
+func (c *Client) callOpenAI(ctx context.Context, apiKey, model, baseURL string, messages []Message, tools []ToolDef) (*Response, error) {
 	cfg := openai.DefaultConfig(apiKey)
 	if baseURL != "" {
 		cfg.BaseURL = strings.TrimRight(baseURL, "/") + "/v1"
@@ -136,33 +143,39 @@ func (c *Client) callOpenAI(ctx context.Context, apiKey, model, baseURL string, 
 	}
 	sdkClient := openai.NewClientWithConfig(cfg)
 
-	sdkMessages := make([]openai.ChatCompletionMessage, 0, len(messages))
-	for _, m := range messages {
-		sdkMessages = append(sdkMessages, openai.ChatCompletionMessage{
-			Role:    m.Role,
-			Content: m.Content,
-		})
+	req := openai.ChatCompletionRequest{
+		Model:    model,
+		Messages: toOpenAIMessages(messages),
+	}
+	if len(tools) > 0 {
+		req.Tools = toOpenAITools(tools)
 	}
 
-	resp, err := sdkClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:    model,
-		Messages: sdkMessages,
-	})
+	resp, err := sdkClient.CreateChatCompletion(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("openai chat completion: %w", err)
 	}
 	if len(resp.Choices) == 0 {
 		return nil, errors.New("openai returned no choices")
 	}
-	return &Response{
-		Content: resp.Choices[0].Message.Content,
+	choice := resp.Choices[0].Message
+	out := &Response{
+		Content: choice.Content,
 		Model:   model,
 		Usage: Usage{
 			PromptTokens:     resp.Usage.PromptTokens,
 			CompletionTokens: resp.Usage.CompletionTokens,
 			TotalTokens:      resp.Usage.TotalTokens,
 		},
-	}, nil
+	}
+	for _, tc := range choice.ToolCalls {
+		out.ToolCalls = append(out.ToolCalls, ToolCall{
+			ID:        tc.ID,
+			Name:      tc.Function.Name,
+			Arguments: tc.Function.Arguments,
+		})
+	}
+	return out, nil
 }
 
 // ChatCompletion sends messages to the configured LLM provider and returns the reply plus metadata.
@@ -186,13 +199,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 		}
 	}
 
-	var resp *Response
-	switch dbSettings.Provider {
-	case appstore.ProviderAnthropic:
-		resp, err = callAnthropic(ctx, apiKey, dbSettings.Model, messages)
-	default: // openai, local
-		resp, err = c.callOpenAI(ctx, apiKey, dbSettings.Model, dbSettings.BaseURL, messages)
-	}
+	resp, err := c.dispatch(ctx, dbSettings, apiKey, messages, nil)
 	if err != nil {
 		return nil, err
 	}

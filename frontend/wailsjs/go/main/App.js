@@ -38,6 +38,10 @@ export function AnalyzeContext(arg1) {
   return window['go']['main']['App']['AnalyzeContext'](arg1);
 }
 
+export function AskAI(arg1, arg2) {
+  return window['go']['main']['App']['AskAI'](arg1, arg2);
+}
+
 export function AssignAuthorBatch(arg1) {
   return window['go']['main']['App']['AssignAuthorBatch'](arg1);
 }
@@ -556,6 +560,10 @@ export function SavePersonAssignment(arg1, arg2) {
 
 export function SearchContextIDs(arg1) {
   return window['go']['main']['App']['SearchContextIDs'](arg1);
+}
+
+export function SearchContextItems(arg1, arg2) {
+  return window['go']['main']['App']['SearchContextItems'](arg1, arg2);
 }
 
 export function SearchJQL(arg1) {

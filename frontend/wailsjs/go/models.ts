@@ -1,3 +1,56 @@
+export namespace agent {
+	
+	export class Step {
+	    tool: string;
+	    args: string;
+	    result: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Step(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tool = source["tool"];
+	        this.args = source["args"];
+	        this.result = source["result"];
+	    }
+	}
+	export class Answer {
+	    content: string;
+	    steps: Step[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Answer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.steps = this.convertValues(source["steps"], Step);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace jira {
 	
 	export class SearchResult {
@@ -804,6 +857,96 @@ export namespace store {
 	        this.userId = source["userId"];
 	    }
 	}
+	export class BoardAssignment {
+	    id: string;
+	    contextId: string;
+	    contextKey: string;
+	    name: string;
+	    body: string;
+	    generatedAt?: string;
+	    analyzedThrough?: string;
+	    isOutdated: boolean;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardAssignment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.name = source["name"];
+	        this.body = source["body"];
+	        this.generatedAt = source["generatedAt"];
+	        this.analyzedThrough = source["analyzedThrough"];
+	        this.isOutdated = source["isOutdated"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class BoardBlocker {
+	    eventId: string;
+	    contextId: string;
+	    contextKey: string;
+	    author: string;
+	    summary: string;
+	    timestamp: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardBlocker(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.eventId = source["eventId"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.author = source["author"];
+	        this.summary = source["summary"];
+	        this.timestamp = source["timestamp"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class BoardPR {
+	    id: string;
+	    contextId: string;
+	    contextKey: string;
+	    repoName: string;
+	    prNumber: number;
+	    title: string;
+	    url: string;
+	    headBranch: string;
+	    reviewStatus: string;
+	    ciStatus: string;
+	    mergeable: string;
+	    isDraft: boolean;
+	    state: string;
+	    prUpdatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardPR(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.repoName = source["repoName"];
+	        this.prNumber = source["prNumber"];
+	        this.title = source["title"];
+	        this.url = source["url"];
+	        this.headBranch = source["headBranch"];
+	        this.reviewStatus = source["reviewStatus"];
+	        this.ciStatus = source["ciStatus"];
+	        this.mergeable = source["mergeable"];
+	        this.isDraft = source["isDraft"];
+	        this.state = source["state"];
+	        this.prUpdatedAt = source["prUpdatedAt"];
+	    }
+	}
 	export class BusinessContextSummary {
 	    product_or_initiative?: string;
 	    business_problem?: string;
@@ -868,6 +1011,28 @@ export namespace store {
 	        this.snapshotStatus = source["snapshotStatus"];
 	        this.snapshotIsStale = source["snapshotIsStale"];
 	        this.snapshotStatusComment = source["snapshotStatusComment"];
+	    }
+	}
+	export class ContextItemMatches {
+	    issueIds: string[];
+	    channelIds: string[];
+	    threadIds: string[];
+	    textIds: string[];
+	    fileIds: string[];
+	    branchIds: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ContextItemMatches(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.issueIds = source["issueIds"];
+	        this.channelIds = source["channelIds"];
+	        this.threadIds = source["threadIds"];
+	        this.textIds = source["textIds"];
+	        this.fileIds = source["fileIds"];
+	        this.branchIds = source["branchIds"];
 	    }
 	}
 	export class ContextRelation {
@@ -1018,6 +1183,28 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	        this.isActive = source["isActive"];
+	    }
+	}
+	export class ContextUpdateAction {
+	    action: string;
+	    eventType?: string;
+	    summary?: string;
+	    statusSlug?: string;
+	    statusComment?: string;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ContextUpdateAction(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.action = source["action"];
+	        this.eventType = source["eventType"];
+	        this.summary = source["summary"];
+	        this.statusSlug = source["statusSlug"];
+	        this.statusComment = source["statusComment"];
+	        this.description = source["description"];
 	    }
 	}
 	export class ContextUploadedFile {
@@ -1358,6 +1545,40 @@ export namespace store {
 	        this.insertedAt = source["insertedAt"];
 	    }
 	}
+	export class MyBoardData {
+	    blockers: BoardBlocker[];
+	    myAssignments: BoardAssignment[];
+	    myOpenPRs: BoardPR[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MyBoardData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.blockers = this.convertValues(source["blockers"], BoardBlocker);
+	        this.myAssignments = this.convertValues(source["myAssignments"], BoardAssignment);
+	        this.myOpenPRs = this.convertValues(source["myOpenPRs"], BoardPR);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Organization {
 	    id: string;
 	    name: string;
@@ -1552,12 +1773,11 @@ export namespace store {
 	    color: string;
 	    isSystem: boolean;
 	    createdAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new WorkflowStatus(source);
 	    }
-
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -1567,138 +1787,6 @@ export namespace store {
 	        this.color = source["color"];
 	        this.isSystem = source["isSystem"];
 	        this.createdAt = source["createdAt"];
-	    }
-	}
-
-	export class BoardBlocker {
-	    eventId: string;
-	    contextId: string;
-	    contextKey: string;
-	    author: string;
-	    summary: string;
-	    timestamp: string;
-	    createdAt: string;
-
-	    static createFrom(source: any = {}) {
-	        return new BoardBlocker(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.eventId = source["eventId"];
-	        this.contextId = source["contextId"];
-	        this.contextKey = source["contextKey"];
-	        this.author = source["author"];
-	        this.summary = source["summary"];
-	        this.timestamp = source["timestamp"];
-	        this.createdAt = source["createdAt"];
-	    }
-	}
-
-	export class BoardAssignment {
-	    id: string;
-	    contextId: string;
-	    contextKey: string;
-	    name: string;
-	    body: string;
-	    generatedAt?: string;
-	    analyzedThrough?: string;
-	    isOutdated: boolean;
-	    updatedAt: string;
-
-	    static createFrom(source: any = {}) {
-	        return new BoardAssignment(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.contextId = source["contextId"];
-	        this.contextKey = source["contextKey"];
-	        this.name = source["name"];
-	        this.body = source["body"];
-	        this.generatedAt = source["generatedAt"];
-	        this.analyzedThrough = source["analyzedThrough"];
-	        this.isOutdated = source["isOutdated"];
-	        this.updatedAt = source["updatedAt"];
-	    }
-	}
-
-	export class BoardPR {
-	    id: string;
-	    contextId: string;
-	    contextKey: string;
-	    repoName: string;
-	    prNumber: number;
-	    title: string;
-	    url: string;
-	    headBranch: string;
-	    reviewStatus: string;
-	    ciStatus: string;
-	    mergeable: string;
-	    isDraft: boolean;
-	    state: string;
-	    prUpdatedAt: string;
-
-	    static createFrom(source: any = {}) {
-	        return new BoardPR(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.contextId = source["contextId"];
-	        this.contextKey = source["contextKey"];
-	        this.repoName = source["repoName"];
-	        this.prNumber = source["prNumber"];
-	        this.title = source["title"];
-	        this.url = source["url"];
-	        this.headBranch = source["headBranch"];
-	        this.reviewStatus = source["reviewStatus"];
-	        this.ciStatus = source["ciStatus"];
-	        this.mergeable = source["mergeable"];
-	        this.isDraft = source["isDraft"];
-	        this.state = source["state"];
-	        this.prUpdatedAt = source["prUpdatedAt"];
-	    }
-	}
-
-	export class MyBoardData {
-	    blockers: BoardBlocker[];
-	    myAssignments: BoardAssignment[];
-	    myOpenPRs: BoardPR[];
-
-	    static createFrom(source: any = {}) {
-	        return new MyBoardData(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.blockers = source["blockers"] ? source["blockers"].map((b: any) => BoardBlocker.createFrom(b)) : [];
-	        this.myAssignments = source["myAssignments"] ? source["myAssignments"].map((a: any) => BoardAssignment.createFrom(a)) : [];
-	        this.myOpenPRs = source["myOpenPRs"] ? source["myOpenPRs"].map((p: any) => BoardPR.createFrom(p)) : [];
-	    }
-	}
-	export class ContextUpdateAction {
-	    action: string;
-	    eventType: string;
-	    summary: string;
-	    statusSlug: string;
-	    statusComment: string;
-	    description: string;
-
-	    static createFrom(source: any = {}) {
-	        return new ContextUpdateAction(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.action = source["action"];
-	        this.eventType = source["eventType"];
-	        this.summary = source["summary"];
-	        this.statusSlug = source["statusSlug"];
-	        this.statusComment = source["statusComment"];
-	        this.description = source["description"];
 	    }
 	}
 

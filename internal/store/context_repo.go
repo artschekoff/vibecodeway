@@ -326,16 +326,25 @@ func (s *Store) RebuildSearchIndex(ctx context.Context) error {
 		return fmt.Errorf("clear search index: %w", err)
 	}
 	stmts := []string{
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT id, 'key', key FROM contexts`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'jira', summary FROM jira_issues WHERE summary != ''`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'jira_key', jira_key FROM jira_issues WHERE jira_key != ''`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'jira_desc', description FROM jira_issues WHERE description != ''`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'slack', channel_name FROM slack_channels WHERE channel_name != ''`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'branch', branch FROM context_vcs_branches WHERE branch != ''`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT DISTINCT cvb.context_id, 'repo', vr.owner || '/' || vr.name FROM context_vcs_branches cvb JOIN vcs_repos vr ON vr.id = cvb.repo_id`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT DISTINCT cvb.context_id, 'repo_desc', vr.description FROM context_vcs_branches cvb JOIN vcs_repos vr ON vr.id = cvb.repo_id WHERE vr.description != ''`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'text', name FROM context_texts WHERE name != ''`,
-		`INSERT INTO context_search_fts (context_id, source, body) SELECT context_id, 'file', original_name FROM context_uploaded_files WHERE original_name != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT id, id, 'key', key FROM contexts`,
+		// Jira issues: title, key, description, and every comment body (item_id = owning issue).
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'jira', summary FROM jira_issues WHERE summary != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'jira_key', jira_key FROM jira_issues WHERE jira_key != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'jira_desc', description FROM jira_issues WHERE description != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT ji.context_id, ji.id, 'jira_comment', jc.body FROM jira_comments jc JOIN jira_issues ji ON ji.id = jc.issue_id WHERE jc.body != ''`,
+		// Slack: channel names (item_id = channel) and full thread content (item_id = thread).
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'slack_channel', channel_name FROM slack_channels WHERE channel_name != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'slack_thread', content FROM slack_threads WHERE content != ''`,
+		// VCS branches + repo metadata (item_id = branch link row).
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'branch', branch FROM context_vcs_branches WHERE branch != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT cvb.context_id, cvb.id, 'repo', vr.owner || '/' || vr.name FROM context_vcs_branches cvb JOIN vcs_repos vr ON vr.id = cvb.repo_id`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT cvb.context_id, cvb.id, 'repo_desc', vr.description FROM context_vcs_branches cvb JOIN vcs_repos vr ON vr.id = cvb.repo_id WHERE vr.description != ''`,
+		// Context texts: name + full body (item_id = text row).
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'text', name FROM context_texts WHERE name != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'text_content', content FROM context_texts WHERE content != ''`,
+		// Uploaded files: original name + extracted text (item_id = file row).
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'file', original_name FROM context_uploaded_files WHERE original_name != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'file_content', extracted_text FROM context_uploaded_files WHERE extracted_text != ''`,
 	}
 	for _, q := range stmts {
 		if _, err := s.db.ExecContext(ctx, q); err != nil {
@@ -432,6 +441,91 @@ func (s *Store) searchContextIDsLike(ctx context.Context, query string) ([]strin
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// ContextItemMatches groups the IDs of the elements inside a single context that
+// matched a search query, bucketed by element type. Empty query yields no match.
+type ContextItemMatches struct {
+	IssueIDs   []string `json:"issueIds"`
+	ChannelIDs []string `json:"channelIds"`
+	ThreadIDs  []string `json:"threadIds"`
+	TextIDs    []string `json:"textIds"`
+	FileIDs    []string `json:"fileIds"`
+	BranchIDs  []string `json:"branchIds"`
+}
+
+// SearchContextItems returns the elements within a single context whose indexed
+// text matches the query, grouped by element type. It powers the in-context
+// filter. An empty query returns an empty (non-nil) match set.
+func (s *Store) SearchContextItems(ctx context.Context, contextID, query string) (*ContextItemMatches, error) {
+	m := &ContextItemMatches{}
+	if strings.TrimSpace(query) == "" {
+		return m, nil
+	}
+
+	if err := s.RebuildSearchIndex(ctx); err != nil {
+		return nil, err
+	}
+
+	ftsQuery := fts5PrefixQuery(query)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT source, item_id
+		FROM context_search_fts
+		WHERE context_search_fts MATCH ? AND context_id = ?
+	`, ftsQuery, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("fts item search: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	seen := map[string]struct{}{}
+	for rows.Next() {
+		var source, itemID string
+		if err := rows.Scan(&source, &itemID); err != nil {
+			return nil, err
+		}
+		m.add(source, itemID, seen)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// add routes a matched (source, itemID) pair into the right bucket, de-duplicating
+// across the multiple FTS sources that can map to the same element.
+func (m *ContextItemMatches) add(source, itemID string, seen map[string]struct{}) {
+	if itemID == "" {
+		return
+	}
+	var bucket *[]string
+	switch source {
+	case "jira", "jira_key", "jira_desc", "jira_comment":
+		bucket = &m.IssueIDs
+	case "slack_channel":
+		bucket = &m.ChannelIDs
+	case "slack_thread":
+		bucket = &m.ThreadIDs
+	case "text", "text_content":
+		bucket = &m.TextIDs
+	case "file", "file_content":
+		bucket = &m.FileIDs
+	case "branch", "repo", "repo_desc":
+		bucket = &m.BranchIDs
+	default: // "key" and anything else: not a filterable element
+		return
+	}
+	if _, ok := seen[bucketKey(bucket, itemID)]; ok {
+		return
+	}
+	seen[bucketKey(bucket, itemID)] = struct{}{}
+	*bucket = append(*bucket, itemID)
+}
+
+// bucketKey builds a dedup key unique per (bucket, itemID) so the same element
+// matched via several sources is only appended once.
+func bucketKey(bucket *[]string, itemID string) string {
+	return fmt.Sprintf("%p:%s", bucket, itemID)
 }
 
 // scanContextRows scans a *sql.Rows result set into []Context.

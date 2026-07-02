@@ -75,6 +75,7 @@ import {
   ListWorkflowStatuses,
   GetUnresolvedAuthors,
   InterpretContextUpdate,
+  SearchContextItems,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
@@ -487,6 +488,10 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const { ensurePassphrase } = usePassphrase();
   const [detail, setDetail] = useState<service.ContextDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  // In-context element filter: matches item ids by type for the current query.
+  const [itemQuery, setItemQuery] = useState("");
+  const [itemMatch, setItemMatch] = useState<store.ContextItemMatches | null>(null);
+  const itemSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshError, setRefreshError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
@@ -936,7 +941,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     if (!quickUpdateAction) return;
     try {
       if (quickUpdateAction.action === "add_event") {
-        await AddUserEvent(id, quickUpdateAction.eventType || "user_note", quickUpdateAction.summary || quickUpdateText);
+        await AddUserEvent(id, quickUpdateAction.eventType || "user_note", quickUpdateText || quickUpdateAction.summary || "");
         const evts = await ListEvents(id) as ContextEvent[];
         if (evts) setEvents(evts);
       } else if (quickUpdateAction.action === "set_status") {
@@ -1126,15 +1131,38 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   );
 
   const { context } = detail;
-  const issues = detail.issues ?? [];
-  const slackChannels = detail.slackChannels ?? [];
-  const slackThreads = detail.slackThreads ?? [];
+  const allIssues = detail.issues ?? [];
+  const allSlackChannels = detail.slackChannels ?? [];
+  const allSlackThreads = detail.slackThreads ?? [];
   const slackDMConfigs = detail.slackDMConfigs ?? [];
-  const contextTexts = detail.contextTexts ?? [];
-  const uploadedFiles = (detail.uploadedFiles ?? []) as UploadedFile[];
-  const vcsBranches = (detail.vcsBranches ?? []) as VCSBranch[];
+  const allContextTexts = detail.contextTexts ?? [];
+  const allUploadedFiles = (detail.uploadedFiles ?? []) as UploadedFile[];
+  const allVcsBranches = (detail.vcsBranches ?? []) as VCSBranch[];
   const pullRequests = (detail.pullRequests ?? []) as PullRequest[];
-  const isEmpty = issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && slackDMConfigs.length === 0 && contextTexts.length === 0 && uploadedFiles.length === 0 && vcsBranches.length === 0;
+  const isEmpty = allIssues.length === 0 && allSlackChannels.length === 0 && allSlackThreads.length === 0 && slackDMConfigs.length === 0 && allContextTexts.length === 0 && allUploadedFiles.length === 0 && allVcsBranches.length === 0;
+
+  // When a filter query is active, narrow each element list to the ids the
+  // backend matched; otherwise show everything.
+  const filtering = itemQuery.trim() !== "" && itemMatch !== null;
+  const has = (ids: string[] | undefined, id: string) => !!ids && ids.includes(id);
+  const issues = filtering ? allIssues.filter((i) => has(itemMatch!.issueIds, i.id)) : allIssues;
+  const slackChannels = filtering ? allSlackChannels.filter((c) => has(itemMatch!.channelIds, c.id)) : allSlackChannels;
+  const slackThreads = filtering ? allSlackThreads.filter((t) => has(itemMatch!.threadIds, t.id)) : allSlackThreads;
+  const contextTexts = filtering ? allContextTexts.filter((t) => has(itemMatch!.textIds, t.id)) : allContextTexts;
+  const uploadedFiles = filtering ? allUploadedFiles.filter((f) => has(itemMatch!.fileIds, f.id)) : allUploadedFiles;
+  const vcsBranches = filtering ? allVcsBranches.filter((b) => has(itemMatch!.branchIds, b.id)) : allVcsBranches;
+  // DM configs are not full-text indexed, so hide them while a filter is active.
+  const visibleDMConfigs = filtering ? [] : slackDMConfigs;
+
+  const handleItemSearch = (value: string) => {
+    setItemQuery(value);
+    if (itemSearchTimer.current) clearTimeout(itemSearchTimer.current);
+    const q = value.trim();
+    if (!q) { setItemMatch(null); return; }
+    itemSearchTimer.current = setTimeout(() => {
+      SearchContextItems(context.id, q).then(setItemMatch).catch(() => setItemMatch(null));
+    }, 200);
+  };
 
   return (
     <div className="page">
@@ -1154,11 +1182,11 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           <span className={`badge badge-${context.status}`}>{context.status}</span>
           <span className="topbar-counts">
             {[
-              issues.length > 0 && `${issues.length} issue${issues.length !== 1 ? "s" : ""}`,
-              slackChannels.length > 0 && `${slackChannels.length} channel${slackChannels.length !== 1 ? "s" : ""}`,
-              slackThreads.length > 0 && `${slackThreads.length} thread${slackThreads.length !== 1 ? "s" : ""}`,
+              allIssues.length > 0 && `${allIssues.length} issue${allIssues.length !== 1 ? "s" : ""}`,
+              allSlackChannels.length > 0 && `${allSlackChannels.length} channel${allSlackChannels.length !== 1 ? "s" : ""}`,
+              allSlackThreads.length > 0 && `${allSlackThreads.length} thread${allSlackThreads.length !== 1 ? "s" : ""}`,
               slackDMConfigs.length > 0 && `${slackDMConfigs.length} DM${slackDMConfigs.length !== 1 ? "s" : ""}`,
-              (contextTexts.length + uploadedFiles.length) > 0 && `${contextTexts.length + uploadedFiles.length} file${(contextTexts.length + uploadedFiles.length) !== 1 ? "s" : ""}`,
+              (allContextTexts.length + allUploadedFiles.length) > 0 && `${allContextTexts.length + allUploadedFiles.length} file${(allContextTexts.length + allUploadedFiles.length) !== 1 ? "s" : ""}`,
             ].filter(Boolean).join(" · ")}
           </span>
         </div>
@@ -1836,6 +1864,22 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         ) : (
           <div className="detail-sections">
             {/* Jira section */}
+            {!isEmpty && (
+              <div className="context-search" style={{ marginBottom: 8 }}>
+                <input
+                  className="context-search-input"
+                  placeholder="Filter items in this context…"
+                  value={itemQuery}
+                  onChange={(e) => handleItemSearch(e.target.value)}
+                />
+                {itemQuery && (
+                  <button className="context-search-clear" onClick={() => handleItemSearch("")} title="Clear filter">×</button>
+                )}
+              </div>
+            )}
+            {filtering && issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && contextTexts.length === 0 && uploadedFiles.length === 0 && vcsBranches.length === 0 && (
+              <div className="detail-section-empty" style={{ padding: "12px 4px" }}>No items match &ldquo;{itemQuery}&rdquo;</div>
+            )}
             {issues.length > 0 && (
               <section className="detail-section">
                 <div className="detail-section-header">
@@ -1888,7 +1932,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             )}
 
             {/* Slack section */}
-            {(slackChannels.length > 0 || slackThreads.length > 0 || slackDMConfigs.length > 0) && (
+            {(slackChannels.length > 0 || slackThreads.length > 0 || visibleDMConfigs.length > 0) && (
               <section className="detail-section">
                 <div className="detail-section-header">
                   <span className="detail-section-title">
@@ -1900,7 +1944,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     )}
                   </span>
                   <span className="detail-section-count">
-                    {slackChannels.length + slackThreads.length + slackDMConfigs.length}
+                    {slackChannels.length + slackThreads.length + visibleDMConfigs.length}
                   </span>
                 </div>
 
@@ -1935,7 +1979,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     ))}
 
                   {/* DM configs */}
-                  {slackDMConfigs.map((dm) => (
+                  {visibleDMConfigs.map((dm) => (
                     <SlackDMConfigCard
                       key={dm.id}
                       dm={dm}

@@ -5,7 +5,7 @@ BUNDLE_NAME := ContextConsolidator
 
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: setup dev build build-desktop build-mcp build-cli install-mcp install-cli install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
+.PHONY: setup dev build build-desktop build-cli install-cli install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
 
 setup:
 	cd frontend && npm install
@@ -13,20 +13,13 @@ setup:
 dev: install-cli
 	wails dev
 
-build: build-desktop build-mcp build-cli
+build: build-desktop build-cli
 
 build-desktop:
 	wails build
 
-build-mcp:
-	go build -o bin/context-consolidator-mcp ./cmd/mcp
-
 build-cli:
 	go build -o bin/context-consolidator-cli ./cmd/cli
-
-install-mcp: build-mcp
-	sudo install -m 755 $(CURDIR)/bin/$(APP_NAME)-mcp $(INSTALL_DIR)/$(APP_NAME)-mcp
-	@echo "Installed → $(INSTALL_DIR)/$(APP_NAME)-mcp"
 
 install-cli: build-cli
 	sudo install -m 755 $(CURDIR)/bin/$(APP_NAME)-cli $(INSTALL_DIR)/$(APP_NAME)-cli
@@ -37,7 +30,7 @@ install-app: build-desktop
 	sudo cp -r build/bin/$(APP_NAME).app /Applications/$(BUNDLE_NAME).app
 	@echo "Installed → /Applications/$(BUNDLE_NAME).app"
 
-install-all: install-mcp install-cli install-app
+install-all: install-cli install-app
 
 test:
 	go test ./... -race -count=1
@@ -80,7 +73,7 @@ rulesync-install:
 	cp commands/*.md .rulesync/commands/
 	rulesync generate --targets cursor --features "*"
 
-MCP_PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
+CLI_PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
 
 package-desktop:
 	@mkdir -p $(DIST_DIR)/
@@ -96,15 +89,10 @@ package-desktop:
 build-all:
 	@rm -rf $(DIST_DIR)/
 	@mkdir -p $(DIST_DIR)/
-	@for platform in $(MCP_PLATFORMS); do \
+	@for platform in $(CLI_PLATFORMS); do \
 		os=$$(echo $$platform | cut -d/ -f1); \
 		arch=$$(echo $$platform | cut -d/ -f2); \
-		out_mcp="$(DIST_DIR)/$(APP_NAME)-mcp_$${os}_$${arch}"; \
 		out_cli="$(DIST_DIR)/$(APP_NAME)-cli_$${os}_$${arch}"; \
-		echo "Building MCP $$os/$$arch..."; \
-		GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags="-s -w" -o $$out_mcp ./cmd/mcp; \
-		tar -czf "$${out_mcp}.tar.gz" -C $(DIST_DIR) "$(APP_NAME)-mcp_$${os}_$${arch}"; \
-		rm $$out_mcp; \
 		echo "Building CLI $$os/$$arch..."; \
 		GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags="-s -w" -o $$out_cli ./cmd/cli; \
 		tar -czf "$${out_cli}.tar.gz" -C $(DIST_DIR) "$(APP_NAME)-cli_$${os}_$${arch}"; \
@@ -114,12 +102,8 @@ build-all:
 	@echo "Archives written to $(DIST_DIR)/"
 
 release:
-	@prev=$$(sed -n 's/.*serverVersion = "\([^"]*\)".*/\1/p' cmd/mcp/main.go); \
-	echo "Current version: $$prev"; \
-	read -p "New version: " version; \
-	sed -i '' "s/serverVersion = \"$$prev\"/serverVersion = \"$$version\"/" cmd/mcp/main.go; \
-	git add cmd/mcp/main.go; \
-	git commit -m "chore(release): bump version to v$$version"; \
+	@read -p "New version: " version; \
+	git commit --allow-empty -m "chore(release): bump version to v$$version"; \
 	git tag -a "v$$version" -m "Release v$$version"; \
 	git push origin main --tags; \
 	$(MAKE) build-all; \

@@ -123,7 +123,13 @@ func newAddTextCmd() *cobra.Command {
 		Long: `Add a plain-text entry to a context.
 
 Provide either --file-path (reads the file from disk) or --content (inline text).
-For .md files, raw Markdown is stored as-is. Output is JSON.`,
+For .md files, raw Markdown is stored as-is.
+
+Optional: --context-id or --context-key (one required), --name, --file-path, --content
+
+Output: JSON text entry object (id, name, content, isActive, createdAt, updatedAt).`,
+		Example: `  context-consolidator-cli add-text --context-key sprint-42 --file-path notes.md
+  context-consolidator-cli add-text --context-id <uuid> --name "Meeting notes" --content "Decided to use GraphQL"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if filePath == "" && content == "" {
 				return fmt.Errorf("provide either --file-path or --content")
@@ -184,7 +190,14 @@ func newAddFileCmd() *cobra.Command {
 		Long: `Upload a document file to a context.
 
 The file is read from disk, text is extracted, and both the original binary and
-extracted text are stored. Supports: pdf, docx, rtf, odt, txt, md. Output is JSON.`,
+extracted text are stored. Supports: pdf, docx, rtf, odt, txt, md.
+
+Required: --file-path
+Optional: --context-id or --context-key (one required)
+
+Output: JSON file object (id, name, fileType, isActive, createdAt, updatedAt).`,
+		Example: `  context-consolidator-cli add-file --context-key sprint-42 --file-path /path/to/spec.pdf
+  context-consolidator-cli add-file --context-id <uuid> --file-path /path/to/doc.docx`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if filePath == "" {
 				return fmt.Errorf("--file-path is required")

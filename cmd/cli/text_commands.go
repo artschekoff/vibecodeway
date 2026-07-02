@@ -12,6 +12,12 @@ func newTextListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "text-list",
 		Short: "List text entries for a context",
+		Long: `List plain-text entries stored for a context.
+
+Required: --context-id
+
+Output: JSON array of text entry objects (id, name, content, isActive, createdAt, updatedAt).`,
+		Example: `  context-consolidator-cli text-list --context-id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if contextID == "" {
 				return fmt.Errorf("--context-id is required")
@@ -40,6 +46,12 @@ func newTextDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "text-delete",
 		Short: "Delete a text entry",
+		Long: `Permanently delete a plain-text entry from a context.
+
+Required: --id
+
+Output: JSON {"deleted": "<uuid>"}.`,
+		Example: `  context-consolidator-cli text-delete --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -67,6 +79,12 @@ func newTextToggleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "text-toggle",
 		Short: "Toggle is_active for a text entry",
+		Long: `Toggle is_active for a text entry. Inactive entries are excluded from context loads.
+
+Required: --id
+
+Output: JSON text entry object with updated isActive.`,
+		Example: `  context-consolidator-cli text-toggle --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
