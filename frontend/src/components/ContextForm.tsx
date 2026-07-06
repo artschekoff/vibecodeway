@@ -337,8 +337,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     setPendingRelations((prev) => prev.filter((r) => !(r.targetId === targetId && r.relationType === type)));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     if (!key.trim()) {
       setError("Key is required.");
       return;
@@ -426,6 +425,10 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       setSaving(false);
     }
   };
+
+  // ponytail: wrapper so Enter in text inputs still submits; button uses handleSave directly
+  // to work around WebKit (Wails/WKWebView) not firing onSubmit when a textarea is focused
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); void handleSave(); };
 
   const toggleChannel = (result: ChannelResultItem) => {
     setSelectedChannels((prev) => {
@@ -1861,7 +1864,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
           <div className="modal-footer">
             <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={saving}>
+            <button type="button" className="btn-primary" disabled={saving} onClick={() => void handleSave()}>
               {saving ? (
                 <span className="btn-with-spinner">
                   <Spinner size={14} color="#fff" />
