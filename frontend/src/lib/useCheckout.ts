@@ -6,7 +6,7 @@ import {
   ListRepoLocalPaths,
   OpenWorkspaceTerminal,
 } from "../../wailsjs/go/main/App";
-import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { EventsOn } from "../../wailsjs/runtime/runtime";
 import type { VCSRepoPath, VCSWorkspace } from "../types";
 
 export type CheckoutLogLine = { line: string; stream: "stdout" | "stderr" };
@@ -43,11 +43,9 @@ export function useCheckout(
       setLogExitCode(p?.exitCode ?? 0);
     });
     return () => {
-      EventsOff("checkout:start");
-      EventsOff("checkout:log");
-      EventsOff("checkout:done");
-      // Silence unused-var lint on the returned unsubscribers.
-      void offStart; void offLog; void offDone;
+      offStart();
+      offLog();
+      offDone();
     };
   }, []);
 
