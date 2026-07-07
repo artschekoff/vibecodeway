@@ -16,6 +16,7 @@ import {
   MarkWorkspaceShouldDelete,
 } from "../../wailsjs/go/main/App";
 import { useCheckout } from "../lib/useCheckout";
+import CheckoutLogModal from "../components/CheckoutLogModal";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo, VCSWorkspace } from "../types";
 import Spinner from "../components/Spinner";
@@ -151,6 +152,12 @@ export default function PendingCodeReviews() {
     checkoutPaths,
     checkoutLoading,
     checkoutError,
+    logs,
+    logRunning,
+    logExitCode,
+    logCommand,
+    logOpen,
+    dismissLog,
   } = useCheckout(
     (ws) => setWorkspaces(ws),
     "No local path set for this repository. Click the folder icon to set one."
@@ -500,6 +507,14 @@ export default function PendingCodeReviews() {
           </div>
         </div>
       )}
+      <CheckoutLogModal
+        open={logOpen}
+        running={logRunning}
+        logs={logs}
+        command={logCommand}
+        exitCode={logExitCode}
+        onClose={dismissLog}
+      />
     </div>
   );
 }

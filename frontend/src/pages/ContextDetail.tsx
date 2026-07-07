@@ -97,6 +97,7 @@ import { ReasoningChainGraph } from "../components/ReasoningChainGraph";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
+import CheckoutLogModal from "../components/CheckoutLogModal";
 
 // ── Task list helpers ────────────────────────────────────────────────────────
 
@@ -563,6 +564,12 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     checkoutLoading,
     checkoutError,
     setCheckoutError,
+    logs,
+    logRunning,
+    logExitCode,
+    logCommand,
+    logOpen,
+    dismissLog,
   } = useCheckout(
     (ws) => setWorkspaces(ws),
     "No local path set for this repository. Add one in the Repositories tab."
@@ -2443,6 +2450,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           </div>
         </div>
       )}
+      <CheckoutLogModal
+        open={logOpen}
+        running={logRunning}
+        logs={logs}
+        command={logCommand}
+        exitCode={logExitCode}
+        onClose={dismissLog}
+      />
       {reasoningGraphFor && (() => {
         const pa = personAssignments.find(p => p.id === reasoningGraphFor);
         if (!pa) return null;

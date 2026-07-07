@@ -90,6 +90,7 @@ import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import { useCheckout } from "../lib/useCheckout";
+import CheckoutLogModal from "../components/CheckoutLogModal";
 
 // ─── Reviews helpers ──────────────────────────────────────────────────────────
 
@@ -302,6 +303,12 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     checkoutLoading: reviewCheckoutLoading,
     checkoutError: reviewCheckoutError,
     setCheckoutError: setReviewCheckoutError,
+    logs: reviewLogs,
+    logRunning: reviewLogRunning,
+    logExitCode: reviewLogExitCode,
+    logCommand: reviewLogCommand,
+    logOpen: reviewLogOpen,
+    dismissLog: dismissReviewLog,
   } = useCheckout(() => {}, "No local path set for this repository. Add one in the Repositories tab.");
 
   // ── DnD ──
@@ -1704,6 +1711,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
           </div>
         </div>
       )}
+      <CheckoutLogModal
+        open={reviewLogOpen}
+        running={reviewLogRunning}
+        logs={reviewLogs}
+        command={reviewLogCommand}
+        exitCode={reviewLogExitCode}
+        onClose={dismissReviewLog}
+      />
     </div>
   );
 }
