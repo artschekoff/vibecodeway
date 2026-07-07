@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckoutInWorkspace,
   FindWorkspaceForBranch,
@@ -6,7 +6,10 @@ import {
   ListRepoLocalPaths,
   OpenWorkspaceTerminal,
 } from "../../wailsjs/go/main/App";
+import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { VCSRepoPath, VCSWorkspace } from "../types";
+
+export type CheckoutLogLine = { line: string; stream: "stdout" | "stderr" };
 
 export function useCheckout(
   onWorkspacesUpdated: (ws: VCSWorkspace[]) => void,
@@ -16,6 +19,37 @@ export function useCheckout(
   const [checkoutPaths, setCheckoutPaths] = useState<VCSRepoPath[]>([]);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
+
+  const [logs, setLogs] = useState<CheckoutLogLine[]>([]);
+  const [logRunning, setLogRunning] = useState(false);
+  const [logExitCode, setLogExitCode] = useState<number | null>(null);
+  const [logCommand, setLogCommand] = useState("");
+  const [logOpen, setLogOpen] = useState(false);
+
+  useEffect(() => {
+    const offStart = EventsOn("checkout:start", (p: { path: string; cmd: string }) => {
+      setLogs([]);
+      setLogExitCode(null);
+      setLogCommand(p?.cmd ?? "");
+      setLogRunning(true);
+      setLogOpen(true);
+    });
+    const offLog = EventsOn("checkout:log", (p: CheckoutLogLine) => {
+      if (!p) return;
+      setLogs(prev => [...prev, p]);
+    });
+    const offDone = EventsOn("checkout:done", (p: { exitCode: number; error: string }) => {
+      setLogRunning(false);
+      setLogExitCode(p?.exitCode ?? 0);
+    });
+    return () => {
+      EventsOff("checkout:start");
+      EventsOff("checkout:log");
+      EventsOff("checkout:done");
+      // Silence unused-var lint on the returned unsubscribers.
+      void offStart; void offLog; void offDone;
+    };
+  }, []);
 
   const refreshWorkspaces = async () => {
     const ws = (await ListAllWorkspaces() as VCSWorkspace[]) ?? [];
@@ -72,6 +106,10 @@ export function useCheckout(
     setCheckoutError("");
   };
 
+  const dismissLog = () => {
+    setLogOpen(false);
+  };
+
   return {
     checkout,
     checkoutWithPath,
@@ -81,5 +119,11 @@ export function useCheckout(
     checkoutLoading,
     checkoutError,
     setCheckoutError,
+    logs,
+    logRunning,
+    logExitCode,
+    logCommand,
+    logOpen,
+    dismissLog,
   };
 }
