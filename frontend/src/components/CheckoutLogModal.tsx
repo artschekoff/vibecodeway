@@ -28,7 +28,7 @@ export default function CheckoutLogModal({ open, running, logs, command, exitCod
       : `Exited with code ${exitCode ?? "?"}`;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={running ? undefined : onClose}>
       <div
         className="modal"
         style={{ width: "min(720px, 90vw)", maxHeight: "80vh", display: "flex", flexDirection: "column" }}

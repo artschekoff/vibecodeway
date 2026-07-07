@@ -395,6 +395,11 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 
 	// Run the checkout command to completion before opening the agent so the
 	// environment is ready (e.g. deps installed) when the editor opens.
+
+	// Emits checkout:start/log/done events. These are only surfaced in the UI on
+	// tabs that mount the useCheckout hook (Contexts, Context Detail, Pending Code
+	// Reviews today). Callers adding checkout triggers from other tabs need to
+	// mount the hook there too.
 	if onCheckoutCommand != "" {
 		shell := os.Getenv("SHELL")
 		if shell == "" {
