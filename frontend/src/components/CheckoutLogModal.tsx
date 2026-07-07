@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
 import Spinner from "./Spinner";
-
-type LogLine = { line: string; stream: "stdout" | "stderr" };
+import type { CheckoutLogLine } from "../lib/useCheckout";
 
 interface Props {
   open: boolean;
   running: boolean;
-  logs: LogLine[];
+  logs: CheckoutLogLine[];
   command: string;
   exitCode: number | null;
   onClose: () => void;
@@ -38,7 +37,7 @@ export default function CheckoutLogModal({ open, running, logs, command, exitCod
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ fontWeight: 600 }}>On-checkout command</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, opacity: 0.8 }}>
-            {running && <Spinner size={14} />}
+            {running && <span aria-hidden><Spinner size={14} /></span>}
             <span>{statusLabel}</span>
           </div>
         </div>
