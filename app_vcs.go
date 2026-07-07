@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/artschekoff/context-consolidator/internal/vcs"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
@@ -399,8 +402,52 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 		}
 		cmd := exec.Command(shell, "-c", onCheckoutCommand)
 		cmd.Dir = path
-		if out, err := cmd.CombinedOutput(); err != nil {
-			a.logger.Sugar().Warnf("on_checkout_command failed: cmd=%q workDir=%q err=%v output=%s", onCheckoutCommand, path, err, out)
+
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
+
+		runtime.EventsEmit(a.ctx, "checkout:start", map[string]interface{}{
+			"path": path,
+			"cmd":  onCheckoutCommand,
+		})
+
+		if err := cmd.Start(); err != nil {
+			a.logger.Sugar().Warnf("on_checkout_command start failed: cmd=%q workDir=%q err=%v", onCheckoutCommand, path, err)
+			runtime.EventsEmit(a.ctx, "checkout:done", map[string]interface{}{
+				"exitCode": -1,
+				"error":    err.Error(),
+			})
+		} else {
+			streamPipe := func(r io.Reader, stream string) {
+				sc := bufio.NewScanner(r)
+				sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // ponytail: 1MB cap per line, enough for npm/yarn output
+				for sc.Scan() {
+					runtime.EventsEmit(a.ctx, "checkout:log", map[string]interface{}{
+						"line":   sc.Text(),
+						"stream": stream,
+					})
+				}
+			}
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() { defer wg.Done(); streamPipe(stdout, "stdout") }()
+			go func() { defer wg.Done(); streamPipe(stderr, "stderr") }()
+			wg.Wait()
+			runErr := cmd.Wait()
+			exitCode := 0
+			errStr := ""
+			if runErr != nil {
+				exitCode = -1
+				if ee, ok := runErr.(*exec.ExitError); ok {
+					exitCode = ee.ExitCode()
+				}
+				errStr = runErr.Error()
+				a.logger.Sugar().Warnf("on_checkout_command failed: cmd=%q workDir=%q err=%v", onCheckoutCommand, path, runErr)
+			}
+			runtime.EventsEmit(a.ctx, "checkout:done", map[string]interface{}{
+				"exitCode": exitCode,
+				"error":    errStr,
+			})
 		}
 	}
 
