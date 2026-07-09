@@ -1171,217 +1171,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }, 200);
   };
 
-  return (
-    <div className="page">
-      <div className="topbar">
-        <button className="back-btn" onClick={() => navigateBack(_tabId)}><ArrowLeft size={16} /> Back</button>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <h1 style={{ fontSize: 16, margin: 0, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
-            {context.key}
-            <button
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", lineHeight: 1 }}
-              title="Copy context name"
-              onClick={() => { void navigator.clipboard.writeText(context.key); showToast("Copied!"); }}
-            >
-              <Copy size={13} />
-            </button>
-          </h1>
-          <span className={`badge badge-${context.status}`}>{context.status}</span>
-          <span className="topbar-counts">
-            {[
-              allIssues.length > 0 && `${allIssues.length} issue${allIssues.length !== 1 ? "s" : ""}`,
-              allSlackChannels.length > 0 && `${allSlackChannels.length} channel${allSlackChannels.length !== 1 ? "s" : ""}`,
-              allSlackThreads.length > 0 && `${allSlackThreads.length} thread${allSlackThreads.length !== 1 ? "s" : ""}`,
-              slackDMConfigs.length > 0 && `${slackDMConfigs.length} DM${slackDMConfigs.length !== 1 ? "s" : ""}`,
-              (allContextTexts.length + allUploadedFiles.length) > 0 && `${allContextTexts.length + allUploadedFiles.length} file${(allContextTexts.length + allUploadedFiles.length) !== 1 ? "s" : ""}`,
-            ].filter(Boolean).join(" · ")}
-          </span>
-        </div>
-        <div className="topbar-actions">
-          {breakdown && breakdown.total > 0 && (
-            <button
-              className="btn-secondary"
-              onClick={() => void handleMarkAllViewed()}
-              disabled={markingAllViewed}
-              title="Mark all items as viewed"
-            >
-              {markingAllViewed ? "Marking…" : <><CheckCheck size={16} /> Mark all viewed ({breakdown.total})</>}
-            </button>
-          )}
-          <button
-            className="btn-secondary"
-            onClick={() => setShowAuthorModal(true)}
-            title="Assign unknown authors"
-          >
-            <UserCheck size={16} />
-          </button>
-          <button
-            className="btn-secondary"
-            onClick={() => void openEditForm()}
-            title="Edit context"
-          >
-            <Pencil size={16} /> Edit
-          </button>
-          <button
-            className="btn-primary"
-            onClick={() => void handleRefresh()}
-            disabled={refreshing}
-          >
-            {refreshing ? (
-              <span className="btn-with-spinner">
-                <Spinner size={14} color="#fff" />
-                Refreshing…
-              </span>
-            ) : (
-              <><RefreshCw size={16} /> Refresh</>
-            )}
-          </button>
-        </div>
-      </div>
-
-      <div className="content content--split">
-        {refreshError && <div className="error-banner">{refreshError}</div>}
-        {toastMsg && <div className={`toast toast--${toastType}`}>{toastMsg}</div>}
-
-        <div className="detail-primary">
-        {/* Analysis snapshot */}
-        <div className="detail-section" style={{ marginBottom: 12 }}>
-          <div className="detail-section-header">
-            <span className="detail-section-title">Analysis</span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {snapshot?.isStale && (
-                <span style={{ color: "orange", fontSize: 12 }}>New data — re-analyze</span>
-              )}
-              <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 10px" }} onClick={() => void analyzeContext()} disabled={isAnalyzing}>
-                {isAnalyzing ? "Analyzing…" : "Analyze"}
-              </button>
-            </div>
-          </div>
-          {snapshotError && <div className="error-banner" style={{ margin: "0 14px 8px" }}>{snapshotError}</div>}
-          <div style={{ padding: "8px 14px" }}>
-            {snapshot ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div>
-                  <strong>Current step:</strong> {snapshot.currentStepDesc}{" "}
-                  <em style={{ color: "var(--text-muted)", fontSize: 12 }}>({snapshot.currentStepConfidence})</em>
-                </div>
-                <div>
-                  <strong>Status:</strong>{" "}
-                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                    <WorkflowStatusBadge status={snapshot.status} statuses={workflowStatuses} />
-                    {snapshot.latestStatusLogEntry?.comment && (
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        — {snapshot.latestStatusLogEntry.comment}
-                      </span>
-                    )}
-                    <button
-                      className="btn-ghost"
-                      style={{ fontSize: 11, padding: "1px 7px" }}
-                      onClick={() => {
-                        setStatusChangeSlug(snapshot.status);
-                        setStatusChangeComment("");
-                        setShowStatusChanger((v) => !v);
-                      }}
-                    >
-                      Change
-                    </button>
-                  </div>
-                  {showStatusChanger && (
-                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                      <select
-                        className="form-control"
-                        style={{ fontSize: 12 }}
-                        value={statusChangeSlug}
-                        onChange={(e) => setStatusChangeSlug(e.target.value)}
-                      >
-                        {workflowStatuses.map((st) => (
-                          <option key={st.slug} value={st.slug}>{st.label}</option>
-                        ))}
-                      </select>
-                      <input
-                        className="form-control"
-                        style={{ fontSize: 12 }}
-                        placeholder="Reason for this status change…"
-                        value={statusChangeComment}
-                        onChange={(e) => setStatusChangeComment(e.target.value)}
-                      />
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn-primary"
-                          style={{ fontSize: 12 }}
-                          disabled={!statusChangeSlug || isChangingStatus}
-                          onClick={() => void handleStatusChange()}
-                        >
-                          {isChangingStatus ? "Saving…" : "Save"}
-                        </button>
-                        <button
-                          className="btn-ghost"
-                          style={{ fontSize: 12 }}
-                          onClick={() => setShowStatusChanger(false)}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {snapshot.sectionOperational && (
-                  <details open>
-                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Operational</summary>
-                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionOperational}</pre>
-                  </details>
-                )}
-                {snapshot.sectionNarrative && (
-                  <details>
-                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Narrative</summary>
-                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionNarrative}</pre>
-                  </details>
-                )}
-                {snapshot.sectionEngineering && (
-                  <details>
-                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Engineering</summary>
-                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionEngineering}</pre>
-                  </details>
-                )}
-                {snapshot && (
-                  <div className="context-detail__estimation">
-                    <h3 className="context-detail__section-title">Time Estimate</h3>
-                    <EstimationPanel snapshot={snapshot} history={estimationHistory} />
-                  </div>
-                )}
-                {(snapshot.aiNextStepsShort || snapshot.aiNextStepsMid || snapshot.aiNextStepsLong) && (
-                  <div style={{ marginTop: 4 }}>
-                    <strong style={{ fontSize: 13 }}>Next steps (AI):</strong>
-                    {snapshot.aiNextStepsShort && <div style={{ fontSize: 12 }}><em>Today:</em> {snapshot.aiNextStepsShort}</div>}
-                    {snapshot.aiNextStepsMid && <div style={{ fontSize: 12 }}><em>This week:</em> {snapshot.aiNextStepsMid}</div>}
-                    {snapshot.aiNextStepsLong && <div style={{ fontSize: 12 }}><em>This month:</em> {snapshot.aiNextStepsLong}</div>}
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "2px 10px" }}
-                    onClick={async () => {
-                      try {
-                        const packet = await GenerateHandoffPacket(id);
-                        await navigator.clipboard.writeText(JSON.stringify(packet, null, 2));
-                      } catch { /* best-effort */ }
-                    }}
-                  >
-                    Copy Handoff Packet
-                  </button>
-                </div>
-                {/* Person Assignments */}
-                <details style={{ marginTop: 8 }}>
-                  <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13, userSelect: "none" }}>
-                    Person Assignments
-                    {personAssignments.length > 0 && (
-                      <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 6, fontSize: 11 }}>
-                        ({personAssignments.length})
-                      </span>
-                    )}
-                  </summary>
-                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+  const personAssignmentsPanel = (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
                     {/* Avatar row */}
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
@@ -1786,7 +1577,222 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       </button>
                     </div>
                   </div>
-                </details>
+  );
+
+  return (
+    <div className="page">
+      <div className="topbar">
+        <button className="back-btn" onClick={() => navigateBack(_tabId)}><ArrowLeft size={16} /> Back</button>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <h1 style={{ fontSize: 16, margin: 0, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+            {context.key}
+            <button
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", lineHeight: 1 }}
+              title="Copy context name"
+              onClick={() => { void navigator.clipboard.writeText(context.key); showToast("Copied!"); }}
+            >
+              <Copy size={13} />
+            </button>
+          </h1>
+          <span className={`badge badge-${context.status}`}>{context.status}</span>
+          <span className="topbar-counts">
+            {[
+              allIssues.length > 0 && `${allIssues.length} issue${allIssues.length !== 1 ? "s" : ""}`,
+              allSlackChannels.length > 0 && `${allSlackChannels.length} channel${allSlackChannels.length !== 1 ? "s" : ""}`,
+              allSlackThreads.length > 0 && `${allSlackThreads.length} thread${allSlackThreads.length !== 1 ? "s" : ""}`,
+              slackDMConfigs.length > 0 && `${slackDMConfigs.length} DM${slackDMConfigs.length !== 1 ? "s" : ""}`,
+              (allContextTexts.length + allUploadedFiles.length) > 0 && `${allContextTexts.length + allUploadedFiles.length} file${(allContextTexts.length + allUploadedFiles.length) !== 1 ? "s" : ""}`,
+            ].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+        {!isEmpty && (
+          <div className="context-search context-search--topbar">
+            <input
+              className="context-search-input"
+              placeholder="Filter items…"
+              value={itemQuery}
+              onChange={(e) => handleItemSearch(e.target.value)}
+            />
+            {itemQuery && (
+              <button className="context-search-clear" onClick={() => handleItemSearch("")} title="Clear filter">×</button>
+            )}
+          </div>
+        )}
+        <div className="topbar-actions">
+          {breakdown && breakdown.total > 0 && (
+            <button
+              className="btn-secondary"
+              onClick={() => void handleMarkAllViewed()}
+              disabled={markingAllViewed}
+              title="Mark all items as viewed"
+            >
+              {markingAllViewed ? "Marking…" : <><CheckCheck size={16} /> Mark all viewed ({breakdown.total})</>}
+            </button>
+          )}
+          <button
+            className="btn-secondary"
+            onClick={() => setShowAuthorModal(true)}
+            title="Assign unknown authors"
+          >
+            <UserCheck size={16} />
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => void openEditForm()}
+            title="Edit context"
+          >
+            <Pencil size={16} /> Edit
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <span className="btn-with-spinner">
+                <Spinner size={14} color="#fff" />
+                Refreshing…
+              </span>
+            ) : (
+              <><RefreshCw size={16} /> Refresh</>
+            )}
+          </button>
+        </div>
+      </div>
+
+      <div className="content content--split">
+        {refreshError && <div className="error-banner">{refreshError}</div>}
+        {toastMsg && <div className={`toast toast--${toastType}`}>{toastMsg}</div>}
+
+        <div className="detail-primary">
+        {/* Analysis snapshot */}
+        <div className="detail-section" style={{ marginBottom: 12 }}>
+          <div className="detail-section-header">
+            <span className="detail-section-title">Analysis</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {snapshot?.isStale && (
+                <span style={{ color: "orange", fontSize: 12 }}>New data — re-analyze</span>
+              )}
+              <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 10px" }} onClick={() => void analyzeContext()} disabled={isAnalyzing}>
+                {isAnalyzing ? "Analyzing…" : "Analyze"}
+              </button>
+            </div>
+          </div>
+          {snapshotError && <div className="error-banner" style={{ margin: "0 14px 8px" }}>{snapshotError}</div>}
+          <div style={{ padding: "8px 14px" }}>
+            {snapshot ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>
+                  <strong>Current step:</strong> {snapshot.currentStepDesc}{" "}
+                  <em style={{ color: "var(--text-muted)", fontSize: 12 }}>({snapshot.currentStepConfidence})</em>
+                </div>
+                <div>
+                  <strong>Status:</strong>{" "}
+                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                    <WorkflowStatusBadge status={snapshot.status} statuses={workflowStatuses} />
+                    {snapshot.latestStatusLogEntry?.comment && (
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        — {snapshot.latestStatusLogEntry.comment}
+                      </span>
+                    )}
+                    <button
+                      className="btn-ghost"
+                      style={{ fontSize: 11, padding: "1px 7px" }}
+                      onClick={() => {
+                        setStatusChangeSlug(snapshot.status);
+                        setStatusChangeComment("");
+                        setShowStatusChanger((v) => !v);
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                  {showStatusChanger && (
+                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <select
+                        className="form-control"
+                        style={{ fontSize: 12 }}
+                        value={statusChangeSlug}
+                        onChange={(e) => setStatusChangeSlug(e.target.value)}
+                      >
+                        {workflowStatuses.map((st) => (
+                          <option key={st.slug} value={st.slug}>{st.label}</option>
+                        ))}
+                      </select>
+                      <input
+                        className="form-control"
+                        style={{ fontSize: 12 }}
+                        placeholder="Reason for this status change…"
+                        value={statusChangeComment}
+                        onChange={(e) => setStatusChangeComment(e.target.value)}
+                      />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn-primary"
+                          style={{ fontSize: 12 }}
+                          disabled={!statusChangeSlug || isChangingStatus}
+                          onClick={() => void handleStatusChange()}
+                        >
+                          {isChangingStatus ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          className="btn-ghost"
+                          style={{ fontSize: 12 }}
+                          onClick={() => setShowStatusChanger(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {snapshot.sectionOperational && (
+                  <details open>
+                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Operational</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionOperational}</pre>
+                  </details>
+                )}
+                {snapshot.sectionNarrative && (
+                  <details>
+                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Narrative</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionNarrative}</pre>
+                  </details>
+                )}
+                {snapshot.sectionEngineering && (
+                  <details>
+                    <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>Engineering</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0", color: "var(--text-muted)" }}>{snapshot.sectionEngineering}</pre>
+                  </details>
+                )}
+                {snapshot && (
+                  <div className="context-detail__estimation">
+                    <h3 className="context-detail__section-title">Time Estimate</h3>
+                    <EstimationPanel snapshot={snapshot} history={estimationHistory} />
+                  </div>
+                )}
+                {(snapshot.aiNextStepsShort || snapshot.aiNextStepsMid || snapshot.aiNextStepsLong) && (
+                  <div style={{ marginTop: 4 }}>
+                    <strong style={{ fontSize: 13 }}>Next steps (AI):</strong>
+                    {snapshot.aiNextStepsShort && <div style={{ fontSize: 12 }}><em>Today:</em> {snapshot.aiNextStepsShort}</div>}
+                    {snapshot.aiNextStepsMid && <div style={{ fontSize: 12 }}><em>This week:</em> {snapshot.aiNextStepsMid}</div>}
+                    {snapshot.aiNextStepsLong && <div style={{ fontSize: 12 }}><em>This month:</em> {snapshot.aiNextStepsLong}</div>}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "2px 10px" }}
+                    onClick={async () => {
+                      try {
+                        const packet = await GenerateHandoffPacket(id);
+                        await navigator.clipboard.writeText(JSON.stringify(packet, null, 2));
+                      } catch { /* best-effort */ }
+                    }}
+                  >
+                    Copy Handoff Packet
+                  </button>
+                </div>
+                {/* Person Assignments — rendered in right column (see personAssignmentsPanel) */}
               </div>
             ) : (
               <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No analysis yet. Click Analyze to start.</div>
@@ -1871,19 +1877,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         ) : (
           <div className="detail-sections">
             {/* Jira section */}
-            {!isEmpty && (
-              <div className="context-search" style={{ marginBottom: 8 }}>
-                <input
-                  className="context-search-input"
-                  placeholder="Filter items in this context…"
-                  value={itemQuery}
-                  onChange={(e) => handleItemSearch(e.target.value)}
-                />
-                {itemQuery && (
-                  <button className="context-search-clear" onClick={() => handleItemSearch("")} title="Clear filter">×</button>
-                )}
-              </div>
-            )}
             {filtering && issues.length === 0 && slackChannels.length === 0 && slackThreads.length === 0 && contextTexts.length === 0 && uploadedFiles.length === 0 && vcsBranches.length === 0 && (
               <div className="detail-section-empty" style={{ padding: "12px 4px" }}>No items match &ldquo;{itemQuery}&rdquo;</div>
             )}
@@ -2210,6 +2203,18 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         </div>
 
         {id && (
+          <div className="detail-rightcol">
+            <section className="pa-panel">
+              <div className="pa-panel-header">
+                Person Assignments
+                {personAssignments.length > 0 && (
+                  <span className="pa-panel-count">{personAssignments.length}</span>
+                )}
+              </div>
+              <div className="pa-panel-body">
+                {personAssignmentsPanel}
+              </div>
+            </section>
           <aside className="detail-sidepanel">
             <div className="sidepanel-tabs">
               <button className="sidepanel-tab sidepanel-tab--active">
@@ -2390,6 +2395,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               )}
             </div>
           </aside>
+          </div>
         )}
       </div>
 
