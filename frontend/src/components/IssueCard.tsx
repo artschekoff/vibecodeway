@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ExternalLink } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { Issue, Comment } from "../types";
@@ -88,25 +88,31 @@ export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteCom
         {onToggleIssue && (
           <ActiveToggle isActive={issue.isActive} onToggle={(e) => { e.stopPropagation(); onToggleIssue(issue.id); }} />
         )}
-        <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
-        {jiraLink && (
-          <button className="copy-btn" onClick={(e) => { e.stopPropagation(); BrowserOpenURL(jiraLink); }} title="Open in Jira">
-            <ExternalLink size={13} />
-          </button>
-        )}
-        <button className="copy-btn" onClick={copyKey} title="Copy ticket number">
-          {copied ? <Check size={13} /> : <CopyIcon />}
-        </button>
+        <div className="issue-key-col">
+          <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
+          {issue.assignee && <span className="issue-assignee">@{issue.assignee}</span>}
+        </div>
         <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{issue.summary}</span>
         <div className="issue-meta">
-          {issue.assignee && <span className="issue-assignee">@{issue.assignee}</span>}
           <span className="status-badge">{issue.status}</span>
-          <span className="status-badge" style={{ borderColor: "transparent", background: "transparent" }}>
-            {comments.length} comment{comments.length !== 1 ? "s" : ""}
-          </span>
-          <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
         </div>
         <div className="card-actions">
+          <span
+            className="issue-comment-count"
+            title={`${comments.length} comment${comments.length !== 1 ? "s" : ""}`}
+          >
+            <MessageSquare size={13} />
+            {comments.length}
+          </span>
+          <ChevronDown size={14} className={`expand-icon${expanded ? " expanded" : ""}`} />
+          {jiraLink && (
+            <button className="copy-btn" onClick={(e) => { e.stopPropagation(); BrowserOpenURL(jiraLink); }} title="Open in Jira">
+              <ExternalLink size={13} />
+            </button>
+          )}
+          <button className="copy-btn" onClick={copyKey} title="Copy ticket number">
+            {copied ? <Check size={13} /> : <CopyIcon />}
+          </button>
           {isUnread && onMarkIssueViewed && (
             <button className="mark-viewed-btn" onClick={(e) => { e.stopPropagation(); onMarkIssueViewed(issue.id); }} title="Mark as viewed"><Check size={13} /></button>
           )}

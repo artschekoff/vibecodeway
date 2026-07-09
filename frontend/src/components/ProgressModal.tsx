@@ -10,7 +10,7 @@ export default function ProgressModal() {
   const isIndeterminate = total === 0 || (current === 0 && currentIndex < 0);
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay modal-overlay--progress">
       <div className="modal progress-modal">
         <h2>{title || "Processing…"}</h2>
 
