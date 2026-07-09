@@ -5159,15 +5159,15 @@ select {
   margin-bottom: 8px;
 }
 .needs-attention-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 6px;
 }
 .needs-attention-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   background: white;
   border-radius: 6px;
   border-left: 3px solid #f87171;
@@ -5181,8 +5181,13 @@ select {
   color: #111827;
 }
 .needs-attention-comment {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .needs-attention-nextstep {
   font-size: 12px;

@@ -1019,8 +1019,12 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         tabIndex={0}
                         onClick={() => openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name, c.orgId)}
                         onKeyDown={(e) => e.key === "Enter" && openContextTab(c.id, c.key, orgs.find((o) => o.id === c.orgId)?.name, c.orgId)}
+                        title={c.snapshotStatusComment || undefined}
                       >
                         <span className="needs-attention-key">{c.key}</span>
+                        {c.snapshotStatusComment && (
+                          <span className="needs-attention-comment">{c.snapshotStatusComment}</span>
+                        )}
                       </div>
                     );
                   })}
