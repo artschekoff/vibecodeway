@@ -4392,6 +4392,61 @@ select {
   flex-wrap: wrap;
 }
 
+.repo-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.repo-collapse-toggle:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.repo-collapse-toggle:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.repo-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  margin: 10px 0 12px;
+  background: var(--surface2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.repo-filter-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 12px;
+}
+.repo-filter-input::placeholder {
+  color: var(--text-muted);
+}
+.repo-filter-clear {
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.repo-filter-clear:hover {
+  color: var(--text);
+}
+
 .repo-card-name {
   font-family: monospace;
   font-size: 13px;

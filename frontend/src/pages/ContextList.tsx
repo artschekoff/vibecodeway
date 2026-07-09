@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2 } from "lucide-react";
+import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2, ChevronDown, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -287,6 +287,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [repoWorkspaces, setRepoWorkspaces] = useState<Record<string, VCSWorkspace[]>>({});
   const [localBranches, setLocalBranches] = useState<Record<string, LocalBranch[]>>({});
   const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
+  const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set()); // repos start collapsed
+  const [repoQuery, setRepoQuery] = useState("");
+  const toggleRepoExpanded = (id: string) =>
+    setExpandedRepos((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editOnCheckoutCommand, setEditOnCheckoutCommand] = useState("");
@@ -1335,6 +1343,27 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
               </div>
             </div>
 
+            {/* Search / filter */}
+            {trackedRepos.length > 0 && (
+              <div className="repo-filter-bar">
+                <Search size={13} style={{ flexShrink: 0, opacity: 0.6 }} />
+                <input
+                  className="repo-filter-input"
+                  placeholder="Search repositories, branches, paths…"
+                  value={repoQuery}
+                  onChange={(e) => setRepoQuery(e.target.value)}
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+                {repoQuery && (
+                  <button className="repo-filter-clear" title="Clear" onClick={() => setRepoQuery("")}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Repo card list */}
             {trackedRepos.length === 0 ? (
               <div className="detail-empty" style={{ marginTop: 16 }}>
@@ -1346,9 +1375,27 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   const url = repoUrl(repo);
                   const isEditing = editingRepoId === repo.id;
                   const displayName = `${repo.owner}/${repo.name}`;
+                  const q = repoQuery.trim().toLowerCase();
+                  const paths = repoPaths[repo.id] ?? [];
+                  const matches = q === "" || [
+                    repo.owner, repo.name, repo.label, repo.description,
+                    ...paths.map((p) => p.path),
+                    ...paths.flatMap((p) => (repoWorkspaces[p.id] ?? []).flatMap((w) => [w.branch, w.worktreePath])),
+                    ...paths.flatMap((p) => (localBranches[p.id] ?? []).map((b) => b.name)),
+                  ].filter(Boolean).join(" ").toLowerCase().includes(q);
+                  if (!matches) return null; // hide non-matching repos while searching
+                  const isExpanded = q !== "" ? true : expandedRepos.has(repo.id); // force-open matches on search
                   return (
                     <div key={repo.id} className="repo-card">
                       <div className="repo-card-header">
+                        <button
+                          className="repo-collapse-toggle"
+                          title={isExpanded ? "Collapse" : "Expand"}
+                          onClick={() => toggleRepoExpanded(repo.id)}
+                          disabled={q !== ""}
+                        >
+                          <ChevronDown size={14} className={`expand-icon${isExpanded ? " expanded" : ""}`} />
+                        </button>
                         <span className="platform-badge">{repo.platform}</span>
                         <span className="repo-card-name">{displayName}</span>
                         {repo.label && <span className="repo-card-label">{repo.label}</span>}
@@ -1386,6 +1433,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         </div>
                       </div>
 
+                      {isExpanded && (<>
                       {(repoPaths[repo.id] ?? []).length > 0 && (
                         <div className="repo-paths-list">
                           {(repoPaths[repo.id] ?? []).map((p) => (
@@ -1589,6 +1637,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                           </div>
                         </div>
                       )}
+                      </>)}
                     </div>
                   );
                 })}
