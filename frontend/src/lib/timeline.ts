@@ -45,7 +45,8 @@ export function startOfDay(d: Date): Date {
 }
 
 export function addDays(d: Date, n: number): Date {
-  const r = startOfDay(d);
+  const base = startOfDay(d);
+  const r = new Date(base.getTime());
   r.setDate(r.getDate() + n);
   return r;
 }

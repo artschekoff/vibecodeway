@@ -47,4 +47,17 @@ describe("applyStatusChange", () => {
     );
     expect(addRelation).not.toHaveBeenCalled();
   });
+
+  it("does not attempt the relation when the status change fails", async () => {
+    const setStatus = vi.fn().mockRejectedValue(new Error("boom"));
+    const addRelation = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      applyStatusChange(
+        { contextId: "c1", slug: "in_progress", comment: "", relationTargetId: "c2" },
+        setStatus,
+        addRelation,
+      ),
+    ).rejects.toThrow("boom");
+    expect(addRelation).not.toHaveBeenCalled();
+  });
 });

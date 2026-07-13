@@ -51,4 +51,22 @@ describe("ActivityTimeline", () => {
     const headersReset = screen.getAllByTestId("timeline-day-header").map((n) => n.textContent);
     expect(headersReset).toEqual(headersBefore);
   });
+
+  it("renders a dependency connector for a relation between visible lanes", async () => {
+    m.ListContextsByOrg.mockResolvedValue([
+      { id: "c1", key: "auth", status: "active", snapshotStatus: "in_progress" },
+      { id: "c2", key: "db", status: "active", snapshotStatus: "in_progress" },
+    ]);
+    m.GetContextRelations.mockImplementation(async (id: string) =>
+      id === "c1"
+        ? [{ id: "r1", contextId: "c1", targetId: "c2", targetKey: "db", relationType: "blocked-by" }]
+        : [],
+    );
+    const { container } = render(<ActivityTimeline />);
+    await waitFor(() => expect(screen.getByText("auth")).toBeInTheDocument());
+    await waitFor(() => {
+      const titles = Array.from(container.querySelectorAll(".timeline-connectors title")).map((t) => t.textContent);
+      expect(titles).toContain("blocked-by → db");
+    });
+  });
 });
