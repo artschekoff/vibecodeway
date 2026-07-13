@@ -218,6 +218,10 @@ export function GetContextParticipants(arg1) {
   return window['go']['main']['App']['GetContextParticipants'](arg1);
 }
 
+export function GetContextRelations(arg1) {
+  return window['go']['main']['App']['GetContextRelations'](arg1);
+}
+
 export function GetContextSnapshot(arg1) {
   return window['go']['main']['App']['GetContextSnapshot'](arg1);
 }
