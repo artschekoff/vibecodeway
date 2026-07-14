@@ -83,7 +83,7 @@ import { useCheckout } from "../lib/useCheckout";
 import { applyStatusChange } from "../lib/statusChange";
 import type { service } from "../../wailsjs/go/models";
 import type { store } from "../../wailsjs/go/models";
-import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, WorkflowStatus } from "../types";
+import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, WorkflowStatus, MentionItem } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
 import IssueCard from "../components/IssueCard";
@@ -1174,6 +1174,33 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const slackThreads = filtering ? allSlackThreads.filter((t) => has(itemMatch!.threadIds, t.id)) : allSlackThreads;
   const contextTexts = filtering ? allContextTexts.filter((t) => has(itemMatch!.textIds, t.id)) : allContextTexts;
   const uploadedFiles = filtering ? allUploadedFiles.filter((f) => has(itemMatch!.fileIds, f.id)) : allUploadedFiles;
+  // @-mention source list: texts, files, and events already held in state. Plain
+  // const (not useMemo) — this runs after the loading/!detail early returns above,
+  // so a hook here would violate the Rules of Hooks. InstructionInput uses it only
+  // in render (no effect deps), so a fresh array identity each render is harmless.
+  const mentionItems: MentionItem[] = [
+    ...contextTexts.map((ct) => ({
+      id: `text-${ct.id}`,
+      title: ct.name,
+      subtitle: `text · ${ct.content.length} chars`,
+      content: `[Text: ${ct.name}]\n${ct.content}`,
+      kind: "text" as const,
+    })),
+    ...uploadedFiles.map((uf) => ({
+      id: `file-${uf.id}`,
+      title: uf.originalName,
+      subtitle: `file · ${uf.fileType}`,
+      content: `[File: ${uf.originalName}]\n${uf.extractedText}`,
+      kind: "file" as const,
+    })),
+    ...events.map((ev) => ({
+      id: `event-${ev.id}`,
+      title: ev.summary,
+      subtitle: `${ev.sourceType} · ${ev.author}`,
+      content: `[Event: ${ev.summary}]\n${ev.rawReference || ev.summary}`,
+      kind: "event" as const,
+    })),
+  ];
   const vcsBranches = filtering ? allVcsBranches.filter((b) => has(itemMatch!.branchIds, b.id)) : allVcsBranches;
   // DM configs are not full-text indexed, so hide them while a filter is active.
   const visibleDMConfigs = filtering ? [] : slackDMConfigs;
@@ -1427,6 +1454,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                       onChange={setPersonAiPrompt}
                                       label={`Describe how to change ${pa.name}'s assignment`}
                                       isLoading={isRefiningPerson}
+                                      mentionItems={mentionItems}
                                       onApply={async (fullPrompt) => {
                                         setIsRefiningPerson(true);
                                         try {
