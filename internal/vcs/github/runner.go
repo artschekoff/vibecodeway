@@ -727,6 +727,49 @@ func aggregateCIStatus(states []string) string {
 	return "SUCCESS"
 }
 
+// reviewStatusReReviewRequired marks a PR whose prior approval by the authenticated
+// user was dismissed and now needs re-approval. Stored in review_status like any other
+// value and rendered with a distinct icon in the UI.
+const reviewStatusReReviewRequired = "re_review_required"
+
+// latestReviewStateFromJSON returns the state of `login`'s most recent review in a
+// `gh api repos/{owner}/{repo}/pulls/{n}/reviews` payload, or "" when the user has none.
+func latestReviewStateFromJSON(raw []byte, login string) string {
+	var reviews []struct {
+		User        struct{ Login string } `json:"user"`
+		State       string                 `json:"state"`
+		SubmittedAt string                 `json:"submitted_at"`
+	}
+	if err := json.Unmarshal(raw, &reviews); err != nil {
+		return ""
+	}
+	latestState, latestAt := "", ""
+	for _, rv := range reviews {
+		if rv.User.Login != login {
+			continue
+		}
+		if rv.SubmittedAt >= latestAt { // RFC3339 UTC sorts lexicographically = chronologically
+			latestAt = rv.SubmittedAt
+			latestState = rv.State
+		}
+	}
+	return latestState
+}
+
+// applyReReviewStatus rewrites ReviewStatus to reviewStatusReReviewRequired for any PR
+// whose latest review by `login` was DISMISSED — a prior approval that went stale.
+func applyReReviewStatus(prs []vcs.PRData, reviewsByNumber map[int][]byte, login string) {
+	for i := range prs {
+		raw, ok := reviewsByNumber[prs[i].Number]
+		if !ok {
+			continue
+		}
+		if latestReviewStateFromJSON(raw, login) == "DISMISSED" {
+			prs[i].ReviewStatus = reviewStatusReReviewRequired
+		}
+	}
+}
+
 // mapReviewDecision converts a GitHub reviewDecision enum to our internal review_status.
 func mapReviewDecision(d string) string {
 	switch d {
