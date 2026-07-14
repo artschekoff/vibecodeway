@@ -64,7 +64,7 @@ describe("InstructionInput @-mention", () => {
     render(
       <InstructionInput
         contextId="ctx-1"
-        value="@красной"
+        value=""
         onChange={onChange}
         onApply={noop}
         onCancel={() => {}}
@@ -72,7 +72,9 @@ describe("InstructionInput @-mention", () => {
       />
     );
     const textarea = screen.getByPlaceholderText(/type @ to reference/i);
-    // Trigger the dropdown by simulating a change event
+    // Trigger the dropdown by simulating a change event. Note: the initial value
+    // must differ from this change value — React skips onChange on a controlled
+    // input when the value is unchanged, which would leave the dropdown closed.
     fireEvent.change(textarea, { target: { value: "@красной", selectionStart: 8 } });
     // Press Enter to select the first item
     fireEvent.keyDown(textarea, { key: "Enter" });
