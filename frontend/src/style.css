@@ -4211,6 +4211,16 @@ select {
   color: #3fb950;
 }
 
+.pr-status--merged {
+  background: rgba(130, 80, 223, 0.18);
+  color: #a371f7;
+}
+
+.pr-status--closed {
+  background: rgba(180, 60, 60, 0.18);
+  color: #e5534b;
+}
+
 .pr-status--re-review {
   background: rgba(187, 128, 9, 0.18);
   color: #d29922;

@@ -132,7 +132,7 @@ function ReviewCard({
       <div className="review-card-top">
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
-        {isWaiting ? (
+        {isWaiting && !status.terminal ? (
           <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
         ) : status.label && (
           <span className={`pr-status-badge${status.className}`}>
