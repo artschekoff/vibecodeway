@@ -16,7 +16,7 @@ export default function HamburgerMenu() {
   const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<string | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, openBoardTab, openAskTab, tabs, closeTab } = useTabContext();
+  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, openBoardTab, openAskTab, openTimelineTab, tabs, closeTab } = useTabContext();
 
   const loadOrgs = useCallback(async () => {
     try {
@@ -95,6 +95,12 @@ export default function HamburgerMenu() {
               onClick={() => { openAskTab(); setOpen(false); }}
             >
               Ask AI
+            </button>
+            <button
+              className="app-menu-item"
+              onClick={() => { openTimelineTab(); setOpen(false); }}
+            >
+              Activity Timeline
             </button>
             <div className="app-menu-divider" />
 

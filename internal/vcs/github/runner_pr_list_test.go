@@ -3,6 +3,7 @@ package github
 import (
 	"testing"
 
+	"github.com/artschekoff/context-consolidator/internal/vcs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -139,4 +140,39 @@ func TestParseGHPRSingle_HappyPath(t *testing.T) {
 func TestParseGHPRSingle_MalformedJSON(t *testing.T) {
 	_, err := parseGHPRSingle([]byte(`not json`))
 	assert.Error(t, err)
+}
+
+func TestLatestReviewStateFromJSON(t *testing.T) {
+	raw := []byte(`[
+		{"user":{"login":"me"},"state":"APPROVED","submitted_at":"2026-01-01T00:00:00Z"},
+		{"user":{"login":"me"},"state":"DISMISSED","submitted_at":"2026-01-02T00:00:00Z"},
+		{"user":{"login":"other"},"state":"CHANGES_REQUESTED","submitted_at":"2026-01-03T00:00:00Z"}
+	]`)
+	assert.Equal(t, "DISMISSED", latestReviewStateFromJSON(raw, "me"))
+	assert.Equal(t, "CHANGES_REQUESTED", latestReviewStateFromJSON(raw, "other"))
+	assert.Equal(t, "", latestReviewStateFromJSON(raw, "nobody"))
+	assert.Equal(t, "", latestReviewStateFromJSON([]byte("not json"), "me"))
+}
+
+func TestLatestReviewStateFromJSON_ReapprovedWins(t *testing.T) {
+	// Approved, dismissed, then approved again → latest is APPROVED, not flagged.
+	raw := []byte(`[
+		{"user":{"login":"me"},"state":"DISMISSED","submitted_at":"2026-01-02T00:00:00Z"},
+		{"user":{"login":"me"},"state":"APPROVED","submitted_at":"2026-01-05T00:00:00Z"}
+	]`)
+	assert.Equal(t, "APPROVED", latestReviewStateFromJSON(raw, "me"))
+}
+
+func TestApplyReReviewStatus(t *testing.T) {
+	prs := []vcs.PRData{
+		{Number: 1, ReviewStatus: "review_required"},
+		{Number: 2, ReviewStatus: "review_required"},
+	}
+	reviewsByNumber := map[int][]byte{
+		1: []byte(`[{"user":{"login":"me"},"state":"DISMISSED","submitted_at":"2026-01-02T00:00:00Z"}]`),
+		// PR 2 intentionally absent → left unchanged.
+	}
+	applyReReviewStatus(prs, reviewsByNumber, "me")
+	assert.Equal(t, "re_review_required", prs[0].ReviewStatus)
+	assert.Equal(t, "review_required", prs[1].ReviewStatus)
 }

@@ -76,9 +76,11 @@ import {
   GetUnresolvedAuthors,
   InterpretContextUpdate,
   SearchContextItems,
+  ListContextsByOrg,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
+import { applyStatusChange } from "../lib/statusChange";
 import type { service } from "../../wailsjs/go/models";
 import type { store } from "../../wailsjs/go/models";
 import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, WorkflowStatus } from "../types";
@@ -515,6 +517,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [statusChangeSlug, setStatusChangeSlug] = useState("");
   const [statusChangeComment, setStatusChangeComment] = useState("");
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [statusRelationTargetId, setStatusRelationTargetId] = useState("");
+  const [statusRelationType, setStatusRelationType] = useState("blocked-by");
+  const [siblingContexts, setSiblingContexts] = useState<{ id: string; key: string }[]>([]);
   const [estimationHistory, setEstimationHistory] = useState<EstimationLog[]>([]);
   const [events, setEvents] = useState<ContextEvent[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -646,11 +651,23 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     if (!statusChangeSlug) return;
     setIsChangingStatus(true);
     try {
-      const updated = await SetContextWorkflowStatus(id, statusChangeSlug, statusChangeComment);
+      await applyStatusChange(
+        {
+          contextId: id,
+          slug: statusChangeSlug,
+          comment: statusChangeComment,
+          relationTargetId: statusRelationTargetId || undefined,
+          relationType: statusRelationType,
+        },
+        SetContextWorkflowStatus,
+        AddContextRelation,
+      );
+      const updated = await GetContextSnapshot(id);
       if (updated) setSnapshot(updated as ContextSnapshot);
       setShowStatusChanger(false);
       setStatusChangeSlug("");
       setStatusChangeComment("");
+      setStatusRelationTargetId("");
     } finally {
       setIsChangingStatus(false);
     }
@@ -1702,6 +1719,20 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                         setStatusChangeSlug(snapshot.status);
                         setStatusChangeComment("");
                         setShowStatusChanger((v) => !v);
+                        setStatusRelationTargetId("");
+                        setStatusRelationType("blocked-by");
+                        const orgId = detail?.context?.orgId;
+                        if (orgId) {
+                          ListContextsByOrg(orgId)
+                            .then((list) =>
+                              setSiblingContexts(
+                                (list ?? [])
+                                  .filter((c) => c.id !== id && c.status === "active")
+                                  .map((c) => ({ id: c.id, key: c.key })),
+                              ),
+                            )
+                            .catch(() => setSiblingContexts([]));
+                        }
                       }}
                     >
                       Change
@@ -1726,6 +1757,28 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                         value={statusChangeComment}
                         onChange={(e) => setStatusChangeComment(e.target.value)}
                       />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <select
+                          className="form-control"
+                          value={statusRelationType}
+                          onChange={(e) => setStatusRelationType(e.target.value)}
+                        >
+                          <option value="blocked-by">blocked-by</option>
+                          <option value="blocks">blocks</option>
+                          <option value="depends-on">depends-on</option>
+                          <option value="relates-to">relates-to</option>
+                        </select>
+                        <select
+                          className="form-control"
+                          value={statusRelationTargetId}
+                          onChange={(e) => setStatusRelationTargetId(e.target.value)}
+                        >
+                          <option value="">— связанная задача (необязательно) —</option>
+                          {siblingContexts.map((c) => (
+                            <option key={c.id} value={c.id}>{c.key}</option>
+                          ))}
+                        </select>
+                      </div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
                           className="btn-primary"

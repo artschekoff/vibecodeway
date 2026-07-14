@@ -11,3 +11,10 @@ func (a *App) AddContextRelation(contextID, targetID, relationType string) (*app
 func (a *App) RemoveContextRelation(id string) error {
 	return a.db.RemoveContextRelation(a.ctx, id)
 }
+
+// GetContextRelations returns all relations originating from contextID,
+// each enriched with the target context key and organization. Read-only;
+// powers dependency connectors in the Activity Timeline view.
+func (a *App) GetContextRelations(contextID string) ([]appstore.ContextRelation, error) {
+	return a.db.ListContextRelations(a.ctx, contextID)
+}

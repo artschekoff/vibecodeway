@@ -23,6 +23,7 @@ interface TabContextValue {
   openPromptsTab: () => void;
   openBoardTab: () => void;
   openAskTab: () => void;
+  openTimelineTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
   pinTab: (tabId: string) => void;
@@ -196,6 +197,13 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, [focusOrOpen]);
 
+  const openTimelineTab = useCallback(() => {
+    focusOrOpen(
+      (t) => t.type === "timeline",
+      () => ({ id: newTabId(), type: "timeline" as const, title: "Activity Timeline", pinned: false })
+    );
+  }, [focusOrOpen]);
+
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId);
@@ -316,6 +324,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openPromptsTab,
         openBoardTab,
         openAskTab,
+        openTimelineTab,
         closeTab,
         forceCloseTab,
         pinTab,

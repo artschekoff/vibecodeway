@@ -439,7 +439,7 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 	out, err := r.run(ctx, []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
-		"--search", "review-requested:@me",
+		"--search", "review-requested:@me draft:false",
 		"--state", "open",
 		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "100",
@@ -447,7 +447,36 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("gh pr list review-requested: %w", err)
 	}
-	return parseGHPRList(out, "review requests")
+	prs, err := parseGHPRList(out, "review requests")
+	if err != nil {
+		return nil, err
+	}
+	r.annotateReReviews(ctx, owner, repo, prs)
+	return prs, nil
+}
+
+// annotateReReviews flags PRs whose authenticated-user review was dismissed (needs re-approval).
+// Best-effort: any auth/API failure leaves PRs unannotated rather than failing the list.
+// ponytail: one reviews API call per still-requested PR; fine at tens of PRs. If this gets
+// hot, request the `latestReviews` field on the `gh pr list` call and drop the per-PR fetch.
+func (r *Runner) annotateReReviews(ctx context.Context, owner, repo string, prs []vcs.PRData) {
+	login, err := r.GetAuthUser(ctx)
+	if err != nil || login == "" {
+		return
+	}
+	reviewsByNumber := make(map[int][]byte)
+	for _, pr := range prs {
+		if pr.ReviewStatus != "review_required" {
+			continue // only a freshly-requested PR can be a dismissed re-request
+		}
+		raw, err := r.apiPaginated(ctx,
+			fmt.Sprintf("repos/%s/%s/pulls/%d/reviews?per_page=100", owner, repo, pr.Number))
+		if err != nil {
+			continue
+		}
+		reviewsByNumber[pr.Number] = raw
+	}
+	applyReReviewStatus(prs, reviewsByNumber, login)
 }
 
 // ListChangesRequestedByUser fetches open PRs where the authenticated user submitted
@@ -456,7 +485,7 @@ func (r *Runner) ListChangesRequestedByUser(ctx context.Context, owner, repo str
 	out, err := r.run(ctx, []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
-		"--search", "reviewed-by:@me review:changes_requested",
+		"--search", "reviewed-by:@me review:changes_requested draft:false",
 		"--state", "open",
 		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "100",
@@ -725,6 +754,49 @@ func aggregateCIStatus(states []string) string {
 		return "PENDING"
 	}
 	return "SUCCESS"
+}
+
+// reviewStatusReReviewRequired marks a PR whose prior approval by the authenticated
+// user was dismissed and now needs re-approval. Stored in review_status like any other
+// value and rendered with a distinct icon in the UI.
+const reviewStatusReReviewRequired = "re_review_required"
+
+// latestReviewStateFromJSON returns the state of `login`'s most recent review in a
+// `gh api repos/{owner}/{repo}/pulls/{n}/reviews` payload, or "" when the user has none.
+func latestReviewStateFromJSON(raw []byte, login string) string {
+	var reviews []struct {
+		User        struct{ Login string } `json:"user"`
+		State       string                 `json:"state"`
+		SubmittedAt string                 `json:"submitted_at"`
+	}
+	if err := json.Unmarshal(raw, &reviews); err != nil {
+		return ""
+	}
+	latestState, latestAt := "", ""
+	for _, rv := range reviews {
+		if rv.User.Login != login {
+			continue
+		}
+		if rv.SubmittedAt >= latestAt { // RFC3339 UTC sorts lexicographically = chronologically
+			latestAt = rv.SubmittedAt
+			latestState = rv.State
+		}
+	}
+	return latestState
+}
+
+// applyReReviewStatus rewrites ReviewStatus to reviewStatusReReviewRequired for any PR
+// whose latest review by `login` was DISMISSED — a prior approval that went stale.
+func applyReReviewStatus(prs []vcs.PRData, reviewsByNumber map[int][]byte, login string) {
+	for i := range prs {
+		raw, ok := reviewsByNumber[prs[i].Number]
+		if !ok {
+			continue
+		}
+		if latestReviewStateFromJSON(raw, login) == "DISMISSED" {
+			prs[i].ReviewStatus = reviewStatusReReviewRequired
+		}
+	}
 }
 
 // mapReviewDecision converts a GitHub reviewDecision enum to our internal review_status.

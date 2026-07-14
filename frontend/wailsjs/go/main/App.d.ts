@@ -118,6 +118,8 @@ export function GetContextDetail(arg1:string):Promise<service.ContextDetail>;
 
 export function GetContextParticipants(arg1:string):Promise<Array<string>>;
 
+export function GetContextRelations(arg1:string):Promise<Array<store.ContextRelation>>;
+
 export function GetContextSnapshot(arg1:string):Promise<store.ContextSnapshot>;
 
 export function GetEstimationHistory(arg1:string):Promise<Array<store.EstimationLog>>;

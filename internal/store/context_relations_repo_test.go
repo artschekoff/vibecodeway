@@ -85,3 +85,34 @@ func TestRemoveContextRelation_NotFound(t *testing.T) {
 	err := s.RemoveContextRelation(context.Background(), "non-existent-id")
 	assert.ErrorIs(t, err, ErrNotFound)
 }
+
+func TestListContextRelations_ReturnsAllForContext(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	src, err := s.CreateContext(ctx, "auth-service", org.ID)
+	require.NoError(t, err)
+	db, err := s.CreateContext(ctx, "db-migration", org.ID)
+	require.NoError(t, err)
+	other, err := s.CreateContext(ctx, "unrelated", org.ID)
+	require.NoError(t, err)
+
+	_, err = s.AddContextRelation(ctx, src.ID, db.ID, "blocked-by")
+	require.NoError(t, err)
+	_, err = s.AddContextRelation(ctx, src.ID, other.ID, "relates-to")
+	require.NoError(t, err)
+
+	rels, err := s.ListContextRelations(ctx, src.ID)
+	require.NoError(t, err)
+	require.Len(t, rels, 2)
+	assert.Equal(t, "db-migration", rels[0].TargetKey)
+	assert.Equal(t, "blocked-by", rels[0].RelationType)
+	assert.Equal(t, "relates-to", rels[1].RelationType)
+
+	// a context with no outgoing relations returns empty, not error
+	none, err := s.ListContextRelations(ctx, db.ID)
+	require.NoError(t, err)
+	assert.Empty(t, none)
+}

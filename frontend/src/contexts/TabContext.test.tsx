@@ -119,6 +119,19 @@ describe("tab persistence", () => {
   });
 });
 
+describe("openTimelineTab", () => {
+  it("openTimelineTab opens and focuses a single timeline tab", () => {
+    const { result } = renderHook(() => useTabContext(), { wrapper });
+    act(() => result.current.openTimelineTab());
+    const timelineTabs = result.current.tabs.filter((t) => t.type === "timeline");
+    expect(timelineTabs).toHaveLength(1);
+    expect(result.current.activeTabId).toBe(timelineTabs[0].id);
+    // opening again focuses the existing one, does not duplicate
+    act(() => result.current.openTimelineTab());
+    expect(result.current.tabs.filter((t) => t.type === "timeline")).toHaveLength(1);
+  });
+});
+
 describe("forceCloseTab", () => {
   it("closes a pinned tab that closeTab would ignore", () => {
     const { result } = renderHook(() => useTabContext(), { wrapper });

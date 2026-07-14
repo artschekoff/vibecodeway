@@ -595,7 +595,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask";
+export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline";
 
 export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)

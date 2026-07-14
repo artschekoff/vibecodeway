@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
+import { reviewStatusMeta } from "./reviewStatus";
 import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2, ChevronDown, Search } from "lucide-react";
 import {
   DndContext,
@@ -124,25 +125,21 @@ function ReviewCard({
     });
   };
 
-  const statusClass =
-    review.reviewStatus === "changes_requested" ? " pr-status--changes-requested"
-    : review.reviewStatus === "approved" ? " pr-status--approved"
-    : "";
-  const statusLabel =
-    review.reviewStatus === "changes_requested" ? "Changes Requested"
-    : review.reviewStatus === "approved" ? "Approved"
-    : review.reviewStatus === "review_required" ? "Review Required"
-    : null;
+  const status = reviewStatusMeta(review.reviewStatus);
 
   return (
     <div className={`review-card${isWaiting ? " review-card--waiting" : ""}`}>
       <div className="review-card-top">
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
-        {isWaiting
-          ? <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
-          : statusLabel && <span className={`pr-status-badge${statusClass}`}>{statusLabel}</span>
-        }
+        {isWaiting && !status.terminal ? (
+          <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
+        ) : status.label && (
+          <span className={`pr-status-badge${status.className}`}>
+            {status.needsReReview && <RotateCcw size={11} className="pr-status-icon" />}
+            {status.label}
+          </span>
+        )}
       </div>
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
@@ -288,13 +285,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [localBranches, setLocalBranches] = useState<Record<string, LocalBranch[]>>({});
   const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set()); // repos start collapsed
+  const [expandedReviewRepos, setExpandedReviewRepos] = useState<Set<string>>(new Set()); // review groups start collapsed
   const [repoQuery, setRepoQuery] = useState("");
-  const toggleRepoExpanded = (id: string) =>
-    setExpandedRepos((prev) => {
+  const toggleInSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
+    setter((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  const toggleRepoExpanded = toggleInSet(setExpandedRepos);
+  const toggleReviewRepoExpanded = toggleInSet(setExpandedReviewRepos);
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editOnCheckoutCommand, setEditOnCheckoutCommand] = useState("");
@@ -1220,20 +1220,40 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const q = reviewFilter.trim().toLowerCase();
                 const match = (r: ReviewRequest) => !q || r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q);
                 const pending = reviews.filter((r) => !r.reviewedAt && match(r));
-                const waiting = reviews.filter((r) => !!r.reviewedAt && match(r));
-                if (pending.length === 0 && waiting.length === 0) return null;
+                const isTerminal = (r: ReviewRequest) => reviewStatusMeta(r.reviewStatus).terminal;
+                const waiting = reviews.filter((r) => !!r.reviewedAt && !isTerminal(r) && match(r));
+                const done = reviews.filter((r) => !!r.reviewedAt && isTerminal(r) && match(r));
+                if (pending.length === 0 && waiting.length === 0 && done.length === 0) return null;
+                const isExpanded = q !== "" ? true : expandedReviewRepos.has(repo.id); // force-open matches on search
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
-                    <div className="review-repo-header">
+                    <div
+                      className="review-repo-header"
+                      role="button"
+                      tabIndex={q === "" ? 0 : -1}
+                      aria-expanded={isExpanded}
+                      onClick={() => q === "" && toggleReviewRepoExpanded(repo.id)}
+                      onKeyDown={(e) => {
+                        if (q === "" && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          toggleReviewRepoExpanded(repo.id);
+                        }
+                      }}
+                      style={{ cursor: q === "" ? "pointer" : "default" }}
+                    >
+                      <span className="repo-collapse-toggle" title={isExpanded ? "Collapse" : "Expand"}>
+                        <ChevronDown size={14} className={`expand-icon${isExpanded ? " expanded" : ""}`} />
+                      </span>
                       <span className="platform-badge">{repo.platform}</span>
                       <span className="review-repo-name">{repo.owner}/{repo.name}</span>
                       {url && (
-                        <button className="review-repo-link" onClick={() => BrowserOpenURL(url)} title={`Open on ${repo.platform}`}>
+                        <button className="review-repo-link" onClick={(e) => { e.stopPropagation(); BrowserOpenURL(url); }} title={`Open on ${repo.platform}`}>
                           <ExternalLink size={12} />
                         </button>
                       )}
                       {pending.length > 0 && <span className="detail-section-count">{pending.length}</span>}
                     </div>
+                    {isExpanded && (<>
                     {pending.length === 0 ? (
                       <div className="detail-section-empty">No pending reviews in this repo.</div>
                     ) : (
@@ -1267,6 +1287,26 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         </div>
                       </>
                     )}
+                    {done.length > 0 && (
+                      <>
+                        <div className="review-waiting-header">
+                          Merged / Closed
+                          <span className="detail-section-count" style={{ marginLeft: 6 }}>{done.length}</span>
+                        </div>
+                        <div className="pr-list">
+                          {done.map((review) => (
+                            <ReviewCard
+                              key={review.id}
+                              review={review}
+                              onDismiss={handleDismissReview}
+                              checkoutLoading={reviewCheckoutLoading}
+                              onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    </>)}
                   </section>
                 );
               })
