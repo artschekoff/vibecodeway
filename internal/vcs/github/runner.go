@@ -447,7 +447,36 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("gh pr list review-requested: %w", err)
 	}
-	return parseGHPRList(out, "review requests")
+	prs, err := parseGHPRList(out, "review requests")
+	if err != nil {
+		return nil, err
+	}
+	r.annotateReReviews(ctx, owner, repo, prs)
+	return prs, nil
+}
+
+// annotateReReviews flags PRs whose authenticated-user review was dismissed (needs re-approval).
+// Best-effort: any auth/API failure leaves PRs unannotated rather than failing the list.
+// ponytail: one reviews API call per still-requested PR; fine at tens of PRs. If this gets
+// hot, request the `latestReviews` field on the `gh pr list` call and drop the per-PR fetch.
+func (r *Runner) annotateReReviews(ctx context.Context, owner, repo string, prs []vcs.PRData) {
+	login, err := r.GetAuthUser(ctx)
+	if err != nil || login == "" {
+		return
+	}
+	reviewsByNumber := make(map[int][]byte)
+	for _, pr := range prs {
+		if pr.ReviewStatus != "review_required" {
+			continue // only a freshly-requested PR can be a dismissed re-request
+		}
+		raw, err := r.apiPaginated(ctx,
+			fmt.Sprintf("repos/%s/%s/pulls/%d/reviews?per_page=100", owner, repo, pr.Number))
+		if err != nil {
+			continue
+		}
+		reviewsByNumber[pr.Number] = raw
+	}
+	applyReReviewStatus(prs, reviewsByNumber, login)
 }
 
 // ListChangesRequestedByUser fetches open PRs where the authenticated user submitted
