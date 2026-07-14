@@ -288,13 +288,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [localBranches, setLocalBranches] = useState<Record<string, LocalBranch[]>>({});
   const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set()); // repos start collapsed
+  const [expandedReviewRepos, setExpandedReviewRepos] = useState<Set<string>>(new Set()); // review groups start collapsed
   const [repoQuery, setRepoQuery] = useState("");
-  const toggleRepoExpanded = (id: string) =>
-    setExpandedRepos((prev) => {
+  const toggleInSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
+    setter((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  const toggleRepoExpanded = toggleInSet(setExpandedRepos);
+  const toggleReviewRepoExpanded = toggleInSet(setExpandedReviewRepos);
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editOnCheckoutCommand, setEditOnCheckoutCommand] = useState("");
@@ -1222,9 +1225,18 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const pending = reviews.filter((r) => !r.reviewedAt && match(r));
                 const waiting = reviews.filter((r) => !!r.reviewedAt && match(r));
                 if (pending.length === 0 && waiting.length === 0) return null;
+                const isExpanded = q !== "" ? true : expandedReviewRepos.has(repo.id); // force-open matches on search
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
                     <div className="review-repo-header">
+                      <button
+                        className="repo-collapse-toggle"
+                        title={isExpanded ? "Collapse" : "Expand"}
+                        onClick={() => toggleReviewRepoExpanded(repo.id)}
+                        disabled={q !== ""}
+                      >
+                        <ChevronDown size={14} className={`expand-icon${isExpanded ? " expanded" : ""}`} />
+                      </button>
                       <span className="platform-badge">{repo.platform}</span>
                       <span className="review-repo-name">{repo.owner}/{repo.name}</span>
                       {url && (
@@ -1234,6 +1246,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                       )}
                       {pending.length > 0 && <span className="detail-section-count">{pending.length}</span>}
                     </div>
+                    {isExpanded && (<>
                     {pending.length === 0 ? (
                       <div className="detail-section-empty">No pending reviews in this repo.</div>
                     ) : (
@@ -1267,6 +1280,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         </div>
                       </>
                     )}
+                    </>)}
                   </section>
                 );
               })
