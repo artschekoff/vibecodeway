@@ -4211,6 +4211,16 @@ select {
   color: #3fb950;
 }
 
+.pr-status--re-review {
+  background: rgba(187, 128, 9, 0.18);
+  color: #d29922;
+}
+
+.pr-status-icon {
+  vertical-align: -1px;
+  margin-right: 3px;
+}
+
 .pr-expand-icon {
   font-size: 10px;
   color: var(--text-muted);

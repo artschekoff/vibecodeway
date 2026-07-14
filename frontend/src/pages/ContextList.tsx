@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
+import { reviewStatusMeta } from "./reviewStatus";
 import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2, ChevronDown, Search } from "lucide-react";
 import {
   DndContext,
@@ -124,25 +125,21 @@ function ReviewCard({
     });
   };
 
-  const statusClass =
-    review.reviewStatus === "changes_requested" ? " pr-status--changes-requested"
-    : review.reviewStatus === "approved" ? " pr-status--approved"
-    : "";
-  const statusLabel =
-    review.reviewStatus === "changes_requested" ? "Changes Requested"
-    : review.reviewStatus === "approved" ? "Approved"
-    : review.reviewStatus === "review_required" ? "Review Required"
-    : null;
+  const status = reviewStatusMeta(review.reviewStatus);
 
   return (
     <div className={`review-card${isWaiting ? " review-card--waiting" : ""}`}>
       <div className="review-card-top">
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
-        {isWaiting
-          ? <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
-          : statusLabel && <span className={`pr-status-badge${statusClass}`}>{statusLabel}</span>
-        }
+        {isWaiting ? (
+          <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
+        ) : status.label && (
+          <span className={`pr-status-badge${status.className}`}>
+            {status.needsReReview && <RotateCcw size={11} className="pr-status-icon" />}
+            {status.label}
+          </span>
+        )}
       </div>
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
