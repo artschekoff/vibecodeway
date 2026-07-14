@@ -1220,8 +1220,10 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const q = reviewFilter.trim().toLowerCase();
                 const match = (r: ReviewRequest) => !q || r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q);
                 const pending = reviews.filter((r) => !r.reviewedAt && match(r));
-                const waiting = reviews.filter((r) => !!r.reviewedAt && match(r));
-                if (pending.length === 0 && waiting.length === 0) return null;
+                const isTerminal = (r: ReviewRequest) => reviewStatusMeta(r.reviewStatus).terminal;
+                const waiting = reviews.filter((r) => !!r.reviewedAt && !isTerminal(r) && match(r));
+                const done = reviews.filter((r) => !!r.reviewedAt && isTerminal(r) && match(r));
+                if (pending.length === 0 && waiting.length === 0 && done.length === 0) return null;
                 const isExpanded = q !== "" ? true : expandedReviewRepos.has(repo.id); // force-open matches on search
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
@@ -1274,6 +1276,25 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         </div>
                         <div className="pr-list">
                           {waiting.map((review) => (
+                            <ReviewCard
+                              key={review.id}
+                              review={review}
+                              onDismiss={handleDismissReview}
+                              checkoutLoading={reviewCheckoutLoading}
+                              onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {done.length > 0 && (
+                      <>
+                        <div className="review-waiting-header">
+                          Merged / Closed
+                          <span className="detail-section-count" style={{ marginLeft: 6 }}>{done.length}</span>
+                        </div>
+                        <div className="pr-list">
+                          {done.map((review) => (
                             <ReviewCard
                               key={review.id}
                               review={review}
