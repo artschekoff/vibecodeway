@@ -34,3 +34,29 @@ func TestUpsertAndListHeadBranch(t *testing.T) {
 	require.Len(t, items, 1)
 	assert.Equal(t, "feat/cool-thing", items[0].HeadBranch)
 }
+
+func TestSetReviewStatusPreservesReviewedAt(t *testing.T) {
+	_, vcsStore := openTestDB(t)
+	ctx := context.Background()
+
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "owner", "mergerepo")
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7,
+		"Merged PR", "alice", "https://example.com/pr/7",
+		"approved", "feat/done", now)
+	require.NoError(t, err)
+
+	// Simulate the PR dropping off the open lists → marked reviewed (waiting).
+	require.NoError(t, vcsStore.ReviewRequests.MarkReviewedForRepo(ctx, repo.ID, nil))
+
+	// Relabel it as merged — must NOT clear reviewed_at.
+	require.NoError(t, vcsStore.ReviewRequests.SetReviewStatus(ctx, repo.ID, 7, "merged"))
+
+	items, err := vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "merged", items[0].ReviewStatus)
+	require.NotNil(t, items[0].ReviewedAt) // still "waiting" (reviewed) — only the label changed
+}

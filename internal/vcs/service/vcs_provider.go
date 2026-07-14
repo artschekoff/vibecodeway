@@ -408,8 +408,48 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		if err := p.store.ReviewRequests.MarkReviewedForRepo(ctx, repo.ID, activeNumbers); err != nil {
 			p.logger.Warn("vcs: mark reviewed failed", zap.String("repo", repo.FullName()), zap.Error(err))
 		}
+
+		// Relabel dropped PRs that were actually merged or closed, so the UI shows
+		// "Merged"/"Closed" instead of "Waiting for Author".
+		// ponytail: one `gh pr view` per newly-dropped PR; PRs already labeled
+		// terminal are skipped, so each PR is fetched at most once.
+		reconcileTerminalStates(ctx, p, runner, repo, activeNumbers)
 	}
 	return nil
+}
+
+// reconcileTerminalStates fetches the real lifecycle state of review requests that
+// dropped off the open review lists and records "merged"/"closed" in review_status.
+// Best-effort: any failure leaves a PR labeled as-is.
+func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCSRunner, repo vcsstore.VCSRepo, activeNumbers []int) {
+	stored, err := p.store.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	if err != nil {
+		p.logger.Warn("vcs: list stored review requests failed",
+			zap.String("repo", repo.FullName()), zap.Error(err))
+		return
+	}
+	active := make(map[int]struct{}, len(activeNumbers))
+	for _, n := range activeNumbers {
+		active[n] = struct{}{}
+	}
+	for _, rr := range stored {
+		if _, isActive := active[rr.PRNumber]; isActive {
+			continue // still in an open review list
+		}
+		if rr.ReviewStatus == "merged" || rr.ReviewStatus == "closed" {
+			continue // already terminal — do not re-fetch
+		}
+		pr, err := runner.GetPRByNumber(ctx, repo.Owner, repo.Name, rr.PRNumber)
+		if err != nil || pr == nil {
+			continue // best-effort
+		}
+		if pr.State == "merged" || pr.State == "closed" {
+			if err := p.store.ReviewRequests.SetReviewStatus(ctx, repo.ID, rr.PRNumber, pr.State); err != nil {
+				p.logger.Warn("vcs: set review status failed",
+					zap.Int("pr", rr.PRNumber), zap.Error(err))
+			}
+		}
+	}
 }
 
 // VCSAuth stores the GitHub auth result. Delegates to the auth store.

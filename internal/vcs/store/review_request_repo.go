@@ -105,6 +105,16 @@ func (r *ReviewRequestRepo) DismissReviewRequest(ctx context.Context, id string)
 	return err
 }
 
+// SetReviewStatus updates only the review_status for a stored review request,
+// leaving reviewed_at/dismissed_at untouched. Used to relabel dropped PRs as
+// "merged"/"closed" without changing their waiting state.
+func (r *ReviewRequestRepo) SetReviewStatus(ctx context.Context, repoID string, prNumber int, status string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_review_requests SET review_status = ? WHERE repo_id = ? AND pr_number = ?`,
+		status, repoID, prNumber)
+	return err
+}
+
 // ListReviewRequests returns non-dismissed review requests, optionally filtered by repoID.
 func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID string) ([]ReviewRequest, error) {
 	q := `
