@@ -1227,7 +1227,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   <section key={repo.id} className="detail-section review-repo-section">
                     <div
                       className="review-repo-header"
+                      role="button"
+                      tabIndex={q === "" ? 0 : -1}
+                      aria-expanded={isExpanded}
                       onClick={() => q === "" && toggleReviewRepoExpanded(repo.id)}
+                      onKeyDown={(e) => {
+                        if (q === "" && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          toggleReviewRepoExpanded(repo.id);
+                        }
+                      }}
                       style={{ cursor: q === "" ? "pointer" : "default" }}
                     >
                       <span className="repo-collapse-toggle" title={isExpanded ? "Collapse" : "Expand"}>
