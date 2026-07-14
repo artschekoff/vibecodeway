@@ -439,7 +439,7 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 	out, err := r.run(ctx, []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
-		"--search", "review-requested:@me",
+		"--search", "review-requested:@me draft:false",
 		"--state", "open",
 		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "100",
@@ -485,7 +485,7 @@ func (r *Runner) ListChangesRequestedByUser(ctx context.Context, owner, repo str
 	out, err := r.run(ctx, []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
-		"--search", "reviewed-by:@me review:changes_requested",
+		"--search", "reviewed-by:@me review:changes_requested draft:false",
 		"--state", "open",
 		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "100",

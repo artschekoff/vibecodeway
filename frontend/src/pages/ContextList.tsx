@@ -1225,19 +1225,18 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const isExpanded = q !== "" ? true : expandedReviewRepos.has(repo.id); // force-open matches on search
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
-                    <div className="review-repo-header">
-                      <button
-                        className="repo-collapse-toggle"
-                        title={isExpanded ? "Collapse" : "Expand"}
-                        onClick={() => toggleReviewRepoExpanded(repo.id)}
-                        disabled={q !== ""}
-                      >
+                    <div
+                      className="review-repo-header"
+                      onClick={() => q === "" && toggleReviewRepoExpanded(repo.id)}
+                      style={{ cursor: q === "" ? "pointer" : "default" }}
+                    >
+                      <span className="repo-collapse-toggle" title={isExpanded ? "Collapse" : "Expand"}>
                         <ChevronDown size={14} className={`expand-icon${isExpanded ? " expanded" : ""}`} />
-                      </button>
+                      </span>
                       <span className="platform-badge">{repo.platform}</span>
                       <span className="review-repo-name">{repo.owner}/{repo.name}</span>
                       {url && (
-                        <button className="review-repo-link" onClick={() => BrowserOpenURL(url)} title={`Open on ${repo.platform}`}>
+                        <button className="review-repo-link" onClick={(e) => { e.stopPropagation(); BrowserOpenURL(url); }} title={`Open on ${repo.platform}`}>
                           <ExternalLink size={12} />
                         </button>
                       )}
