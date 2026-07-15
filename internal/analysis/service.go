@@ -184,7 +184,7 @@ The document must be detailed enough for a coding agent to execute the work, but
 Write a comprehensive task assignment for **{{person_name}} only**.
 Focus exclusively on what this person owns or has commented on.
 
-Include ALL sections below. Write "N/A" in any section with no data — do not omit sections.
+You are given an authoritative "Jira issues" block (with exact keys, current statuses, and comment bodies) plus an event log below. Extract concrete specifics from them: cite exact issue keys (e.g. JH-4264), current statuses, acceptance criteria, field/endpoint names, and branch names verbatim wherever they appear in the source. Include ALL sections below; write "N/A" in a section ONLY when the source genuinely contains nothing for it — never as a shortcut when specifics are present.
 
 ### Current Assignment
 - Exact Jira issue keys, summaries, and current statuses they own
