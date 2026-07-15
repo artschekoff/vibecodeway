@@ -14,6 +14,7 @@ import {
 } from "../../wailsjs/go/main/App";
 import type { Context, Organization } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
+import TypingIndicator from "./TypingIndicator";
 
 interface Props {
   visible: boolean;
@@ -237,12 +238,16 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
     "Attach";
 
   return (
-    <div
-      className="modal-overlay quick-attach-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) handleDismiss();
-      }}
-    >
+    <>
+      {(creatingCtx || attaching) && (
+        <TypingIndicator label={creatingCtx ? "Creating context…" : "Fetching resources…"} />
+      )}
+      <div
+        className="modal-overlay quick-attach-overlay"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) handleDismiss();
+        }}
+      >
       <div className="modal quick-attach-modal">
         <h2>
           {kind.type === "jira" ? "Add Jira issue to context" :
@@ -415,5 +420,6 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
         </div>
       </div>
     </div>
+    </>
   );
 };

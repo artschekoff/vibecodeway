@@ -6460,3 +6460,45 @@ select {
 .timeline-empty { color: var(--text-muted); font-size: 12px; padding: 6px 0; }
 .timeline-loading { color: var(--text-muted); padding: 24px; }
 .timeline-connectors { z-index: 3; }
+
+/* ── Typing-indicator preloader (Telegram-style bouncing dots) ── */
+.typing-indicator-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 4000; /* ponytail: sits above .modal-overlay; bump if a higher overlay appears */
+}
+.typing-indicator-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  color: var(--text);
+  font-size: 14px;
+}
+.typing-indicator-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+.typing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #e0559d);
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+.typing-indicator-label { color: var(--text); }
+
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
