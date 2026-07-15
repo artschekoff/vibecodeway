@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- Refresh the stored person_assignment_single prompt to the softened wording introduced in
 -- the Go constant defaultSinglePersonAssignmentPrompt. loadPrompt prefers the ai_prompts DB
 -- row over the constant, so without this refresh the softened instruction is inert.
