@@ -711,6 +711,30 @@ func (svc *ContextService) SyncAllComments(ctx context.Context, contextID string
 	return syncIssueComments(ctx, svc.jira, svc.jiraRepo, issues, svc.logger)
 }
 
+// GetIssuesWithComments returns the context's Jira issues (all, not just active) with
+// their comments attached — used to build authoritative AI-prompt content.
+func (svc *ContextService) GetIssuesWithComments(ctx context.Context, contextID string) ([]jirastore.Issue, error) {
+	issues, err := svc.jiraRepo.GetIssuesByContext(ctx, contextID, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(issues) == 0 {
+		return issues, nil
+	}
+	ids := make([]string, len(issues))
+	for i, is := range issues {
+		ids[i] = is.ID
+	}
+	byIssue, err := svc.jiraRepo.GetCommentsByIssues(ctx, ids, false)
+	if err != nil {
+		return nil, err
+	}
+	for i := range issues {
+		issues[i].Comments = byIssue[issues[i].ID]
+	}
+	return issues, nil
+}
+
 // syncIssueComments fetches and deduplicates comments for the given issues.
 // Errors per-issue are logged and skipped; returns the count of newly inserted comments.
 // Comments are fetched concurrently using a pool of up to 5 workers.
