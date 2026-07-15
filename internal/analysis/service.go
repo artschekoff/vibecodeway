@@ -12,6 +12,7 @@ import (
 
 	"github.com/artschekoff/context-consolidator/internal/openai"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
+	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	"github.com/viterin/vek/vek32"
 	"go.uber.org/zap"
@@ -183,7 +184,7 @@ The document must be detailed enough for a coding agent to execute the work, but
 Write a comprehensive task assignment for **{{person_name}} only**.
 Focus exclusively on what this person owns or has commented on.
 
-Include ALL sections below. Write "N/A" in any section with no data — do not omit sections.
+You are given an authoritative "Jira issues" block (with exact keys, current statuses, and comment bodies) plus an event log below. Extract concrete specifics from them: cite exact issue keys (e.g. JH-4264), current statuses, acceptance criteria, field/endpoint names, and branch names verbatim wherever they appear in the source. Include ALL sections below; write "N/A" in a section ONLY when the source genuinely contains nothing for it — never as a shortcut when specifics are present.
 
 ### Current Assignment
 - Exact Jira issue keys, summaries, and current statuses they own
@@ -792,11 +793,18 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 		})
 	}
 
+	rawContent := formatMessages(allMsgs)
+	if issues, ierr := s.jiraSvc.GetIssuesWithComments(ctx, contextID); ierr != nil {
+		s.logger.Warn("analysis: could not load jira issues for assignment prompt", zap.Error(ierr))
+	} else {
+		rawContent += formatJiraIssuesForPrompt(issues)
+	}
+
 	tmpl := s.loadPrompt(ctx, "person_assignment", defaultPersonAssignmentPrompt)
 	prompt := applyPlaceholders(tmpl, map[string]string{
 		"context_key":         ctxRow.Key,
 		"org_users":           formatOrgUsers(orgUsers),
-		"raw_content":         formatMessages(allMsgs),
+		"raw_content":         rawContent,
 		"events":              formatEventsForPrompt(promptEvents),
 		"custom_instructions": "",
 	})
@@ -820,7 +828,6 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 	if err != nil {
 		return nil, fmt.Errorf("replace person assignments: %w", err)
 	}
-	rawContent := formatMessages(allMsgs)
 	eventsJSON, _ := json.Marshal(allEvents)
 	eventsSnapshot := string(eventsJSON)
 	for _, pa := range result {
@@ -1099,6 +1106,11 @@ func (s *Service) GenerateSinglePersonAssignment(ctx context.Context, contextID,
 		s.logger.Warn("analysis: list messages failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 	rawContent := formatMessages(allMsgs)
+	if issues, ierr := s.jiraSvc.GetIssuesWithComments(ctx, contextID); ierr != nil {
+		s.logger.Warn("analysis: could not load jira issues for assignment prompt", zap.Error(ierr))
+	} else {
+		rawContent += formatJiraIssuesForPrompt(issues)
+	}
 
 	promptEvents := make([]eventForPrompt, 0, len(allEvents))
 	for _, e := range allEvents {
@@ -1647,6 +1659,49 @@ func formatMessages(msgs []appstore.Message) string {
 		write(root, "")
 	}
 	return b.String()
+}
+
+// formatJiraIssuesForPrompt renders the context's Jira issues as an authoritative,
+// clearly-labeled block for the assignment prompt: issue key, current status, type,
+// assignee, description, and comment bodies (which often carry acceptance criteria and
+// branch/PR references). Unlike formatMessages, this surfaces the key and status the
+// model needs to cite verbatim instead of writing "N/A".
+func formatJiraIssuesForPrompt(issues []jirastore.Issue) string {
+	if len(issues) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n=== Jira issues (authoritative — cite keys, statuses and acceptance criteria verbatim) ===\n")
+	for _, is := range issues {
+		fmt.Fprintf(&b, "\n[%s] %s\n", is.JiraKey, is.Summary)
+		fmt.Fprintf(&b, "  Status: %s", orUnknown(is.Status))
+		if is.IssueType != "" {
+			fmt.Fprintf(&b, " | Type: %s", is.IssueType)
+		}
+		if is.Assignee != "" {
+			fmt.Fprintf(&b, " | Assignee: %s", is.Assignee)
+		}
+		b.WriteString("\n")
+		if strings.TrimSpace(is.Description) != "" {
+			fmt.Fprintf(&b, "  Description: %s\n", is.Description)
+		}
+		for _, c := range is.Comments {
+			author := c.Author
+			if author == "" {
+				author = "unknown"
+			}
+			fmt.Fprintf(&b, "  Comment (%s): %s\n", author, c.Body)
+		}
+	}
+	return b.String()
+}
+
+// orUnknown avoids emitting a blank status/field, which the model reads as "no data".
+func orUnknown(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "unknown"
+	}
+	return s
 }
 
 // formatOrgUsers renders org users as a simple bulleted list for prompt injection.
