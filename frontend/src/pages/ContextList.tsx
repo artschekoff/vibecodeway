@@ -92,6 +92,7 @@ import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import { useCheckout } from "../lib/useCheckout";
 import CheckoutLogModal from "../components/CheckoutLogModal";
+import { workspaceMatchesQuery, branchMatchesQuery } from "../lib/repoFilter";
 
 // ─── Reviews helpers ──────────────────────────────────────────────────────────
 
@@ -1417,13 +1418,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   const displayName = `${repo.owner}/${repo.name}`;
                   const q = repoQuery.trim().toLowerCase();
                   const paths = repoPaths[repo.id] ?? [];
-                  const matches = q === "" || [
-                    repo.owner, repo.name, repo.label, repo.description,
-                    ...paths.map((p) => p.path),
-                    ...paths.flatMap((p) => (repoWorkspaces[p.id] ?? []).flatMap((w) => [w.branch, w.worktreePath])),
-                    ...paths.flatMap((p) => (localBranches[p.id] ?? []).map((b) => b.name)),
-                  ].filter(Boolean).join(" ").toLowerCase().includes(q);
-                  if (!matches) return null; // hide non-matching repos while searching
+                  // Row-level filter: match only workspace branch/worktree-folder names and
+                  // local-branch names. A path shows if it has >=1 matching row; a repo shows
+                  // if any path does. Empty query shows everything.
+                  const visibleWorkspaces = (pid: string) =>
+                    (repoWorkspaces[pid] ?? []).filter((w) => workspaceMatchesQuery(w, q));
+                  const visibleBranches = (pid: string) =>
+                    (localBranches[pid] ?? []).filter((b) => branchMatchesQuery(b, q));
+                  const pathHasMatch = (pid: string) =>
+                    visibleWorkspaces(pid).length > 0 || visibleBranches(pid).length > 0;
+                  if (q !== "" && !paths.some((p) => pathHasMatch(p.id))) return null; // hide repos with no matching row
                   const isExpanded = q !== "" ? true : expandedRepos.has(repo.id); // force-open matches on search
                   return (
                     <div key={repo.id} className="repo-card">
@@ -1476,7 +1480,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                       {isExpanded && (<>
                       {(repoPaths[repo.id] ?? []).length > 0 && (
                         <div className="repo-paths-list">
-                          {(repoPaths[repo.id] ?? []).map((p) => (
+                          {(repoPaths[repo.id] ?? []).map((p) => {
+                            if (q !== "" && !pathHasMatch(p.id)) return null; // hide paths with no matching row
+                            return (
                             <div key={p.id}>
                               <div className="repo-path-row">
                                 <FolderOpen size={11} style={{ flexShrink: 0 }} />
@@ -1496,10 +1502,10 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                   <X size={11} />
                                 </button>
                               </div>
-                              {(repoWorkspaces[p.id] ?? []).length > 0 && (
+                              {visibleWorkspaces(p.id).length > 0 && (
                                 <div className="repo-section-label">Workspaces</div>
                               )}
-                              {(repoWorkspaces[p.id] ?? []).map((w) => {
+                              {visibleWorkspaces(p.id).map((w) => {
                                 const branchUrl = url ? `${url}/tree/${encodeURIComponent(w.branch)}` : "";
                                 return (
                                   <div key={w.id} className="workspace-row">
@@ -1550,10 +1556,10 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                   </div>
                                 );
                               })}
-                              {(localBranches[p.id] ?? []).length > 0 && (
+                              {visibleBranches(p.id).length > 0 && (
                                 <div className="repo-section-label">Local branches</div>
                               )}
-                              {(localBranches[p.id] ?? []).map((b) => {
+                              {visibleBranches(p.id).map((b) => {
                                 const branchUrl = url ? `${url}/tree/${encodeURIComponent(b.name)}` : "";
                                 return (
                                   <div key={b.name} className="local-branch-row">
@@ -1601,7 +1607,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                 );
                               })}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
 
