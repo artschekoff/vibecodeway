@@ -388,7 +388,7 @@ interface ContextDetailProps {
   tabId: string;
 }
 
-function WorkspaceMenu({
+export function WorkspaceMenu({
   workspace,
   checkoutLoading,
   onMarkDone,
@@ -437,6 +437,13 @@ function WorkspaceMenu({
             onClick={() => { onCheckout(); setOpen(false); }}
           >
             Open workspace
+          </button>
+          <button
+            className="workspace-menu-item"
+            onClick={() => { void navigator.clipboard.writeText(workspace.worktreePath); setOpen(false); }}
+            title="Copy workspace local path"
+          >
+            Copy local path
           </button>
           {workspace.status === "active" && (
             <button
