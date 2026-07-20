@@ -20,6 +20,7 @@ import {
   ToggleUploadedFileActive,
   ToggleSlackDMConfigActive,
   UpdateContext,
+  ToggleContextStatus,
   SetJiraConfig,
   AddIssuesToContext,
   AddSlackChannels,
@@ -81,6 +82,7 @@ import {
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import { applyStatusChange } from "../lib/statusChange";
+import StatusToggle from "../components/StatusToggle";
 import type { service } from "../../wailsjs/go/models";
 import type { store } from "../../wailsjs/go/models";
 import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, WorkflowStatus, MentionItem } from "../types";
@@ -1162,6 +1164,16 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   );
 
   const { context } = detail;
+
+  const handleToggleContextStatus = async () => {
+    try {
+      const updated = await ToggleContextStatus(context.id);
+      setDetail((prev) => prev ? ({ ...prev, context: { ...prev.context, status: updated.status } } as service.ContextDetail) : prev);
+    } catch {
+      /* best-effort, mirrors list behaviour */
+    }
+  };
+
   const allIssues = detail.issues ?? [];
   const allSlackChannels = detail.slackChannels ?? [];
   const allSlackThreads = detail.slackThreads ?? [];
@@ -1646,7 +1658,11 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               <Copy size={13} />
             </button>
           </h1>
-          <span className={`badge badge-${context.status}`}>{context.status}</span>
+          <StatusToggle
+            active={context.status === "active"}
+            onToggle={() => void handleToggleContextStatus()}
+            title={context.status === "active" ? "Archive this context" : "Reactivate this context"}
+          />
           <span className="topbar-counts">
             {[
               allIssues.length > 0 && `${allIssues.length} issue${allIssues.length !== 1 ? "s" : ""}`,
