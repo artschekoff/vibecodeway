@@ -610,6 +610,20 @@ export interface ActivityFeedItem {
   createdAt: string;
 }
 
+export type EventCategory = "jira_update" | "pr_update" | "code_review";
+export type HookActionType = "os_notification" | "run_script";
+
+export interface ContextEventHook {
+  id: string;
+  contextId: string;
+  eventCategory: EventCategory;
+  actionType: HookActionType;
+  scriptCommand: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)
   type: TabType;

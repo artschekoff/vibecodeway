@@ -102,6 +102,7 @@ import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import CheckoutLogModal from "../components/CheckoutLogModal";
+import ContextEventHooks from "../components/ContextEventHooks";
 
 // ── Task list helpers ────────────────────────────────────────────────────────
 
@@ -1733,6 +1734,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         {toastMsg && <div className={`toast toast--${toastType}`}>{toastMsg}</div>}
 
         <div className="detail-primary">
+        <ContextEventHooks contextId={id} />
         {/* Analysis snapshot */}
         <div className="detail-section" style={{ marginBottom: 12 }}>
           <div className="detail-section-header">
