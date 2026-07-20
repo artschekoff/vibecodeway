@@ -150,7 +150,7 @@ func (a *App) startup(ctx context.Context) {
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
 	jiraProvider.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		if err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
+		if _, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
 			return err
 		}
 		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
@@ -171,7 +171,7 @@ func (a *App) startup(ctx context.Context) {
 		ghRunner.SetToken(auth.Token)
 	}
 	a.vcsSvc.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		if err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
+		if _, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
 			return err
 		}
 		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {

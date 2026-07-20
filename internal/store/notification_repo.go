@@ -9,20 +9,20 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreateNotification inserts a new notification for a state-change event.
-// If an unread notification of the same event_type already exists for the entity,
-// it is a no-op (prevents duplicate alerts on repeated syncs).
-func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+// CreateNotification inserts a new notification for a state-change event and
+// reports whether a row was actually inserted. If an unread notification of the
+// same event_type already exists for the entity, it is a no-op returning false.
+func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) (bool, error) {
 	var existing string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id FROM notifications WHERE entity_id = ? AND event_type = ? AND read_at IS NULL LIMIT 1`,
 		entityID, eventType,
 	).Scan(&existing)
 	if err == nil {
-		return nil // already an unread notification of this type — skip
+		return false, nil // already an unread notification of this type — skip
 	}
 	if err != sql.ErrNoRows {
-		return fmt.Errorf("check existing notification: %w", err)
+		return false, fmt.Errorf("check existing notification: %w", err)
 	}
 
 	_, err = s.db.ExecContext(ctx, `
@@ -31,9 +31,9 @@ func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, e
 	`, uuid.New().String(), contextID, entityType, entityID, eventType, oldValue, newValue,
 		time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
-		return fmt.Errorf("insert notification: %w", err)
+		return false, fmt.Errorf("insert notification: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // CountUnreadNotifications returns the number of unread notifications for a context.
