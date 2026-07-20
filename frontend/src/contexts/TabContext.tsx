@@ -24,6 +24,7 @@ interface TabContextValue {
   openBoardTab: () => void;
   openAskTab: () => void;
   openTimelineTab: () => void;
+  openActivityFeedTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
   pinTab: (tabId: string) => void;
@@ -204,6 +205,13 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, [focusOrOpen]);
 
+  const openActivityFeedTab = useCallback(() => {
+    focusOrOpen(
+      (t) => t.type === "activity-feed",
+      () => ({ id: newTabId(), type: "activity-feed" as const, title: "Activity Feed", pinned: false })
+    );
+  }, [focusOrOpen]);
+
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId);
@@ -325,6 +333,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openBoardTab,
         openAskTab,
         openTimelineTab,
+        openActivityFeedTab,
         closeTab,
         forceCloseTab,
         pinTab,

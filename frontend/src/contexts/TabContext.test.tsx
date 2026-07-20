@@ -132,6 +132,20 @@ describe("openTimelineTab", () => {
   });
 });
 
+describe("openActivityFeedTab", () => {
+  it("opens and focuses a single activity-feed tab", () => {
+    const { result } = renderHook(() => useTabContext(), { wrapper });
+    act(() => result.current.openActivityFeedTab());
+    const feedTabs = result.current.tabs.filter((t) => t.type === "activity-feed");
+    expect(feedTabs).toHaveLength(1);
+    expect(feedTabs[0].title).toBe("Activity Feed");
+    expect(result.current.activeTabId).toBe(feedTabs[0].id);
+    // opening again focuses the existing one, does not duplicate
+    act(() => result.current.openActivityFeedTab());
+    expect(result.current.tabs.filter((t) => t.type === "activity-feed")).toHaveLength(1);
+  });
+});
+
 describe("forceCloseTab", () => {
   it("closes a pinned tab that closeTab would ignore", () => {
     const { result } = renderHook(() => useTabContext(), { wrapper });
