@@ -578,3 +578,24 @@ func (s *Store) TouchContext(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// ContextIDsForRepo returns the distinct context IDs that track the given repo
+// (via context_vcs_branches). Non-nil even when empty.
+func (s *Store) ContextIDsForRepo(ctx context.Context, repoID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DISTINCT context_id FROM context_vcs_branches WHERE repo_id = ?`, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("context ids for repo: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan context id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}

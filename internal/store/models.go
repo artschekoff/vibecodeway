@@ -108,6 +108,19 @@ type ActivityFeedItem struct {
 	CreatedAt  string `json:"createdAt"`
 }
 
+// ContextEventHook is a per-context automation: when an event of EventCategory
+// is newly detected, run the action of ActionType.
+type ContextEventHook struct {
+	ID            string `json:"id"`
+	ContextID     string `json:"contextId"`
+	EventCategory string `json:"eventCategory"` // jira_update | pr_update | code_review
+	ActionType    string `json:"actionType"`    // os_notification | run_script
+	ScriptCommand string `json:"scriptCommand"` // empty unless ActionType == run_script
+	Enabled       bool   `json:"enabled"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+}
+
 // ContextText is a plain-text entry associated with a context.
 // Multiple texts can be attached to a single context (1 context : many texts).
 type ContextText struct {
