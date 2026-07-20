@@ -79,3 +79,34 @@ func (s *Store) ListUnreadNotifications(ctx context.Context, contextID string) (
 	}
 	return result, rows.Err()
 }
+
+// ListRecentActivity returns the most recent notifications across all contexts,
+// newest first, joined with the context key for display. Includes read and
+// unread. limit <= 0 defaults to 100.
+func (s *Store) ListRecentActivity(ctx context.Context, limit int) ([]ActivityFeedItem, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT n.id, n.context_id, c.key, n.entity_type, n.event_type, n.old_value, n.new_value, n.created_at
+		FROM notifications n
+		JOIN contexts c ON c.id = n.context_id
+		ORDER BY n.created_at DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent activity: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := []ActivityFeedItem{}
+	for rows.Next() {
+		var it ActivityFeedItem
+		if err := rows.Scan(&it.ID, &it.ContextID, &it.ContextKey, &it.EntityType,
+			&it.EventType, &it.OldValue, &it.NewValue, &it.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan activity item: %w", err)
+		}
+		items = append(items, it)
+	}
+	return items, rows.Err()
+}

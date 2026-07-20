@@ -95,6 +95,19 @@ type Notification struct {
 	ReadAt     *string `json:"readAt,omitempty"`
 }
 
+// ActivityFeedItem is a notification joined with its context key, for the
+// cross-context activity feed. Read and unread are both included.
+type ActivityFeedItem struct {
+	ID         string `json:"id"`
+	ContextID  string `json:"contextId"`
+	ContextKey string `json:"contextKey"`
+	EntityType string `json:"entityType"`
+	EventType  string `json:"eventType"`
+	OldValue   string `json:"oldValue"`
+	NewValue   string `json:"newValue"`
+	CreatedAt  string `json:"createdAt"`
+}
+
 // ContextText is a plain-text entry associated with a context.
 // Multiple texts can be attached to a single context (1 context : many texts).
 type ContextText struct {
