@@ -19,6 +19,7 @@ import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
 import { AccessibilityBanner } from "./components/AccessibilityBanner";
 import { BgRefreshToast } from "./components/BgRefreshToast";
 import { EventsOn, EventsOff, SendNotification, InitializeNotifications } from "../wailsjs/runtime/runtime";
+import { hookNotificationOptions, type HookNotifyPayload } from "./lib/hookNotify";
 import "./style.css";
 
 const isWailsContext = () =>
@@ -89,11 +90,15 @@ function AppShell() {
     const offA11yGranted = EventsOn("accessibility:granted", () => setShowA11yBanner(false));
     const offNoSelection = EventsOn("hotkey:no-selection", () =>
       showToast("No text selected — select text in another app first"));
+    const offHookNotify = EventsOn("hook:notify", (payload: HookNotifyPayload) => {
+      SendNotification(hookNotificationOptions(payload)).catch(() => {});
+    });
     return () => {
       safeOff(offPicker, "hotkey:show-picker");
       safeOff(offA11y, "accessibility:needed");
       safeOff(offA11yGranted, "accessibility:granted");
       safeOff(offNoSelection, "hotkey:no-selection");
+      safeOff(offHookNotify, "hook:notify");
     };
   }, [showToast]);
 
