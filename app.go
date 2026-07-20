@@ -150,8 +150,12 @@ func (a *App) startup(ctx context.Context) {
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
 	jiraProvider.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		if _, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
+		inserted, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+		if err != nil {
 			return err
+		}
+		if inserted {
+			a.dispatchContextHooks(contextID, "jira_update")
 		}
 		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
 			a.logger.Warn("jira notify: set snapshot status failed",
@@ -171,8 +175,12 @@ func (a *App) startup(ctx context.Context) {
 		ghRunner.SetToken(auth.Token)
 	}
 	a.vcsSvc.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		if _, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue); err != nil {
+		inserted, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+		if err != nil {
 			return err
+		}
+		if inserted {
+			a.dispatchContextHooks(contextID, "pr_update")
 		}
 		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
 			a.logger.Warn("vcs notify: set snapshot status failed",
