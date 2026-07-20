@@ -9,6 +9,7 @@ import PromptsPage from "./pages/PromptsPage";
 import MyBoardPage from "./pages/MyBoardPage";
 import AskAIPage from "./pages/AskAIPage";
 import ActivityTimeline from "./pages/ActivityTimeline";
+import ActivityFeedPage from "./pages/ActivityFeedPage";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
 import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
@@ -48,6 +49,7 @@ function TabContent() {
   if (activeTab.type === "board") return <MyBoardPage />;
   if (activeTab.type === "ask") return <AskAIPage />;
   if (activeTab.type === "timeline") return <ActivityTimeline />;
+  if (activeTab.type === "activity-feed") return <ActivityFeedPage />;
   if (activeTab.type === "org") {
     return <ContextList orgId={activeTab.orgId!} tabId={activeTab.id} />;
   }
