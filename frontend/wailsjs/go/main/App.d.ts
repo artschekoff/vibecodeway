@@ -56,6 +56,8 @@ export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string
 
 export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
+export function CreateContextEventHook(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.ContextEventHook>;
+
 export function CreateOrgUser(arg1:string,arg2:string,arg3:string):Promise<store.User>;
 
 export function CreateOrganization(arg1:string):Promise<store.Organization>;
@@ -65,6 +67,8 @@ export function CreateUserAndAssign(arg1:string,arg2:string,arg3:string,arg4:str
 export function CreateWorkflowStatus(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.WorkflowStatus>;
 
 export function DeleteContext(arg1:string):Promise<void>;
+
+export function DeleteContextEventHook(arg1:string):Promise<void>;
 
 export function DeleteContextText(arg1:string):Promise<void>;
 
@@ -167,6 +171,8 @@ export function ListAllContexts():Promise<Array<store.Context>>;
 export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;
 
 export function ListAssignmentVersions(arg1:string):Promise<Array<store.PersonAssignmentVersion>>;
+
+export function ListContextEventHooks(arg1:string):Promise<Array<store.ContextEventHook>>;
 
 export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 

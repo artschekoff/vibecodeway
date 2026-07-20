@@ -94,6 +94,10 @@ export function CreateContext(arg1, arg2) {
   return window['go']['main']['App']['CreateContext'](arg1, arg2);
 }
 
+export function CreateContextEventHook(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CreateContextEventHook'](arg1, arg2, arg3, arg4);
+}
+
 export function CreateOrgUser(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateOrgUser'](arg1, arg2, arg3);
 }
@@ -112,6 +116,10 @@ export function CreateWorkflowStatus(arg1, arg2, arg3, arg4) {
 
 export function DeleteContext(arg1) {
   return window['go']['main']['App']['DeleteContext'](arg1);
+}
+
+export function DeleteContextEventHook(arg1) {
+  return window['go']['main']['App']['DeleteContextEventHook'](arg1);
 }
 
 export function DeleteContextText(arg1) {
@@ -316,6 +324,10 @@ export function ListAllWorkspaces() {
 
 export function ListAssignmentVersions(arg1) {
   return window['go']['main']['App']['ListAssignmentVersions'](arg1);
+}
+
+export function ListContextEventHooks(arg1) {
+  return window['go']['main']['App']['ListContextEventHooks'](arg1);
 }
 
 export function ListContextTexts(arg1) {

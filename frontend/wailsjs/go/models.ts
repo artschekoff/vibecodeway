@@ -1039,6 +1039,32 @@ export namespace store {
 	        this.snapshotStatusComment = source["snapshotStatusComment"];
 	    }
 	}
+	export class ContextEventHook {
+	    id: string;
+	    contextId: string;
+	    eventCategory: string;
+	    actionType: string;
+	    scriptCommand: string;
+	    enabled: boolean;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ContextEventHook(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.eventCategory = source["eventCategory"];
+	        this.actionType = source["actionType"];
+	        this.scriptCommand = source["scriptCommand"];
+	        this.enabled = source["enabled"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class ContextItemMatches {
 	    issueIds: string[];
 	    channelIds: string[];
