@@ -88,7 +88,7 @@ type ActiveTab = "jira" | "slack" | "texts" | "vcs" | "relations";
 export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, initialRelations, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
   const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
-  const [status, setStatus] = useState(initial?.status ?? "active");
+  const status = initial?.status ?? "active";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("jira");
@@ -766,16 +766,6 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
             />
             <div className="form-hint">A short human-readable name for this context</div>
           </div>
-
-          {initial && (
-            <div className="form-group">
-              <label>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-              </select>
-            </div>
-          )}
 
           {/* Tab bar — all providers are optional */}
           <div className="ctx-tabs">
