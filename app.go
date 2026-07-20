@@ -188,6 +188,17 @@ func (a *App) startup(ctx context.Context) {
 		}
 		return nil
 	})
+	a.vcsSvc.WithReviewNotifyFunc(func(ctx context.Context, repoID string, prNumber int) {
+		ctxIDs, err := s.ContextIDsForRepo(ctx, repoID)
+		if err != nil {
+			a.logger.Warn("hooks: contexts for repo failed",
+				zap.String("repoID", repoID), zap.Error(err))
+			return
+		}
+		for _, cid := range ctxIDs {
+			a.dispatchContextHooks(cid, "code_review")
+		}
+	})
 	vcsProvider := a.vcsSvc
 
 	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)

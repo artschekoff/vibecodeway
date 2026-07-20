@@ -24,7 +24,7 @@ func TestUpsertAndListHeadBranch(t *testing.T) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42,
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42,
 		"My PR", "alice", "https://example.com/pr/42",
 		"review_required", "feat/cool-thing", now)
 	require.NoError(t, err)
@@ -35,6 +35,24 @@ func TestUpsertAndListHeadBranch(t *testing.T) {
 	assert.Equal(t, "feat/cool-thing", items[0].HeadBranch)
 }
 
+func TestUpsertReviewRequest_InsertedFlag(t *testing.T) {
+	_, vcsStore := openTestDB(t)
+	ctx := context.Background()
+
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "owner", "insertedflagrepo")
+	require.NoError(t, err)
+
+	inserted, err := vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42,
+		"Title", "author", "https://example/pr/42", "changes_requested", "feat/x", "2026-07-20T00:00:00Z")
+	require.NoError(t, err)
+	assert.True(t, inserted, "first upsert should insert")
+
+	inserted, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42,
+		"Title v2", "author", "https://example/pr/42", "approved", "feat/x", "2026-07-20T00:00:00Z")
+	require.NoError(t, err)
+	assert.False(t, inserted, "second upsert of same (repo,pr) should update, not insert")
+}
+
 func TestSetReviewStatusPreservesReviewedAt(t *testing.T) {
 	_, vcsStore := openTestDB(t)
 	ctx := context.Background()
@@ -43,7 +61,7 @@ func TestSetReviewStatusPreservesReviewedAt(t *testing.T) {
 	require.NoError(t, err)
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7,
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7,
 		"Merged PR", "alice", "https://example.com/pr/7",
 		"approved", "feat/done", now)
 	require.NoError(t, err)

@@ -21,7 +21,7 @@ func NewReviewRequestRepo(db *sql.DB) *ReviewRequestRepo { return &ReviewRequest
 // UpsertReviewRequest creates or updates a review request identified by (repoID, prNumber).
 // When an existing record is updated (PR re-appears in the review list), reviewed_at and
 // dismissed_at are cleared so it shows as a fresh pending review again.
-func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt string) error {
+func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt string) (bool, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing string
@@ -38,10 +38,10 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 			    head_branch = ?, requested_at = ?, fetched_at = ?, reviewed_at = NULL, dismissed_at = NULL
 			WHERE id = ?
 		`, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, existing)
-		return err
+		return false, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("query review request: %w", err)
+		return false, fmt.Errorf("query review request: %w", err)
 	}
 
 	id := uuid.New().String()
@@ -52,9 +52,9 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now)
 	if err != nil {
-		return fmt.Errorf("insert review request: %w", err)
+		return false, fmt.Errorf("insert review request: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // MarkReviewedForRepo marks all review requests for a repo that are NOT in the given

@@ -39,14 +39,18 @@ func formatVCSDateTime(s string) string {
 // eventType is one of: "pr_conflict", "pr_review_changed".
 type NotifyFunc func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error
 
+// ReviewNotifyFunc is invoked once when a brand-new review request is inserted.
+type ReviewNotifyFunc func(ctx context.Context, repoID string, prNumber int)
+
 // VCSProvider implements provider.Provider for VCS platforms (GitHub, GitLab, Linear).
 // It dispatches to the appropriate VCSRunner based on the platform stored with each repo.
 type VCSProvider struct {
-	store     *vcsstore.Store
-	runners   map[vcs.Platform]vcs.VCSRunner
-	logger    *zap.Logger
-	notify    NotifyFunc // nil = no-op
-	msgWriter appstore.MessageWriter
+	store        *vcsstore.Store
+	runners      map[vcs.Platform]vcs.VCSRunner
+	logger       *zap.Logger
+	notify       NotifyFunc       // nil = no-op
+	reviewNotify ReviewNotifyFunc // nil = no-op
+	msgWriter    appstore.MessageWriter
 }
 
 // NewVCSProvider constructs a VCSProvider with the given runner implementations.
@@ -61,6 +65,9 @@ func NewVCSProvider(store *vcsstore.Store, logger *zap.Logger, msgWriter appstor
 
 // WithNotifyFunc sets the callback that is invoked when a notable PR state change is detected.
 func (p *VCSProvider) WithNotifyFunc(fn NotifyFunc) { p.notify = fn }
+
+// WithReviewNotifyFunc sets the callback invoked when a new review request appears.
+func (p *VCSProvider) WithReviewNotifyFunc(fn ReviewNotifyFunc) { p.reviewNotify = fn }
 
 // Name implements provider.Provider.
 func (p *VCSProvider) Name() string { return "vcs" }
@@ -393,12 +400,16 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		activeNumbers := make([]int, 0, len(merged))
 		for _, pr := range merged {
 			activeNumbers = append(activeNumbers, pr.Number)
-			if err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
+			insertedRR, err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
 				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt,
-			); err != nil {
+			)
+			if err != nil {
 				p.logger.Warn("vcs: upsert review request failed",
 					zap.Int("pr", pr.Number), zap.Error(err))
+			}
+			if insertedRR && p.reviewNotify != nil {
+				p.reviewNotify(ctx, repo.ID, pr.Number)
 			}
 		}
 
