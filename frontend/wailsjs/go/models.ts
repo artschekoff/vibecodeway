@@ -793,6 +793,32 @@ export namespace store {
 		    return a;
 		}
 	}
+	export class ActivityFeedItem {
+	    id: string;
+	    contextId: string;
+	    contextKey: string;
+	    entityType: string;
+	    eventType: string;
+	    oldValue: string;
+	    newValue: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActivityFeedItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.entityType = source["entityType"];
+	        this.eventType = source["eventType"];
+	        this.oldValue = source["oldValue"];
+	        this.newValue = source["newValue"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
 	export class AppSettings {
 	    contextRefetchEnabled: boolean;
 	    contextRefetchIntervalMin: number;

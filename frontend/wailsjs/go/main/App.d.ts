@@ -110,6 +110,8 @@ export function GenerateSinglePersonAssignment(arg1:string,arg2:string,arg3:stri
 
 export function GetAISettings():Promise<main.AISettingsResponse>;
 
+export function GetActivityFeed(arg1:number):Promise<Array<store.ActivityFeedItem>>;
+
 export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
