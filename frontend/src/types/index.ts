@@ -595,7 +595,20 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline";
+export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed";
+
+export type ActivitySource = "jira" | "github";
+
+export interface ActivityFeedItem {
+  id: string;
+  contextId: string;
+  contextKey: string;
+  entityType: string;
+  eventType: string;
+  oldValue: string;
+  newValue: string;
+  createdAt: string;
+}
 
 export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)
