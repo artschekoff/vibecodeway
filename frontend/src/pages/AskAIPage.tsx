@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { Send, Loader2, Wrench } from "lucide-react";
 import { AskAI, ListOrganizations } from "../../wailsjs/go/main/App";
+import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { agent } from "../../wailsjs/go/models";
 import type { Organization } from "../types";
+
+type ProgressEvent = { phase: string; tool?: string; args?: string; result?: string };
 
 export default function AskAIPage() {
   const [question, setQuestion] = useState("");
@@ -11,9 +14,20 @@ export default function AskAIPage() {
   const [error, setError] = useState("");
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgID, setOrgID] = useState("");
+  const [progress, setProgress] = useState<ProgressEvent[]>([]);
 
   useEffect(() => {
     ListOrganizations().then((list) => setOrgs(list ?? [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const off = EventsOn("ask:progress", (ev: ProgressEvent) => {
+      setProgress((p) => [...p, ev]);
+    });
+    return () => {
+      off();
+      EventsOff("ask:progress");
+    };
   }, []);
 
   const ask = async () => {
@@ -22,6 +36,7 @@ export default function AskAIPage() {
     setLoading(true);
     setError("");
     setAnswer(null);
+    setProgress([]);
     try {
       const res = await AskAI(q, orgID);
       setAnswer(res);
@@ -77,6 +92,16 @@ export default function AskAIPage() {
           <span style={{ color: "var(--text-muted)", fontSize: 12 }}>⌘/Ctrl + Enter</span>
         </div>
       </div>
+
+      {loading && progress.length > 0 && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+          {progress.map((ev, i) => (
+            <div key={i} style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-muted)" }}>
+              {ev.phase === "tool" ? `→ ${ev.tool}(${ev.args ?? ""})` : "· thinking…"}
+            </div>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="detail-section-empty" style={{ color: "var(--danger, #c0392b)", marginTop: 16 }}>
