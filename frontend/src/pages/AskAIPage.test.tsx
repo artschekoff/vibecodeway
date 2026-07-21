@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const { AskAI } = vi.hoisted(() => ({ AskAI: vi.fn() }));
+const { AskAI, ListAgentTools } = vi.hoisted(() => ({ AskAI: vi.fn(), ListAgentTools: vi.fn() }));
 vi.mock("../../wailsjs/go/main/App", () => ({
   AskAI,
+  ListAgentTools: ListAgentTools.mockResolvedValue([{ name: "search_contexts", description: "Full-text search across contexts." }]),
   ListOrganizations: vi.fn().mockResolvedValue([{ id: "o1", name: "jiro" }]),
 }));
 
@@ -36,5 +37,12 @@ describe("AskAIPage live progress", () => {
     // Now the answer arrives.
     resolve({ content: "answer", steps: [{ tool: "search_contexts", args: "{}", result: "[]" }] });
     expect(await screen.findByText("answer")).toBeInTheDocument();
+  });
+
+  it("shows the tooling reference", async () => {
+    AskAI.mockResolvedValue({ content: "", steps: [] });
+    render(<AskAIPage />);
+    expect(await screen.findByText("search_contexts")).toBeInTheDocument();
+    expect(screen.getByText(/Full-text search across contexts/)).toBeInTheDocument();
   });
 });

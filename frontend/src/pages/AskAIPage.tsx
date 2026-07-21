@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Send, Loader2, Wrench } from "lucide-react";
-import { AskAI, ListOrganizations } from "../../wailsjs/go/main/App";
+import { AskAI, ListOrganizations, ListAgentTools } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { agent } from "../../wailsjs/go/models";
 import type { Organization } from "../types";
@@ -15,9 +15,14 @@ export default function AskAIPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgID, setOrgID] = useState("");
   const [progress, setProgress] = useState<ProgressEvent[]>([]);
+  const [tools, setTools] = useState<{ name: string; description: string }[]>([]);
 
   useEffect(() => {
     ListOrganizations().then((list) => setOrgs(list ?? [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void ListAgentTools().then((t) => setTools(t ?? [])).catch(() => setTools([]));
   }, []);
 
   useEffect(() => {
@@ -92,6 +97,22 @@ export default function AskAIPage() {
           <span style={{ color: "var(--text-muted)", fontSize: 12 }}>⌘/Ctrl + Enter</span>
         </div>
       </div>
+
+      {tools.length > 0 && (
+        <details style={{ marginTop: 20 }}>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>
+            What the assistant can do ({tools.length} tools)
+          </summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {tools.map((t) => (
+              <div key={t.name} style={{ fontSize: 12 }}>
+                <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--text)" }}>{t.name}</span>
+                <div style={{ color: "var(--text-muted)" }}>{t.description}</div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {loading && progress.length > 0 && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
