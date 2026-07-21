@@ -70,9 +70,9 @@ export default function ActivityTimeline() {
           ))}
         </select>
         <div className="timeline-nav">
-          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, -1))}>‹ Назад</button>
+          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, -WINDOW_DAYS))}>‹ Назад</button>
           <button className="btn-ghost" onClick={() => setAnchor(defaultAnchor(todayRef.current))}>Сегодня</button>
-          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, 1))}>Вперёд ›</button>
+          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, WINDOW_DAYS))}>Вперёд ›</button>
         </div>
         {error && <span className="timeline-error">{error}</span>}
       </div>
