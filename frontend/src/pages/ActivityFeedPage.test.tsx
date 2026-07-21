@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { openContextTab } = vi.hoisted(() => ({ openContextTab: vi.fn() }));
@@ -7,8 +7,11 @@ vi.mock("../contexts/TabContext", () => ({
   useTabContext: () => ({ openContextTab }),
 }));
 
-const { GetActivityFeed } = vi.hoisted(() => ({ GetActivityFeed: vi.fn() }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetActivityFeed }));
+const { GetActivityFeed, SearchContextIDs } = vi.hoisted(() => ({
+  GetActivityFeed: vi.fn(),
+  SearchContextIDs: vi.fn(),
+}));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetActivityFeed, SearchContextIDs }));
 
 import ActivityFeedPage from "./ActivityFeedPage";
 
@@ -20,6 +23,8 @@ const items = [
 beforeEach(() => {
   openContextTab.mockClear();
   GetActivityFeed.mockReset();
+  SearchContextIDs.mockReset();
+  SearchContextIDs.mockResolvedValue([]);
 });
 
 describe("ActivityFeedPage", () => {
@@ -44,5 +49,33 @@ describe("ActivityFeedPage", () => {
     GetActivityFeed.mockResolvedValue([]);
     render(<ActivityFeedPage />);
     expect(await screen.findByText("No activity yet.")).toBeInTheDocument();
+  });
+
+  it("re-fetches the feed when Refresh is clicked", async () => {
+    GetActivityFeed.mockResolvedValue(items);
+    const user = userEvent.setup();
+    render(<ActivityFeedPage />);
+    await screen.findByText("PR merged");
+    expect(GetActivityFeed).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: /refresh/i }));
+    expect(GetActivityFeed).toHaveBeenCalledTimes(2);
+  });
+
+  it("filters the feed to contexts matching the search (same logic as contexts)", async () => {
+    GetActivityFeed.mockResolvedValue(items);
+    SearchContextIDs.mockResolvedValue(["c1"]); // only PROJ-1's context matches
+    const user = userEvent.setup();
+    render(<ActivityFeedPage />);
+    await screen.findByText("PR merged");
+
+    await user.type(screen.getByPlaceholderText("Search…"), "referral");
+
+    // Debounced search resolves → PROJ-2 event drops out; PROJ-1 event stays.
+    await waitFor(() =>
+      expect(screen.queryByText(/Jira status: To Do → In Progress/)).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("PR merged")).toBeInTheDocument();
+    expect(SearchContextIDs).toHaveBeenCalledWith("referral");
   });
 });
