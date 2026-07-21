@@ -624,6 +624,16 @@ export interface ContextEventHook {
   updatedAt: string;
 }
 
+export interface GlobalEventHook {
+  id: string;
+  eventCategory: EventCategory;
+  actionType: HookActionType;
+  scriptCommand: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Tab {
   id: string;          // unique tab instance ID (not entity ID)
   type: TabType;

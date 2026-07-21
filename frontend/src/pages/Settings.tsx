@@ -6,6 +6,7 @@ import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeI
 import { useTabContext } from "../contexts/TabContext";
 import WorkflowStatusManager from "../components/WorkflowStatusManager";
 import KeybindingRow from "../components/KeybindingRow";
+import GlobalEventHooks from "../components/GlobalEventHooks";
 
 const OPENAI_MODELS = [
   // GPT-5 series
@@ -416,6 +417,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <GlobalEventHooks />
 
         <section className="detail-section">
           <div className="detail-section-header">
