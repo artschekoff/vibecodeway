@@ -26,9 +26,15 @@ const maxIterations = 12
 // context window. Tunable; kept here rather than inline at every call site.
 const maxBodyChars = 8000
 
+// chatClient is the subset of *openai.Client the agent needs, extracted so the
+// LLM turn can be faked in tests. *openai.Client satisfies it.
+type chatClient interface {
+	ChatWithTools(ctx context.Context, messages []openai.Message, tools []openai.ToolDef) (*openai.Response, error)
+}
+
 // Agent answers questions over the local context store using LLM tool calling.
 type Agent struct {
-	ai     *openai.Client
+	ai     chatClient
 	store  *appstore.Store
 	svc    *jiraservice.ContextService
 	logger *zap.Logger
@@ -52,10 +58,26 @@ type Answer struct {
 	Steps   []Step `json:"steps"`
 }
 
+// ProgressEvent is streamed during Ask so the UI can show the agent's work live.
+// Phase is "thinking" (about to call the model) or "tool" (a tool just ran).
+type ProgressEvent struct {
+	Phase  string `json:"phase"`
+	Tool   string `json:"tool,omitempty"`
+	Args   string `json:"args,omitempty"`
+	Result string `json:"result,omitempty"`
+}
+
 // Ask runs the agent loop for a natural-language question and returns the answer
 // plus the trace of tool calls it made along the way. orgID filters to a single
-// organisation; empty string searches across all organisations.
-func (a *Agent) Ask(ctx context.Context, question, orgID string) (*Answer, error) {
+// organisation; empty string searches across all organisations. onProgress, if
+// non-nil, is called before each model turn ("thinking") and after each tool
+// call ("tool") so the UI can render the work live.
+func (a *Agent) Ask(ctx context.Context, question, orgID string, onProgress func(ProgressEvent)) (*Answer, error) {
+	emit := func(ev ProgressEvent) {
+		if onProgress != nil {
+			onProgress(ev)
+		}
+	}
 	messages := []openai.Message{
 		{Role: "system", Content: a.loadPrompt(ctx, "ask_ai", defaultAskAIPrompt)},
 		{Role: "user", Content: question},
@@ -64,6 +86,7 @@ func (a *Agent) Ask(ctx context.Context, question, orgID string) (*Answer, error
 	answer := &Answer{}
 
 	for i := 0; i < maxIterations; i++ {
+		emit(ProgressEvent{Phase: "thinking"})
 		resp, err := a.ai.ChatWithTools(ctx, messages, tools)
 		if err != nil {
 			return nil, err
@@ -84,6 +107,7 @@ func (a *Agent) Ask(ctx context.Context, question, orgID string) (*Answer, error
 		for _, tc := range resp.ToolCalls {
 			result := a.dispatchTool(ctx, tc.Name, tc.Arguments, orgID)
 			answer.Steps = append(answer.Steps, Step{Tool: tc.Name, Args: tc.Arguments, Result: result})
+			emit(ProgressEvent{Phase: "tool", Tool: tc.Name, Args: tc.Arguments, Result: result})
 			messages = append(messages, openai.Message{
 				Role:       "tool",
 				Content:    result,

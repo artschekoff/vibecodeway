@@ -323,7 +323,7 @@ func (a *App) SearchContextItems(contextID, query string) (*appstore.ContextItem
 // full-text read, and relation following). Returns the answer plus the tool trace.
 // orgID restricts search to one organisation; empty string searches all.
 func (a *App) AskAI(question, orgID string) (*agent.Answer, error) {
-	return a.agent.Ask(a.ctx, question, orgID)
+	return a.agent.Ask(a.ctx, question, orgID, nil)
 }
 
 // ToggleContextStatus flips a context between "active" and "archived".
