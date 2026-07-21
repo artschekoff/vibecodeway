@@ -58,6 +58,8 @@ export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
 export function CreateContextEventHook(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.ContextEventHook>;
 
+export function CreateGlobalEventHook(arg1:string,arg2:string,arg3:string):Promise<store.GlobalEventHook>;
+
 export function CreateOrgUser(arg1:string,arg2:string,arg3:string):Promise<store.User>;
 
 export function CreateOrganization(arg1:string):Promise<store.Organization>;
@@ -71,6 +73,8 @@ export function DeleteContext(arg1:string):Promise<void>;
 export function DeleteContextEventHook(arg1:string):Promise<void>;
 
 export function DeleteContextText(arg1:string):Promise<void>;
+
+export function DeleteGlobalEventHook(arg1:string):Promise<void>;
 
 export function DeleteJiraComment(arg1:string):Promise<void>;
 
@@ -181,6 +185,8 @@ export function ListContexts():Promise<Array<store.Context>>;
 export function ListContextsByOrg(arg1:string):Promise<Array<store.Context>>;
 
 export function ListEvents(arg1:string):Promise<Array<store.Event>>;
+
+export function ListGlobalEventHooks():Promise<Array<store.GlobalEventHook>>;
 
 export function ListLocalBranches(arg1:string):Promise<Array<vcs.LocalBranch>>;
 

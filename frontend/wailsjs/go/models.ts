@@ -1383,6 +1383,30 @@ export namespace store {
 	        this.rationale = source["rationale"];
 	    }
 	}
+	export class GlobalEventHook {
+	    id: string;
+	    eventCategory: string;
+	    actionType: string;
+	    scriptCommand: string;
+	    enabled: boolean;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GlobalEventHook(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.eventCategory = source["eventCategory"];
+	        this.actionType = source["actionType"];
+	        this.scriptCommand = source["scriptCommand"];
+	        this.enabled = source["enabled"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class HandoffCandidate {
 	    handoff_title: string;
 	    objective: string;

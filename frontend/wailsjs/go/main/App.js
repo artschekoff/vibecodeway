@@ -98,6 +98,10 @@ export function CreateContextEventHook(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CreateContextEventHook'](arg1, arg2, arg3, arg4);
 }
 
+export function CreateGlobalEventHook(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateGlobalEventHook'](arg1, arg2, arg3);
+}
+
 export function CreateOrgUser(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateOrgUser'](arg1, arg2, arg3);
 }
@@ -124,6 +128,10 @@ export function DeleteContextEventHook(arg1) {
 
 export function DeleteContextText(arg1) {
   return window['go']['main']['App']['DeleteContextText'](arg1);
+}
+
+export function DeleteGlobalEventHook(arg1) {
+  return window['go']['main']['App']['DeleteGlobalEventHook'](arg1);
 }
 
 export function DeleteJiraComment(arg1) {
@@ -344,6 +352,10 @@ export function ListContextsByOrg(arg1) {
 
 export function ListEvents(arg1) {
   return window['go']['main']['App']['ListEvents'](arg1);
+}
+
+export function ListGlobalEventHooks() {
+  return window['go']['main']['App']['ListGlobalEventHooks']();
 }
 
 export function ListLocalBranches(arg1) {

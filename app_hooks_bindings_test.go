@@ -35,3 +35,23 @@ func TestContextEventHookBindings(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list, 0)
 }
+
+func TestGlobalEventHookBindings(t *testing.T) {
+	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	a := &App{db: s, ctx: context.Background()}
+
+	h, err := a.CreateGlobalEventHook("jira_update", "os_notification", "")
+	require.NoError(t, err)
+	assert.NotEmpty(t, h.ID)
+
+	list, err := a.ListGlobalEventHooks()
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+
+	require.NoError(t, a.DeleteGlobalEventHook(h.ID))
+	list, err = a.ListGlobalEventHooks()
+	require.NoError(t, err)
+	assert.Len(t, list, 0)
+}
