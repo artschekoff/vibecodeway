@@ -11,6 +11,22 @@ import (
 // payloads small and focused.
 const maxContextHits = 25
 
+// ToolInfo is a user-facing description of a tool the agent can call.
+type ToolInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// ToolCatalogue returns the tools available to the agent, for display in the UI.
+func (a *Agent) ToolCatalogue() []ToolInfo {
+	defs := a.toolDefs()
+	out := make([]ToolInfo, 0, len(defs))
+	for _, d := range defs {
+		out = append(out, ToolInfo{Name: d.Name, Description: d.Description})
+	}
+	return out
+}
+
 // toolDefs is the tool catalogue advertised to the model. JSON-schema arguments
 // keep the model's calls well-formed.
 func (a *Agent) toolDefs() []openai.ToolDef {
