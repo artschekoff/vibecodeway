@@ -121,6 +121,18 @@ type ContextEventHook struct {
 	UpdatedAt     string `json:"updatedAt"`
 }
 
+// GlobalEventHook is a default hook applied to every context for an event
+// category, unless that context defines its own hook(s) for the category.
+type GlobalEventHook struct {
+	ID            string `json:"id"`
+	EventCategory string `json:"eventCategory"`
+	ActionType    string `json:"actionType"`
+	ScriptCommand string `json:"scriptCommand"`
+	Enabled       bool   `json:"enabled"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+}
+
 // ContextText is a plain-text entry associated with a context.
 // Multiple texts can be attached to a single context (1 context : many texts).
 type ContextText struct {
