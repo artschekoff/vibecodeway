@@ -322,6 +322,10 @@ export function ListAIPrompts() {
   return window['go']['main']['App']['ListAIPrompts']();
 }
 
+export function ListAgentTools() {
+  return window['go']['main']['App']['ListAgentTools']();
+}
+
 export function ListAllContexts() {
   return window['go']['main']['App']['ListAllContexts']();
 }

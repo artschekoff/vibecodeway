@@ -48,6 +48,21 @@ export namespace agent {
 		    return a;
 		}
 	}
+	
+	export class ToolInfo {
+	    name: string;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ToolInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	    }
+	}
 
 }
 

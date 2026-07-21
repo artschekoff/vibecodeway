@@ -170,6 +170,8 @@ export function InterpretContextUpdate(arg1:string,arg2:string):Promise<store.Co
 
 export function ListAIPrompts():Promise<Array<store.AIPrompt>>;
 
+export function ListAgentTools():Promise<Array<agent.ToolInfo>>;
+
 export function ListAllContexts():Promise<Array<store.Context>>;
 
 export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;

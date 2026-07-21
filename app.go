@@ -323,7 +323,14 @@ func (a *App) SearchContextItems(contextID, query string) (*appstore.ContextItem
 // full-text read, and relation following). Returns the answer plus the tool trace.
 // orgID restricts search to one organisation; empty string searches all.
 func (a *App) AskAI(question, orgID string) (*agent.Answer, error) {
-	return a.agent.Ask(a.ctx, question, orgID, nil)
+	return a.agent.Ask(a.ctx, question, orgID, func(ev agent.ProgressEvent) {
+		runtime.EventsEmit(a.ctx, "ask:progress", ev)
+	})
+}
+
+// ListAgentTools returns the tools the Ask AI agent can call, for the on-page reference.
+func (a *App) ListAgentTools() []agent.ToolInfo {
+	return a.agent.ToolCatalogue()
 }
 
 // ToggleContextStatus flips a context between "active" and "archived".
