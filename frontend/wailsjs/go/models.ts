@@ -1122,6 +1122,26 @@ export namespace store {
 	        this.branchIds = source["branchIds"];
 	    }
 	}
+	export class ContextPlan {
+	    id: string;
+	    contextId: string;
+	    personAssignmentId: string;
+	    body: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ContextPlan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.personAssignmentId = source["personAssignmentId"];
+	        this.body = source["body"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
 	export class ContextRelation {
 	    id: string;
 	    contextId: string;

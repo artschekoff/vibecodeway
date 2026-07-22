@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
@@ -452,4 +454,60 @@ func (a *App) UpdateVCSRepoMeta(repoID, label, description string) error {
 
 func (a *App) ListVCSRepos(platform string) ([]vcsstore.VCSRepo, error) {
 	return a.vcsStore.Repos.ListRepos(context.Background(), platform)
+}
+
+// --- Plans ---
+
+// GeneratePlan generates and persists a new implementation plan for the given
+// person assignment.
+func (a *App) GeneratePlan(contextID, personAssignmentID string) (*appstore.ContextPlan, error) {
+	return a.analysisSvc.GeneratePlan(a.ctx, contextID, personAssignmentID)
+}
+
+// ListContextPlans returns all previously generated plans for a person
+// assignment, most recent first.
+func (a *App) ListContextPlans(personAssignmentID string) ([]appstore.ContextPlan, error) {
+	return a.db.ListContextPlansByAssignment(a.ctx, personAssignmentID)
+}
+
+// writePlanTempFile writes a plan's markdown body to a temp file named
+// cc-plan-<planID>.md and returns the resulting path. Separated from
+// OpenPlanInTerminal so it's testable without spawning a terminal.
+func writePlanTempFile(planID, body string) (string, error) {
+	path := filepath.Join(os.TempDir(), "cc-plan-"+planID+".md")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return "", fmt.Errorf("writing plan temp file: %w", err)
+	}
+	return path, nil
+}
+
+// OpenPlanInTerminal writes the given plan to a temp markdown file and opens
+// it in the configured terminal/agent at the plan's context's repo path.
+func (a *App) OpenPlanInTerminal(contextID, planID string) error {
+	plan, err := a.db.GetContextPlan(a.ctx, planID)
+	if err != nil {
+		return fmt.Errorf("get context plan: %w", err)
+	}
+
+	if _, err := writePlanTempFile(plan.ID, plan.Body); err != nil {
+		return err
+	}
+
+	branches, err := a.ListVCSBranches(contextID)
+	if err != nil {
+		return fmt.Errorf("list vcs branches: %w", err)
+	}
+
+	var repoPath string
+	for _, b := range branches {
+		if b.Repo != nil && b.Repo.LocalPath != "" {
+			repoPath = b.Repo.LocalPath
+			break
+		}
+	}
+	if repoPath == "" {
+		return fmt.Errorf("no linked repo with a local path found for context %q", contextID)
+	}
+
+	return a.openWithCheckout("", repoPath)
 }

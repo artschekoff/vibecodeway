@@ -116,6 +116,8 @@ export function GenerateHandoffPacket(arg1:string):Promise<store.InferredRequire
 
 export function GeneratePersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
+export function GeneratePlan(arg1:string,arg2:string):Promise<store.ContextPlan>;
+
 export function GenerateSinglePersonAssignment(arg1:string,arg2:string,arg3:string):Promise<store.PersonAssignment>;
 
 export function GetAISettings():Promise<main.AISettingsResponse>;
@@ -183,6 +185,8 @@ export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;
 export function ListAssignmentVersions(arg1:string):Promise<Array<store.PersonAssignmentVersion>>;
 
 export function ListContextEventHooks(arg1:string):Promise<Array<store.ContextEventHook>>;
+
+export function ListContextPlans(arg1:string):Promise<Array<store.ContextPlan>>;
 
 export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 
@@ -253,6 +257,8 @@ export function MarkSlackThreadViewed(arg1:string):Promise<void>;
 export function MarkWorkspaceShouldDelete(arg1:string):Promise<void>;
 
 export function OpenAccessibilityPreferences():Promise<void>;
+
+export function OpenPlanInTerminal(arg1:string,arg2:string):Promise<void>;
 
 export function OpenRepoPathTerminal(arg1:string):Promise<void>;
 

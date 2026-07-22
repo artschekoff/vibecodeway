@@ -214,6 +214,10 @@ export function GeneratePersonAssignments(arg1) {
   return window['go']['main']['App']['GeneratePersonAssignments'](arg1);
 }
 
+export function GeneratePlan(arg1, arg2) {
+  return window['go']['main']['App']['GeneratePlan'](arg1, arg2);
+}
+
 export function GenerateSinglePersonAssignment(arg1, arg2, arg3) {
   return window['go']['main']['App']['GenerateSinglePersonAssignment'](arg1, arg2, arg3);
 }
@@ -348,6 +352,10 @@ export function ListAssignmentVersions(arg1) {
 
 export function ListContextEventHooks(arg1) {
   return window['go']['main']['App']['ListContextEventHooks'](arg1);
+}
+
+export function ListContextPlans(arg1) {
+  return window['go']['main']['App']['ListContextPlans'](arg1);
 }
 
 export function ListContextTexts(arg1) {
@@ -488,6 +496,10 @@ export function MarkWorkspaceShouldDelete(arg1) {
 
 export function OpenAccessibilityPreferences() {
   return window['go']['main']['App']['OpenAccessibilityPreferences']();
+}
+
+export function OpenPlanInTerminal(arg1, arg2) {
+  return window['go']['main']['App']['OpenPlanInTerminal'](arg1, arg2);
 }
 
 export function OpenRepoPathTerminal(arg1) {
