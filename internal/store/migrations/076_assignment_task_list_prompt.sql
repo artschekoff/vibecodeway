@@ -12,15 +12,15 @@ SET body = replace(
     body,
     '- **Next concrete actions**: step-by-step tasks described as behaviors or outcomes (e.g. "add pagination to the user list") — do NOT reference specific file locations or function signatures',
     '- **Next concrete actions**: write these as a GFM task list — one `- [ ] ` line per step, imperative, each an outcome/behavior (e.g. "add pagination to the user list"). When a specific file is implicated, append an inline code reference like `path/to/file.go:42`. Example:' || char(10) ||
-    '  - [ ] Validate the auth token before refresh `auth/service.go:42`' || char(10) ||
-    '  - [ ] Add a regression test for expiry `auth/service_test.go`'
+    '- [ ] Validate the auth token before refresh `auth/service.go:42`' || char(10) ||
+    '- [ ] Add a regression test for expiry `auth/service_test.go`'
 ),
     default_body = replace(
     default_body,
     '- **Next concrete actions**: step-by-step tasks described as behaviors or outcomes (e.g. "add pagination to the user list") — do NOT reference specific file locations or function signatures',
     '- **Next concrete actions**: write these as a GFM task list — one `- [ ] ` line per step, imperative, each an outcome/behavior (e.g. "add pagination to the user list"). When a specific file is implicated, append an inline code reference like `path/to/file.go:42`. Example:' || char(10) ||
-    '  - [ ] Validate the auth token before refresh `auth/service.go:42`' || char(10) ||
-    '  - [ ] Add a regression test for expiry `auth/service_test.go`'
+    '- [ ] Validate the auth token before refresh `auth/service.go:42`' || char(10) ||
+    '- [ ] Add a regression test for expiry `auth/service_test.go`'
 ),
     updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 WHERE id = 'person_assignment';

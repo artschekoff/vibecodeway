@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { DragEndEvent } from "@dnd-kit/core";
 import { PersonAssignmentDetail } from "./PersonAssignmentDetail";
 import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
 
@@ -11,6 +12,41 @@ vi.mock("../../wailsjs/go/main/App", () => ({
   ListAssignmentVersions: vi.fn().mockResolvedValue([]),
   SetActiveAssignmentVersion: vi.fn(),
 }));
+
+// Capture the `onDragEnd` handler passed to dnd-kit's DndContext so tests can
+// invoke the real component's drag-end logic with a synthetic event, without
+// needing to simulate actual pointer drag gestures (unsupported in jsdom).
+let capturedOnDragEnd: ((event: DragEndEvent) => void) | undefined;
+vi.mock("@dnd-kit/core", async () => {
+  const actual = await vi.importActual<typeof import("@dnd-kit/core")>("@dnd-kit/core");
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    ...actual,
+    DndContext: (props: Parameters<typeof actual.DndContext>[0]) => {
+      capturedOnDragEnd = props.onDragEnd;
+      return React.createElement(actual.DndContext, props);
+    },
+  };
+});
+
+// Capture the `items` prop passed to dnd-kit's SortableContext. dnd-kit's own
+// sorting/collision math (activeIndex/overIndex) is `items.indexOf(id)`
+// against the SAME ids each SortableChecklistItem registers via
+// `useSortable({ id })`. If the two id-spaces diverge, dnd-kit can't locate
+// the dragged/target node in `items` (indexOf returns -1), which is exactly
+// the corruption this regression test guards against.
+let capturedSortableItems: unknown[] | undefined;
+vi.mock("@dnd-kit/sortable", async () => {
+  const actual = await vi.importActual<typeof import("@dnd-kit/sortable")>("@dnd-kit/sortable");
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    ...actual,
+    SortableContext: (props: Parameters<typeof actual.SortableContext>[0]) => {
+      capturedSortableItems = props.items as unknown[];
+      return React.createElement(actual.SortableContext, props);
+    },
+  };
+});
 
 import * as App from "../../wailsjs/go/main/App";
 
@@ -150,6 +186,34 @@ describe("PersonAssignmentDetail — interactive checklist", () => {
     fireEvent.click(screen.getByRole("button", { name: /add step/i }));
     await waitFor(() =>
       expect(App.SaveAssignmentOutput).toHaveBeenCalledWith("pa-1", "- [x] a\n- [ ] ")
+    );
+    expect(onUpdated).toHaveBeenCalled();
+  });
+
+  it("dragging tasks reorders correctly when a prose line precedes the task lines (id-space alignment)", async () => {
+    const pa = makePA({ body: "context note\n- [ ] a\n- [ ] b" });
+    (App.SaveAssignmentOutput as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makePA({ body: "context note\n- [ ] b\n- [ ] a" })
+    );
+    const onUpdated = vi.fn();
+    render(<PersonAssignmentDetail pa={pa} steps={[makeStep()]} onUpdated={onUpdated} />);
+
+    // The SortableContext `items` (taskIds) must be built from task ordinals
+    // — the SAME id-space as each SortableChecklistItem's `useSortable({id})`
+    // — not from line indices over all body lines (which would yield [1, 2]
+    // here because of the leading "context note" prose line).
+    expect(capturedSortableItems).toEqual([0, 1]);
+
+    expect(capturedOnDragEnd).toBeDefined();
+    act(() => {
+      capturedOnDragEnd!({
+        active: { id: 0, data: { current: undefined }, rect: { current: { initial: null, translated: null } } },
+        over: { id: 1, rect: {} as never, disabled: false, data: { current: undefined } },
+      } as unknown as DragEndEvent);
+    });
+
+    await waitFor(() =>
+      expect(App.SaveAssignmentOutput).toHaveBeenCalledWith("pa-1", "context note\n- [ ] b\n- [ ] a")
     );
     expect(onUpdated).toHaveBeenCalled();
   });

@@ -265,10 +265,17 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
 
   const parsedDraft = parseBody(outputDraft);
   const checklistLines = parsedDraft.some((l) => l.kind === "task") ? parsedDraft : null;
-  const taskIds = useMemo(
-    () => (checklistLines ?? []).flatMap((l, i) => (l.kind === "task" ? [i] : [])),
+  const taskCount = useMemo(
+    () => (checklistLines ?? []).filter((l) => l.kind === "task").length,
     [checklistLines]
   );
+  // dnd-kit's SortableContext `items` must live in the SAME id-space as each
+  // SortableChecklistItem's `useSortable({ id: taskIndex })` — task ordinals
+  // (0-based among task lines only), NOT line indices over all body lines.
+  // Otherwise dnd-kit's internal `items.indexOf(id)` sorting/collision math
+  // can't locate the dragged/target node when prose lines precede or
+  // interleave the task lines.
+  const taskIds = useMemo(() => Array.from({ length: taskCount }, (_, k) => k), [taskCount]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })

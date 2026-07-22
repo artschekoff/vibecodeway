@@ -46,6 +46,11 @@ func TestAssignmentPromptRequestsTaskList(t *testing.T) {
 	p, err := store.GetAIPrompt(ctx, "person_assignment")
 	require.NoError(t, err)
 	assert.Contains(t, p.Body, "- [ ] ")
+	// The example rows themselves must be unindented (column 0) so they match
+	// the frontend parser's anchored regex `^- \[( |x)\] ?(.*)$` — a leading
+	// indent would parse as plain text and the model may mirror it.
+	assert.Contains(t, p.Body, "\n- [ ] ", "person_assignment task-list example must be unindented, not \"\\n  - [ ]\"")
+	assert.NotContains(t, p.Body, "\n  - [ ] ")
 
 	single, err := store.GetAIPrompt(ctx, "person_assignment_single")
 	require.NoError(t, err)
