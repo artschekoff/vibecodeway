@@ -19,9 +19,12 @@ import {
   CommitAssignmentVersionFromCustomPrompt,
   ListAssignmentVersions,
   SetActiveAssignmentVersion,
+  GeneratePlan,
 } from "../../wailsjs/go/main/App";
+import type { store } from "../../wailsjs/go/models";
 import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
 import { VersionDiffModal } from "./VersionDiffModal";
+import { PlanModal } from "./PlanModal";
 import { parseBody, toggleAt, addStep, moveTask } from "../lib/taskList";
 import { splitInlineCode } from "../lib/inlineRefs";
 
@@ -152,8 +155,24 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [versionConfirmError, setVersionConfirmError] = useState<string | undefined>(undefined);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<store.ContextPlan | null>(null);
   // Guard against double-sends while a handleSend call is still in flight.
   const isSendInFlight = useRef(false);
+
+  const handleGeneratePlan = async () => {
+    setIsGeneratingPlan(true);
+    setPlanError(null);
+    try {
+      const generated = await GeneratePlan(pa.contextId, pa.id);
+      setPlan(generated);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
 
   useEffect(() => {
     let ignored = false;
@@ -354,18 +373,33 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
           >
             Prompt
           </span>
-          {promptState.mode === "view" && currentStep?.llmPrompt && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button
               className="btn-secondary"
               style={{ fontSize: 10, padding: "2px 8px" }}
-              onClick={() =>
-                setPromptState({ mode: "editing", draftPrompt: currentStep.llmPrompt! })
-              }
+              disabled={isGeneratingPlan}
+              onClick={() => void handleGeneratePlan()}
             >
-              Edit
+              {isGeneratingPlan ? "Generating…" : "Generate Plan"}
             </button>
-          )}
+            {promptState.mode === "view" && currentStep?.llmPrompt && (
+              <button
+                className="btn-secondary"
+                style={{ fontSize: 10, padding: "2px 8px" }}
+                onClick={() =>
+                  setPromptState({ mode: "editing", draftPrompt: currentStep.llmPrompt! })
+                }
+              >
+                Edit
+              </button>
+            )}
+          </div>
         </div>
+        {planError && (
+          <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 6 }} role="alert">
+            {planError}
+          </div>
+        )}
 
         {promptState.mode === "view" ? (
           <div
@@ -679,6 +713,11 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
           isConfirming={isConfirming}
           confirmError={versionConfirmError}
         />
+      )}
+
+      {/* PLAN MODAL */}
+      {plan && (
+        <PlanModal plan={plan} contextId={pa.contextId} onClose={() => setPlan(null)} />
       )}
     </div>
   );
