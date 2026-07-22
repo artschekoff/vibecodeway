@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,4 +33,21 @@ func TestExternalizedPromptsSeeded(t *testing.T) {
 	require.True(t, ids["ask_ai"], "ask_ai should be listed")
 	require.True(t, ids["person_assignment_judge"], "person_assignment_judge should be listed")
 	require.True(t, ids["person_assignment_summary"], "person_assignment_summary should be listed")
+}
+
+// TestAssignmentPromptRequestsTaskList verifies that the person_assignment and
+// person_assignment_single prompts instruct the model to write actionable
+// steps as a GFM task list, so downstream rendering can turn them into an
+// interactive checklist.
+func TestAssignmentPromptRequestsTaskList(t *testing.T) {
+	store := openTestStore(t)
+	ctx := context.Background()
+
+	p, err := store.GetAIPrompt(ctx, "person_assignment")
+	require.NoError(t, err)
+	assert.Contains(t, p.Body, "- [ ] ")
+
+	single, err := store.GetAIPrompt(ctx, "person_assignment_single")
+	require.NoError(t, err)
+	assert.Contains(t, single.Body, "- [ ] ")
 }
