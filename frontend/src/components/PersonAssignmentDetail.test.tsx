@@ -152,6 +152,31 @@ describe("PersonAssignmentDetail — interactive checklist", () => {
     );
     expect(onUpdated).toHaveBeenCalled();
   });
+
+  it("toggling a checkbox after an unsaved textarea edit persists both the edit and the toggle (no data loss)", async () => {
+    const pa = makePA({ body: "- [ ] a\n- [ ] b" });
+    (App.SaveAssignmentOutput as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makePA({ body: "- [ ] a extra text\n- [x] b" })
+    );
+    const onUpdated = vi.fn();
+    render(<PersonAssignmentDetail pa={pa} steps={[makeStep()]} onUpdated={onUpdated} />);
+
+    // User types in the textarea, diverging outputDraft from pa.body (unsaved).
+    const textarea = screen.getByRole("textbox", { name: /output/i });
+    fireEvent.change(textarea, { target: { value: "- [ ] a extra text\n- [ ] b" } });
+
+    // Then clicks a checkbox — this must persist the draft's edit AND the toggle together.
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[1]);
+
+    await waitFor(() =>
+      expect(App.SaveAssignmentOutput).toHaveBeenCalledWith(
+        "pa-1",
+        "- [ ] a extra text\n- [x] b"
+      )
+    );
+    expect(onUpdated).toHaveBeenCalled();
+  });
 });
 
 describe("PersonAssignmentDetail — prompt edit + modal", () => {

@@ -142,8 +142,8 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
     ? versions.find((v) => v.id === selectedVersionId) ?? null
     : null;
 
-  const parsedBody = parseBody(pa.body);
-  const checklistLines = parsedBody.some((l) => l.kind === "task") ? parsedBody : null;
+  const parsedDraft = parseBody(outputDraft);
+  const checklistLines = parsedDraft.some((l) => l.kind === "task") ? parsedDraft : null;
 
   if (!steps.length) {
     return (
@@ -433,7 +433,11 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
                         type="checkbox"
                         checked={line.checked}
                         disabled={isSaving}
-                        onChange={() => void persist(toggleAt(pa.body, idx))}
+                        onChange={() => {
+                          const next = toggleAt(outputDraft, idx);
+                          setOutputDraft(next);
+                          void persist(next);
+                        }}
                       />
                       <span
                         style={{
@@ -457,7 +461,11 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
               className="btn-secondary"
               style={{ fontSize: 11, padding: "3px 10px", marginTop: 8 }}
               disabled={isSaving}
-              onClick={() => void persist(addStep(pa.body))}
+              onClick={() => {
+                const next = addStep(outputDraft);
+                setOutputDraft(next);
+                void persist(next);
+              }}
             >
               Add step
             </button>
