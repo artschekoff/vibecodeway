@@ -153,6 +153,10 @@ func (s *Store) ListContextsByOrg(ctx context.Context, orgID string) ([]Context,
 		       COALESCE(sn.status, 'not_started'),
 		       COALESCE(sn.is_stale, 0),
 		       COALESCE(latest_log.comment, '')
+		       ,(SELECT AVG(CASE ji_imp.priority
+		             WHEN 'Highest' THEN 5 WHEN 'High' THEN 4 WHEN 'Medium' THEN 3
+		             WHEN 'Low' THEN 2 WHEN 'Lowest' THEN 1 END)
+		         FROM jira_issues ji_imp WHERE ji_imp.context_id = c.id) AS importance
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id

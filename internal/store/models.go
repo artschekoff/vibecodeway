@@ -27,6 +27,9 @@ type Context struct {
 	// SnapshotStatusComment is the comment from the latest status log entry.
 	// Denormalized from context_status_log in list/get queries for tooltip display.
 	SnapshotStatusComment string `json:"snapshotStatusComment,omitempty"`
+	// Importance is the average of the numeric scores of contained issues' priorities
+	// (Highest=5 ... Lowest=1). Nil when no contained issue has a mapped priority.
+	Importance *float64 `json:"importance,omitempty"`
 }
 
 // ContextUpdateAction is the AI-determined action to apply to a context

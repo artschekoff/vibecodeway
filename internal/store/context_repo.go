@@ -70,6 +70,10 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 		       COALESCE(sn.status, 'not_started') AS snapshot_status,
 		       COALESCE(sn.is_stale, 0) AS snapshot_is_stale,
 		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
+		       ,(SELECT AVG(CASE ji_imp.priority
+		             WHEN 'Highest' THEN 5 WHEN 'High' THEN 4 WHEN 'Medium' THEN 3
+		             WHEN 'Low' THEN 2 WHEN 'Lowest' THEN 1 END)
+		         FROM jira_issues ji_imp WHERE ji_imp.context_id = c.id) AS importance
 		FROM contexts c
 		LEFT JOIN jira_issues i ON i.context_id = c.id
 		LEFT JOIN context_snapshots sn ON sn.context_id = c.id
@@ -535,15 +539,20 @@ func scanContextRows(rows *sql.Rows) ([]Context, error) {
 	for rows.Next() {
 		var c Context
 		var isStaleInt int
+		var importance sql.NullFloat64
 		if err := rows.Scan(
 			&c.ID, &c.Key, &c.Status, &c.OrgID, &c.CreatedAt, &c.UpdatedAt,
 			&c.IssueCount, &c.LastItemAt, &c.UnviewedCount,
 			&c.HasJira, &c.HasSlack, &c.HasVCS, &c.HasFiles,
 			&c.SnapshotStatus, &isStaleInt, &c.SnapshotStatusComment,
+			&importance,
 		); err != nil {
 			return nil, fmt.Errorf("scanning context: %w", err)
 		}
 		c.SnapshotIsStale = isStaleInt == 1
+		if importance.Valid {
+			c.Importance = &importance.Float64
+		}
 		contexts = append(contexts, c)
 	}
 	return contexts, rows.Err()
