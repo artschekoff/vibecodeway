@@ -125,6 +125,27 @@ func TestGeneratePersonAssignments_withLinkedRepo_injectsCodebaseContext(t *test
 	require.Contains(t, assignmentPrompt, "func Login() error")
 }
 
+func TestGeneratePersonAssignments_malformedSelectResponse_fallsBackToBaseTemplate(t *testing.T) {
+	repoDir := t.TempDir()
+	authGo := "package auth\n\nfunc Login() error { return nil }\n"
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "auth.go"), []byte(authGo), 0o644))
+
+	ai := &fakeCodebaseAI{
+		selectResponse:     "not json",
+		assignmentResponse: `[{"name":"Ada Lovelace","body":"## Ada Lovelace\n\nassigned work"}]`,
+	}
+	svc, contextID := newCodebaseTestService(t, ai)
+	linkRepo(t, svc, contextID, repoDir)
+
+	_, err := svc.GeneratePersonAssignments(context.Background(), contextID)
+	require.NoError(t, err, "malformed codebase_file_select output must not fail the whole assignment flow")
+
+	require.Len(t, ai.prompts, 2, "expected one file-select call and one assignment call")
+	assignmentPrompt := ai.assignmentPrompt()
+	require.NotContains(t, assignmentPrompt, "## Codebase context", "should fall back to the base template when selection is malformed")
+	require.NotContains(t, assignmentPrompt, "func Login() error", "no file content should be injected when selection is malformed")
+}
+
 func TestGeneratePersonAssignments_noLinkedRepo_usesBaseTemplate(t *testing.T) {
 	ai := &fakeCodebaseAI{
 		assignmentResponse: `[{"name":"Ada Lovelace","body":"## Ada Lovelace\n\nassigned work"}]`,

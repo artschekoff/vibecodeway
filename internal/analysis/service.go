@@ -1382,6 +1382,9 @@ func (s *Service) loadPrompt(ctx context.Context, id, fallback string) string {
 // contextRepoPath returns the on-disk local path of the first repo linked to
 // contextID whose path is non-empty and exists on disk, or "" if none qualify
 // (no VCS store attached, no linked repos, or no path resolves on disk).
+// "First" here is whatever order ListBranches returns from the DB — not
+// guaranteed to be insertion order — so with multiple linked repos the choice
+// is DB-return-order-dependent.
 func (s *Service) contextRepoPath(ctx context.Context, contextID string) string {
 	if s.vcsStore == nil {
 		return ""
