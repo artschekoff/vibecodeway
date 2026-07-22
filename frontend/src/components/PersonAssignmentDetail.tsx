@@ -8,6 +8,7 @@ import {
 } from "../../wailsjs/go/main/App";
 import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
 import { VersionDiffModal } from "./VersionDiffModal";
+import { parseBody, toggleAt, addStep } from "../lib/taskList";
 
 interface Props {
   pa: PersonAssignment;
@@ -61,11 +62,11 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   // Use the current step for PROMPT and SOURCE. Fall back to last step if no isCurrent.
   const currentStep = steps.find((s) => s.isCurrent) ?? steps[steps.length - 1];
 
-  const handleSave = async () => {
+  const persist = async (body: string) => {
     setIsSaving(true);
     setSaveError(null);
     try {
-      const updated = (await SaveAssignmentOutput(pa.id, outputDraft)) as PersonAssignment;
+      const updated = (await SaveAssignmentOutput(pa.id, body)) as PersonAssignment;
       onUpdated(updated);
     } catch (err) {
       setSaveError(String(err));
@@ -73,6 +74,8 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
       setIsSaving(false);
     }
   };
+
+  const handleSave = () => persist(outputDraft);
 
   const handleSend = async () => {
     if (promptState.mode !== "editing") return;
@@ -138,6 +141,9 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   const selectedVersion = selectedVersionId
     ? versions.find((v) => v.id === selectedVersionId) ?? null
     : null;
+
+  const parsedBody = parseBody(pa.body);
+  const checklistLines = parsedBody.some((l) => l.kind === "task") ? parsedBody : null;
 
   if (!steps.length) {
     return (
@@ -394,6 +400,68 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
         </div>
         {saveError && (
           <div style={{ fontSize: 11, color: "#dc2626", marginTop: 4 }}>{saveError}</div>
+        )}
+        {checklistLines && (
+          <div
+            style={{
+              background: "var(--surface2)",
+              borderRadius: 6,
+              padding: "8px 10px",
+              marginBottom: 8,
+            }}
+          >
+            {(() => {
+              let taskIndex = -1;
+              return checklistLines.map((line, i) => {
+                if (line.kind === "task") {
+                  taskIndex += 1;
+                  const idx = taskIndex;
+                  return (
+                    <label
+                      key={i}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 6,
+                        fontSize: 12,
+                        lineHeight: 1.6,
+                        color: "var(--text)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={line.checked}
+                        disabled={isSaving}
+                        onChange={() => void persist(toggleAt(pa.body, idx))}
+                      />
+                      <span
+                        style={{
+                          textDecoration: line.checked ? "line-through" : "none",
+                          color: line.checked ? "var(--text-muted)" : "var(--text)",
+                        }}
+                      >
+                        {line.text}
+                      </span>
+                    </label>
+                  );
+                }
+                return (
+                  <div key={i} style={{ fontSize: 12, lineHeight: 1.6, color: "var(--text)" }}>
+                    {line.raw}
+                  </div>
+                );
+              });
+            })()}
+            <button
+              className="btn-secondary"
+              style={{ fontSize: 11, padding: "3px 10px", marginTop: 8 }}
+              disabled={isSaving}
+              onClick={() => void persist(addStep(pa.body))}
+            >
+              Add step
+            </button>
+          </div>
         )}
         <textarea
           id="pa-output"

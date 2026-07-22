@@ -101,6 +101,57 @@ describe("PersonAssignmentDetail", () => {
     render(<PersonAssignmentDetail pa={makePA()} steps={[]} onUpdated={vi.fn()} />);
     expect(screen.getByText(/no reasoning steps available/i)).toBeInTheDocument();
   });
+
+  it("renders no checklist checkboxes when body has no task lines", () => {
+    render(<PersonAssignmentDetail pa={makePA()} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add step/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("PersonAssignmentDetail — interactive checklist", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("renders a checkbox per task line and text lines as plain text", () => {
+    const pa = makePA({ body: "note\n- [ ] do A\n- [x] do B" });
+    render(<PersonAssignmentDetail pa={pa} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    expect(screen.getByText("note")).toBeInTheDocument();
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0]).not.toBeChecked();
+    expect(checkboxes[1]).toBeChecked();
+    expect(screen.getByText("do A")).toBeInTheDocument();
+    expect(screen.getByText("do B")).toBeInTheDocument();
+  });
+
+  it("toggling a checkbox persists the toggled body via SaveAssignmentOutput", async () => {
+    const pa = makePA({ body: "- [ ] a\n- [ ] b" });
+    (App.SaveAssignmentOutput as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makePA({ body: "- [ ] a\n- [x] b" })
+    );
+    const onUpdated = vi.fn();
+    render(<PersonAssignmentDetail pa={pa} steps={[makeStep()]} onUpdated={onUpdated} />);
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[1]);
+    await waitFor(() =>
+      expect(App.SaveAssignmentOutput).toHaveBeenCalledWith("pa-1", "- [ ] a\n- [x] b")
+    );
+    expect(onUpdated).toHaveBeenCalled();
+  });
+
+  it("Add step button appends a new empty step via SaveAssignmentOutput", async () => {
+    const pa = makePA({ body: "- [x] a" });
+    (App.SaveAssignmentOutput as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makePA({ body: "- [x] a\n- [ ] " })
+    );
+    const onUpdated = vi.fn();
+    render(<PersonAssignmentDetail pa={pa} steps={[makeStep()]} onUpdated={onUpdated} />);
+    fireEvent.click(screen.getByRole("button", { name: /add step/i }));
+    await waitFor(() =>
+      expect(App.SaveAssignmentOutput).toHaveBeenCalledWith("pa-1", "- [x] a\n- [ ] ")
+    );
+    expect(onUpdated).toHaveBeenCalled();
+  });
 });
 
 describe("PersonAssignmentDetail — prompt edit + modal", () => {
