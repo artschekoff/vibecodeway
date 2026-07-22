@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { PersonAssignmentDetail } from "./PersonAssignmentDetail";
 import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
 
@@ -176,6 +177,32 @@ describe("PersonAssignmentDetail — interactive checklist", () => {
       )
     );
     expect(onUpdated).toHaveBeenCalled();
+  });
+});
+
+describe("PersonAssignmentDetail — inline path:line chips", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("renders an inline code span as a clickable chip separate from surrounding text", () => {
+    const pa = makePA({ body: "- [ ] fix `auth.go:42` now" });
+    render(<PersonAssignmentDetail pa={pa} steps={[makeStep()]} onUpdated={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "auth.go:42" })).toBeInTheDocument();
+    expect(screen.getByText("fix")).toBeInTheDocument();
+    expect(screen.getByText("now")).toBeInTheDocument();
+  });
+
+  it("clicking the chip copies its value to the clipboard without toggling the checkbox", async () => {
+    const user = userEvent.setup();
+    const writeTextSpy = vi.spyOn(navigator.clipboard, "writeText");
+    const pa = makePA({ body: "- [ ] fix `auth.go:42` now" });
+    render(<PersonAssignmentDetail pa={pa} steps={[makeStep()]} onUpdated={vi.fn()} />);
+
+    const chip = screen.getByRole("button", { name: "auth.go:42" });
+    await user.click(chip);
+
+    expect(writeTextSpy).toHaveBeenCalledWith("auth.go:42");
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(App.SaveAssignmentOutput).not.toHaveBeenCalled();
   });
 });
 

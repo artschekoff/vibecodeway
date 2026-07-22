@@ -23,6 +23,7 @@ import {
 import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
 import { VersionDiffModal } from "./VersionDiffModal";
 import { parseBody, toggleAt, addStep, moveTask } from "../lib/taskList";
+import { splitInlineCode } from "../lib/inlineRefs";
 
 interface Props {
   pa: PersonAssignment;
@@ -34,6 +35,53 @@ type PromptEditState =
   | { mode: "view" }
   | { mode: "editing"; draftPrompt: string }
   | { mode: "preview"; draftPrompt: string; previewOutput: string; isSending: boolean; confirmError?: string };
+
+function InlineRefText({ text }: { text: string }) {
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const segments = splitInlineCode(text);
+
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.code ? (
+          <button
+            key={i}
+            type="button"
+            title={
+              copiedValue === seg.value
+                ? "Copied!"
+                : "Copy reference — paste into your editor's Go to File"
+            }
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void navigator.clipboard.writeText(seg.value);
+              setCopiedValue(seg.value);
+              setTimeout(() => setCopiedValue((v) => (v === seg.value ? null : v)), 1500);
+            }}
+            style={{
+              font: "inherit",
+              fontFamily: "monospace",
+              fontSize: "0.92em",
+              padding: "1px 5px",
+              margin: "0 1px",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              background: copiedValue === seg.value ? "var(--accent)" : "var(--surface)",
+              color: copiedValue === seg.value ? "var(--surface)" : "var(--text)",
+              cursor: "pointer",
+            }}
+          >
+            {copiedValue === seg.value ? "Copied" : seg.value}
+          </button>
+        ) : (
+          <span key={i}>{seg.value}</span>
+        )
+      )}
+    </>
+  );
+}
 
 function SortableChecklistItem({
   taskIndex,
@@ -88,7 +136,7 @@ function SortableChecklistItem({
           color: checked ? "var(--text-muted)" : "var(--text)",
         }}
       >
-        {text}
+        <InlineRefText text={text} />
       </span>
     </label>
   );
