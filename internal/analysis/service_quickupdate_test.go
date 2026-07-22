@@ -78,3 +78,27 @@ func TestInterpretContextUpdate_returnsMultiActionSlice(t *testing.T) {
 	require.Equal(t, "add_event", actions[1].Action)
 	require.Equal(t, "work_completed", actions[1].EventType)
 }
+
+// TestInterpretContextUpdate_stripsFencesAndProse verifies that a response
+// wrapped in markdown code fences with leading prose (common LLM behavior)
+// still parses correctly via extractJSON, rather than failing a direct
+// json.Unmarshal on the raw content.
+func TestInterpretContextUpdate_stripsFencesAndProse(t *testing.T) {
+	ai := &fakeQuickUpdateAI{
+		response: "Here are the actions:\n```json\n" +
+			`[{"action":"set_status","statusSlug":"in_review","statusComment":"done","description":"Set status → In Review"},
+ {"action":"add_event","eventType":"work_completed","summary":"perf fixed","description":"Add work_completed: perf fixed"}]` +
+			"\n```",
+	}
+	svc, contextID := newQuickUpdateTestService(t, ai)
+
+	actions, err := svc.InterpretContextUpdate(context.Background(), contextID, "fixed the perf issue and moved to review")
+	require.NoError(t, err)
+	require.Len(t, actions, 2)
+
+	require.Equal(t, "set_status", actions[0].Action)
+	require.Equal(t, "in_review", actions[0].StatusSlug)
+
+	require.Equal(t, "add_event", actions[1].Action)
+	require.Equal(t, "work_completed", actions[1].EventType)
+}

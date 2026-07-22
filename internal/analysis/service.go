@@ -1373,7 +1373,7 @@ func (s *Service) InterpretContextUpdate(ctx context.Context, contextID, userTex
 	}
 
 	var actions []appstore.ContextUpdateAction
-	if err := json.Unmarshal([]byte(resp.Content), &actions); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content, '[')), &actions); err != nil {
 		return nil, fmt.Errorf("parse ai response (raw: %.200s): %w", resp.Content, err)
 	}
 	for _, action := range actions {
