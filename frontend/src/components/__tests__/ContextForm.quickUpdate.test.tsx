@@ -91,6 +91,43 @@ describe("ContextForm — Quick Update tab", () => {
     });
   });
 
+  it("excludes an unchecked action from the applied payload", async () => {
+    const { InterpretContextUpdate, ApplyContextUpdateActions } = await import(
+      "../../../wailsjs/go/main/App"
+    );
+
+    const user = userEvent.setup();
+    render(<ContextForm initial={initialContext} onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    const quickTab = screen.getByRole("button", { name: /quick update/i });
+    await user.click(quickTab);
+
+    const textarea = screen.getByPlaceholderText(/move this to in review/i);
+    await user.type(textarea, "Mark it in review, note perf fixed");
+
+    const interpretBtn = screen.getByRole("button", { name: /interpret/i });
+    await user.click(interpretBtn);
+
+    await waitFor(() => {
+      expect(InterpretContextUpdate).toHaveBeenCalledWith("ctx-1", "Mark it in review, note perf fixed");
+    });
+
+    const checkbox1 = await screen.findByRole("checkbox", { name: /set status → in review/i });
+    const checkbox2 = screen.getByRole("checkbox", { name: /add work_completed: perf fixed/i });
+    expect(checkbox1).toBeChecked();
+    expect(checkbox2).toBeChecked();
+
+    await user.click(checkbox1);
+    expect(checkbox1).not.toBeChecked();
+
+    const applyBtn = screen.getByRole("button", { name: /apply selected/i });
+    await user.click(applyBtn);
+
+    await waitFor(() => {
+      expect(ApplyContextUpdateActions).toHaveBeenCalledWith("ctx-1", [proposedActions[1]]);
+    });
+  });
+
   it("does not show the Quick Update tab when creating a new context", () => {
     render(<ContextForm onSave={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /quick update/i })).not.toBeInTheDocument();
