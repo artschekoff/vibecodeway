@@ -349,6 +349,16 @@ type PersonAssignment struct {
 	UpdatedAt       string  `json:"updatedAt"`
 }
 
+// ContextPlan is an AI-generated implementation-plan markdown document tied to a
+// context and the person assignment it was generated for.
+type ContextPlan struct {
+	ID                 string `json:"id"`
+	ContextID          string `json:"contextId"`
+	PersonAssignmentID string `json:"personAssignmentId"`
+	Body               string `json:"body"`
+	CreatedAt          string `json:"createdAt"`
+}
+
 // ReasoningChainStep is one step in a generic reasoning chain.
 // entity_type = "person_assignment" | "context"
 // input_state/output_state hold the domain-specific payload (markdown body, JSON events, etc.)
