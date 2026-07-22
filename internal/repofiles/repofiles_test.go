@@ -68,3 +68,69 @@ func TestReadFilesTruncatesLargeFile(t *testing.T) {
 	assert.LessOrEqual(t, len(got["big.go"]), maxFileBytes+len("…[truncated]"))
 	assert.Contains(t, got["big.go"], "…[truncated]")
 }
+
+func TestReadFilesRejectsSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "a.go", "AAA")
+
+	// A secret file OUTSIDE root.
+	outside := filepath.Join(filepath.Dir(root), "symlink-secret.txt")
+	require.NoError(t, os.WriteFile(outside, []byte("SECRET"), 0o644))
+
+	// A symlink INSIDE root pointing at the outside file. No ".." in its own
+	// name, so it sails past the lexical safeJoin check.
+	link := filepath.Join(root, "evil")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks not supported on this platform: %v", err)
+	}
+
+	got, err := ReadFiles(root, []string{"evil"})
+	require.Error(t, err, "must reject a symlink that escapes repo root")
+	assert.NotContains(t, err.Error(), "SECRET")
+	assert.Empty(t, got)
+}
+
+func TestReadFilesAllowsInRootSymlink(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "real.go", "REAL")
+
+	link := filepath.Join(root, "alias.go")
+	if err := os.Symlink(filepath.Join(root, "real.go"), link); err != nil {
+		t.Skipf("symlinks not supported on this platform: %v", err)
+	}
+
+	got, err := ReadFiles(root, []string{"alias.go"})
+	require.NoError(t, err)
+	assert.Equal(t, "REAL", got["alias.go"])
+}
+
+func TestFileTreeSkipsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "real.go", "REAL")
+
+	link := filepath.Join(root, "alias.go")
+	if err := os.Symlink(filepath.Join(root, "real.go"), link); err != nil {
+		t.Skipf("symlinks not supported on this platform: %v", err)
+	}
+
+	tree, err := FileTree(root)
+	require.NoError(t, err)
+	assert.Contains(t, tree, "real.go")
+	assert.NotContains(t, tree, "alias.go")
+}
+
+func TestReadFilesBoundedRead(t *testing.T) {
+	root := t.TempDir()
+	big := make([]byte, maxFileBytes+500)
+	for i := range big {
+		big[i] = 'y'
+	}
+	writeFile(t, root, "huge.go", string(big))
+
+	got, err := ReadFiles(root, []string{"huge.go"})
+	require.NoError(t, err)
+	content := got["huge.go"]
+	assert.Contains(t, content, "…[truncated]")
+	assert.LessOrEqual(t, len(content), maxFileBytes+len("…[truncated]"))
+	assert.Equal(t, maxFileBytes, len(content)-len("…[truncated]"))
+}
