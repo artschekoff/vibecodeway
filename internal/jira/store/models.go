@@ -19,6 +19,7 @@ type Issue struct {
 	Status      string    `json:"status"`
 	Assignee    string    `json:"assignee"`
 	IssueType   string    `json:"issueType"`
+	Priority    string    `json:"priority"`
 	Description string    `json:"description"`
 	JiraUpdated string    `json:"jiraUpdated"`
 	ParentKey   string    `json:"parentKey"`
