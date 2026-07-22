@@ -93,6 +93,30 @@ Respond with ONLY a JSON ARRAY of action objects (no markdown fences, no explana
   { ... action object ... }
 ]`
 
+// defaultPlanGenerationPrompt is the in-code fallback used when the
+// plan_generation row cannot be loaded from the DB (see loadPrompt). The
+// canonical, editable copy lives in ai_prompts and is seeded by migration
+// 080 — keep this constant BYTE-IDENTICAL to that migration's body.
+const defaultPlanGenerationPrompt = `You are a senior engineer writing a precise, writing-plans-style implementation plan. Ground every step in the assignment, the context, and the shown codebase. Use concrete file paths and inline ` + "`path:line`" + ` references from the Codebase context when present. Output GitHub-flavored markdown only.
+
+## Context key
+{{context_key}}
+
+## Assignment
+{{assignment_body}}
+
+## Raw context content
+{{raw_content}}
+{{codebase_context}}
+## Task
+Write a step-by-step implementation plan for the assignment above. The plan must:
+- Be grounded in the assignment, the raw context content, and the codebase context — do not invent requirements not supported by them
+- Use concrete file paths and inline ` + "`path:line`" + ` references from the Codebase context section when it is non-empty
+- Break the work into small, ordered, independently verifiable steps
+- Call out open questions or blockers as a separate section when relevant
+
+Output ONLY the plan as GitHub-flavored markdown — no preamble, no trailing commentary.`
+
 // applyPlaceholders replaces all {{key}} tokens in tmpl with the values from vars.
 func applyPlaceholders(tmpl string, vars map[string]string) string {
 	for k, v := range vars {

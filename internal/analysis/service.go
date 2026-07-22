@@ -902,6 +902,59 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 	return result, nil
 }
 
+// GeneratePlan generates a writing-plans-style implementation plan markdown
+// document for a single person assignment, grounded in the assignment body,
+// the context's raw content, and (when a repo is linked) Codebase Read Mode
+// output, then persists it via CreateContextPlan.
+func (s *Service) GeneratePlan(ctx context.Context, contextID, personAssignmentID string) (*appstore.ContextPlan, error) {
+	pa, err := s.store.GetPersonAssignment(ctx, personAssignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("get person assignment: %w", err)
+	}
+
+	ctxRow, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return nil, fmt.Errorf("get context: %w", err)
+	}
+
+	allMsgs, err := s.listMessages(ctx, contextID, time.Time{})
+	if err != nil {
+		s.logger.Warn("plan gen: list messages failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	rawContent := formatMessages(allMsgs)
+	if issues, ierr := s.jiraSvc.GetIssuesWithComments(ctx, contextID); ierr != nil {
+		s.logger.Warn("plan gen: could not load jira issues for prompt", zap.Error(ierr))
+	} else {
+		rawContent += formatJiraIssuesForPrompt(issues)
+	}
+
+	codebaseSection := ""
+	if repoPath := s.contextRepoPath(ctx, contextID); repoPath != "" {
+		if cb, cerr := s.buildCodebaseContext(ctx, repoPath, pa.Body); cerr != nil {
+			s.logger.Warn("plan gen: codebase read failed, continuing without it",
+				zap.String("contextID", contextID), zap.Error(cerr))
+		} else if cb != "" {
+			codebaseSection = fmt.Sprintf("\n## Codebase context\n%s\n", cb)
+		}
+	}
+
+	tmpl := s.loadPrompt(ctx, "plan_generation", defaultPlanGenerationPrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{
+		"context_key":      ctxRow.Key,
+		"assignment_body":  pa.Body,
+		"raw_content":      rawContent,
+		"codebase_context": codebaseSection,
+	})
+
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return nil, fmt.Errorf("ai plan generation: %w", err)
+	}
+
+	return s.store.CreateContextPlan(ctx, contextID, personAssignmentID, resp.Content)
+}
+
 // RefinePersonAssignment refines a single person's assignment body based on a user instruction.
 // Returns the updated PersonAssignment.
 func (s *Service) RefinePersonAssignment(ctx context.Context, contextID, personID, userInstruction string) (*appstore.PersonAssignment, error) {

@@ -68,6 +68,12 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "existing_tickets", Description: "Jira issue keys already linked to this context, for dedup — injected automatically (best-effort, empty if unavailable)"},
 		{Name: "user_text", Description: "The user's free-form Quick Update note"},
 	},
+	"plan_generation": {
+		{Name: "context_key", Description: "Project/module key of the context"},
+		{Name: "assignment_body", Description: "The person assignment's Markdown body the plan is generated for"},
+		{Name: "raw_content", Description: "Formatted Jira issues and activity for this context"},
+		{Name: "codebase_context", Description: "Relevant source files from the linked repository, injected for grounding (empty if no repo linked)"},
+	},
 }
 
 // ListAIPrompts returns all prompt templates with their placeholder definitions.
