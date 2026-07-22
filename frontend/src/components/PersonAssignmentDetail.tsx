@@ -1,4 +1,18 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   SaveAssignmentOutput,
   RunAssignmentStepWithCustomPrompt,
@@ -8,7 +22,7 @@ import {
 } from "../../wailsjs/go/main/App";
 import type { PersonAssignment, PersonAssignmentVersion, ReasoningChainStep } from "../types/index";
 import { VersionDiffModal } from "./VersionDiffModal";
-import { parseBody, toggleAt, addStep } from "../lib/taskList";
+import { parseBody, toggleAt, addStep, moveTask } from "../lib/taskList";
 
 interface Props {
   pa: PersonAssignment;
@@ -20,6 +34,65 @@ type PromptEditState =
   | { mode: "view" }
   | { mode: "editing"; draftPrompt: string }
   | { mode: "preview"; draftPrompt: string; previewOutput: string; isSending: boolean; confirmError?: string };
+
+function SortableChecklistItem({
+  taskIndex,
+  checked,
+  text,
+  disabled,
+  onToggle,
+}: {
+  taskIndex: number;
+  checked: boolean;
+  text: string;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: taskIndex,
+  });
+
+  const dragStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <label
+      ref={setNodeRef}
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 6,
+        fontSize: 12,
+        lineHeight: 1.6,
+        color: "var(--text)",
+        cursor: "pointer",
+        ...dragStyle,
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onPointerDown={(e) => e.stopPropagation()}
+        onChange={onToggle}
+      />
+      <span
+        style={{
+          textDecoration: checked ? "line-through" : "none",
+          color: checked ? "var(--text-muted)" : "var(--text)",
+        }}
+      >
+        {text}
+      </span>
+    </label>
+  );
+}
 
 export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
   const [outputDraft, setOutputDraft] = useState(pa.body);
@@ -144,6 +217,25 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
 
   const parsedDraft = parseBody(outputDraft);
   const checklistLines = parsedDraft.some((l) => l.kind === "task") ? parsedDraft : null;
+  const taskIds = useMemo(
+    () => (checklistLines ?? []).flatMap((l, i) => (l.kind === "task" ? [i] : [])),
+    [checklistLines]
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const from = active.id as number;
+      const to = over.id as number;
+      const next = moveTask(outputDraft, from, to);
+      setOutputDraft(next);
+      void persist(next);
+    }
+  };
 
   if (!steps.length) {
     return (
@@ -410,53 +502,38 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
               marginBottom: 8,
             }}
           >
-            {(() => {
-              let taskIndex = -1;
-              return checklistLines.map((line, i) => {
-                if (line.kind === "task") {
-                  taskIndex += 1;
-                  const idx = taskIndex;
-                  return (
-                    <label
-                      key={i}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 6,
-                        fontSize: 12,
-                        lineHeight: 1.6,
-                        color: "var(--text)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={line.checked}
-                        disabled={isSaving}
-                        onChange={() => {
-                          const next = toggleAt(outputDraft, idx);
-                          setOutputDraft(next);
-                          void persist(next);
-                        }}
-                      />
-                      <span
-                        style={{
-                          textDecoration: line.checked ? "line-through" : "none",
-                          color: line.checked ? "var(--text-muted)" : "var(--text)",
-                        }}
-                      >
-                        {line.text}
-                      </span>
-                    </label>
-                  );
-                }
-                return (
-                  <div key={i} style={{ fontSize: 12, lineHeight: 1.6, color: "var(--text)" }}>
-                    {line.raw}
-                  </div>
-                );
-              });
-            })()}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+                {(() => {
+                  let taskIndex = -1;
+                  return checklistLines.map((line, i) => {
+                    if (line.kind === "task") {
+                      taskIndex += 1;
+                      const idx = taskIndex;
+                      return (
+                        <SortableChecklistItem
+                          key={i}
+                          taskIndex={idx}
+                          checked={line.checked}
+                          text={line.text}
+                          disabled={isSaving}
+                          onToggle={() => {
+                            const next = toggleAt(outputDraft, idx);
+                            setOutputDraft(next);
+                            void persist(next);
+                          }}
+                        />
+                      );
+                    }
+                    return (
+                      <div key={i} style={{ fontSize: 12, lineHeight: 1.6, color: "var(--text)" }}>
+                        {line.raw}
+                      </div>
+                    );
+                  });
+                })()}
+              </SortableContext>
+            </DndContext>
             <button
               className="btn-secondary"
               style={{ fontSize: 11, padding: "3px 10px", marginTop: 8 }}

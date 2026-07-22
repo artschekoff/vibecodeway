@@ -30,3 +30,14 @@ export function toggleAt(body: string, taskIndex: number): string {
 export function addStep(body: string, text = ""): string {
   return body === "" ? `- [ ] ${text}` : `${body}\n- [ ] ${text}`;
 }
+
+export function moveTask(body: string, from: number, to: number): string {
+  if (from === to) return body;
+  const lines = parseBody(body);
+  const taskPositions = lines.flatMap((l, i) => (l.kind === "task" ? [i] : []));
+  const tasks = taskPositions.map((i) => lines[i]);
+  const [moved] = tasks.splice(from, 1);
+  tasks.splice(to, 0, moved);
+  taskPositions.forEach((pos, k) => (lines[pos] = tasks[k]));
+  return serialize(lines);
+}
