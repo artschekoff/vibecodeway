@@ -1068,6 +1068,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         <th style={{ width: 120 }}>Status</th>
                         <th style={{ width: 88 }}></th>
                         <th>Issues</th>
+                        <th>Importance</th>
                         <th>Unread</th>
                         <th>Updated</th>
                         <th>Latest item</th>
@@ -1138,6 +1139,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                   </div>
                                 </td>
                                 <td><span className="context-meta">{c.issueCount ?? 0}</span></td>
+                                <td><span className="context-meta">{c.importance != null ? c.importance.toFixed(1) : "—"}</span></td>
                                 <td>
                                   {(c.unviewedCount ?? 0) > 0
                                     ? <span className="unread-badge">{c.unviewedCount}</span>

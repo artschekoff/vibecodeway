@@ -133,6 +133,7 @@ export namespace jirastore {
 	    status: string;
 	    assignee: string;
 	    issueType: string;
+	    priority: string;
 	    description: string;
 	    jiraUpdated: string;
 	    parentKey: string;
@@ -156,6 +157,7 @@ export namespace jirastore {
 	        this.status = source["status"];
 	        this.assignee = source["assignee"];
 	        this.issueType = source["issueType"];
+	        this.priority = source["priority"];
 	        this.description = source["description"];
 	        this.jiraUpdated = source["jiraUpdated"];
 	        this.parentKey = source["parentKey"];
@@ -1029,6 +1031,7 @@ export namespace store {
 	    snapshotStatus: string;
 	    snapshotIsStale: boolean;
 	    snapshotStatusComment?: string;
+	    importance?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Context(source);
@@ -1052,6 +1055,7 @@ export namespace store {
 	        this.snapshotStatus = source["snapshotStatus"];
 	        this.snapshotIsStale = source["snapshotIsStale"];
 	        this.snapshotStatusComment = source["snapshotStatusComment"];
+	        this.importance = source["importance"];
 	    }
 	}
 	export class ContextEventHook {

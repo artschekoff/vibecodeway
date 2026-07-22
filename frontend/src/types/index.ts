@@ -16,6 +16,7 @@ export interface Context {
   snapshotStatus: string;      // from context_snapshots.status
   snapshotIsStale: boolean;    // true when new data needs re-analysis
   snapshotStatusComment?: string;
+  importance?: number;
 }
 
 // Derived helper
