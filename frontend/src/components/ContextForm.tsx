@@ -4,7 +4,8 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
 import { usePassphrase } from "../contexts/PassphraseContext";
-import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, UpdateVCSRepoMeta } from "../../wailsjs/go/main/App";
+import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, UpdateVCSRepoMeta, InterpretContextUpdate, ApplyContextUpdateActions } from "../../wailsjs/go/main/App";
+import type { store, main } from "../../wailsjs/go/models";
 import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo, ContextRelation, RelationInput, RelationsPayload, ContextRelationType } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 
@@ -83,7 +84,7 @@ interface NewFile {
   content: string;
 }
 
-type ActiveTab = "jira" | "slack" | "texts" | "vcs" | "relations";
+type ActiveTab = "quick" | "jira" | "slack" | "texts" | "vcs" | "relations";
 
 export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, initialRelations, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
@@ -91,7 +92,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const status = initial?.status ?? "active";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("jira");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initial ? "quick" : "jira");
 
   const { ensurePassphrase } = usePassphrase();
 
@@ -188,6 +189,62 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [allContexts, setAllContexts] = useState<Context[]>([]);
   const [contextsLoading, setContextsLoading] = useState(false);
   const [showRelationDropdown, setShowRelationDropdown] = useState(false);
+
+  // Quick Update tab state
+  const [quickText, setQuickText] = useState("");
+  const [quickInterpreting, setQuickInterpreting] = useState(false);
+  const [quickInterpretError, setQuickInterpretError] = useState("");
+  const [quickProposed, setQuickProposed] = useState<store.ContextUpdateAction[]>([]);
+  const [quickSelected, setQuickSelected] = useState<boolean[]>([]);
+  const [quickApplying, setQuickApplying] = useState(false);
+  const [quickApplyError, setQuickApplyError] = useState("");
+  const [quickResults, setQuickResults] = useState<main.ApplyActionResult[]>([]);
+
+  const handleInterpretQuickUpdate = async () => {
+    if (!initial?.id || !quickText.trim()) {
+      setQuickInterpretError("Describe what changed first.");
+      return;
+    }
+    setQuickInterpreting(true);
+    setQuickInterpretError("");
+    setQuickResults([]);
+    try {
+      const actions = await InterpretContextUpdate(initial.id, quickText.trim());
+      const proposed = actions ?? [];
+      setQuickProposed(proposed);
+      setQuickSelected(proposed.map(() => true));
+      if (proposed.length === 0) {
+        setQuickInterpretError("No actionable changes were found in that note.");
+      }
+    } catch (err) {
+      setQuickInterpretError(String(err));
+    } finally {
+      setQuickInterpreting(false);
+    }
+  };
+
+  const toggleQuickSelected = (index: number) => {
+    setQuickSelected((prev) => prev.map((v, i) => (i === index ? !v : v)));
+  };
+
+  const handleApplyQuickUpdate = async () => {
+    if (!initial?.id) return;
+    const chosen = quickProposed.filter((_, i) => quickSelected[i]);
+    if (chosen.length === 0) {
+      setQuickApplyError("Select at least one action to apply.");
+      return;
+    }
+    setQuickApplying(true);
+    setQuickApplyError("");
+    try {
+      const results = await ApplyContextUpdateActions(initial.id, chosen);
+      setQuickResults(results ?? []);
+    } catch (err) {
+      setQuickApplyError(String(err));
+    } finally {
+      setQuickApplying(false);
+    }
+  };
 
   useEffect(() => {
     GetSupportedPlatforms()
@@ -769,6 +826,15 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
           {/* Tab bar — all providers are optional */}
           <div className="ctx-tabs">
+            {initial && (
+              <button
+                type="button"
+                className={`ctx-tab${activeTab === "quick" ? " ctx-tab--active" : ""}`}
+                onClick={() => setActiveTab("quick")}
+              >
+                ⚡ Quick Update
+              </button>
+            )}
             <button
               type="button"
               className={`ctx-tab${activeTab === "jira" ? " ctx-tab--active" : ""}`}
@@ -830,6 +896,88 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
           </div>
 
           <div className="modal-scroll-body">
+          {/* Quick Update panel */}
+          {activeTab === "quick" && initial && (
+            <div className="ctx-panel">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Describe what changed</label>
+                <textarea
+                  className="quick-update-note"
+                  value={quickText}
+                  onChange={(e) => setQuickText(e.target.value)}
+                  placeholder="e.g. Move this to In Review, note that the perf issue was fixed"
+                  rows={4}
+                  disabled={quickInterpreting || quickApplying}
+                />
+                <div className="form-hint">
+                  AI can: change status · add event · add Jira ticket · add repo/branch · add relation. File uploads: use the Texts &amp; Files tab.
+                </div>
+
+                <div className="slack-conditions-footer" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <span />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => void handleInterpretQuickUpdate()}
+                    disabled={quickInterpreting || quickApplying}
+                  >
+                    {quickInterpreting ? "Interpreting…" : "Interpret"}
+                  </button>
+                </div>
+
+                {quickInterpretError && (
+                  <div className="field-error" style={{ marginTop: 6 }}>{quickInterpretError}</div>
+                )}
+
+                {quickProposed.length > 0 && (
+                  <div className="quick-update-proposed" style={{ marginTop: 12 }}>
+                    <div className="channel-saved-header">Proposed actions</div>
+                    {quickProposed.map((action, i) => (
+                      <label key={`${action.action}-${i}`} className="quick-update-action-row">
+                        <input
+                          type="checkbox"
+                          checked={quickSelected[i] ?? false}
+                          onChange={() => toggleQuickSelected(i)}
+                          disabled={quickApplying}
+                        />
+                        {action.description}
+                      </label>
+                    ))}
+
+                    <div className="slack-conditions-footer" style={{ marginTop: 8, marginBottom: 0 }}>
+                      <span />
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => void handleApplyQuickUpdate()}
+                        disabled={quickApplying || quickSelected.every((v) => !v)}
+                      >
+                        {quickApplying ? "Applying…" : "Apply selected"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {quickApplyError && (
+                  <div className="field-error" style={{ marginTop: 6 }}>{quickApplyError}</div>
+                )}
+
+                {quickResults.length > 0 && (
+                  <div className="quick-update-results" style={{ marginTop: 12 }}>
+                    <div className="channel-saved-header">Results</div>
+                    {quickResults.map((result, i) => (
+                      <div key={`${result.action}-${i}`} className="quick-update-result-row">
+                        <span>{result.ok ? "✓" : "✗"}</span>
+                        <span>{result.action}</span>
+                        {result.message && <span style={{ color: "var(--text-muted)" }}>{result.message}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Jira panel */}
           {activeTab === "jira" && (
             <div className="ctx-panel">
