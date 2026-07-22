@@ -32,6 +32,17 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "events", Description: "Full event log in chronological order"},
 		{Name: "custom_instructions", Description: "Optional extra instructions section (empty by default)"},
 	},
+	"person_assignment_with_code": {
+		{Name: "context_key", Description: "Project/module key of the context"},
+		{Name: "raw_content", Description: "Formatted Jira issues and activity for this context"},
+		{Name: "events", Description: "Full event log in chronological order"},
+		{Name: "custom_instructions", Description: "Optional extra instructions section (empty by default)"},
+		{Name: "codebase_context", Description: "Relevant source files from the linked repository, injected for grounding"},
+	},
+	"codebase_file_select": {
+		{Name: "task_summary", Description: "Short summary of the task the file selection is being made for"},
+		{Name: "file_tree", Description: "Repo-relative file tree listing to choose from"},
+	},
 	"person_assignment_refine": {
 		{Name: "person_name", Description: "The name of the person whose assignment is being refined"},
 		{Name: "current_body", Description: "The current Markdown body for this person"},

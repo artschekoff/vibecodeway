@@ -83,3 +83,18 @@ func TestAssignmentPromptTaskListExemptFromPathProhibition(t *testing.T) {
 	assert.Contains(t, single.Body, "except as an inline `path:line` reference inside the Implementation Steps task list")
 	assert.Equal(t, single.Body, single.DefaultBody, "default_body should match the scoped body")
 }
+
+// TestCodebaseReadPromptsSeeded verifies that the two prompts backing
+// "Codebase Read Mode" are seeded: person_assignment_with_code (the
+// person_assignment body plus a trailing codebase-context section) and
+// codebase_file_select (the AI file-selection step).
+func TestCodebaseReadPromptsSeeded(t *testing.T) {
+	store := openTestStore(t)
+	ctx := context.Background()
+	wc, err := store.GetAIPrompt(ctx, "person_assignment_with_code")
+	require.NoError(t, err)
+	assert.Contains(t, wc.Body, "{{codebase_context}}")
+	sel, err := store.GetAIPrompt(ctx, "codebase_file_select")
+	require.NoError(t, err)
+	assert.Contains(t, sel.Body, "{{file_tree}}")
+}
