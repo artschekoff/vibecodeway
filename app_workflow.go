@@ -326,6 +326,74 @@ func (a *App) DeleteWorkflowStatus(id string) error {
 	return a.db.DeleteWorkflowStatus(context.Background(), id)
 }
 
+// --- Quick Update (confirmed apply) ---
+
+// ApplyActionResult reports the outcome of applying one confirmed Quick Update action.
+type ApplyActionResult struct {
+	Action  string `json:"action"`
+	OK      bool   `json:"ok"`
+	Message string `json:"message"` // error text or short success note
+}
+
+// ApplyContextUpdateActions applies user-confirmed Quick Update actions, one by one,
+// reporting per-action success/failure. A failed action does not abort the rest.
+func (a *App) ApplyContextUpdateActions(contextID string, actions []appstore.ContextUpdateAction) ([]ApplyActionResult, error) {
+	out := make([]ApplyActionResult, 0, len(actions))
+	for _, act := range actions {
+		res := ApplyActionResult{Action: act.Action, OK: true}
+		var err error
+		switch act.Action {
+		case "set_status":
+			_, err = a.SetContextWorkflowStatus(contextID, act.StatusSlug, act.StatusComment)
+		case "add_event":
+			et := act.EventType
+			if et == "" {
+				et = appstore.EventTypeUserNote
+			}
+			_, err = a.AddUserEvent(contextID, et, act.Summary)
+		case "add_ticket":
+			if len(act.JiraKeys) == 0 {
+				err = fmt.Errorf("no jira keys")
+			} else {
+				_, err = a.AddIssuesToContext(contextID, act.JiraKeys)
+			}
+		case "add_repo":
+			_, err = a.AddVCSBranch(contextID, act.Platform, act.OwnerRepo, act.Branch, act.RepoLabel)
+		case "add_relation":
+			err = a.addRelationByKey(contextID, act.TargetContextKey, act.RelationType)
+		default:
+			res.OK = false
+			res.Message = "unsupported action: " + act.Action
+			out = append(out, res)
+			continue
+		}
+		if err != nil {
+			res.OK = false
+			res.Message = err.Error()
+		}
+		out = append(out, res)
+		if a.logger != nil {
+			a.logger.Sugar().Infow("applied quick update action",
+				"contextId", contextID, "action", act.Action, "ok", res.OK)
+		}
+	}
+	return out, nil
+}
+
+// addRelationByKey resolves targetKey to a context id and stores a relation
+// from contextID to that context. Returns an error if the key doesn't resolve.
+func (a *App) addRelationByKey(contextID, targetKey, relationType string) error {
+	if targetKey == "" {
+		return fmt.Errorf("target context key is required")
+	}
+	target, err := a.db.GetContextByKey(context.Background(), targetKey)
+	if err != nil {
+		return fmt.Errorf("resolving target context %q: %w", targetKey, err)
+	}
+	_, err = a.db.AddContextRelation(context.Background(), contextID, target.ID, relationType)
+	return err
+}
+
 // --- VCS Repo Meta ---
 
 func (a *App) UpdateVCSRepoMeta(repoID, label, description string) error {
