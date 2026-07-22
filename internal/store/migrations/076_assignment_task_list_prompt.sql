@@ -25,6 +25,24 @@ SET body = replace(
     updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 WHERE id = 'person_assignment';
 
+-- The closing blanket prohibition in person_assignment was written before the
+-- task-list instruction above existed, and now contradicts it (it forbids the
+-- very `path:line` references the checklist steps are allowed to include).
+-- Scope it: keep prose/narrative sections path-free, but exempt the task list.
+UPDATE ai_prompts
+SET body = replace(
+    body,
+    'Do NOT include specific file paths, directory paths, function names, class names, or component paths. Describe work at the feature and behavior level.',
+    'Do NOT include specific file paths, directory paths, function names, class names, or component paths outside of the Next concrete actions task list. Describe work at the feature and behavior level — except inside the Next concrete actions task list, where you may include an inline `path:line` reference per the format above.'
+),
+    default_body = replace(
+    default_body,
+    'Do NOT include specific file paths, directory paths, function names, class names, or component paths. Describe work at the feature and behavior level.',
+    'Do NOT include specific file paths, directory paths, function names, class names, or component paths outside of the Next concrete actions task list. Describe work at the feature and behavior level — except inside the Next concrete actions task list, where you may include an inline `path:line` reference per the format above.'
+),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+WHERE id = 'person_assignment';
+
 UPDATE ai_prompts
 SET body = replace(
     body,
@@ -49,6 +67,40 @@ SET body = replace(
     'Write these as a GFM task list — one `- [ ] ` line per step, imperative, each describing an outcome/behavior and its acceptance signal. When a specific file is implicated, append an inline code reference like `path/to/file.go:42`. Example:' || char(10) ||
     '- [ ] Add pagination to the user list endpoint `api/users.go:88`' || char(10) ||
     '- [ ] Add a regression test covering the new page size param `api/users_test.go`'
+),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+WHERE id = 'person_assignment_single';
+
+-- person_assignment_single still carries two other blanket prohibitions that
+-- predate the task-list instruction above and now contradict it: the opening
+-- paragraph's "must NOT contain ..." clause and the Technical Context bullet's
+-- "Do NOT name ..." line. Scope both so the Implementation Steps task list is
+-- exempted, matching the format the "### Implementation Steps" section above
+-- now asks for.
+UPDATE ai_prompts
+SET body = replace(
+    body,
+    'The document must be detailed enough for a coding agent to execute the work, but must NOT contain specific file paths, function names, class names, or directory structures — the agent resolves those from the codebase itself.',
+    'The document must be detailed enough for a coding agent to execute the work. Outside of the Implementation Steps task list, it must NOT contain specific file paths, function names, class names, or directory structures — the agent resolves those from the codebase itself. Inside the Implementation Steps task list, you may include an inline `path:line` reference per the format in that section.'
+),
+    default_body = replace(
+    default_body,
+    'The document must be detailed enough for a coding agent to execute the work, but must NOT contain specific file paths, function names, class names, or directory structures — the agent resolves those from the codebase itself.',
+    'The document must be detailed enough for a coding agent to execute the work. Outside of the Implementation Steps task list, it must NOT contain specific file paths, function names, class names, or directory structures — the agent resolves those from the codebase itself. Inside the Implementation Steps task list, you may include an inline `path:line` reference per the format in that section.'
+),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+WHERE id = 'person_assignment_single';
+
+UPDATE ai_prompts
+SET body = replace(
+    body,
+    '- Do NOT name specific file paths, directory paths, function names, class names, or module paths',
+    '- Do NOT name specific file paths, directory paths, function names, class names, or module paths here — except as an inline `path:line` reference inside the Implementation Steps task list'
+),
+    default_body = replace(
+    default_body,
+    '- Do NOT name specific file paths, directory paths, function names, class names, or module paths',
+    '- Do NOT name specific file paths, directory paths, function names, class names, or module paths here — except as an inline `path:line` reference inside the Implementation Steps task list'
 ),
     updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 WHERE id = 'person_assignment_single';

@@ -51,3 +51,30 @@ func TestAssignmentPromptRequestsTaskList(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, single.Body, "- [ ] ")
 }
+
+// TestAssignmentPromptTaskListExemptFromPathProhibition verifies that the
+// blanket "no file paths" prohibitions surviving in person_assignment and
+// person_assignment_single no longer contradict the task-list instruction:
+// the old unscoped sentences must be gone, and each prompt must now carry an
+// explicit exemption allowing an inline `path:line` reference inside the
+// actionable-steps task list.
+func TestAssignmentPromptTaskListExemptFromPathProhibition(t *testing.T) {
+	store := openTestStore(t)
+	ctx := context.Background()
+
+	p, err := store.GetAIPrompt(ctx, "person_assignment")
+	require.NoError(t, err)
+	assert.Contains(t, p.Body, "- [ ] ")
+	assert.NotContains(t, p.Body, "Do NOT include specific file paths, directory paths, function names, class names, or component paths. Describe work at the feature and behavior level.")
+	assert.Contains(t, p.Body, "except inside the Next concrete actions task list")
+	assert.Equal(t, p.Body, p.DefaultBody, "default_body should match the scoped body")
+
+	single, err := store.GetAIPrompt(ctx, "person_assignment_single")
+	require.NoError(t, err)
+	assert.Contains(t, single.Body, "- [ ] ")
+	assert.NotContains(t, single.Body, "but must NOT contain specific file paths, function names, class names, or directory structures — the agent resolves those from the codebase itself.")
+	assert.NotContains(t, single.Body, "- Do NOT name specific file paths, directory paths, function names, class names, or module paths\n")
+	assert.Contains(t, single.Body, "Inside the Implementation Steps task list, you may include an inline `path:line` reference")
+	assert.Contains(t, single.Body, "except as an inline `path:line` reference inside the Implementation Steps task list")
+	assert.Equal(t, single.Body, single.DefaultBody, "default_body should match the scoped body")
+}
