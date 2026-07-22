@@ -19,9 +19,10 @@ func (a *App) AnalyzeContext(contextID string) (*appstore.ContextSnapshot, error
 	return a.analysisSvc.AnalyzeContext(a.ctx, contextID)
 }
 
-// InterpretContextUpdate parses userText and returns the AI-suggested action
-// (add_event or set_status) to apply to the context. Used by the Quick Update UI.
-func (a *App) InterpretContextUpdate(contextID, userText string) (*appstore.ContextUpdateAction, error) {
+// InterpretContextUpdate parses userText and returns the AI-proposed list of
+// actions (set_status, add_event, add_ticket, add_repo, add_relation) for the
+// user to review and confirm. Used by the Quick Update UI.
+func (a *App) InterpretContextUpdate(contextID, userText string) ([]appstore.ContextUpdateAction, error) {
 	return a.analysisSvc.InterpretContextUpdate(a.ctx, contextID, userText)
 }
 

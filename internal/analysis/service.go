@@ -1323,9 +1323,21 @@ func (s *Service) ListAssignmentVersions(ctx context.Context, personAssignmentID
 	return s.store.ListAssignmentVersions(ctx, personAssignmentID)
 }
 
-// InterpretContextUpdate parses userText using AI and returns a suggested action
-// (add_event or set_status) for the given context.
-func (s *Service) InterpretContextUpdate(ctx context.Context, contextID, userText string) (*appstore.ContextUpdateAction, error) {
+// validContextUpdateActions is the set of action types the context_updater
+// prompt is allowed to emit. Keep in sync with the multi-action prompt body
+// (migration 078) and the ContextUpdateAction field comments.
+var validContextUpdateActions = map[string]bool{
+	"set_status":   true,
+	"add_event":    true,
+	"add_ticket":   true,
+	"add_repo":     true,
+	"add_relation": true,
+}
+
+// InterpretContextUpdate parses userText using AI and returns the list of
+// AI-proposed actions for the given context. The caller (UI) presents these
+// to the user for review/confirmation before any are applied.
+func (s *Service) InterpretContextUpdate(ctx context.Context, contextID, userText string) ([]appstore.ContextUpdateAction, error) {
 	ctxRow, err := s.store.GetContext(ctx, contextID)
 	if err != nil {
 		return nil, fmt.Errorf("get context: %w", err)
@@ -1349,22 +1361,74 @@ func (s *Service) InterpretContextUpdate(ctx context.Context, contextID, userTex
 		currentStatus = "not_started"
 	}
 
+	existingRepos := s.existingReposSummary(ctx, contextID)
+	existingTickets := s.existingTicketsSummary(ctx, contextID)
+
 	tmpl := s.loadPrompt(ctx, "context_updater", defaultContextUpdaterPrompt)
-	prompt := contextUpdaterPrompt(tmpl, ctxRow.Key, currentStatus, userText, slugLines)
+	prompt := contextUpdaterPrompt(tmpl, ctxRow.Key, currentStatus, userText, slugLines, existingRepos, existingTickets)
 
 	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
 		return nil, fmt.Errorf("ai completion: %w", err)
 	}
 
-	var action appstore.ContextUpdateAction
-	if err := json.Unmarshal([]byte(resp.Content), &action); err != nil {
+	var actions []appstore.ContextUpdateAction
+	if err := json.Unmarshal([]byte(resp.Content), &actions); err != nil {
 		return nil, fmt.Errorf("parse ai response (raw: %.200s): %w", resp.Content, err)
 	}
-	if action.Action != "add_event" && action.Action != "set_status" {
-		return nil, fmt.Errorf("unknown action %q from AI", action.Action)
+	for _, action := range actions {
+		if !validContextUpdateActions[action.Action] {
+			return nil, fmt.Errorf("unknown action %q from AI", action.Action)
+		}
 	}
-	return &action, nil
+	return actions, nil
+}
+
+// existingReposSummary returns a best-effort human-readable list of VCS repos
+// already linked to contextID, for injection into the context_updater prompt
+// so the AI can avoid proposing duplicate add_repo actions. Returns "" when
+// no VCS store is attached or the lookup fails — the prompt still works
+// without this context, just without dedup awareness.
+func (s *Service) existingReposSummary(ctx context.Context, contextID string) string {
+	if s.vcsStore == nil {
+		return ""
+	}
+	branches, err := s.vcsStore.Branches.ListBranches(ctx, contextID)
+	if err != nil {
+		s.logger.Warn("context updater: list branches failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		return ""
+	}
+	lines := make([]string, 0, len(branches))
+	for _, b := range branches {
+		repo, rerr := s.vcsStore.Repos.GetRepo(ctx, b.RepoID)
+		if rerr != nil {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s/%s (%s) branch %s", repo.Owner, repo.Name, repo.Platform, b.Branch))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// existingTicketsSummary returns a best-effort list of Jira keys already
+// linked to contextID, for injection into the context_updater prompt so the
+// AI can avoid proposing duplicate add_ticket actions. Returns "" when no
+// jiraSvc is attached or the lookup fails.
+func (s *Service) existingTicketsSummary(ctx context.Context, contextID string) string {
+	if s.jiraSvc == nil {
+		return ""
+	}
+	issues, err := s.jiraSvc.GetIssuesWithComments(ctx, contextID)
+	if err != nil {
+		s.logger.Warn("context updater: list jira issues failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		return ""
+	}
+	keys := make([]string, 0, len(issues))
+	for _, i := range issues {
+		keys = append(keys, i.JiraKey)
+	}
+	return strings.Join(keys, ", ")
 }
 
 // loadPrompt fetches a prompt template from the DB. Logs a warning and returns
@@ -1554,11 +1618,11 @@ func parseSnapshotResponse(content string) (*appstore.ContextSnapshot, error) {
 			Confidence   string   `json:"confidence"`
 			FromEventIDs []string `json:"from_event_ids"`
 		} `json:"current_step"`
-		Status             string `json:"status"`
-		StatusComment      string `json:"status_comment"`
-		SectionOperational string `json:"section_operational"`
-		SectionNarrative   string `json:"section_narrative"`
-		SectionEngineering string `json:"section_engineering"`
+		Status               string   `json:"status"`
+		StatusComment        string   `json:"status_comment"`
+		SectionOperational   string   `json:"section_operational"`
+		SectionNarrative     string   `json:"section_narrative"`
+		SectionEngineering   string   `json:"section_engineering"`
 		AINextStepsShort     string   `json:"ai_next_steps_short"`
 		AINextStepsMid       string   `json:"ai_next_steps_mid"`
 		AINextStepsLong      string   `json:"ai_next_steps_long"`

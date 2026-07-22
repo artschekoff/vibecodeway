@@ -19,7 +19,7 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "next_steps_short", Description: "User short-term hints (~1 day)"},
 		{Name: "next_steps_mid", Description: "User mid-term hints (~1 week)"},
 		{Name: "next_steps_long", Description: "User long-term hints (~1 month)"},
-		{Name: "status_definitions",       Description: "Available workflow statuses with AI hints — injected automatically"},
+		{Name: "status_definitions", Description: "Available workflow statuses with AI hints — injected automatically"},
 		{Name: "current_status_log_entry", Description: "Latest status log entry (current status + reason) — injected automatically"},
 	},
 	"handoff_packet": {
@@ -59,6 +59,14 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 	},
 	"ask_ai": {
 		// The Ask AI agent system prompt takes no placeholders; it drives tool use.
+	},
+	"context_updater": {
+		{Name: "context_key", Description: "Project/module key of the context"},
+		{Name: "current_status", Description: "Current workflow status slug — injected automatically"},
+		{Name: "workflow_statuses", Description: "Available workflow status slugs with labels — injected automatically"},
+		{Name: "existing_repos", Description: "VCS repos already linked to this context, for dedup — injected automatically (best-effort, empty if unavailable)"},
+		{Name: "existing_tickets", Description: "Jira issue keys already linked to this context, for dedup — injected automatically (best-effort, empty if unavailable)"},
+		{Name: "user_text", Description: "The user's free-form Quick Update note"},
 	},
 }
 

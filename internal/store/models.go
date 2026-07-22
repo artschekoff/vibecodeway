@@ -32,10 +32,11 @@ type Context struct {
 	Importance *float64 `json:"importance,omitempty"`
 }
 
-// ContextUpdateAction is the AI-determined action to apply to a context
-// in response to a user's free-form Quick Update text.
+// ContextUpdateAction is one AI-proposed action to apply to a context
+// in response to a user's free-form Quick Update text. InterpretContextUpdate
+// returns a slice of these — the user reviews and confirms which to apply.
 type ContextUpdateAction struct {
-	// "add_event" or "set_status"
+	// One of: set_status, add_event, add_ticket, add_repo, add_relation
 	Action string `json:"action"`
 	// For action="add_event": one of the EventType* constants
 	EventType string `json:"eventType,omitempty"`
@@ -45,6 +46,20 @@ type ContextUpdateAction struct {
 	StatusSlug string `json:"statusSlug,omitempty"`
 	// For action="set_status": reason for the change
 	StatusComment string `json:"statusComment,omitempty"`
+	// For action="add_ticket": Jira issue keys to link to the context
+	JiraKeys []string `json:"jiraKeys,omitempty"`
+	// For action="add_repo": VCS platform (e.g. "github")
+	Platform string `json:"platform,omitempty"`
+	// For action="add_repo": "owner/repo" slug
+	OwnerRepo string `json:"ownerRepo,omitempty"`
+	// For action="add_repo": branch name to link
+	Branch string `json:"branch,omitempty"`
+	// For action="add_repo": optional human-readable label for the repo link
+	RepoLabel string `json:"repoLabel,omitempty"`
+	// For action="add_relation": the key of the other context to relate to
+	TargetContextKey string `json:"targetContextKey,omitempty"`
+	// For action="add_relation": the relation type (e.g. "blocks", "related_to")
+	RelationType string `json:"relationType,omitempty"`
 	// Human-readable description shown as preview to the user
 	Description string `json:"description"`
 }
@@ -169,14 +184,14 @@ type ContextUploadedFile struct {
 // ContextRelation is a typed directional link from one context to another.
 // TargetKey, TargetOrgID, and TargetOrgName are denormalized from the target context row for display.
 type ContextRelation struct {
-	ID             string `json:"id"`
-	ContextID      string `json:"contextId"`
-	TargetID       string `json:"targetId"`
-	TargetKey      string `json:"targetKey"`
-	TargetOrgID    string `json:"targetOrgId"`
-	TargetOrgName  string `json:"targetOrgName"`
-	RelationType   string `json:"relationType"`
-	CreatedAt      string `json:"createdAt"`
+	ID            string `json:"id"`
+	ContextID     string `json:"contextId"`
+	TargetID      string `json:"targetId"`
+	TargetKey     string `json:"targetKey"`
+	TargetOrgID   string `json:"targetOrgId"`
+	TargetOrgName string `json:"targetOrgName"`
+	RelationType  string `json:"relationType"`
+	CreatedAt     string `json:"createdAt"`
 }
 
 // AISettings holds multi-provider AI configuration stored in the local database.
@@ -277,7 +292,7 @@ type ContextSnapshot struct {
 	SectionNarrative      string `json:"sectionNarrative"`
 	SectionEngineering    string `json:"sectionEngineering"`
 	Status                string `json:"status"` // slug from workflow_statuses, e.g. "in_progress"
-	StatusComment         string `json:"-"` // transient: AI's one-sentence reason for the chosen status; never serialised to frontend
+	StatusComment         string `json:"-"`      // transient: AI's one-sentence reason for the chosen status; never serialised to frontend
 
 	// AI-generated next-step recommendations by time horizon (rebuilt on each analysis).
 	AINextStepsShort string `json:"aiNextStepsShort"` // ~1 day
