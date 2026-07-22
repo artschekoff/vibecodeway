@@ -152,6 +152,8 @@ export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.Reason
 
 export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
+export function GetRepoFileTree(arg1:string):Promise<Array<string>>;
+
 export function GetStatusLog(arg1:string):Promise<Array<store.StatusLogEntry>>;
 
 export function GetSupportedPlatforms():Promise<Array<vcsstore.VCSPlatformInfo>>;
@@ -267,6 +269,8 @@ export function PreviewAssignmentStep(arg1:string,arg2:number,arg3:string):Promi
 export function PreviewSlackDMs(arg1:string,arg2:string):Promise<string>;
 
 export function QuickAttachText(arg1:string,arg2:string):Promise<store.ContextText>;
+
+export function ReadRepoFiles(arg1:string,arg2:Array<string>):Promise<Record<string, string>>;
 
 export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
 

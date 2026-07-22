@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/artschekoff/context-consolidator/internal/repofiles"
 	"github.com/artschekoff/context-consolidator/internal/vcs"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -260,6 +261,18 @@ func (a *App) ListTrackedRepos(platform string) ([]vcsstore.VCSRepo, error) {
 // UpdateTrackedRepoMeta updates the label, description, and on-checkout command for a tracked repo.
 func (a *App) UpdateTrackedRepoMeta(repoID, label, description, onCheckoutCommand string) error {
 	return a.vcsStore.Repos.UpdateRepoMeta(a.ctx, repoID, label, description, onCheckoutCommand)
+}
+
+// GetRepoFileTree returns repo-root-relative file paths for a linked repo's local
+// checkout, for the AI to choose which files are relevant. Ignored/build dirs are skipped.
+func (a *App) GetRepoFileTree(repoPath string) ([]string, error) {
+	return repofiles.FileTree(repoPath)
+}
+
+// ReadRepoFiles returns contents for the given repo-relative paths, path-confined to
+// repoPath and size-bounded. Used to inject code context into analysis prompts.
+func (a *App) ReadRepoFiles(repoPath string, paths []string) (map[string]string, error) {
+	return repofiles.ReadFiles(repoPath, paths)
 }
 
 // --- Pending Code Reviews ---

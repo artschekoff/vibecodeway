@@ -286,6 +286,10 @@ export function GetPersonAssignments(arg1) {
   return window['go']['main']['App']['GetPersonAssignments'](arg1);
 }
 
+export function GetRepoFileTree(arg1) {
+  return window['go']['main']['App']['GetRepoFileTree'](arg1);
+}
+
 export function GetStatusLog(arg1) {
   return window['go']['main']['App']['GetStatusLog'](arg1);
 }
@@ -516,6 +520,10 @@ export function PreviewSlackDMs(arg1, arg2) {
 
 export function QuickAttachText(arg1, arg2) {
   return window['go']['main']['App']['QuickAttachText'](arg1, arg2);
+}
+
+export function ReadRepoFiles(arg1, arg2) {
+  return window['go']['main']['App']['ReadRepoFiles'](arg1, arg2);
 }
 
 export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
