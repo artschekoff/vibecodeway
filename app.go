@@ -207,6 +207,7 @@ func (a *App) startup(ctx context.Context) {
 	openAI := openaiclient.NewClient(s, logger)
 	a.openAI = openAI
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
+	a.analysisSvc.SetVCSStore(a.vcsStore)
 	a.agent = agent.New(openAI, s, a.svc, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)

@@ -6,14 +6,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/openai"
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	"github.com/artschekoff/context-consolidator/internal/openai"
+	"github.com/artschekoff/context-consolidator/internal/repofiles"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/viterin/vek/vek32"
 	"go.uber.org/zap"
 )
@@ -167,6 +170,25 @@ Return ONLY valid JSON — no markdown fences, no preamble:
   }
 ]`
 
+	// defaultPersonAssignmentWithCodePrompt mirrors migration 077's seed body for
+	// "person_assignment_with_code": the person_assignment body plus a trailing
+	// "## Codebase context" section rendering {{codebase_context}}.
+	defaultPersonAssignmentWithCodePrompt = defaultPersonAssignmentPrompt + `
+
+## Codebase context
+Relevant files from the linked repository are shown below. Ground your steps in this actual code — cite real symbols and use inline ` + "`path:line`" + ` references that exist in these files.
+{{codebase_context}}`
+
+	// defaultCodebaseFileSelectPrompt mirrors migration 077's seed body for "codebase_file_select".
+	defaultCodebaseFileSelectPrompt = `You are selecting which repository files are relevant to a work task.
+Given the file tree and the task summary, return ONLY a JSON array of at most 12 repo-relative file paths most relevant to implementing the task. No prose.
+
+Task summary:
+{{task_summary}}
+
+File tree:
+{{file_tree}}`
+
 	defaultSinglePersonAssignmentPrompt = `You are a senior technical lead writing a task assignment for a single developer.
 The document must be detailed enough for a coding agent to execute the work, but must NOT contain specific file paths, function names, class names, or directory structures — the agent resolves those from the codebase itself.
 
@@ -297,14 +319,23 @@ SCORE: <avg 0.0-1.0 float>
 NOTES: <one sentence explaining the lowest-scoring criterion>`
 )
 
+// chatClient is the subset of *openai.Client the analysis service needs,
+// extracted so the LLM turn can be faked in tests. *openai.Client satisfies it.
+type chatClient interface {
+	ChatCompletion(ctx context.Context, messages []openai.Message) (*openai.Response, error)
+	DescribeSettings(ctx context.Context) (*appstore.AISettings, openai.Source, error)
+	EmbedText(ctx context.Context, text string) ([]float32, error)
+}
+
 // Service orchestrates the full analysis pipeline for one context.
 type Service struct {
 	store    *appstore.Store
 	jiraSvc  *jiraservice.ContextService
-	ai       *openai.Client
+	ai       chatClient
 	logger   *zap.Logger
 	chainSvc *ReasoningChainService
 	paJudge  *PersonAssignmentJudge
+	vcsStore *vcsstore.Store // optional; nil disables codebase-read mode
 }
 
 // NewService creates an analysis service.
@@ -318,6 +349,12 @@ func NewService(store *appstore.Store, jiraSvc *jiraservice.ContextService, ai *
 	}
 	svc.paJudge = &PersonAssignmentJudge{svc: svc}
 	return svc
+}
+
+// SetVCSStore attaches a vcsstore.Store so bulk person-assignment generation can
+// inject codebase context from a context's linked repo. Pass nil to disable.
+func (s *Service) SetVCSStore(vs *vcsstore.Store) {
+	s.vcsStore = vs
 }
 
 // PersonAssignmentProcessor runs one incremental or refine step of a person assignment chain.
@@ -800,13 +837,31 @@ func (s *Service) GeneratePersonAssignments(ctx context.Context, contextID strin
 		rawContent += formatJiraIssuesForPrompt(issues)
 	}
 
-	tmpl := s.loadPrompt(ctx, "person_assignment", defaultPersonAssignmentPrompt)
+	codebaseContext := ""
+	promptID := "person_assignment"
+	if repoPath := s.contextRepoPath(ctx, contextID); repoPath != "" {
+		taskSummary := rawContent
+		if cb, cbErr := s.buildCodebaseContext(ctx, repoPath, taskSummary); cbErr != nil {
+			s.logger.Warn("person assignment: codebase read failed, falling back",
+				zap.String("contextID", contextID), zap.Error(cbErr))
+		} else if cb != "" {
+			codebaseContext = cb
+			promptID = "person_assignment_with_code"
+		}
+	}
+
+	fallback := defaultPersonAssignmentPrompt
+	if promptID == "person_assignment_with_code" {
+		fallback = defaultPersonAssignmentWithCodePrompt
+	}
+	tmpl := s.loadPrompt(ctx, promptID, fallback)
 	prompt := applyPlaceholders(tmpl, map[string]string{
 		"context_key":         ctxRow.Key,
 		"org_users":           formatOrgUsers(orgUsers),
 		"raw_content":         rawContent,
 		"events":              formatEventsForPrompt(promptEvents),
 		"custom_instructions": "",
+		"codebase_context":    codebaseContext,
 	})
 
 	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
@@ -1322,6 +1377,93 @@ func (s *Service) loadPrompt(ctx context.Context, id, fallback string) string {
 		return fallback
 	}
 	return p.Body
+}
+
+// contextRepoPath returns the on-disk local path of the first repo linked to
+// contextID whose path is non-empty and exists on disk, or "" if none qualify
+// (no VCS store attached, no linked repos, or no path resolves on disk).
+func (s *Service) contextRepoPath(ctx context.Context, contextID string) string {
+	if s.vcsStore == nil {
+		return ""
+	}
+	branches, err := s.vcsStore.Branches.ListBranches(ctx, contextID)
+	if err != nil {
+		s.logger.Warn("contextRepoPath: list branches failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		return ""
+	}
+	for _, b := range branches {
+		repo, rerr := s.vcsStore.Repos.GetRepo(ctx, b.RepoID)
+		if rerr != nil || repo.LocalPath == "" {
+			continue
+		}
+		info, serr := os.Stat(repo.LocalPath)
+		if serr != nil || !info.IsDir() {
+			continue
+		}
+		return repo.LocalPath
+	}
+	return ""
+}
+
+// buildCodebaseContext lists the repo tree, asks the AI to select up to a
+// handful of relevant files, reads them, and formats them as fenced code
+// blocks for injection into the assignment prompt. Any failure along the way
+// (tree walk, AI call, JSON parse) degrades to ("", nil) so the caller falls
+// back to the codebase-less template rather than failing the whole analysis.
+func (s *Service) buildCodebaseContext(ctx context.Context, repoPath, taskSummary string) (string, error) {
+	tree, err := repofiles.FileTree(repoPath)
+	if err != nil {
+		return "", fmt.Errorf("list repo file tree: %w", err)
+	}
+	if len(tree) == 0 {
+		return "", nil
+	}
+
+	tmpl := s.loadPrompt(ctx, "codebase_file_select", defaultCodebaseFileSelectPrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{
+		"task_summary": taskSummary,
+		"file_tree":    strings.Join(tree, "\n"),
+	})
+
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return "", fmt.Errorf("ai codebase file select: %w", err)
+	}
+
+	var selected []string
+	if jerr := json.Unmarshal([]byte(extractJSON(resp.Content, '[')), &selected); jerr != nil {
+		// Best-effort selection: a malformed response degrades to no codebase
+		// context rather than a hard failure.
+		return "", nil
+	}
+	if len(selected) == 0 {
+		return "", nil
+	}
+
+	files, err := repofiles.ReadFiles(repoPath, selected)
+	if err != nil {
+		return "", fmt.Errorf("read selected repo files: %w", err)
+	}
+	if len(files) == 0 {
+		return "", nil
+	}
+
+	paths := make([]string, 0, len(files))
+	for p := range files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	var b strings.Builder
+	for _, p := range paths {
+		b.WriteString("```")
+		b.WriteString(p)
+		b.WriteByte('\n')
+		b.WriteString(files[p])
+		b.WriteString("\n```\n\n")
+	}
+	return strings.TrimRight(b.String(), "\n"), nil
 }
 
 // extractEvents calls the AI to extract typed events from raw content.
