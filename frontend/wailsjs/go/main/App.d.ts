@@ -258,7 +258,7 @@ export function MarkWorkspaceShouldDelete(arg1:string):Promise<void>;
 
 export function OpenAccessibilityPreferences():Promise<void>;
 
-export function OpenPlanInTerminal(arg1:string,arg2:string):Promise<void>;
+export function OpenPlanInTerminal(arg1:string,arg2:string):Promise<string>;
 
 export function OpenRepoPathTerminal(arg1:string):Promise<void>;
 

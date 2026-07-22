@@ -483,19 +483,21 @@ func writePlanTempFile(planID, body string) (string, error) {
 
 // OpenPlanInTerminal writes the given plan to a temp markdown file and opens
 // it in the configured terminal/agent at the plan's context's repo path.
-func (a *App) OpenPlanInTerminal(contextID, planID string) error {
+// It returns the path to the temp file so the UI can surface it to the user.
+func (a *App) OpenPlanInTerminal(contextID, planID string) (string, error) {
 	plan, err := a.db.GetContextPlan(a.ctx, planID)
 	if err != nil {
-		return fmt.Errorf("get context plan: %w", err)
+		return "", fmt.Errorf("get context plan: %w", err)
 	}
 
-	if _, err := writePlanTempFile(plan.ID, plan.Body); err != nil {
-		return err
+	path, err := writePlanTempFile(plan.ID, plan.Body)
+	if err != nil {
+		return "", err
 	}
 
 	branches, err := a.ListVCSBranches(contextID)
 	if err != nil {
-		return fmt.Errorf("list vcs branches: %w", err)
+		return "", fmt.Errorf("list vcs branches: %w", err)
 	}
 
 	var repoPath string
@@ -506,8 +508,12 @@ func (a *App) OpenPlanInTerminal(contextID, planID string) error {
 		}
 	}
 	if repoPath == "" {
-		return fmt.Errorf("no linked repo with a local path found for context %q", contextID)
+		return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
 	}
 
-	return a.openWithCheckout("", repoPath)
+	if err := a.openWithCheckout("", repoPath); err != nil {
+		return "", err
+	}
+
+	return path, nil
 }

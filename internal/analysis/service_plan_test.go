@@ -86,3 +86,14 @@ func TestGeneratePlan_noLinkedRepo_omitsCodebaseContext(t *testing.T) {
 	require.NotContains(t, planPrompt, "## Codebase context")
 	require.False(t, strings.Contains(planPrompt, "func Login() error"))
 }
+
+func TestGeneratePlan_missingPersonAssignment_returnsErrorNotPanic(t *testing.T) {
+	ai := &fakeCodebaseAI{
+		assignmentResponse: "## Plan\n\n- [ ] Step one",
+	}
+	svc, contextID := newCodebaseTestService(t, ai)
+
+	plan, err := svc.GeneratePlan(context.Background(), contextID, "does-not-exist")
+	require.Error(t, err)
+	require.Nil(t, plan)
+}

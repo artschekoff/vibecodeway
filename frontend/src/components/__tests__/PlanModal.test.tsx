@@ -8,7 +8,7 @@ const { UpsertContextText, OpenPlanInTerminal } = vi.hoisted(() => ({
 }));
 vi.mock("../../../wailsjs/go/main/App", () => ({
   UpsertContextText: UpsertContextText.mockResolvedValue(undefined),
-  OpenPlanInTerminal: OpenPlanInTerminal.mockResolvedValue(undefined),
+  OpenPlanInTerminal: OpenPlanInTerminal.mockResolvedValue("/tmp/cc-plan-p1.md"),
 }));
 
 import { PlanModal } from "../PlanModal";
@@ -18,7 +18,7 @@ const plan = { id: "p1", contextId: "c1", body: "# Plan\nX" } as any;
 beforeEach(() => {
   vi.clearAllMocks();
   UpsertContextText.mockResolvedValue(undefined);
-  OpenPlanInTerminal.mockResolvedValue(undefined);
+  OpenPlanInTerminal.mockResolvedValue("/tmp/cc-plan-p1.md");
 });
 
 describe("PlanModal", () => {
@@ -56,5 +56,14 @@ describe("PlanModal", () => {
     await user.click(screen.getByRole("button", { name: /open in terminal/i }));
 
     expect(OpenPlanInTerminal).toHaveBeenCalledWith("c1", "p1");
+  });
+
+  it("shows the plan temp-file path after opening in the terminal", async () => {
+    const user = userEvent.setup();
+    render(<PlanModal plan={plan} contextId="c1" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /open in terminal/i }));
+
+    expect(await screen.findByText(/\/tmp\/cc-plan-p1\.md/)).toBeInTheDocument();
   });
 });

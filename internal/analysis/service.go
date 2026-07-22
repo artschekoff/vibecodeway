@@ -911,6 +911,9 @@ func (s *Service) GeneratePlan(ctx context.Context, contextID, personAssignmentI
 	if err != nil {
 		return nil, fmt.Errorf("get person assignment: %w", err)
 	}
+	if pa == nil {
+		return nil, fmt.Errorf("person assignment %s not found", personAssignmentID)
+	}
 
 	ctxRow, err := s.store.GetContext(ctx, contextID)
 	if err != nil {

@@ -14,6 +14,7 @@ export function PlanModal({ plan, contextId, onClose }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [openState, setOpenState] = useState<"idle" | "opened" | "error">("idle");
   const [openError, setOpenError] = useState<string | null>(null);
+  const [planPath, setPlanPath] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -52,7 +53,8 @@ export function PlanModal({ plan, contextId, onClose }: Props) {
     setOpenState("idle");
     setOpenError(null);
     try {
-      await OpenPlanInTerminal(contextId, plan.id);
+      const path = await OpenPlanInTerminal(contextId, plan.id);
+      setPlanPath(path);
       setOpenState("opened");
     } catch (err) {
       setOpenState("error");
@@ -156,6 +158,11 @@ export function PlanModal({ plan, contextId, onClose }: Props) {
         )}
         {openError && (
           <div style={{ fontSize: 11, color: "#dc2626", marginTop: 8 }}>{openError}</div>
+        )}
+        {planPath && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+            Plan written to {planPath} — reference it in the opened terminal.
+          </div>
         )}
       </div>
     </div>
