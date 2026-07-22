@@ -38,6 +38,10 @@ export function AnalyzeContext(arg1) {
   return window['go']['main']['App']['AnalyzeContext'](arg1);
 }
 
+export function ApplyContextUpdateActions(arg1, arg2) {
+  return window['go']['main']['App']['ApplyContextUpdateActions'](arg1, arg2);
+}
+
 export function AskAI(arg1, arg2) {
   return window['go']['main']['App']['AskAI'](arg1, arg2);
 }

@@ -75,7 +75,6 @@ import {
   SetContextWorkflowStatus,
   ListWorkflowStatuses,
   GetUnresolvedAuthors,
-  InterpretContextUpdate,
   SearchContextItems,
   ListContextsByOrg,
 } from "../../wailsjs/go/main/App";
@@ -562,10 +561,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAuthorModal, setShowAuthorModal] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [quickUpdateOpen, setQuickUpdateOpen] = useState(false);
-  const [quickUpdateText, setQuickUpdateText] = useState("");
-  const [quickUpdateLoading, setQuickUpdateLoading] = useState(false);
-  const [quickUpdateAction, setQuickUpdateAction] = useState<store.ContextUpdateAction | null>(null);
   const [editEventType, setEditEventType] = useState("user_note");
   const [editEventSummary, setEditEventSummary] = useState("");
   const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
@@ -955,39 +950,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     setToastType(type);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToastMsg(""), type === "error" ? 5000 : 3000);
-  };
-
-  const handleQuickUpdate = async () => {
-    if (!quickUpdateText.trim()) return;
-    setQuickUpdateLoading(true);
-    setQuickUpdateAction(null);
-    try {
-      const action = await InterpretContextUpdate(id, quickUpdateText) as store.ContextUpdateAction;
-      setQuickUpdateAction(action);
-    } catch (e) {
-      showToast("Failed to interpret update: " + String(e), "error");
-    } finally {
-      setQuickUpdateLoading(false);
-    }
-  };
-
-  const handleQuickUpdateConfirm = async () => {
-    if (!quickUpdateAction) return;
-    try {
-      if (quickUpdateAction.action === "add_event") {
-        await AddUserEvent(id, quickUpdateAction.eventType || "user_note", quickUpdateText || quickUpdateAction.summary || "");
-        const evts = await ListEvents(id) as ContextEvent[];
-        if (evts) setEvents(evts);
-      } else if (quickUpdateAction.action === "set_status") {
-        const updated = await SetContextWorkflowStatus(id, quickUpdateAction.statusSlug ?? "", quickUpdateAction.statusComment ?? "") as ContextSnapshot;
-        if (updated) setSnapshot(updated);
-      }
-      setQuickUpdateOpen(false);
-      setQuickUpdateText("");
-      setQuickUpdateAction(null);
-    } catch (e) {
-      showToast("Failed to apply update: " + String(e), "error");
-    }
   };
 
   const handleDeleteIssue = async (issueId: string) => {
@@ -1902,74 +1864,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               </div>
             ) : (
               <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No analysis yet. Click Analyze to start.</div>
-            )}
-          </div>
-          {/* Quick Update — available even without a snapshot */}
-          <div className="quick-update-wrap" style={{ padding: "0 14px 8px" }}>
-            {!quickUpdateOpen ? (
-              <button
-                className="quick-update-btn"
-                onClick={() => setQuickUpdateOpen(true)}
-                title="Quick Update — describe a change in plain text"
-              >
-                ✏️ Quick Update
-              </button>
-            ) : (
-              <div className="quick-update-panel">
-                <textarea
-                  className="quick-update-input"
-                  value={quickUpdateText}
-                  onChange={(e) => setQuickUpdateText(e.target.value)}
-                  placeholder='e.g. "blocker resolved — PR merged" or "moving to in review"'
-                  rows={3}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      setQuickUpdateOpen(false);
-                      setQuickUpdateText("");
-                      setQuickUpdateAction(null);
-                    }
-                  }}
-                />
-                <div className="quick-update-actions">
-                  <button
-                    className="quick-update-interpret-btn"
-                    onClick={() => void handleQuickUpdate()}
-                    disabled={quickUpdateLoading || !quickUpdateText.trim()}
-                  >
-                    {quickUpdateLoading ? "Interpreting…" : "Interpret"}
-                  </button>
-                  <button
-                    className="quick-update-cancel-btn"
-                    onClick={() => {
-                      setQuickUpdateOpen(false);
-                      setQuickUpdateText("");
-                      setQuickUpdateAction(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-                {quickUpdateAction && (
-                  <div className="quick-update-preview">
-                    <div className="quick-update-preview-desc">{quickUpdateAction.description}</div>
-                    <div className="quick-update-preview-btns">
-                      <button
-                        className="quick-update-confirm-btn"
-                        onClick={() => void handleQuickUpdateConfirm()}
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        className="quick-update-discard-btn"
-                        onClick={() => setQuickUpdateAction(null)}
-                      >
-                        Try again
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
             )}
           </div>
         </div>

@@ -3,8 +3,8 @@
 import {store} from '../models';
 import {vcsstore} from '../models';
 import {slackstore} from '../models';
-import {agent} from '../models';
 import {main} from '../models';
+import {agent} from '../models';
 import {service} from '../models';
 import {vcs} from '../models';
 import {jira} from '../models';
@@ -27,6 +27,8 @@ export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.
 export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<vcsstore.ContextVCSBranch>;
 
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
+
+export function ApplyContextUpdateActions(arg1:string,arg2:Array<store.ContextUpdateAction>):Promise<Array<main.ApplyActionResult>>;
 
 export function AskAI(arg1:string,arg2:string):Promise<agent.Answer>;
 
@@ -168,7 +170,7 @@ export function GetVCSPRsForContext(arg1:string):Promise<Array<vcsstore.PullRequ
 
 export function HasSlackPassphrase():Promise<boolean>;
 
-export function InterpretContextUpdate(arg1:string,arg2:string):Promise<store.ContextUpdateAction>;
+export function InterpretContextUpdate(arg1:string,arg2:string):Promise<Array<store.ContextUpdateAction>>;
 
 export function ListAIPrompts():Promise<Array<store.AIPrompt>>;
 

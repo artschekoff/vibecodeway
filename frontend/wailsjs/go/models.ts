@@ -264,6 +264,22 @@ export namespace main {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
+	export class ApplyActionResult {
+	    action: string;
+	    ok: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApplyActionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.action = source["action"];
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	    }
+	}
 	export class PendingUploadPreview {
 	    tempId: string;
 	    originalName: string;
@@ -1262,6 +1278,13 @@ export namespace store {
 	    summary?: string;
 	    statusSlug?: string;
 	    statusComment?: string;
+	    jiraKeys?: string[];
+	    platform?: string;
+	    ownerRepo?: string;
+	    branch?: string;
+	    repoLabel?: string;
+	    targetContextKey?: string;
+	    relationType?: string;
 	    description: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1275,6 +1298,13 @@ export namespace store {
 	        this.summary = source["summary"];
 	        this.statusSlug = source["statusSlug"];
 	        this.statusComment = source["statusComment"];
+	        this.jiraKeys = source["jiraKeys"];
+	        this.platform = source["platform"];
+	        this.ownerRepo = source["ownerRepo"];
+	        this.branch = source["branch"];
+	        this.repoLabel = source["repoLabel"];
+	        this.targetContextKey = source["targetContextKey"];
+	        this.relationType = source["relationType"];
 	        this.description = source["description"];
 	    }
 	}
