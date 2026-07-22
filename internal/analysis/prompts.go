@@ -77,8 +77,8 @@ Break the note down into one action object per distinct change described. Use ON
    {
      "action": "add_relation",
      "targetContextKey": "<the other context's key>",
-     "relationType": "<e.g. blocks, blocked_by, related_to, duplicates>",
-     "description": "<human-readable preview, e.g. 'Mark as blocked_by JH-42'>"
+     "relationType": "<one of: blocks, is-blocked-by, relates-to, duplicates, is-duplicated-by>",
+     "description": "<human-readable preview, e.g. 'Mark as is-blocked-by JH-42'>"
    }
 
 Rules:

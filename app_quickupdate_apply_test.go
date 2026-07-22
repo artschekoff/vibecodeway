@@ -60,4 +60,62 @@ func TestApplyContextUpdateActions(t *testing.T) {
 		assert.False(t, results[0].OK)
 		assert.NotEmpty(t, results[0].Message)
 	})
+
+	t.Run("add_relation rejects off-vocabulary relationType without persisting", func(t *testing.T) {
+		c2, err := s.CreateContext(ctx, "PROJ-2", org.ID)
+		require.NoError(t, err)
+
+		actions := []appstore.ContextUpdateAction{
+			{Action: "add_relation", TargetContextKey: c2.Key, RelationType: "blocked_by", Description: "bad vocab"},
+		}
+		results, err := a.ApplyContextUpdateActions(c1.ID, actions)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.False(t, results[0].OK)
+		assert.NotEmpty(t, results[0].Message)
+
+		relations, err := s.ListContextRelations(ctx, c1.ID)
+		require.NoError(t, err)
+		assert.Empty(t, relations, "off-vocabulary relation must not be persisted")
+	})
+
+	t.Run("add_relation accepts canonical relationType", func(t *testing.T) {
+		c3, err := s.CreateContext(ctx, "PROJ-3", org.ID)
+		require.NoError(t, err)
+
+		actions := []appstore.ContextUpdateAction{
+			{Action: "add_relation", TargetContextKey: c3.Key, RelationType: "is-blocked-by", Description: "good vocab"},
+		}
+		results, err := a.ApplyContextUpdateActions(c1.ID, actions)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.True(t, results[0].OK, results[0].Message)
+
+		relations, err := s.ListContextRelations(ctx, c1.ID)
+		require.NoError(t, err)
+		require.Len(t, relations, 1)
+		assert.Equal(t, "is-blocked-by", relations[0].RelationType)
+	})
+
+	t.Run("add_event rejects unknown eventType", func(t *testing.T) {
+		actions := []appstore.ContextUpdateAction{
+			{Action: "add_event", EventType: "not_a_real_type", Summary: "bogus", Description: "bad event type"},
+		}
+		results, err := a.ApplyContextUpdateActions(c1.ID, actions)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.False(t, results[0].OK)
+		assert.NotEmpty(t, results[0].Message)
+	})
+
+	t.Run("add_repo rejects missing branch", func(t *testing.T) {
+		actions := []appstore.ContextUpdateAction{
+			{Action: "add_repo", Platform: "github", OwnerRepo: "acme/widgets", Branch: "", Description: "missing branch"},
+		}
+		results, err := a.ApplyContextUpdateActions(c1.ID, actions)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.False(t, results[0].OK)
+		assert.NotEmpty(t, results[0].Message)
+	})
 }

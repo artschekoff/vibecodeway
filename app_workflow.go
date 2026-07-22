@@ -335,6 +335,26 @@ type ApplyActionResult struct {
 	Message string `json:"message"` // error text or short success note
 }
 
+// validEventTypes is the canonical set of EventType* constants an AI-proposed
+// add_event action may use. Anything outside this set is rejected rather than
+// persisted raw, matching the strictness set_status already has via
+// IsValidWorkflowStatus.
+var validEventTypes = map[string]bool{
+	appstore.EventTypeRequirementStated:      true,
+	appstore.EventTypeRequirementConfirmed:   true,
+	appstore.EventTypeRequirementRejected:    true,
+	appstore.EventTypeOpenQuestionRaised:     true,
+	appstore.EventTypeOpenQuestionAnswered:   true,
+	appstore.EventTypeDecisionMade:           true,
+	appstore.EventTypeBlockerIdentified:      true,
+	appstore.EventTypeBlockerResolved:        true,
+	appstore.EventTypeWorkCompleted:          true,
+	appstore.EventTypeStatusUpdate:           true,
+	appstore.EventTypeCurrentStepOverride:    true,
+	appstore.EventTypeNextStepRecommendation: true,
+	appstore.EventTypeUserNote:               true,
+}
+
 // ApplyContextUpdateActions applies user-confirmed Quick Update actions, one by one,
 // reporting per-action success/failure. A failed action does not abort the rest.
 func (a *App) ApplyContextUpdateActions(contextID string, actions []appstore.ContextUpdateAction) ([]ApplyActionResult, error) {
@@ -349,8 +369,12 @@ func (a *App) ApplyContextUpdateActions(contextID string, actions []appstore.Con
 			et := act.EventType
 			if et == "" {
 				et = appstore.EventTypeUserNote
+			} else if !validEventTypes[et] {
+				err = fmt.Errorf("unknown event type %q", et)
 			}
-			_, err = a.AddUserEvent(contextID, et, act.Summary)
+			if err == nil {
+				_, err = a.AddUserEvent(contextID, et, act.Summary)
+			}
 		case "add_ticket":
 			if len(act.JiraKeys) == 0 {
 				err = fmt.Errorf("no jira keys")
@@ -358,7 +382,11 @@ func (a *App) ApplyContextUpdateActions(contextID string, actions []appstore.Con
 				_, err = a.AddIssuesToContext(contextID, act.JiraKeys)
 			}
 		case "add_repo":
-			_, err = a.AddVCSBranch(contextID, act.Platform, act.OwnerRepo, act.Branch, act.RepoLabel)
+			if act.Platform == "" || act.OwnerRepo == "" || act.Branch == "" {
+				err = fmt.Errorf("platform, ownerRepo, and branch are required")
+			} else {
+				_, err = a.AddVCSBranch(contextID, act.Platform, act.OwnerRepo, act.Branch, act.RepoLabel)
+			}
 		case "add_relation":
 			err = a.addRelationByKey(contextID, act.TargetContextKey, act.RelationType)
 		default:
@@ -380,11 +408,29 @@ func (a *App) ApplyContextUpdateActions(contextID string, actions []appstore.Con
 	return out, nil
 }
 
+// validRelationTypes is the canonical set of context relation types accepted
+// by the frontend (see ContextRelationType / RELATION_TYPE_LABELS in
+// frontend/src/types/index.ts). AddContextRelation stores whatever string it
+// is given with no validation, so an off-vocabulary value would "succeed" but
+// render as a blank badge in the UI and never round-trip — reject it here
+// before it reaches the store.
+var validRelationTypes = map[string]bool{
+	"blocks":           true,
+	"is-blocked-by":    true,
+	"relates-to":       true,
+	"duplicates":       true,
+	"is-duplicated-by": true,
+}
+
 // addRelationByKey resolves targetKey to a context id and stores a relation
-// from contextID to that context. Returns an error if the key doesn't resolve.
+// from contextID to that context. Returns an error if the key doesn't resolve
+// or if relationType is not one of validRelationTypes.
 func (a *App) addRelationByKey(contextID, targetKey, relationType string) error {
 	if targetKey == "" {
 		return fmt.Errorf("target context key is required")
+	}
+	if !validRelationTypes[relationType] {
+		return fmt.Errorf("unknown relation type %q", relationType)
 	}
 	target, err := a.db.GetContextByKey(context.Background(), targetKey)
 	if err != nil {
