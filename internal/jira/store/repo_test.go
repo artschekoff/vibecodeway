@@ -202,16 +202,18 @@ func TestToggleIssueActive(t *testing.T) {
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
 	require.NoError(t, err)
-	toggleRes, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "", "")
+	toggleRes, err := repo.UpsertIssue(ctx, c.ID, "TEST-1", "Summary", "Open", "", "Bug", "", "", "", "High")
 	require.NoError(t, err)
 
 	issue, err := repo.ToggleIssueActive(ctx, toggleRes.ID)
 	require.NoError(t, err)
 	assert.False(t, issue.IsActive)
+	assert.Equal(t, "High", issue.Priority)
 
 	issue, err = repo.ToggleIssueActive(ctx, toggleRes.ID)
 	require.NoError(t, err)
 	assert.True(t, issue.IsActive)
+	assert.Equal(t, "High", issue.Priority)
 }
 
 func TestToggleIssueActive_NotFound(t *testing.T) {

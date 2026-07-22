@@ -102,6 +102,7 @@ func TestAnalysis_FullPipeline(t *testing.T) {
 			"Admin users bypass MFA for internal tools.",
 		time.Now().Add(-48*time.Hour).UTC().Format(time.RFC3339),
 		"",
+		"",
 	)
 	require.NoError(t, err)
 
@@ -318,6 +319,7 @@ Open questions / follow-ups:
 Source: Referral pro-paywall implementation meeting — May 5, 2026 (Liora, Artem, Rustam, McLean).`,
 		time.Now().Add(-7*24*time.Hour).UTC().Format(time.RFC3339),
 		"",
+		"",
 	)
 	require.NoError(t, err)
 
@@ -334,6 +336,7 @@ Move subtask to Ready For Development status to create github branch.
 Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering task.`,
 		time.Now().Add(-5*24*time.Hour).UTC().Format(time.RFC3339),
 		"JH-477",
+		"",
 	)
 	require.NoError(t, err)
 

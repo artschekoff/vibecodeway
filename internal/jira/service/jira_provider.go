@@ -84,6 +84,7 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 				res, err := p.jiraRepo.UpsertIssue(ctx, contextID,
 					detail.Key, detail.Summary, detail.Status, detail.Assignee,
 					detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
+					detail.Priority,
 				)
 				if err != nil {
 					p.logger.Warn("jira refresh: upsert issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
@@ -166,7 +167,7 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 			if r.Status != stored.Status {
 				res, uErr := p.jiraRepo.UpsertIssue(ctx, contextID,
 					r.Key, r.Summary, r.Status, r.Assignee, r.IssueType,
-					stored.Description, stored.JiraUpdated, stored.ParentKey)
+					stored.Description, stored.JiraUpdated, stored.ParentKey, stored.Priority)
 				if uErr != nil {
 					p.logger.Warn("jira reload: update status failed", zap.String("key", r.Key), zap.Error(uErr))
 				} else if res.StatusChanged && p.notify != nil {
@@ -189,6 +190,7 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 		reloadRes, err := p.jiraRepo.UpsertIssue(ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
 			detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
+			detail.Priority,
 		)
 		if err != nil {
 			p.logger.Warn("jira reload: upsert issue failed", zap.String("key", r.Key), zap.Error(err))

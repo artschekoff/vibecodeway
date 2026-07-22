@@ -57,11 +57,11 @@ func (r *Repo) ToggleIssueActive(ctx context.Context, id string) (*Issue, error)
 	var i Issue
 	err = r.db.QueryRowContext(ctx, `
 		SELECT id, context_id, jira_key, summary, status, assignee, issue_type,
-		       description, jira_updated, parent_key, created_at, is_active, viewed_at, ai_processed_at
+		       description, jira_updated, parent_key, priority, created_at, is_active, viewed_at, ai_processed_at
 		FROM jira_issues WHERE id = ?
 	`, id).Scan(
 		&i.ID, &i.ContextID, &i.JiraKey, &i.Summary, &i.Status,
-		&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.ParentKey, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
+		&i.Assignee, &i.IssueType, &i.Description, &i.JiraUpdated, &i.ParentKey, &i.Priority, &i.CreatedAt, &i.IsActive, &i.ViewedAt, &i.AiProcessedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

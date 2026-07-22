@@ -26,6 +26,7 @@ type IssueDetail struct {
 	Description string       `json:"description"`
 	Updated     string       `json:"updated"`
 	ParentKey   string       `json:"parentKey,omitempty"`
+	Priority    string       `json:"priority"`
 	Subtasks    []SubtaskRef `json:"subtasks,omitempty"`
 	Links       []IssueLink  `json:"links,omitempty"`
 }

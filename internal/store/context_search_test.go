@@ -22,7 +22,7 @@ func TestSearchContextIDs_JiraKeyAndRepo(t *testing.T) {
 
 	// seed a jira issue with a key and description
 	jiraRepo := jirastore.NewRepo(s.DB())
-	_, err = jiraRepo.UpsertIssue(ctx, c.ID, "ENG-999", "Fix login bug", "todo", "", "bug", "Users cannot log in via SSO", "", "")
+	_, err = jiraRepo.UpsertIssue(ctx, c.ID, "ENG-999", "Fix login bug", "todo", "", "bug", "Users cannot log in via SSO", "", "", "")
 	require.NoError(t, err, "upsert issue")
 
 	// seed a vcs repo + branch linked to the context
@@ -76,7 +76,7 @@ func TestSearchContextItems_ContentAndBuckets(t *testing.T) {
 	require.NoError(t, err)
 
 	jiraRepo := jirastore.NewRepo(s.DB())
-	res, err := jiraRepo.UpsertIssue(ctx, c.ID, "ENG-1", "Login page", "todo", "", "bug", "nothing special here", "", "")
+	res, err := jiraRepo.UpsertIssue(ctx, c.ID, "ENG-1", "Login page", "todo", "", "bug", "nothing special here", "", "", "")
 	require.NoError(t, err)
 	// The searchable term lives only in a comment body -> exercises comment indexing.
 	_, err = jiraRepo.UpsertComment(ctx, res.ID, "c1", "alice", "we should add zephyrflux handling", "")
@@ -110,7 +110,7 @@ func TestSearchContextIDs_LikeFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	jiraRepo := jirastore.NewRepo(s.DB())
-	_, err = jiraRepo.UpsertIssue(ctx, c.ID, "PAY-42", "Stripe refund flow", "todo", "", "task", "", "", "")
+	_, err = jiraRepo.UpsertIssue(ctx, c.ID, "PAY-42", "Stripe refund flow", "todo", "", "task", "", "", "", "")
 	require.NoError(t, err)
 
 	// "pa" is too short for FTS5 to reliably match — LIKE fallback should catch it
