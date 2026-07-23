@@ -74,3 +74,22 @@ func TestBuildAgentTask(t *testing.T) {
 	assert.Contains(t, out, "slow sql")    // ticket summary
 	assert.Contains(t, out, "/tmp/repoA")  // attached repo path
 }
+
+// TestBuildAgentTask_multiRepo proves the attached-repos loop appends every
+// qualifying repo rather than stopping at (or returning) the first match —
+// unlike contextRepoPath, which intentionally stops at the first repo.
+func TestBuildAgentTask_multiRepo(t *testing.T) {
+	svc, contextID := newAgentTaskTestService(t)
+
+	vs := svc.vcsStore
+	repoB, err := vs.Repos.EnsureRepo(context.Background(), "github", "acme", "repoB")
+	require.NoError(t, err)
+	require.NoError(t, vs.Repos.UpdateLocalPath(context.Background(), repoB.ID, "/tmp/repoB"))
+	_, err = vs.Branches.AddBranch(context.Background(), contextID, repoB.ID, "develop", "")
+	require.NoError(t, err)
+
+	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")
+	require.NoError(t, err)
+	assert.Contains(t, out, "/tmp/repoA") // first repo's path
+	assert.Contains(t, out, "/tmp/repoB") // second repo's path
+}

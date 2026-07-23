@@ -495,20 +495,9 @@ func (a *App) OpenPlanInTerminal(contextID, planID string) (string, error) {
 		return "", err
 	}
 
-	branches, err := a.ListVCSBranches(contextID)
+	repoPath, err := a.firstAttachedRepoPath(contextID)
 	if err != nil {
-		return "", fmt.Errorf("list vcs branches: %w", err)
-	}
-
-	var repoPath string
-	for _, b := range branches {
-		if b.Repo != nil && b.Repo.LocalPath != "" {
-			repoPath = b.Repo.LocalPath
-			break
-		}
-	}
-	if repoPath == "" {
-		return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
+		return "", err
 	}
 
 	if err := a.openWithCheckout("", repoPath); err != nil {
@@ -516,4 +505,41 @@ func (a *App) OpenPlanInTerminal(contextID, planID string) (string, error) {
 	}
 
 	return path, nil
+}
+
+// firstAttachedRepoPath returns the on-disk LocalPath of the first attached
+// repo that has one (resolved via GetRepo — ListBranches does NOT populate
+// Repo.LocalPath; that field is always empty because ListBranches's JOIN
+// selects only platform/owner/name).
+func (a *App) firstAttachedRepoPath(contextID string) (string, error) {
+	branches, err := a.ListVCSBranches(contextID)
+	if err != nil {
+		return "", fmt.Errorf("list vcs branches: %w", err)
+	}
+	for _, b := range branches {
+		repo, rerr := a.vcsStore.Repos.GetRepo(a.ctx, b.RepoID)
+		if rerr != nil || repo.LocalPath == "" {
+			continue
+		}
+		return repo.LocalPath, nil
+	}
+	return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
+}
+
+// SolveWithAI assembles a context-grounded task instruction, opens the configured
+// coding agent + terminal at the first attached repo, and returns the instruction
+// (the frontend copies it to the clipboard for the user to paste into the agent).
+func (a *App) SolveWithAI(contextID, userPrompt string) (string, error) {
+	instruction, err := a.analysisSvc.BuildAgentTask(a.ctx, contextID, userPrompt)
+	if err != nil {
+		return "", err
+	}
+	repoPath, err := a.firstAttachedRepoPath(contextID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.openWithCheckout("", repoPath); err != nil {
+		return "", err
+	}
+	return instruction, nil
 }

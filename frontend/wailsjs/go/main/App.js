@@ -698,6 +698,10 @@ export function SetTrackedRepoPath(arg1, arg2) {
   return window['go']['main']['App']['SetTrackedRepoPath'](arg1, arg2);
 }
 
+export function SolveWithAI(arg1, arg2) {
+  return window['go']['main']['App']['SolveWithAI'](arg1, arg2);
+}
+
 export function SwitchMainWorkingTree(arg1, arg2) {
   return window['go']['main']['App']['SwitchMainWorkingTree'](arg1, arg2);
 }

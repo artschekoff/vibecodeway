@@ -358,6 +358,8 @@ export function SetSlackPassphrase(arg1:string):Promise<void>;
 
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
+export function SolveWithAI(arg1:string,arg2:string):Promise<string>;
+
 export function SwitchMainWorkingTree(arg1:string,arg2:string):Promise<void>;
 
 export function SyncAllComments(arg1:string):Promise<number>;
