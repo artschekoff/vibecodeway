@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
+import ContextEventHooks from "./ContextEventHooks";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, UpdateVCSRepoMeta, InterpretContextUpdate, ApplyContextUpdateActions } from "../../wailsjs/go/main/App";
 import type { store, main } from "../../wailsjs/go/models";
@@ -84,7 +85,7 @@ interface NewFile {
   content: string;
 }
 
-type ActiveTab = "quick" | "jira" | "slack" | "texts" | "vcs" | "relations";
+type ActiveTab = "quick" | "hooks" | "jira" | "slack" | "texts" | "vcs" | "relations";
 
 export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, initialRelations, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
@@ -835,6 +836,15 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                 ⚡ Quick Update
               </button>
             )}
+            {initial && (
+              <button
+                type="button"
+                className={`ctx-tab${activeTab === "hooks" ? " ctx-tab--active" : ""}`}
+                onClick={() => setActiveTab("hooks")}
+              >
+                Hooks
+              </button>
+            )}
             <button
               type="button"
               className={`ctx-tab${activeTab === "jira" ? " ctx-tab--active" : ""}`}
@@ -976,6 +986,11 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                 )}
               </div>
             </div>
+          )}
+
+          {/* Hooks panel */}
+          {activeTab === "hooks" && initial && (
+            <ContextEventHooks contextId={initial.id} />
           )}
 
           {/* Jira panel */}
