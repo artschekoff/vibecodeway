@@ -1779,6 +1779,43 @@ func parsePersonAssignmentArray(content string) ([]appstore.PersonAssignment, er
 	return result, nil
 }
 
+// MatchBranchesToContext asks the AI which of branchTitles (Git branch NAMES
+// only — never code/diffs/bodies) belong to the given context, identified by
+// contextKey and contextSummary. Returns 0-based indices into branchTitles.
+// Fail-soft: empty input or an unparseable AI response returns ([]int{}, nil).
+func (s *Service) MatchBranchesToContext(ctx context.Context, contextKey, contextSummary string, branchTitles []string) ([]int, error) {
+	if len(branchTitles) == 0 {
+		return []int{}, nil
+	}
+	numbered := make([]string, len(branchTitles))
+	for i, t := range branchTitles {
+		numbered[i] = fmt.Sprintf("%d: %s", i, t)
+	}
+	tmpl := s.loadPrompt(ctx, "branch_match", defaultBranchMatchPrompt)
+	prompt := applyPlaceholders(tmpl, map[string]string{
+		"context_key":     contextKey,
+		"context_summary": contextSummary,
+		"branch_titles":   strings.Join(numbered, "\n"),
+	})
+	resp, err := s.ai.ChatCompletion(ctx, []openai.Message{{Role: "user", Content: prompt}})
+	if err != nil {
+		return nil, err
+	}
+	var idx []int
+	if uerr := json.Unmarshal([]byte(extractJSON(resp.Content, '[')), &idx); uerr != nil {
+		s.logger.Warn("branch match: unparseable ai response", zap.Error(uerr))
+		return []int{}, nil
+	}
+	// Filter to valid, in-range indices.
+	out := make([]int, 0, len(idx))
+	for _, i := range idx {
+		if i >= 0 && i < len(branchTitles) {
+			out = append(out, i)
+		}
+	}
+	return out, nil
+}
+
 // extractJSON finds the first occurrence of startChar ('{' or '[') in content
 // and returns everything from that point. Strips markdown fences if present.
 func extractJSON(content string, startChar byte) string {

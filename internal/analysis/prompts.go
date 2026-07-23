@@ -7,6 +7,24 @@ import (
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 )
 
+// defaultBranchMatchPrompt mirrors migration 081's seed body for
+// "branch_match": used by MatchBranchesToContext to match Git branch NAMES
+// (titles only — no code/diffs/bodies) to a context's ticket key(s)/subject.
+const defaultBranchMatchPrompt = `You match Git branch names to a work context using ONLY the branch names below — no other information exists or should be inferred.
+
+## Context key
+{{context_key}}
+
+## Context summary (tickets and focus)
+{{context_summary}}
+
+## Candidate branch names (index: name)
+{{branch_titles}}
+
+A branch belongs to this context if its name references the context's ticket key(s), feature, or subject. Be precise — do NOT match generic branches (chore/deps, release, hotfix) unless clearly tied to this context.
+
+Respond with ONLY a JSON array of the 0-based indices of matching branches (e.g. [0, 3]). If none match, return [].`
+
 // defaultContextUpdaterPrompt is the in-code fallback used when the
 // context_updater row cannot be loaded from the DB (see loadPrompt). The
 // canonical, editable copy lives in ai_prompts and is seeded/updated by

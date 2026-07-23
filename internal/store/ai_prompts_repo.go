@@ -74,6 +74,11 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "raw_content", Description: "Formatted Jira issues and activity for this context"},
 		{Name: "codebase_context", Description: "Relevant source files from the linked repository, injected for grounding (empty if no repo linked)"},
 	},
+	"branch_match": {
+		{Name: "context_key", Description: "Project/module key of the context"},
+		{Name: "context_summary", Description: "Context summary — tickets and focus — used to judge relevance"},
+		{Name: "branch_titles", Description: "Numbered list of candidate branch names (index: name), titles only"},
+	},
 }
 
 // ListAIPrompts returns all prompt templates with their placeholder definitions.
