@@ -25,6 +25,26 @@ A branch belongs to this context if its name references the context's ticket key
 
 Respond with ONLY a JSON array of the 0-based indices of matching branches (e.g. [0, 3]). If none match, return [].`
 
+// defaultAgentTaskPrompt mirrors migration 082's seed body for "agent_task":
+// used by BuildAgentTask to assemble a coding-agent instruction string from a
+// context's linked tickets and on-disk repos. Pure string assembly — no LLM
+// call is made with this prompt; it is handed to an external coding agent.
+const defaultAgentTaskPrompt = `You are a coding agent. Implement the task below using the repositories checked out on disk.
+
+## Task
+{{user_prompt}}
+
+## Context
+{{context_key}}
+
+## Related tickets
+{{tickets}}
+
+## Repositories on disk (read and modify the code here)
+{{repos}}
+
+Work directly in these repositories to implement the task. Inspect the relevant files, make the changes, and keep them scoped to the task.`
+
 // defaultContextUpdaterPrompt is the in-code fallback used when the
 // context_updater row cannot be loaded from the DB (see loadPrompt). The
 // canonical, editable copy lives in ai_prompts and is seeded/updated by

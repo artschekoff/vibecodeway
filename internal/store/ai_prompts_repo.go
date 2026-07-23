@@ -79,6 +79,12 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "context_summary", Description: "Context summary — tickets and focus — used to judge relevance"},
 		{Name: "branch_titles", Description: "Numbered list of candidate branch names (index: name), titles only"},
 	},
+	"agent_task": {
+		{Name: "user_prompt", Description: "The user's free-form task instruction for the coding agent"},
+		{Name: "context_key", Description: "Project/module key of the context"},
+		{Name: "tickets", Description: "Titles-only ticket lines (key + summary) linked to this context"},
+		{Name: "repos", Description: "On-disk local paths (and branches) of repos attached to this context"},
+	},
 }
 
 // ListAIPrompts returns all prompt templates with their placeholder definitions.

@@ -1,0 +1,76 @@
+package analysis
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
+	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+)
+
+// newAgentTaskTestService builds a Service backed by a temp SQLite DB, seeded
+// with one org, one context, one Jira issue (JH-1: "slow sql"), and one VCS
+// branch linked to a repo whose LocalPath is "/tmp/repoA".
+func newAgentTaskTestService(t *testing.T) (*Service, string) {
+	t.Helper()
+	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+
+	ctx := context.Background()
+	org, err := s.CreateOrganization(ctx, "acme")
+	require.NoError(t, err)
+
+	ctxRow, err := s.CreateContext(ctx, "JH-1", org.ID)
+	require.NoError(t, err)
+
+	jiraRepo := jirastore.NewRepo(s.DB())
+	jiraSvc := jiraservice.NewContextService(s, nil, jiraRepo, nil, nil, zap.NewNop())
+
+	_, err = jiraRepo.UpsertIssue(ctx, ctxRow.ID,
+		"JH-1",
+		"slow sql",
+		"In Progress",
+		"alice",
+		"Bug",
+		"",
+		"",
+		"",
+		"",
+	)
+	require.NoError(t, err)
+
+	svc := &Service{
+		store:   s,
+		jiraSvc: jiraSvc,
+		logger:  zap.NewNop(),
+	}
+
+	vs := vcsstore.NewStore(s.DB())
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "repoA")
+	require.NoError(t, err)
+	require.NoError(t, vs.Repos.UpdateLocalPath(ctx, repo.ID, "/tmp/repoA"))
+
+	_, err = vs.Branches.AddBranch(ctx, ctxRow.ID, repo.ID, "main", "")
+	require.NoError(t, err)
+
+	svc.SetVCSStore(vs)
+
+	return svc, ctxRow.ID
+}
+
+func TestBuildAgentTask(t *testing.T) {
+	svc, contextID := newAgentTaskTestService(t)
+	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")
+	require.NoError(t, err)
+	assert.Contains(t, out, "реализовать") // the user task
+	assert.Contains(t, out, "JH-1")        // ticket key
+	assert.Contains(t, out, "slow sql")    // ticket summary
+	assert.Contains(t, out, "/tmp/repoA")  // attached repo path
+}

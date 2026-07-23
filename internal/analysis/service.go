@@ -1529,6 +1529,78 @@ func (s *Service) contextRepoPath(ctx context.Context, contextID string) string 
 	return ""
 }
 
+// ticketSummaryLines returns "JiraKey: Summary" lines (titles only — never
+// descriptions/comments) for every Jira issue linked to contextID, one per
+// line. Returns "" when no jiraSvc is attached or the lookup fails, mirroring
+// existingTicketsSummary's best-effort/degrade-gracefully behavior.
+func (s *Service) ticketSummaryLines(ctx context.Context, contextID string) string {
+	if s.jiraSvc == nil {
+		return ""
+	}
+	issues, err := s.jiraSvc.GetIssuesWithComments(ctx, contextID)
+	if err != nil {
+		s.logger.Warn("ticketSummaryLines: list jira issues failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		return ""
+	}
+	lines := make([]string, 0, len(issues))
+	for _, i := range issues {
+		lines = append(lines, fmt.Sprintf("%s: %s", i.JiraKey, i.Summary))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// attachedRepoLines returns a "- <LocalPath> (branch <branch>)" line for every
+// VCS branch linked to contextID whose repo has a non-empty LocalPath —
+// unlike contextRepoPath (which stops at the first match), this includes ALL
+// qualifying repos. Returns nil when no vcsStore is attached or the lookup
+// fails.
+func (s *Service) attachedRepoLines(ctx context.Context, contextID string) []string {
+	if s.vcsStore == nil {
+		return nil
+	}
+	branches, err := s.vcsStore.Branches.ListBranches(ctx, contextID)
+	if err != nil {
+		s.logger.Warn("attachedRepoLines: list branches failed",
+			zap.String("contextID", contextID), zap.Error(err))
+		return nil
+	}
+	var lines []string
+	for _, b := range branches {
+		repo, rerr := s.vcsStore.Repos.GetRepo(ctx, b.RepoID)
+		if rerr != nil || repo.LocalPath == "" {
+			continue
+		}
+		line := "- " + repo.LocalPath
+		if b.Branch != "" {
+			line += " (branch " + b.Branch + ")"
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// BuildAgentTask assembles the instruction string handed to an external
+// coding agent for contextID: pure string assembly (loadPrompt +
+// applyPlaceholders) — no LLM call is made here. It injects the user's task
+// prompt, the context key, titles-only ticket lines, and the on-disk paths of
+// every repo attached to the context.
+func (s *Service) BuildAgentTask(ctx context.Context, contextID, userPrompt string) (string, error) {
+	c, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return "", err
+	}
+	tickets := s.ticketSummaryLines(ctx, contextID)
+	repoLines := s.attachedRepoLines(ctx, contextID)
+	tmpl := s.loadPrompt(ctx, "agent_task", defaultAgentTaskPrompt)
+	return applyPlaceholders(tmpl, map[string]string{
+		"user_prompt": userPrompt,
+		"context_key": c.Key,
+		"tickets":     tickets,
+		"repos":       strings.Join(repoLines, "\n"),
+	}), nil
+}
+
 // buildCodebaseContext lists the repo tree, asks the AI to select up to a
 // handful of relevant files, reads them, and formats them as fenced code
 // blocks for injection into the assignment prompt. Any failure along the way
