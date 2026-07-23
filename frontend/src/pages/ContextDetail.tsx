@@ -1183,7 +1183,12 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       kind: "event" as const,
     })),
   ];
-  const vcsBranches = filtering ? allVcsBranches.filter((b) => has(itemMatch!.branchIds, b.id)) : allVcsBranches;
+  const pullRequestsFiltered = filtering ? pullRequests.filter((pr) => has(itemMatch!.prIds, pr.id)) : pullRequests;
+  // A branch stays visible if it matched directly, or if one of its PRs matched
+  // (so a PR-content hit doesn't hide its parent branch row).
+  const vcsBranches = filtering
+    ? allVcsBranches.filter((b) => has(itemMatch!.branchIds, b.id) || pullRequestsFiltered.some((pr) => pr.branchId === b.id))
+    : allVcsBranches;
   // DM configs are not full-text indexed, so hide them while a filter is active.
   const visibleDMConfigs = filtering ? [] : slackDMConfigs;
 
@@ -2021,7 +2026,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             )}
 
             {/* Pull Requests section — grouped by repo/branch */}
-            {(vcsBranches.length > 0 || pullRequests.length > 0) && (
+            {(vcsBranches.length > 0 || pullRequestsFiltered.length > 0) && (
               <section className="detail-section">
                 <div className="detail-section-header">
                   <span className="detail-section-title">
@@ -2032,7 +2037,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       </span>
                     )}
                   </span>
-                  <span className="detail-section-count">{pullRequests.length}</span>
+                  <span className="detail-section-count">{pullRequestsFiltered.length}</span>
                 </div>
                 {checkoutError && (
                   <div className="error-banner" style={{ margin: "0 14px 8px" }}>
@@ -2054,7 +2059,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                     const repoLabel = b.repo
                       ? `${b.repo.owner}/${b.repo.name}`
                       : b.id;
-                    const branchPRs = pullRequests.filter((pr) => pr.branchId === b.id);
+                    const branchPRs = pullRequestsFiltered.filter((pr) => pr.branchId === b.id);
                     const workspace = b.branch
                       ? workspaces.find((w) => w.branch === b.branch && w.repoId === b.repoId)
                       : undefined;
@@ -2142,9 +2147,11 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
 
                         {/* PRs for this branch */}
                         {branchPRs.length === 0 ? (
-                          <div className="detail-section-empty" style={{ padding: "8px 14px 12px" }}>
-                            Click <strong>Refresh</strong> to fetch PRs
-                          </div>
+                          !filtering && (
+                            <div className="detail-section-empty" style={{ padding: "8px 14px 12px" }}>
+                              Click <strong>Refresh</strong> to fetch PRs
+                            </div>
+                          )
                         ) : branchPRs.map((pr) => (
                           <PRCard
                             key={pr.id}
@@ -2159,7 +2166,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                   })}
 
                   {/* PRs that don't match any tracked branch (edge case) */}
-                  {pullRequests
+                  {pullRequestsFiltered
                     .filter((pr) => !vcsBranches.some((b) => b.id === pr.branchId))
                     .map((pr) => (
                       <PRCard

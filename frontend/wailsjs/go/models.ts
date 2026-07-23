@@ -1107,6 +1107,7 @@ export namespace store {
 	    textIds: string[];
 	    fileIds: string[];
 	    branchIds: string[];
+	    prIds: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ContextItemMatches(source);
@@ -1120,6 +1121,7 @@ export namespace store {
 	        this.textIds = source["textIds"];
 	        this.fileIds = source["fileIds"];
 	        this.branchIds = source["branchIds"];
+	        this.prIds = source["prIds"];
 	    }
 	}
 	export class ContextPlan {

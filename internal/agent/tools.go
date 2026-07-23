@@ -192,6 +192,7 @@ func (a *Agent) toolSearchWithinContext(ctx context.Context, contextID, query st
 		"fileIds":    m.FileIDs,
 		"channelIds": m.ChannelIDs,
 		"branchIds":  m.BranchIDs,
+		"prIds":      m.PRIDs,
 	}, nil
 }
 
