@@ -847,7 +847,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
           </div>
 
           {/* Tab bar — all providers are optional */}
-          <div className="ctx-tabs">
+          <div className="ctx-body">
+          <div className="ctx-sidebar">
             {initial && (
               <button
                 type="button"
@@ -925,6 +926,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
               )}
             </button>
           </div>
+          <div className="ctx-content">
 
           <div className="modal-scroll-body">
           {/* Quick Update panel */}
@@ -2063,6 +2065,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
           )}
 
           </div>{/* end modal-scroll-body */}
+          </div>
+          </div>
 
           <div className="modal-footer">
             <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
