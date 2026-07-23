@@ -69,3 +69,13 @@ func TestMatchBranchesToContext_emptyTitles_returnsEmptyFailSoft(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []int{}, got)
 }
+
+func TestMatchBranchesToContext_outOfRangeIndex_filtered(t *testing.T) {
+	ai := &fakeBranchMatchAI{response: "[0,99]"}
+	svc := newBranchMatchTestService(t, ai)
+
+	titles := []string{"feat/JH-4532-slow-sql", "chore/deps"}
+	got, err := svc.MatchBranchesToContext(context.Background(), "JH-4532", "slow sql query", titles)
+	require.NoError(t, err)
+	require.Equal(t, []int{0}, got)
+}

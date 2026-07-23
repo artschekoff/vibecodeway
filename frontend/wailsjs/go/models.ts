@@ -280,6 +280,24 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class MatchedBranch {
+	    platform: string;
+	    ownerRepo: string;
+	    branch: string;
+	    label: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MatchedBranch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.platform = source["platform"];
+	        this.ownerRepo = source["ownerRepo"];
+	        this.branch = source["branch"];
+	        this.label = source["label"];
+	    }
+	}
 	export class PendingUploadPreview {
 	    tempId: string;
 	    originalName: string;

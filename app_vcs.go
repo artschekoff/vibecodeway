@@ -790,3 +790,134 @@ func (a *App) DeleteWorkspace(workspaceID string) error {
 func (a *App) MarkWorkspaceShouldDelete(workspaceID string) error {
 	return a.vcsStore.Workspaces.UpdateStatus(a.ctx, workspaceID, "should_delete")
 }
+
+// --- AI Branch Matching ---
+
+const (
+	// maxMatchRepos caps how many tracked repos per platform are scanned for
+	// candidate branches, to keep AIMatchBranches bounded on large repo lists.
+	maxMatchRepos = 40
+	// maxMatchCandidates caps the total number of candidate branches sent to
+	// the AI matcher across all platforms/repos.
+	maxMatchCandidates = 400
+)
+
+// defaultBranchNames lists common default/trunk branch names that are never
+// useful match candidates and are dropped by dedupeMatches.
+var defaultBranchNames = map[string]bool{"main": true, "master": true, "develop": true, "dev": true}
+
+// MatchedBranch is a candidate (or matched) branch surfaced to the frontend.
+// JSON tags MUST match the frontend VCSBranchInput shape.
+type MatchedBranch struct {
+	Platform  string `json:"platform"`
+	OwnerRepo string `json:"ownerRepo"`
+	Branch    string `json:"branch"`
+	Label     string `json:"label"`
+}
+
+// dedupeMatches drops candidates whose branch is a common default/trunk
+// branch name or empty, and collapses duplicate platform/ownerRepo/branch
+// triples, preserving the first occurrence's order.
+func dedupeMatches(candidates []MatchedBranch) []MatchedBranch {
+	seen := map[string]bool{}
+	out := make([]MatchedBranch, 0, len(candidates))
+	for _, c := range candidates {
+		if defaultBranchNames[c.Branch] || c.Branch == "" {
+			continue
+		}
+		key := c.Platform + "|" + c.OwnerRepo + "|" + c.Branch
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, c)
+	}
+	return out
+}
+
+// contextMatchSignal builds the titles-only signal passed to the AI branch
+// matcher: the context's key plus a short summary of its Jira ticket keys
+// and summaries (no ticket bodies/comments/code).
+func (a *App) contextMatchSignal(contextID string) (key, summary string, err error) {
+	ctxRow, err := a.db.GetContext(a.ctx, contextID)
+	if err != nil {
+		return "", "", err
+	}
+	var lines []string
+	if a.svc != nil {
+		issues, ierr := a.svc.GetIssuesWithComments(a.ctx, contextID)
+		if ierr != nil {
+			a.logger.Sugar().Warnf("AIMatchBranches: list jira issues failed: %s", ierr.Error())
+		} else {
+			for _, issue := range issues {
+				lines = append(lines, issue.JiraKey+": "+issue.Summary)
+			}
+		}
+	}
+	return ctxRow.Key, strings.Join(lines, "\n"), nil
+}
+
+// AIMatchBranches enumerates branches across tracked repos (capped by
+// maxMatchRepos/maxMatchCandidates) and asks the AI matcher which ones
+// likely belong to contextID, based on branch names/titles only. Fail-soft:
+// per-repo enumeration errors are skipped rather than aborting the whole
+// scan. Returns an empty slice (not nil) when there are no candidates.
+func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
+	key, summary, err := a.contextMatchSignal(contextID)
+	if err != nil {
+		return nil, err
+	}
+
+	var candidates []MatchedBranch
+	for _, p := range vcs.KnownPlatforms() {
+		if !vcs.IsPlatformEnabled(p) {
+			continue
+		}
+		platform := string(p)
+		repos, rerr := a.ListTrackedRepos(platform)
+		if rerr != nil {
+			a.logger.Sugar().Warnf("AIMatchBranches: list tracked repos failed: %s", rerr.Error())
+			continue
+		}
+		for ri, repo := range repos {
+			if ri >= maxMatchRepos || len(candidates) >= maxMatchCandidates {
+				break
+			}
+			ownerRepo := repo.FullName()
+			names, berr := a.ListRepoBranches(platform, ownerRepo)
+			if berr != nil {
+				a.logger.Sugar().Warnf("AIMatchBranches: list repo branches failed: %s", berr.Error())
+				continue
+			}
+			for _, name := range names {
+				candidates = append(candidates, MatchedBranch{Platform: platform, OwnerRepo: ownerRepo, Branch: name})
+				if len(candidates) >= maxMatchCandidates {
+					break
+				}
+			}
+		}
+	}
+
+	candidates = dedupeMatches(candidates)
+	if len(candidates) == 0 {
+		return []MatchedBranch{}, nil
+	}
+
+	titles := make([]string, len(candidates))
+	for i, c := range candidates {
+		titles[i] = c.OwnerRepo + ": " + c.Branch
+	}
+	idx, merr := a.analysisSvc.MatchBranchesToContext(a.ctx, key, summary, titles)
+	if merr != nil {
+		a.logger.Sugar().Warnf("AIMatchBranches: ai match failed: %s", merr.Error())
+		return nil, merr
+	}
+	out := make([]MatchedBranch, 0, len(idx))
+	for _, i := range idx {
+		if i < 0 || i >= len(candidates) {
+			continue
+		}
+		out = append(out, candidates[i])
+	}
+	return out, nil
+}
