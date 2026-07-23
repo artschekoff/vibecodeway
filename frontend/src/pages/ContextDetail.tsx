@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
+import { ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -101,6 +101,7 @@ import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import CheckoutLogModal from "../components/CheckoutLogModal";
+import { SolveWithAIModal } from "../components/SolveWithAIModal";
 
 // ── Task list helpers ────────────────────────────────────────────────────────
 
@@ -559,6 +560,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [generatingForPerson, setGeneratingForPerson] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAuthorModal, setShowAuthorModal] = useState(false);
+  const [solveOpen, setSolveOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editEventType, setEditEventType] = useState("user_note");
   const [editEventSummary, setEditEventSummary] = useState("");
@@ -1679,6 +1681,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             <Pencil size={16} /> Edit
           </button>
           <button
+            className="btn-secondary"
+            onClick={() => setSolveOpen(true)}
+            title="Solve with AI"
+          >
+            <Bot size={16} /> Solve with AI
+          </button>
+          <button
             className="btn-primary"
             onClick={() => void handleRefresh()}
             disabled={refreshing}
@@ -2469,6 +2478,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         exitCode={logExitCode}
         onClose={dismissLog}
       />
+      {solveOpen && (
+        <SolveWithAIModal contextId={contextId} onClose={() => setSolveOpen(false)} />
+      )}
       {reasoningGraphFor && (() => {
         const pa = personAssignments.find(p => p.id === reasoningGraphFor);
         if (!pa) return null;
