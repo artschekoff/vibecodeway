@@ -5,7 +5,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
 import ContextEventHooks from "./ContextEventHooks";
 import { usePassphrase } from "../contexts/PassphraseContext";
-import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, UpdateVCSRepoMeta, InterpretContextUpdate, ApplyContextUpdateActions } from "../../wailsjs/go/main/App";
+import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, UpdateVCSRepoMeta, InterpretContextUpdate, ApplyContextUpdateActions, AIMatchBranches } from "../../wailsjs/go/main/App";
 import type { store, main } from "../../wailsjs/go/models";
 import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo, ContextRelation, RelationInput, RelationsPayload, ContextRelationType } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
@@ -165,6 +165,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [vcsBranch, setVCSBranch] = useState("");
   const [vcsLabel, setVCSLabel] = useState("");
   const [vcsAddError, setVCSAddError] = useState("");
+  const [aiMatching, setAiMatching] = useState(false);
+  const [aiMatchNote, setAiMatchNote] = useState("");
   // Repo picker
   const [trackedRepos, setTrackedRepos] = useState<VCSRepo[]>([]);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
@@ -719,6 +721,25 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     setRepoBranches([]);
     setBranchFilter("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
+  };
+
+  const handleAIMatch = async () => {
+    if (!initial) return;
+    setAiMatching(true);
+    setAiMatchNote("");
+    try {
+      const matches = await AIMatchBranches(initial.id);
+      const fresh = (matches ?? []).filter((m) =>
+        !newVCSBranches.some((b) => b.platform === m.platform && b.ownerRepo === m.ownerRepo && b.branch === m.branch) &&
+        !existingVCSBranches.some((b) => b.repo?.platform === m.platform && `${b.repo?.owner}/${b.repo?.name}` === m.ownerRepo && b.branch === m.branch)
+      );
+      setNewVCSBranches((prev) => [...prev, ...fresh.map((m) => ({ platform: m.platform as VCSPlatform, ownerRepo: m.ownerRepo, branch: m.branch, label: m.label }))]);
+      setAiMatchNote(fresh.length ? `Added ${fresh.length} matched branch(es) — review and Save.` : "No new matching branches found.");
+    } catch (e) {
+      setAiMatchNote(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setAiMatching(false);
+    }
   };
 
   const handleSaveRepoMeta = async (repoId: string) => {
@@ -1717,7 +1738,35 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
 
                 {/* Add branch form */}
                 <div className="channel-search-section">
-                  <div className="channel-search-label">Link repository</div>
+                  <div className="channel-search-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <span>Link repository</span>
+                    {initial && (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => void handleAIMatch()}
+                        disabled={aiMatching}
+                        style={{ flexShrink: 0 }}
+                      >
+                        {aiMatching ? (
+                          <span className="btn-with-spinner">
+                            <Spinner size={12} color="var(--text)" />
+                            Matching…
+                          </span>
+                        ) : (
+                          "✨ AI Match"
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  {initial && (
+                    <div className="form-hint" style={{ marginTop: 4 }}>
+                      AI Match scans open branch titles across your tracked repos and pre-fills the ones that match this context.
+                    </div>
+                  )}
+                  {aiMatchNote && (
+                    <div className="form-hint" style={{ marginTop: 4 }}>{aiMatchNote}</div>
+                  )}
 
                   {/* Row 1: platform + repo selector */}
                   <div className="vcs-add-row">
