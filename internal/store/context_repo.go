@@ -349,6 +349,9 @@ func (s *Store) RebuildSearchIndex(ctx context.Context) error {
 		// Uploaded files: original name + extracted text (item_id = file row).
 		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'file', original_name FROM context_uploaded_files WHERE original_name != ''`,
 		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT context_id, id, 'file_content', extracted_text FROM context_uploaded_files WHERE extracted_text != ''`,
+		// Pull requests: title (item_id = PR) and comment bodies (item_id = owning PR).
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT cvb.context_id, vpr.id, 'pr', vpr.title FROM vcs_pull_requests vpr JOIN context_vcs_branches cvb ON cvb.id = vpr.branch_id WHERE vpr.title != ''`,
+		`INSERT INTO context_search_fts (context_id, item_id, source, body) SELECT cvb.context_id, vpr.id, 'pr_comment', vpc.body FROM vcs_pr_comments vpc JOIN vcs_pull_requests vpr ON vpr.id = vpc.pr_id JOIN context_vcs_branches cvb ON cvb.id = vpr.branch_id WHERE vpc.body != ''`,
 	}
 	for _, q := range stmts {
 		if _, err := s.db.ExecContext(ctx, q); err != nil {
@@ -456,6 +459,7 @@ type ContextItemMatches struct {
 	TextIDs    []string `json:"textIds"`
 	FileIDs    []string `json:"fileIds"`
 	BranchIDs  []string `json:"branchIds"`
+	PRIDs      []string `json:"prIds"`
 }
 
 // SearchContextItems returns the elements within a single context whose indexed
@@ -516,6 +520,8 @@ func (m *ContextItemMatches) add(source, itemID string, seen map[string]struct{}
 		bucket = &m.FileIDs
 	case "branch", "repo", "repo_desc":
 		bucket = &m.BranchIDs
+	case "pr", "pr_comment":
+		bucket = &m.PRIDs
 	default: // "key" and anything else: not a filterable element
 		return
 	}

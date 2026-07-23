@@ -6,6 +6,7 @@ import (
 
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -126,4 +127,48 @@ func TestSearchContextIDs_LikeFallback(t *testing.T) {
 	if !found {
 		t.Error("expected 'pa' to match context 'payments-service' via LIKE fallback")
 	}
+}
+
+// TestSearchIndexesPRContent locks in that PR titles and PR comment bodies are
+// indexed into the FTS table, and that both map to the PR's id under the
+// PRIDs bucket (a comment match maps to its owning PR, which is what the
+// in-context filter uses).
+func TestSearchIndexesPRContent(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "my-feature", org.ID)
+	require.NoError(t, err)
+
+	vcsStore := vcsstore.NewStore(s.DB())
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme", "auth-service")
+	require.NoError(t, err, "ensure repo")
+
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feature/zeta", "")
+	require.NoError(t, err, "add branch")
+
+	prResult, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 1,
+		"Zebrafish auth refactor", "alice", "open", "", "", "", "", "", false, "", "")
+	require.NoError(t, err, "upsert pr")
+	prID := prResult.ID
+
+	_, err = vcsStore.PullRequests.UpsertComment(ctx, prID, "ext-1", nil,
+		"conversation", "bob", "quokka edge case", nil, nil, false, nil, "", "")
+	require.NoError(t, err, "upsert pr comment")
+
+	// Global: a PR-title token surfaces the context.
+	ids, err := s.SearchContextIDs(ctx, "Zebrafish")
+	require.NoError(t, err)
+	assert.Contains(t, ids, c.ID)
+
+	// In-context: the PR id is bucketed under PRIDs for both title and comment tokens.
+	m, err := s.SearchContextItems(ctx, c.ID, "Zebrafish")
+	require.NoError(t, err)
+	assert.Contains(t, m.PRIDs, prID)
+
+	m2, err := s.SearchContextItems(ctx, c.ID, "quokka")
+	require.NoError(t, err)
+	assert.Contains(t, m2.PRIDs, prID)
 }
