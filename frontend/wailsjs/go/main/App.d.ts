@@ -282,6 +282,10 @@ export function PreviewSlackDMs(arg1:string,arg2:string):Promise<string>;
 
 export function QuickAttachText(arg1:string,arg2:string):Promise<store.ContextText>;
 
+export function ReadRepoFile(arg1:string,arg2:string):Promise<string>;
+
+export function ReadRepoFileHead(arg1:string,arg2:string):Promise<string>;
+
 export function ReadRepoFiles(arg1:string,arg2:Array<string>):Promise<Record<string, string>>;
 
 export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
@@ -321,6 +325,8 @@ export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Pro
 export function SaveAssignmentOutput(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
 export function SavePersonAssignment(arg1:string,arg2:string):Promise<void>;
+
+export function SaveRepoFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 

@@ -546,6 +546,14 @@ export function QuickAttachText(arg1, arg2) {
   return window['go']['main']['App']['QuickAttachText'](arg1, arg2);
 }
 
+export function ReadRepoFile(arg1, arg2) {
+  return window['go']['main']['App']['ReadRepoFile'](arg1, arg2);
+}
+
+export function ReadRepoFileHead(arg1, arg2) {
+  return window['go']['main']['App']['ReadRepoFileHead'](arg1, arg2);
+}
+
 export function ReadRepoFiles(arg1, arg2) {
   return window['go']['main']['App']['ReadRepoFiles'](arg1, arg2);
 }
@@ -624,6 +632,10 @@ export function SaveAssignmentOutput(arg1, arg2) {
 
 export function SavePersonAssignment(arg1, arg2) {
   return window['go']['main']['App']['SavePersonAssignment'](arg1, arg2);
+}
+
+export function SaveRepoFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveRepoFile'](arg1, arg2, arg3);
 }
 
 export function SearchContextIDs(arg1) {
