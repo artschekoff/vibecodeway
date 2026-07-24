@@ -17,9 +17,9 @@ beforeEach(() => {
 });
 
 describe("SolveWithAIModal", () => {
-  it("defaults the task textarea to реализовать", () => {
+  it("defaults the task textarea to implement", () => {
     render(<SolveWithAIModal contextId="c1" onClose={vi.fn()} />);
-    expect(screen.getByRole("textbox")).toHaveValue("реализовать");
+    expect(screen.getByRole("textbox")).toHaveValue("implement");
   });
 
   it("solves with AI and copies the returned instruction to the clipboard", async () => {
@@ -29,10 +29,22 @@ describe("SolveWithAIModal", () => {
 
     await user.click(screen.getByRole("button", { name: /^solve$/i }));
 
-    expect(SolveWithAI).toHaveBeenCalledWith("c1", "реализовать");
+    expect(SolveWithAI).toHaveBeenCalledWith("c1", "implement");
     expect(writeTextSpy).toHaveBeenCalledWith("AGENT INSTRUCTION");
     expect(
-      await screen.findByText(/скопирована в буфер обмена/i)
+      await screen.findByText(/copied to clipboard/i)
+    ).toBeInTheDocument();
+  });
+
+  it("surfaces the real error when Wails rejects with a plain string", async () => {
+    const user = userEvent.setup();
+    SolveWithAI.mockRejectedValueOnce("no repository attached to context");
+    render(<SolveWithAIModal contextId="c1" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /^solve$/i }));
+
+    expect(
+      await screen.findByText("no repository attached to context")
     ).toBeInTheDocument();
   });
 });

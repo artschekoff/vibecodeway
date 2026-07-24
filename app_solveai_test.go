@@ -77,3 +77,24 @@ func TestFirstAttachedRepoPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "/tmp/x", path)
 }
+
+// The real app stores local paths in vcs_repo_paths (via RepoPaths.Add from the
+// UI), NOT in the legacy vcs_repos.local_path column — which stays empty. This
+// reproduces the "no linked repo with a local path found" error users hit even
+// though their repos clearly have paths configured.
+func TestFirstAttachedRepoPath_usesRepoPaths(t *testing.T) {
+	app, contextID := newAppWithContext(t)
+
+	repo, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "repoY")
+	require.NoError(t, err)
+	// Path configured only in vcs_repo_paths; local_path left empty (as in prod).
+	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repo.ID, "/tmp/y")
+	require.NoError(t, err)
+
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "main", "")
+	require.NoError(t, err)
+
+	path, err := app.firstAttachedRepoPath(contextID)
+	require.NoError(t, err)
+	require.Equal(t, "/tmp/y", path)
+}

@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function SolveWithAIModal({ contextId, onClose }: Props) {
-  const [task, setTask] = useState("реализовать");
+  const [task, setTask] = useState("implement");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,9 @@ export function SolveWithAIModal({ contextId, onClose }: Props) {
       await navigator.clipboard.writeText(cmd).catch(() => {});
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      // Wails rejects with a plain string, not an Error — coerce whatever we got.
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || "Unknown error");
     } finally {
       setLoading(false);
     }
@@ -64,7 +66,7 @@ export function SolveWithAIModal({ contextId, onClose }: Props) {
         }}
       >
         <div id="solve-with-ai-modal-title" style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-          Решить с помощью ИИ
+          Solve with AI
         </div>
         <textarea
           value={task}
@@ -91,7 +93,7 @@ export function SolveWithAIModal({ contextId, onClose }: Props) {
             disabled={loading}
             onClick={() => void handleConfirm()}
           >
-            {loading ? "Решаем…" : "Solve"}
+            {loading ? "Solving…" : "Solve"}
           </button>
           <button
             aria-label="Close solve with AI"
@@ -107,7 +109,7 @@ export function SolveWithAIModal({ contextId, onClose }: Props) {
         )}
         {done && (
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-            Команда скопирована в буфер обмена — вставьте её в открывшийся агент.
+            Command copied to clipboard — paste it into the agent that just opened.
           </div>
         )}
       </div>

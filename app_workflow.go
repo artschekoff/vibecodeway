@@ -507,21 +507,23 @@ func (a *App) OpenPlanInTerminal(contextID, planID string) (string, error) {
 	return path, nil
 }
 
-// firstAttachedRepoPath returns the on-disk LocalPath of the first attached
-// repo that has one (resolved via GetRepo — ListBranches does NOT populate
-// Repo.LocalPath; that field is always empty because ListBranches's JOIN
-// selects only platform/owner/name).
+// firstAttachedRepoPath returns the on-disk path of the first attached repo
+// that has one. Paths are configured through vcs_repo_paths (RepoPaths); the
+// legacy vcs_repos.local_path column is checked only as a fallback since it is
+// empty for repos set up via the current UI.
 func (a *App) firstAttachedRepoPath(contextID string) (string, error) {
 	branches, err := a.ListVCSBranches(contextID)
 	if err != nil {
 		return "", fmt.Errorf("list vcs branches: %w", err)
 	}
 	for _, b := range branches {
-		repo, rerr := a.vcsStore.Repos.GetRepo(a.ctx, b.RepoID)
-		if rerr != nil || repo.LocalPath == "" {
-			continue
+		if paths, perr := a.vcsStore.RepoPaths.ListForRepo(a.ctx, b.RepoID); perr == nil && len(paths) > 0 {
+			return paths[0].Path, nil
 		}
-		return repo.LocalPath, nil
+		// Fallback: legacy local_path column.
+		if repo, rerr := a.vcsStore.Repos.GetRepo(a.ctx, b.RepoID); rerr == nil && repo.LocalPath != "" {
+			return repo.LocalPath, nil
+		}
 	}
 	return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
 }
