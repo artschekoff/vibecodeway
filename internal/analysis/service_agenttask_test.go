@@ -93,3 +93,22 @@ func TestBuildAgentTask_multiRepo(t *testing.T) {
 	assert.Contains(t, out, "/tmp/repoA") // first repo's path
 	assert.Contains(t, out, "/tmp/repoB") // second repo's path
 }
+
+// The real app registers paths in vcs_repo_paths, not the legacy local_path
+// column. BuildAgentTask must surface those paths in the instruction.
+func TestBuildAgentTask_usesRepoPaths(t *testing.T) {
+	svc, contextID := newAgentTaskTestService(t)
+
+	vs := svc.vcsStore
+	repoC, err := vs.Repos.EnsureRepo(context.Background(), "github", "acme", "repoC")
+	require.NoError(t, err)
+	// Path only in vcs_repo_paths; local_path left empty (as in prod).
+	_, err = vs.RepoPaths.Add(context.Background(), repoC.ID, "/tmp/repoC")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(context.Background(), contextID, repoC.ID, "main", "")
+	require.NoError(t, err)
+
+	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")
+	require.NoError(t, err)
+	assert.Contains(t, out, "/tmp/repoC")
+}

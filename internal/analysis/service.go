@@ -1517,14 +1517,39 @@ func (s *Service) contextRepoPath(ctx context.Context, contextID string) string 
 	}
 	for _, b := range branches {
 		repo, rerr := s.vcsStore.Repos.GetRepo(ctx, b.RepoID)
-		if rerr != nil || repo.LocalPath == "" {
+		if rerr != nil {
 			continue
 		}
-		info, serr := os.Stat(repo.LocalPath)
-		if serr != nil || !info.IsDir() {
-			continue
+		if p := s.firstExistingRepoPath(ctx, b.RepoID, repo.LocalPath); p != "" {
+			return p
 		}
-		return repo.LocalPath
+	}
+	return ""
+}
+
+// repoPathCandidates returns the paths registered for repoID in vcs_repo_paths
+// (the source of truth), followed by the legacy vcs_repos.local_path column as
+// a fallback. Order is stable (registration order, then legacy).
+func (s *Service) repoPathCandidates(ctx context.Context, repoID, legacyPath string) []string {
+	var candidates []string
+	if paths, err := s.vcsStore.RepoPaths.ListForRepo(ctx, repoID); err == nil {
+		for _, p := range paths {
+			candidates = append(candidates, p.Path)
+		}
+	}
+	if legacyPath != "" {
+		candidates = append(candidates, legacyPath)
+	}
+	return candidates
+}
+
+// firstExistingRepoPath returns the first candidate path (see repoPathCandidates)
+// that resolves to a directory on disk, or "" when none do.
+func (s *Service) firstExistingRepoPath(ctx context.Context, repoID, legacyPath string) string {
+	for _, path := range s.repoPathCandidates(ctx, repoID, legacyPath) {
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			return path
+		}
 	}
 	return ""
 }
@@ -1550,11 +1575,11 @@ func (s *Service) ticketSummaryLines(ctx context.Context, contextID string) stri
 	return strings.Join(lines, "\n")
 }
 
-// attachedRepoLines returns a "- <LocalPath> (branch <branch>)" line for every
-// VCS branch linked to contextID whose repo has a non-empty LocalPath —
-// unlike contextRepoPath (which stops at the first match), this includes ALL
-// qualifying repos. Returns nil when no vcsStore is attached or the lookup
-// fails.
+// attachedRepoLines returns a "- <path> (branch <branch>)" line for every VCS
+// branch linked to contextID whose repo resolves to a path on disk (via
+// vcs_repo_paths, legacy local_path fallback) — unlike contextRepoPath (which
+// stops at the first match), this includes ALL qualifying repos. Returns nil
+// when no vcsStore is attached or the lookup fails.
 func (s *Service) attachedRepoLines(ctx context.Context, contextID string) []string {
 	if s.vcsStore == nil {
 		return nil
@@ -1568,10 +1593,14 @@ func (s *Service) attachedRepoLines(ctx context.Context, contextID string) []str
 	var lines []string
 	for _, b := range branches {
 		repo, rerr := s.vcsStore.Repos.GetRepo(ctx, b.RepoID)
-		if rerr != nil || repo.LocalPath == "" {
+		if rerr != nil {
 			continue
 		}
-		line := "- " + repo.LocalPath
+		candidates := s.repoPathCandidates(ctx, b.RepoID, repo.LocalPath)
+		if len(candidates) == 0 {
+			continue
+		}
+		line := "- " + candidates[0]
 		if b.Branch != "" {
 			line += " (branch " + b.Branch + ")"
 		}

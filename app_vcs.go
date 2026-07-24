@@ -958,13 +958,26 @@ func (a *App) GetContextChanges(contextID string) ([]RepoChange, error) {
 	var repos []RepoChange
 	for _, b := range branches {
 		repo, rerr := a.vcsStore.Repos.GetRepo(a.ctx, b.RepoID)
-		if rerr != nil || repo.LocalPath == "" {
+		if rerr != nil {
 			continue
 		}
-		if info, serr := os.Stat(repo.LocalPath); serr != nil || !info.IsDir() {
-			continue
+		// Paths live in vcs_repo_paths; local_path is a legacy fallback.
+		var candidates []string
+		if paths, perr := a.vcsStore.RepoPaths.ListForRepo(a.ctx, b.RepoID); perr == nil {
+			for _, p := range paths {
+				candidates = append(candidates, p.Path)
+			}
 		}
-		repos = append(repos, RepoChange{RepoName: repo.Owner + "/" + repo.Name, RepoPath: repo.LocalPath})
+		if repo.LocalPath != "" {
+			candidates = append(candidates, repo.LocalPath)
+		}
+		for _, path := range candidates {
+			if info, serr := os.Stat(path); serr != nil || !info.IsDir() {
+				continue
+			}
+			repos = append(repos, RepoChange{RepoName: repo.Owner + "/" + repo.Name, RepoPath: path})
+			break // one (first existing) path per repo
+		}
 	}
 	repos = dedupeRepoPaths(repos)
 	for i := range repos {
