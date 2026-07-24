@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,4 +56,40 @@ func TestSaveRepoFile_rejectsEscape(t *testing.T) {
 	dir := gitInitRepo(t)
 	app := &App{}
 	require.Error(t, app.SaveRepoFile(dir, "../evil.txt", "x"))
+}
+
+func TestSaveRepoFile_rejectsSymlinkEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires elevated privileges on windows")
+	}
+	dir := gitInitRepo(t)
+	outside := t.TempDir()
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "link")))
+
+	app := &App{}
+	err := app.SaveRepoFile(dir, "link/evil.txt", "x")
+	require.Error(t, err)
+
+	_, statErr := os.Stat(filepath.Join(outside, "evil.txt"))
+	require.True(t, os.IsNotExist(statErr), "file must not be written outside the repo")
+}
+
+func TestSaveRepoFile_allowsNewFileInRealSubdir(t *testing.T) {
+	dir := gitInitRepo(t)
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o755))
+
+	app := &App{}
+	require.NoError(t, app.SaveRepoFile(dir, "sub/new.txt", "x"))
+
+	got, err := os.ReadFile(filepath.Join(dir, "sub", "new.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "x", string(got))
+}
+
+func TestReadRepoFileHead_rejectsEscape(t *testing.T) {
+	dir := gitInitRepo(t)
+	app := &App{}
+	head, err := app.ReadRepoFileHead(dir, "../outside")
+	require.NoError(t, err)
+	require.Equal(t, "", head)
 }
