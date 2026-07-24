@@ -714,6 +714,22 @@ export function SyncAllComments(arg1) {
   return window['go']['main']['App']['SyncAllComments'](arg1);
 }
 
+export function TerminalClose(arg1) {
+  return window['go']['main']['App']['TerminalClose'](arg1);
+}
+
+export function TerminalResize(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TerminalResize'](arg1, arg2, arg3);
+}
+
+export function TerminalStart(arg1) {
+  return window['go']['main']['App']['TerminalStart'](arg1);
+}
+
+export function TerminalWrite(arg1, arg2) {
+  return window['go']['main']['App']['TerminalWrite'](arg1, arg2);
+}
+
 export function ToggleCommentActive(arg1) {
   return window['go']['main']['App']['ToggleCommentActive'](arg1);
 }

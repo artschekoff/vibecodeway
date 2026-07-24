@@ -366,6 +366,14 @@ export function SwitchMainWorkingTree(arg1:string,arg2:string):Promise<void>;
 
 export function SyncAllComments(arg1:string):Promise<number>;
 
+export function TerminalClose(arg1:string):Promise<void>;
+
+export function TerminalResize(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function TerminalStart(arg1:string):Promise<string>;
+
+export function TerminalWrite(arg1:string,arg2:string):Promise<void>;
+
 export function ToggleCommentActive(arg1:string):Promise<jirastore.Comment>;
 
 export function ToggleContextStatus(arg1:string):Promise<store.Context>;
