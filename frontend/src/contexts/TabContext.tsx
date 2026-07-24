@@ -18,6 +18,7 @@ interface TabContextValue {
   openOrgTab: (orgId: string, orgName: string) => void;
   openContextTab: (contextId: string, contextKey: string, orgName?: string, orgId?: string) => void;
   openNewContextTab: (contextId: string, contextKey: string, orgName?: string, orgId?: string) => void;
+  openEditorTab: (contextId: string, contextKey: string) => void;
   openSettingsTab: () => void;
   openLogsTab: () => void;
   openPromptsTab: () => void;
@@ -138,6 +139,16 @@ export function TabProvider({ children }: { children: ReactNode }) {
           title: contextKey,
           pinned: false,
         })
+      );
+    },
+    [focusOrOpen]
+  );
+
+  const openEditorTab = useCallback(
+    (contextId: string, contextKey: string) => {
+      focusOrOpen(
+        (t) => t.type === "editor" && t.contextId === contextId,
+        () => ({ id: newTabId(), type: "editor" as const, contextId, contextKey, title: `${contextKey} — Editor`, pinned: false })
       );
     },
     [focusOrOpen]
@@ -327,6 +338,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openOrgTab,
         openContextTab,
         openNewContextTab,
+        openEditorTab,
         openSettingsTab,
         openLogsTab,
         openPromptsTab,

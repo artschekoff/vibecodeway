@@ -10,6 +10,7 @@ import MyBoardPage from "./pages/MyBoardPage";
 import AskAIPage from "./pages/AskAIPage";
 import ActivityTimeline from "./pages/ActivityTimeline";
 import ActivityFeedPage from "./pages/ActivityFeedPage";
+import { EditorWorkspace } from "./pages/EditorWorkspace";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
 import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
@@ -56,6 +57,9 @@ function TabContent() {
   }
   if (activeTab.type === "context") {
     return <ContextDetail contextId={activeTab.contextId!} tabId={activeTab.id} />;
+  }
+  if (activeTab.type === "editor") {
+    return <EditorWorkspace contextId={activeTab.contextId!} />;
   }
   return null;
 }

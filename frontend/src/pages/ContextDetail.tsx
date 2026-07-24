@@ -498,7 +498,7 @@ function getAvatarColor(name: string): string {
 
 export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextDetailProps) {
   const id = contextId;
-  const { closeTab, navigateBack, openContextTab } = useTabContext();
+  const { closeTab, navigateBack, openContextTab, openEditorTab } = useTabContext();
   const progress = useProgress();
   const { ensurePassphrase } = usePassphrase();
   const [detail, setDetail] = useState<service.ContextDetail | null>(null);
@@ -2549,7 +2549,11 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         onClose={dismissLog}
       />
       {solveOpen && (
-        <SolveWithAIModal contextId={contextId} onClose={() => setSolveOpen(false)} />
+        <SolveWithAIModal
+          contextId={contextId}
+          onClose={() => setSolveOpen(false)}
+          onOpenEditor={() => openEditorTab(contextId, context.key)}
+        />
       )}
       {reasoningGraphFor && (() => {
         const pa = personAssignments.find(p => p.id === reasoningGraphFor);
