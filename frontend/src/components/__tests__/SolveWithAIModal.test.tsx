@@ -47,4 +47,23 @@ describe("SolveWithAIModal", () => {
       await screen.findByText("no repository attached to context")
     ).toBeInTheDocument();
   });
+
+  it("opens the editor after a successful solve, but not on error", async () => {
+    const user = userEvent.setup();
+    const onOpenEditor = vi.fn();
+    const { rerender } = render(
+      <SolveWithAIModal contextId="c1" onClose={vi.fn()} onOpenEditor={onOpenEditor} />
+    );
+    await user.click(screen.getByRole("button", { name: /^solve$/i }));
+    expect(await screen.findByText(/copied to clipboard/i)).toBeInTheDocument();
+    expect(onOpenEditor).toHaveBeenCalledTimes(1);
+
+    // Error path: onOpenEditor must NOT fire.
+    onOpenEditor.mockClear();
+    SolveWithAI.mockRejectedValueOnce("boom");
+    rerender(<SolveWithAIModal contextId="c2" onClose={vi.fn()} onOpenEditor={onOpenEditor} />);
+    await user.click(screen.getByRole("button", { name: /^solve$/i }));
+    expect(await screen.findByText("boom")).toBeInTheDocument();
+    expect(onOpenEditor).not.toHaveBeenCalled();
+  });
 });
