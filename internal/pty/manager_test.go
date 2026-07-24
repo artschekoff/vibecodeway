@@ -28,7 +28,7 @@ func TestManager_StartStreamsOutputAndExits(t *testing.T) {
 	exited := make(chan error, 1)
 
 	id, err := m.Start(t.TempDir(), "/bin/sh", []string{"-c", "printf hello_pty && exit 0"},
-		func(_ , chunk string) { mu.Lock(); out += chunk; mu.Unlock() },
+		func(_, chunk string) { mu.Lock(); out += chunk; mu.Unlock() },
 		func(_ string, err error) { exited <- err },
 	)
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestManager_WriteAndClose(t *testing.T) {
 	var mu sync.Mutex
 	var out string
 	id, err := m.Start(t.TempDir(), "/bin/sh", []string{"-i"},
-		func(_ , chunk string) { mu.Lock(); out += chunk; mu.Unlock() },
+		func(_, chunk string) { mu.Lock(); out += chunk; mu.Unlock() },
 		func(string, error) {},
 	)
 	require.NoError(t, err)
