@@ -11,9 +11,9 @@ const noop = async () => {};
 
 const makeMentionItem = (overrides: Partial<MentionItem> = {}): MentionItem => ({
   id: "item-1",
-  title: "кнопка должна быть красной",
+  title: "button should be red",
   subtitle: "text",
-  content: "[Text: кнопка должна быть красной]\nкнопка должна быть красной",
+  content: "[Text: button should be red]\nbutton should be red",
   kind: "text",
   ...overrides,
 });
@@ -33,14 +33,14 @@ describe("InstructionInput @-mention", () => {
     );
     const textarea = screen.getByPlaceholderText(/type @ to reference/i);
     fireEvent.change(textarea, { target: { value: "@", selectionStart: 1 } });
-    expect(screen.getByText("кнопка должна быть красной")).toBeTruthy();
+    expect(screen.getByText("button should be red")).toBeTruthy();
     expect(screen.getByText("another note")).toBeTruthy();
   });
 
   it("filters mentionItems by substring query", () => {
     const items = [
-      makeMentionItem({ id: "1", title: "кнопка должна быть красной" }),
-      makeMentionItem({ id: "2", title: "совсем другой текст" }),
+      makeMentionItem({ id: "1", title: "button should be red" }),
+      makeMentionItem({ id: "2", title: "completely different text" }),
     ];
     render(
       <InstructionInput
@@ -53,9 +53,9 @@ describe("InstructionInput @-mention", () => {
       />
     );
     const textarea = screen.getByPlaceholderText(/type @ to reference/i);
-    fireEvent.change(textarea, { target: { value: "@красной", selectionStart: 8 } });
-    expect(screen.getByText("кнопка должна быть красной")).toBeTruthy();
-    expect(screen.queryByText("совсем другой текст")).toBeNull();
+    fireEvent.change(textarea, { target: { value: "@red", selectionStart: 4 } });
+    expect(screen.getByText("button should be red")).toBeTruthy();
+    expect(screen.queryByText("completely different text")).toBeNull();
   });
 
   it("selecting item via Enter attaches chip and clears @ token", () => {
@@ -75,13 +75,13 @@ describe("InstructionInput @-mention", () => {
     // Trigger the dropdown by simulating a change event. Note: the initial value
     // must differ from this change value — React skips onChange on a controlled
     // input when the value is unchanged, which would leave the dropdown closed.
-    fireEvent.change(textarea, { target: { value: "@красной", selectionStart: 8 } });
+    fireEvent.change(textarea, { target: { value: "@red", selectionStart: 4 } });
     // Press Enter to select the first item
     fireEvent.keyDown(textarea, { key: "Enter" });
     // onChange should have been called to remove the @token
     expect(onChange).toHaveBeenCalled();
     // Chip should appear
-    expect(screen.getByText(/кнопка должна быть красной/)).toBeTruthy();
+    expect(screen.getByText(/button should be red/)).toBeTruthy();
   });
 
   it("includes attached item content in onApply prompt", async () => {
@@ -99,13 +99,13 @@ describe("InstructionInput @-mention", () => {
     );
     const textarea = screen.getByPlaceholderText(/type @ to reference/i);
     // attach item
-    fireEvent.change(textarea, { target: { value: "@красной", selectionStart: 8 } });
+    fireEvent.change(textarea, { target: { value: "@red", selectionStart: 4 } });
     fireEvent.keyDown(textarea, { key: "Enter" });
     // click Apply
     fireEvent.click(screen.getByText("Apply"));
     await vi.waitFor(() => expect(onApply).toHaveBeenCalled());
     const promptArg: string = onApply.mock.calls[0][0];
-    expect(promptArg).toContain("[Text: кнопка должна быть красной]");
+    expect(promptArg).toContain("[Text: button should be red]");
     expect(promptArg).toContain("make it so");
   });
 });

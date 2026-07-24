@@ -1,17 +1,17 @@
 // Pure date-axis + event-grouping utilities for the Activity Timeline.
-// No external deps: native Date + deterministic Russian labels (no Intl locale).
+// No external deps: native Date + deterministic English labels (no Intl locale).
 
 export const WINDOW_DAYS = 7;
 export const DAY_COL_WIDTH = 150; // px per day column
 export const LANE_HEIGHT = 116; // px, FIXED — relation connectors align to lane index
 export const LABEL_COL_WIDTH = 190; // px, sticky left column
 
-const RU_WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export interface DayColumn {
   key: string; // local YYYY-MM-DD
   date: Date; // local midnight
-  label: string; // "Пн 13.07"
+  label: string; // "Mon 13.07"
   isToday: boolean;
 }
 
@@ -63,7 +63,7 @@ export function isoToDayKey(iso: string): string {
 }
 
 export function formatDayLabel(d: Date): string {
-  const wd = RU_WEEKDAYS[d.getDay()];
+  const wd = WEEKDAYS[d.getDay()];
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `${wd} ${dd}.${mm}`;

@@ -53,7 +53,7 @@ export default function TimelineLane({ lane, columns, statusLabel, statusColor }
 
         <div className="timeline-lane-events">
           {windowEvents.length === 0 ? (
-            <div className="timeline-empty">Нет событий в этом окне</div>
+            <div className="timeline-empty">No events in this window</div>
           ) : (
             windowEvents.map((e) => (
               <div key={e.id} className="timeline-event-row" title={e.summary}>

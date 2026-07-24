@@ -70,9 +70,9 @@ export default function ActivityTimeline() {
           ))}
         </select>
         <div className="timeline-nav">
-          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, -WINDOW_DAYS))}>‹ Назад</button>
-          <button className="btn-ghost" onClick={() => setAnchor(defaultAnchor(todayRef.current))}>Сегодня</button>
-          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, WINDOW_DAYS))}>Вперёд ›</button>
+          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, -WINDOW_DAYS))}>‹ Back</button>
+          <button className="btn-ghost" onClick={() => setAnchor(defaultAnchor(todayRef.current))}>Today</button>
+          <button className="btn-ghost" onClick={() => setAnchor((a) => addDays(a, WINDOW_DAYS))}>Forward ›</button>
         </div>
         {error && <span className="timeline-error">{error}</span>}
       </div>
@@ -136,9 +136,9 @@ export default function ActivityTimeline() {
             </svg>
 
             {loading ? (
-              <div className="timeline-loading">Загрузка…</div>
+              <div className="timeline-loading">Loading…</div>
             ) : lanes.length === 0 ? (
-              <div className="timeline-loading">Нет активных контекстов в этой организации</div>
+              <div className="timeline-loading">No active contexts in this organization</div>
             ) : (
               lanes.map((lane) => {
                 const info = statuses[lane.status];

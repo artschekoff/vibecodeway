@@ -36,11 +36,11 @@ describe("dayKey / isoToDayKey", () => {
 });
 
 describe("formatDayLabel", () => {
-  it("renders a Russian weekday abbrev + dd.mm", () => {
+  it("renders an English weekday abbrev + dd.mm", () => {
     // 2026-07-13 is a Monday
-    expect(formatDayLabel(new Date(2026, 6, 13))).toBe("Пн 13.07");
+    expect(formatDayLabel(new Date(2026, 6, 13))).toBe("Mon 13.07");
     // 2026-07-12 is a Sunday
-    expect(formatDayLabel(new Date(2026, 6, 12))).toBe("Вс 12.07");
+    expect(formatDayLabel(new Date(2026, 6, 12))).toBe("Sun 12.07");
   });
 });
 
@@ -58,7 +58,7 @@ describe("defaultAnchor / buildDayColumns", () => {
     expect(cols[6].key).toBe("2026-07-13");
     expect(cols[6].isToday).toBe(true);
     expect(cols[0].isToday).toBe(false);
-    expect(cols[0].label).toBe("Вт 07.07");
+    expect(cols[0].label).toBe("Tue 07.07");
   });
 });
 

@@ -43,11 +43,11 @@ describe("ActivityTimeline", () => {
     render(<ActivityTimeline />);
     await waitFor(() => expect(screen.getByText("auth")).toBeInTheDocument());
     const headersBefore = screen.getAllByTestId("timeline-day-header").map((n) => n.textContent);
-    fireEvent.click(screen.getByRole("button", { name: "‹ Назад" }));
+    fireEvent.click(screen.getByRole("button", { name: "‹ Back" }));
     const headersAfter = screen.getAllByTestId("timeline-day-header").map((n) => n.textContent);
     expect(headersAfter).not.toEqual(headersBefore);
     // Today resets
-    fireEvent.click(screen.getByRole("button", { name: "Сегодня" }));
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
     const headersReset = screen.getAllByTestId("timeline-day-header").map((n) => n.textContent);
     expect(headersReset).toEqual(headersBefore);
   });

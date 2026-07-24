@@ -1826,7 +1826,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           value={statusRelationTargetId}
                           onChange={(e) => setStatusRelationTargetId(e.target.value)}
                         >
-                          <option value="">— связанная задача (необязательно) —</option>
+                          <option value="">— linked task (optional) —</option>
                           {siblingContexts.map((c) => (
                             <option key={c.id} value={c.id}>{c.key}</option>
                           ))}
