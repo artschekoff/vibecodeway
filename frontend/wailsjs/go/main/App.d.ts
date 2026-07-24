@@ -130,6 +130,8 @@ export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
 
+export function GetContextChanges(arg1:string):Promise<Array<main.RepoChange>>;
+
 export function GetContextDetail(arg1:string):Promise<service.ContextDetail>;
 
 export function GetContextParticipants(arg1:string):Promise<Array<string>>;

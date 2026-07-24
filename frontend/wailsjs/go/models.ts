@@ -318,6 +318,40 @@ export namespace main {
 	        this.fileSize = source["fileSize"];
 	    }
 	}
+	export class RepoChange {
+	    repoName: string;
+	    repoPath: string;
+	    files: vcs.FileChange[];
+	
+	    static createFrom(source: any = {}) {
+	        return new RepoChange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repoName = source["repoName"];
+	        this.repoPath = source["repoPath"];
+	        this.files = this.convertValues(source["files"], vcs.FileChange);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class UploadBatchResult {
 	    files: store.ContextUploadedFile[];
 	    errors: string[];
@@ -1977,6 +2011,22 @@ export namespace vcs {
 	        this.deviceCode = source["deviceCode"];
 	        this.expiresIn = source["expiresIn"];
 	        this.interval = source["interval"];
+	    }
+	}
+	export class FileChange {
+	    path: string;
+	    status: string;
+	    diff: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileChange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.status = source["status"];
+	        this.diff = source["diff"];
 	    }
 	}
 	export class LocalBranch {

@@ -921,3 +921,58 @@ func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
 	}
 	return out, nil
 }
+
+// --- VCS Diff ---
+
+// RepoChange is the working-tree diff for one repo attached to a context.
+type RepoChange struct {
+	RepoName string           `json:"repoName"` // owner/name
+	RepoPath string           `json:"repoPath"`
+	Files    []vcs.FileChange `json:"files"`
+}
+
+// dedupeRepoPaths removes entries with an empty RepoPath and collapses
+// duplicate RepoPath entries, keeping the first occurrence.
+func dedupeRepoPaths(in []RepoChange) []RepoChange {
+	seen := map[string]bool{}
+	out := make([]RepoChange, 0, len(in))
+	for _, r := range in {
+		if r.RepoPath == "" || seen[r.RepoPath] {
+			continue
+		}
+		seen[r.RepoPath] = true
+		out = append(out, r)
+	}
+	return out
+}
+
+// GetContextChanges returns the git working-tree changes for every repo
+// attached to contextID (deduped, only repos whose LocalPath exists on
+// disk). Diffing is fail-soft: a repo that errors during diff is left with
+// nil Files rather than failing the whole call.
+func (a *App) GetContextChanges(contextID string) ([]RepoChange, error) {
+	branches, err := a.ListVCSBranches(contextID)
+	if err != nil {
+		return nil, fmt.Errorf("list vcs branches: %w", err)
+	}
+	var repos []RepoChange
+	for _, b := range branches {
+		repo, rerr := a.vcsStore.Repos.GetRepo(a.ctx, b.RepoID)
+		if rerr != nil || repo.LocalPath == "" {
+			continue
+		}
+		if info, serr := os.Stat(repo.LocalPath); serr != nil || !info.IsDir() {
+			continue
+		}
+		repos = append(repos, RepoChange{RepoName: repo.Owner + "/" + repo.Name, RepoPath: repo.LocalPath})
+	}
+	repos = dedupeRepoPaths(repos)
+	for i := range repos {
+		files, derr := vcs.RepoDiff(repos[i].RepoPath)
+		if derr != nil {
+			continue // fail-soft: skip un-diffable repo, leave Files nil
+		}
+		repos[i].Files = files
+	}
+	return repos, nil
+}

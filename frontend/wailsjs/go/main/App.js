@@ -242,6 +242,10 @@ export function GetAppSettings() {
   return window['go']['main']['App']['GetAppSettings']();
 }
 
+export function GetContextChanges(arg1) {
+  return window['go']['main']['App']['GetContextChanges'](arg1);
+}
+
 export function GetContextDetail(arg1) {
   return window['go']['main']['App']['GetContextDetail'](arg1);
 }
