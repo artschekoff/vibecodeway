@@ -77,6 +77,7 @@ import {
   GetUnresolvedAuthors,
   SearchContextItems,
   ListContextsByOrg,
+  GetContextChanges,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
@@ -84,6 +85,7 @@ import { applyStatusChange } from "../lib/statusChange";
 import StatusToggle from "../components/StatusToggle";
 import type { service } from "../../wailsjs/go/models";
 import type { store } from "../../wailsjs/go/models";
+import type { main } from "../../wailsjs/go/models";
 import type { Context, Issue, SlackChannel, ContextText, SlackDMConfig, SlackSavePayload, TextFilesPayload, UploadedFile, VCSBranch, PullRequest, UnviewedBreakdown, ContextRelation, RelationsPayload, ContextSnapshot, ContextEvent, VCSWorkspace, EstimationLog, PersonAssignment, PersonAssignmentStep, ContextMessage, WorkflowStatus, MentionItem } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import type { VCSBranchInput } from "../components/ContextForm";
@@ -102,6 +104,7 @@ import { usePassphrase } from "../contexts/PassphraseContext";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import CheckoutLogModal from "../components/CheckoutLogModal";
 import { SolveWithAIModal } from "../components/SolveWithAIModal";
+import FileDiff from "../components/FileDiff";
 
 // ── Task list helpers ────────────────────────────────────────────────────────
 
@@ -532,6 +535,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [estimationHistory, setEstimationHistory] = useState<EstimationLog[]>([]);
   const [events, setEvents] = useState<ContextEvent[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [sidepanelTab, setSidepanelTab] = useState<"events" | "changes">("events");
+  const [changes, setChanges] = useState<main.RepoChange[]>([]);
+  const [isLoadingChanges, setIsLoadingChanges] = useState(false);
   const [snapshotError, setSnapshotError] = useState("");
   const [addEventType, setAddEventType] = useState("user_note");
   const [addEventSummary, setAddEventSummary] = useState("");
@@ -634,6 +640,26 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       .then((h) => setEstimationHistory(h ?? []))
       .catch(() => setEstimationHistory([]));
   }, [id]);
+
+  const loadChanges = useCallback(async () => {
+    if (!id) return;
+    setIsLoadingChanges(true);
+    try {
+      const result = await GetContextChanges(id);
+      setChanges(result ?? []);
+    } catch {
+      setChanges([]);
+    } finally {
+      setIsLoadingChanges(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (sidepanelTab === "changes" && changes.length === 0 && !isLoadingChanges) {
+      void loadChanges();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidepanelTab]);
 
   const analyzeContext = async () => {
     setIsAnalyzing(true);
@@ -2231,10 +2257,53 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             </section>
           <aside className="detail-sidepanel">
             <div className="sidepanel-tabs">
-              <button className="sidepanel-tab sidepanel-tab--active">
+              <button
+                className={`sidepanel-tab${sidepanelTab === "events" ? " sidepanel-tab--active" : ""}`}
+                onClick={() => setSidepanelTab("events")}
+              >
                 Events
               </button>
+              <button
+                className={`sidepanel-tab${sidepanelTab === "changes" ? " sidepanel-tab--active" : ""}`}
+                onClick={() => setSidepanelTab("changes")}
+              >
+                Changes
+              </button>
             </div>
+            {sidepanelTab === "changes" ? (
+              <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column" }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 11, padding: "2px 10px" }}
+                    onClick={() => void loadChanges()}
+                    disabled={isLoadingChanges}
+                  >
+                    Refresh
+                  </button>
+                </div>
+                {isLoadingChanges ? (
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", paddingTop: 24 }}>
+                    Loading…
+                  </div>
+                ) : changes.length === 0 ? (
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", paddingTop: 24 }}>
+                    No changes
+                  </div>
+                ) : (
+                  changes.map((repo) => (
+                    <div key={repo.repoName} style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--text)" }}>
+                        {repo.repoName}
+                      </div>
+                      {repo.files.map((f) => (
+                        <FileDiff key={f.path} path={f.path} status={f.status} diff={f.diff} />
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
             <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column" }}>
               {isAnalyzing ? (
                 <div className="event-skeleton-list">
@@ -2408,6 +2477,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 )
               )}
             </div>
+            )}
           </aside>
           </div>
         )}
