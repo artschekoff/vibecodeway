@@ -513,6 +513,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [editInitialTab, setEditInitialTab] = useState<"vcs" | undefined>(undefined);
   const [editJqlQuery, setEditJqlQuery] = useState<string | undefined>(undefined);
   const [editJiraIssues, setEditJiraIssues] = useState<Issue[] | undefined>(undefined);
   const [editSlackChannels, setEditSlackChannels] = useState<SlackChannel[] | undefined>(undefined);
@@ -829,7 +830,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }
   };
 
-  const openEditForm = async () => {
+  const openEditForm = async (initialTab?: "vcs") => {
     if (!id) return;
     let jql = "";
     let issues: Issue[] = [];
@@ -857,11 +858,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     setEditUploadedFiles((detail?.uploadedFiles ?? []) as UploadedFile[]);
     setEditVCSBranches((detail?.vcsBranches ?? []) as VCSBranch[]);
     setEditRelations((detail?.relations ?? []) as ContextRelation[]);
+    setEditInitialTab(initialTab);
     setEditOpen(true);
   };
 
   const closeEditForm = () => {
     setEditOpen(false);
+    setEditInitialTab(undefined);
     setEditJqlQuery(undefined);
     setEditJiraIssues(undefined);
     setEditSlackChannels(undefined);
@@ -2059,7 +2062,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             )}
 
             {/* Pull Requests section — grouped by repo/branch */}
-            {(vcsBranches.length > 0 || pullRequestsFiltered.length > 0) && (
+            {(
               <section className="detail-section">
                 <div className="detail-section-header">
                   <span className="detail-section-title">
@@ -2210,6 +2213,18 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                         onMarkCommentViewed={async (cid) => { await MarkPRCommentViewed(cid); load(true); void loadBreakdown(); }}
                       />
                     ))}
+                  {vcsBranches.length === 0 && pullRequestsFiltered.length === 0 && (
+                    <div style={{ padding: "8px 14px", fontSize: 13, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span>No repos or PRs linked yet.</span>
+                      <button
+                        type="button"
+                        className="vcs-checkout-btn"
+                        onClick={() => void openEditForm("vcs")}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
                 </div>
               </section>
             )}
@@ -2494,6 +2509,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           initialUploadedFiles={editUploadedFiles}
           initialVCSBranches={editVCSBranches}
           initialRelations={editRelations}
+          initialActiveTab={editInitialTab}
           onSave={handleUpdate}
           onCancel={closeEditForm}
         />
