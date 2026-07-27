@@ -836,20 +836,47 @@ func dedupeMatches(candidates []MatchedBranch) []MatchedBranch {
 }
 
 // contextMatchSignal builds the titles-only signal passed to the AI branch
-// matcher: the context's key plus a short summary of its Jira ticket keys
-// and summaries (no ticket bodies/comments/code).
+// matcher: the edited context's key plus a short summary of the Jira ticket
+// keys/summaries of the edited context AND every directly-related context
+// (relations of any type). No ticket bodies/comments/code. Duplicate Jira keys
+// across contexts are collapsed. Fail-soft: a relations-lookup error falls back
+// to the edited context alone, and per-context issue errors are skipped.
 func (a *App) contextMatchSignal(contextID string) (key, summary string, err error) {
 	ctxRow, err := a.db.GetContext(a.ctx, contextID)
 	if err != nil {
 		return "", "", err
 	}
+
+	// The signal spans the edited context plus its directly-related contexts.
+	ids := []string{contextID}
+	seenID := map[string]bool{contextID: true}
+	rels, rerr := a.db.ListContextRelations(a.ctx, contextID)
+	if rerr != nil {
+		a.logger.Sugar().Warnf("AIMatchBranches: list context relations failed: %s", rerr.Error())
+	} else {
+		for _, r := range rels {
+			if r.TargetID == "" || seenID[r.TargetID] {
+				continue
+			}
+			seenID[r.TargetID] = true
+			ids = append(ids, r.TargetID)
+		}
+	}
+
 	var lines []string
+	seenKey := map[string]bool{}
 	if a.svc != nil {
-		issues, ierr := a.svc.GetIssuesWithComments(a.ctx, contextID)
-		if ierr != nil {
-			a.logger.Sugar().Warnf("AIMatchBranches: list jira issues failed: %s", ierr.Error())
-		} else {
+		for _, id := range ids {
+			issues, ierr := a.svc.GetIssuesWithComments(a.ctx, id)
+			if ierr != nil {
+				a.logger.Sugar().Warnf("AIMatchBranches: list jira issues failed: %s", ierr.Error())
+				continue
+			}
 			for _, issue := range issues {
+				if seenKey[issue.JiraKey] {
+					continue
+				}
+				seenKey[issue.JiraKey] = true
 				lines = append(lines, issue.JiraKey+": "+issue.Summary)
 			}
 		}
