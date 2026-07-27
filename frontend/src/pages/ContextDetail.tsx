@@ -30,6 +30,7 @@ import {
   RemoveSlackDMEntry,
   ListSlackDMConfigs,
   AddVCSBranch,
+  AIMatchBranches,
   RemoveVCSBranch,
   ListAllWorkspaces,
   DeleteWorkspace,
@@ -514,6 +515,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editInitialTab, setEditInitialTab] = useState<"vcs" | undefined>(undefined);
+  const [gitMatching, setGitMatching] = useState(false);
+  const [gitMatchNote, setGitMatchNote] = useState("");
   const [editJqlQuery, setEditJqlQuery] = useState<string | undefined>(undefined);
   const [editJiraIssues, setEditJiraIssues] = useState<Issue[] | undefined>(undefined);
   const [editSlackChannels, setEditSlackChannels] = useState<SlackChannel[] | undefined>(undefined);
@@ -827,6 +830,28 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       EventsOff("refresh:progress");
       setRefreshing(false);
       progress.done();
+    }
+  };
+
+  const handleGitAIMatch = async () => {
+    if (!id) return;
+    setGitMatching(true);
+    setGitMatchNote("");
+    try {
+      const matches = (await AIMatchBranches(id)) ?? [];
+      let added = 0;
+      for (const m of matches) {
+        try {
+          await AddVCSBranch(id, m.platform, m.ownerRepo, m.branch, m.label);
+          added++;
+        } catch { /* skip individual failures (e.g. already linked) */ }
+      }
+      setGitMatchNote(added > 0 ? `Linked ${added} branch${added === 1 ? "" : "es"}.` : "No new matching branches found.");
+      window.dispatchEvent(new CustomEvent("context:updated", { detail: { id } }));
+    } catch (e) {
+      setGitMatchNote(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setGitMatching(false);
     }
   };
 
@@ -2073,8 +2098,28 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       </span>
                     )}
                   </span>
-                  <span className="detail-section-count">{pullRequestsFiltered.length}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="vcs-checkout-btn"
+                      disabled={gitMatching}
+                      onClick={() => void handleGitAIMatch()}
+                    >
+                      {gitMatching ? "Matching…" : "AI Match"}
+                    </button>
+                    <button
+                      type="button"
+                      className="vcs-checkout-btn"
+                      onClick={() => void openEditForm("vcs")}
+                    >
+                      Add
+                    </button>
+                    <span className="detail-section-count">{pullRequestsFiltered.length}</span>
+                  </span>
                 </div>
+                {gitMatchNote && (
+                  <div style={{ padding: "0 14px 8px", fontSize: 12, color: "var(--text-muted)" }}>{gitMatchNote}</div>
+                )}
                 {checkoutError && (
                   <div className="error-banner" style={{ margin: "0 14px 8px" }}>
                     {checkoutError}
