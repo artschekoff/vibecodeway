@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GetContextChanges, StageFile, UnstageFile, DiscardFile } from "../../../wailsjs/go/main/App";
 import { main } from "../../../wailsjs/go/models";
 
@@ -23,11 +23,12 @@ const actionBtnStyle: React.CSSProperties = {
 
 export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
+  const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
     try {
       const r = await GetContextChanges(contextId);
-      setRepos(r ?? []);
+      if (mountedRef.current) setRepos(r ?? []);
     } catch {
       /* transient; keep last known */
     }
@@ -38,7 +39,7 @@ export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
     const tick = async () => { if (active) await load(); };
     void tick();
     const t = setInterval(tick, POLL_MS);
-    return () => { active = false; clearInterval(t); };
+    return () => { active = false; mountedRef.current = false; clearInterval(t); };
   }, [load]);
 
   const act = async (fn: (repoPath: string, path: string) => Promise<void>, repoPath: string, path: string) => {
