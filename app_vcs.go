@@ -973,6 +973,40 @@ func dedupeRepoPaths(in []RepoChange) []RepoChange {
 	return out
 }
 
+// StageFile stages repo-relative path in the repo at repoPath.
+func (a *App) StageFile(repoPath, path string) error {
+	if _, err := safeJoin(repoPath, path); err != nil {
+		return err
+	}
+	return vcs.GitStageFile(repoPath, path)
+}
+
+// UnstageFile removes repo-relative path from the index, keeping the working tree.
+func (a *App) UnstageFile(repoPath, path string) error {
+	if _, err := safeJoin(repoPath, path); err != nil {
+		return err
+	}
+	return vcs.GitUnstageFile(repoPath, path)
+}
+
+// DiscardFile discards working-tree (and staged) changes for repo-relative
+// path: tracked files are restored to HEAD; untracked files are deleted. The
+// path is containment-checked before any filesystem deletion.
+func (a *App) DiscardFile(repoPath, path string) error {
+	full, err := safeJoin(repoPath, path)
+	if err != nil {
+		return err
+	}
+	if restoreErr := vcs.GitRestoreFile(repoPath, path); restoreErr == nil {
+		return nil
+	}
+	// No HEAD entry (untracked): remove the file. `full` is guaranteed inside repoPath.
+	if rmErr := os.Remove(full); rmErr != nil {
+		return fmt.Errorf("discard %s: %w", path, rmErr)
+	}
+	return nil
+}
+
 // GetContextChanges returns the git working-tree changes for every repo
 // attached to contextID (deduped, only repos whose LocalPath exists on
 // disk). Diffing is fail-soft: a repo that errors during diff is left with

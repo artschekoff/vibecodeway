@@ -186,6 +186,10 @@ export function DeleteWorkspace(arg1) {
   return window['go']['main']['App']['DeleteWorkspace'](arg1);
 }
 
+export function DiscardFile(arg1, arg2) {
+  return window['go']['main']['App']['DiscardFile'](arg1, arg2);
+}
+
 export function DiscardPendingUpload(arg1) {
   return window['go']['main']['App']['DiscardPendingUpload'](arg1);
 }
@@ -718,6 +722,10 @@ export function SolveWithAI(arg1, arg2) {
   return window['go']['main']['App']['SolveWithAI'](arg1, arg2);
 }
 
+export function StageFile(arg1, arg2) {
+  return window['go']['main']['App']['StageFile'](arg1, arg2);
+}
+
 export function SwitchMainWorkingTree(arg1, arg2) {
   return window['go']['main']['App']['SwitchMainWorkingTree'](arg1, arg2);
 }
@@ -772,6 +780,10 @@ export function ToggleSlackThreadActive(arg1) {
 
 export function ToggleUploadedFileActive(arg1) {
   return window['go']['main']['App']['ToggleUploadedFileActive'](arg1);
+}
+
+export function UnstageFile(arg1, arg2) {
+  return window['go']['main']['App']['UnstageFile'](arg1, arg2);
 }
 
 export function UpdateAIPrompt(arg1, arg2) {

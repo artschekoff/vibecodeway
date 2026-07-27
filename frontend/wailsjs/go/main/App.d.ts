@@ -102,6 +102,8 @@ export function DeleteWorkflowStatus(arg1:string):Promise<void>;
 
 export function DeleteWorkspace(arg1:string):Promise<void>;
 
+export function DiscardFile(arg1:string,arg2:string):Promise<void>;
+
 export function DiscardPendingUpload(arg1:string):Promise<void>;
 
 export function DismissPicker():Promise<void>;
@@ -368,6 +370,8 @@ export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
 export function SolveWithAI(arg1:string,arg2:string):Promise<string>;
 
+export function StageFile(arg1:string,arg2:string):Promise<void>;
+
 export function SwitchMainWorkingTree(arg1:string,arg2:string):Promise<void>;
 
 export function SyncAllComments(arg1:string):Promise<number>;
@@ -395,6 +399,8 @@ export function ToggleSlackDMConfigActive(arg1:string):Promise<slackstore.SlackD
 export function ToggleSlackThreadActive(arg1:string):Promise<slackstore.SlackThread>;
 
 export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploadedFile>;
+
+export function UnstageFile(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 

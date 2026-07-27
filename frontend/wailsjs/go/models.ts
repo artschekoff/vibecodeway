@@ -2017,6 +2017,8 @@ export namespace vcs {
 	    path: string;
 	    status: string;
 	    diff: string;
+	    indexStatus: string;
+	    workStatus: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileChange(source);
@@ -2027,6 +2029,8 @@ export namespace vcs {
 	        this.path = source["path"];
 	        this.status = source["status"];
 	        this.diff = source["diff"];
+	        this.indexStatus = source["indexStatus"];
+	        this.workStatus = source["workStatus"];
 	    }
 	}
 	export class LocalBranch {
