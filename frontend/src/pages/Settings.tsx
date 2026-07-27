@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, GetKeybindings, UpdateKeybinding } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, GetKeybindings, UpdateKeybinding } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
 import { useTabContext } from "../contexts/TabContext";
@@ -70,6 +70,7 @@ export default function SettingsPage() {
   const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
   const [terminalAppPath, setTerminalAppPath] = useState("");
   const [codingAgentApp, setCodingAgentApp] = useState("cursor");
+  const [autoLinkRepos, setAutoLinkRepos] = useState(true);
   const [savingRefetch, setSavingRefetch] = useState(false);
   const [refetchMessage, setRefetchMessage] = useState("");
   const [savingTerminal, setSavingTerminal] = useState(false);
@@ -102,6 +103,7 @@ export default function SettingsPage() {
           setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
           setTerminalAppPath(typedAppS.terminalAppPath ?? "");
           setCodingAgentApp(typedAppS.codingAgentApp ?? "cursor");
+          setAutoLinkRepos(typedAppS.autoLinkReposOnContextCreate ?? true);
         }
 
         const typedPlats = (plats ?? []) as VCSPlatformInfo[];
@@ -168,10 +170,12 @@ export default function SettingsPage() {
         terminalAppPath.trim(),
         codingAgentApp.trim(),
       );
+      await SetAutoLinkRepos(autoLinkRepos);
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
       setTerminalAppPath(updated.terminalAppPath ?? "");
       setCodingAgentApp(updated.codingAgentApp ?? "cursor");
+      setAutoLinkRepos(updated.autoLinkReposOnContextCreate ?? true);
       setRefetchMessage("Saved.");
     } catch (e) {
       setError(String(e));
@@ -196,6 +200,7 @@ export default function SettingsPage() {
       setAppSettings(updated);
       setTerminalAppPath(updated.terminalAppPath ?? "");
       setCodingAgentApp(updated.codingAgentApp ?? "cursor");
+      setAutoLinkRepos(updated.autoLinkReposOnContextCreate ?? true);
       setTerminalMessage("Saved.");
     } catch (e) {
       setError(String(e));
@@ -399,6 +404,18 @@ export default function SettingsPage() {
                   style={{ width: 80 }}
                 />
               </div>
+            </div>
+
+            {/* Auto-link repos */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={autoLinkRepos}
+                  onChange={(e) => setAutoLinkRepos(e.target.checked)}
+                />
+                Auto-link matching repos when a context is created
+              </label>
             </div>
 
             <div>

@@ -27,6 +27,7 @@ interface Props {
   initialUploadedFiles?: UploadedFile[];
   initialVCSBranches?: VCSBranch[];
   initialRelations?: ContextRelation[];
+  initialActiveTab?: ActiveTab;
   onSave: (
     key: string,
     searchQuery: string,
@@ -87,13 +88,13 @@ interface NewFile {
 
 type ActiveTab = "quick" | "hooks" | "jira" | "slack" | "texts" | "vcs" | "relations";
 
-export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, initialRelations, onSave, onCancel }: Props) {
+export default function ContextForm({ initial, initialJqlQuery, initialJiraIssues, initialSlackChannels, initialSlackDMConfigs, initialContextTexts, initialUploadedFiles, initialVCSBranches, initialRelations, initialActiveTab, onSave, onCancel }: Props) {
   const [key, setKey] = useState(initial?.key ?? "");
   const [searchQuery, setSearchQuery] = useState(initialJqlQuery ?? "");
   const status = initial?.status ?? "active";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<ActiveTab>(initial ? "quick" : "jira");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialActiveTab ?? (initial ? "quick" : "jira"));
 
   const { ensurePassphrase } = usePassphrase();
 

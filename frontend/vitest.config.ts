@@ -15,6 +15,10 @@ export default defineConfig({
       { find: /^react-dom\/(.+)$/, replacement: path.resolve(mainFrontend, 'react-dom/$1') },
       { find: /^react-dom$/, replacement: path.resolve(mainFrontend, 'react-dom') },
       { find: /^lucide-react$/, replacement: path.resolve(mainFrontend, 'lucide-react') },
+      // monaco-editor's `?worker` imports rely on Vite's client-only worker
+      // plugin, which vitest's SSR module transform does not run. Redirect
+      // them to a stub so modules using these imports can load under test.
+      { find: /^monaco-editor\/esm\/vs\/.*\.worker(\.js)?\?worker$/, replacement: path.resolve(__dirname, 'src/__mocks__/monaco-worker-stub.ts') },
     ],
   },
   test: {

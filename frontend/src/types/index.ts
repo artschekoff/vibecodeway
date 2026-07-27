@@ -386,6 +386,7 @@ export interface AppSettings {
   reviewsRefetchIntervalMin: number;
   terminalAppPath: string;
   codingAgentApp: string;
+  autoLinkReposOnContextCreate: boolean;
   updatedAt: string;
 }
 
@@ -596,7 +597,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed";
+export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "editor";
 
 export type ActivitySource = "jira" | "github";
 

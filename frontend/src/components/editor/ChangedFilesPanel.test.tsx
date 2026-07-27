@@ -1,0 +1,70 @@
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const { GetContextChanges, StageFile, UnstageFile, DiscardFile } = vi.hoisted(() => ({
+  GetContextChanges: vi.fn(),
+  StageFile: vi.fn(),
+  UnstageFile: vi.fn(),
+  DiscardFile: vi.fn(),
+}));
+vi.mock("../../../wailsjs/go/main/App", () => ({ GetContextChanges, StageFile, UnstageFile, DiscardFile }));
+
+import { ChangedFilesPanel } from "./ChangedFilesPanel";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  StageFile.mockResolvedValue(undefined);
+  UnstageFile.mockResolvedValue(undefined);
+  DiscardFile.mockResolvedValue(undefined);
+  GetContextChanges.mockResolvedValue([
+    {
+      repoName: "acme/api",
+      repoPath: "/r/api",
+      files: [
+        { path: "staged.ts", status: "modified", diff: "", indexStatus: "modified", workStatus: "" },
+        { path: "work.ts", status: "modified", diff: "", indexStatus: "", workStatus: "modified" },
+      ],
+    },
+  ]);
+});
+
+describe("ChangedFilesPanel", () => {
+  it("groups files into Staged Changes and Changes", async () => {
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Staged Changes")).toBeInTheDocument());
+    expect(screen.getByText("Changes")).toBeInTheDocument();
+    expect(screen.getByText("staged.ts")).toBeInTheDocument();
+    expect(screen.getByText("work.ts")).toBeInTheDocument();
+  });
+
+  it("opens the diff when a filename is clicked", async () => {
+    const onOpenFile = vi.fn();
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={onOpenFile} />);
+    await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("work.ts"));
+    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "work.ts", "modified");
+  });
+
+  it("stages an unstaged file", async () => {
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("stage work.ts"));
+    await waitFor(() => expect(StageFile).toHaveBeenCalledWith("/r/api", "work.ts"));
+  });
+
+  it("unstages a staged file", async () => {
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("staged.ts")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("unstage staged.ts"));
+    await waitFor(() => expect(UnstageFile).toHaveBeenCalledWith("/r/api", "staged.ts"));
+  });
+
+  it("discards an unstaged file after confirmation", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("discard work.ts"));
+    await waitFor(() => expect(DiscardFile).toHaveBeenCalledWith("/r/api", "work.ts"));
+    confirmSpy.mockRestore();
+  });
+});

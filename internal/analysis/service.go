@@ -1596,11 +1596,20 @@ func (s *Service) attachedRepoLines(ctx context.Context, contextID string) []str
 		if rerr != nil {
 			continue
 		}
-		candidates := s.repoPathCandidates(ctx, b.RepoID, repo.LocalPath)
-		if len(candidates) == 0 {
-			continue
+		// Prefer an existing worktree (workspace) for this branch so the agent
+		// works in the isolated per-branch checkout; fall back to the repo's
+		// main path when no workspace has been created.
+		path := ""
+		if ws, werr := s.vcsStore.Workspaces.FindByBranch(ctx, b.RepoID, b.Branch); werr == nil && ws != nil && ws.WorktreePath != "" {
+			path = ws.WorktreePath
+		} else {
+			candidates := s.repoPathCandidates(ctx, b.RepoID, repo.LocalPath)
+			if len(candidates) == 0 {
+				continue
+			}
+			path = candidates[0]
 		}
-		line := "- " + candidates[0]
+		line := "- " + path
 		if b.Branch != "" {
 			line += " (branch " + b.Branch + ")"
 		}
@@ -1626,6 +1635,24 @@ func (s *Service) BuildAgentTask(ctx context.Context, contextID, userPrompt stri
 		"user_prompt": userPrompt,
 		"context_key": c.Key,
 		"tickets":     tickets,
+		"repos":       strings.Join(repoLines, "\n"),
+	}), nil
+}
+
+// BuildReviewTask assembles the PR-review instruction string for contextID from
+// the "pr_review" prompt: the context key, PR number/title, and the on-disk
+// worktree paths of the context's repos. Pure string assembly — no LLM call.
+func (s *Service) BuildReviewTask(ctx context.Context, contextID string, prNumber int, prTitle string) (string, error) {
+	c, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return "", err
+	}
+	repoLines := s.attachedRepoLines(ctx, contextID)
+	tmpl := s.loadPrompt(ctx, "pr_review", defaultPRReviewPrompt)
+	return applyPlaceholders(tmpl, map[string]string{
+		"context_key": c.Key,
+		"pr_number":   fmt.Sprintf("%d", prNumber),
+		"pr_title":    prTitle,
 		"repos":       strings.Join(repoLines, "\n"),
 	}), nil
 }

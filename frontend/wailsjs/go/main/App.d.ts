@@ -38,6 +38,8 @@ export function AssignAuthorBatch(arg1:Array<store.AuthorAssignment>):Promise<vo
 
 export function AuthStatus():Promise<string>;
 
+export function AutoLinkRepos(arg1:string):Promise<void>;
+
 export function CancelRefresh():Promise<void>;
 
 export function CheckAccessibility():Promise<boolean>;
@@ -101,6 +103,8 @@ export function DeleteUserEvent(arg1:string,arg2:string):Promise<void>;
 export function DeleteWorkflowStatus(arg1:string):Promise<void>;
 
 export function DeleteWorkspace(arg1:string):Promise<void>;
+
+export function DiscardFile(arg1:string,arg2:string):Promise<void>;
 
 export function DiscardPendingUpload(arg1:string):Promise<void>;
 
@@ -282,6 +286,10 @@ export function PreviewSlackDMs(arg1:string,arg2:string):Promise<string>;
 
 export function QuickAttachText(arg1:string,arg2:string):Promise<store.ContextText>;
 
+export function ReadRepoFile(arg1:string,arg2:string):Promise<string>;
+
+export function ReadRepoFileHead(arg1:string,arg2:string):Promise<string>;
+
 export function ReadRepoFiles(arg1:string,arg2:Array<string>):Promise<Record<string, string>>;
 
 export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
@@ -314,6 +322,8 @@ export function RemoveVCSBranch(arg1:string):Promise<void>;
 
 export function ResetAIPrompt(arg1:string):Promise<void>;
 
+export function ReviewPRWithAI(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.ReviewPRResult>;
+
 export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
@@ -321,6 +331,8 @@ export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Pro
 export function SaveAssignmentOutput(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
 export function SavePersonAssignment(arg1:string,arg2:string):Promise<void>;
+
+export function SaveRepoFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
@@ -339,6 +351,8 @@ export function SetAISettings(arg1:string,arg2:string,arg3:string,arg4:string,ar
 export function SetActiveAssignmentVersion(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
 export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number,arg5:string,arg6:string):Promise<void>;
+
+export function SetAutoLinkRepos(arg1:boolean):Promise<void>;
 
 export function SetContextOrg(arg1:string,arg2:string):Promise<void>;
 
@@ -362,9 +376,19 @@ export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
 export function SolveWithAI(arg1:string,arg2:string):Promise<string>;
 
+export function StageFile(arg1:string,arg2:string):Promise<void>;
+
 export function SwitchMainWorkingTree(arg1:string,arg2:string):Promise<void>;
 
 export function SyncAllComments(arg1:string):Promise<number>;
+
+export function TerminalClose(arg1:string):Promise<void>;
+
+export function TerminalResize(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function TerminalStart(arg1:string):Promise<string>;
+
+export function TerminalWrite(arg1:string,arg2:string):Promise<void>;
 
 export function ToggleCommentActive(arg1:string):Promise<jirastore.Comment>;
 
@@ -381,6 +405,8 @@ export function ToggleSlackDMConfigActive(arg1:string):Promise<slackstore.SlackD
 export function ToggleSlackThreadActive(arg1:string):Promise<slackstore.SlackThread>;
 
 export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploadedFile>;
+
+export function UnstageFile(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 

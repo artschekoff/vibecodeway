@@ -4,9 +4,10 @@ import { SolveWithAI } from "../../wailsjs/go/main/App";
 interface Props {
   contextId: string;
   onClose: () => void;
+  onOpenEditor?: () => void;
 }
 
-export function SolveWithAIModal({ contextId, onClose }: Props) {
+export function SolveWithAIModal({ contextId, onClose, onOpenEditor }: Props) {
   const [task, setTask] = useState("implement");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -27,6 +28,7 @@ export function SolveWithAIModal({ contextId, onClose }: Props) {
       const cmd = await SolveWithAI(contextId, task);
       await navigator.clipboard.writeText(cmd).catch(() => {});
       setDone(true);
+      onOpenEditor?.();
     } catch (err) {
       // Wails rejects with a plain string, not an Error — coerce whatever we got.
       const msg = err instanceof Error ? err.message : String(err);

@@ -352,6 +352,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ReviewPRResult {
+	    contextId: string;
+	    contextKey: string;
+	    instruction: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReviewPRResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.instruction = source["instruction"];
+	    }
+	}
 	export class UploadBatchResult {
 	    files: store.ContextUploadedFile[];
 	    errors: string[];
@@ -911,6 +927,7 @@ export namespace store {
 	    reviewsRefetchIntervalMin: number;
 	    terminalAppPath: string;
 	    codingAgentApp: string;
+	    autoLinkReposOnContextCreate: boolean;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -925,6 +942,7 @@ export namespace store {
 	        this.reviewsRefetchIntervalMin = source["reviewsRefetchIntervalMin"];
 	        this.terminalAppPath = source["terminalAppPath"];
 	        this.codingAgentApp = source["codingAgentApp"];
+	        this.autoLinkReposOnContextCreate = source["autoLinkReposOnContextCreate"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
@@ -2017,6 +2035,8 @@ export namespace vcs {
 	    path: string;
 	    status: string;
 	    diff: string;
+	    indexStatus: string;
+	    workStatus: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileChange(source);
@@ -2027,6 +2047,8 @@ export namespace vcs {
 	        this.path = source["path"];
 	        this.status = source["status"];
 	        this.diff = source["diff"];
+	        this.indexStatus = source["indexStatus"];
+	        this.workStatus = source["workStatus"];
 	    }
 	}
 	export class LocalBranch {

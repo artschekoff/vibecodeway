@@ -22,6 +22,7 @@ import (
 	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	openaiclient "github.com/artschekoff/context-consolidator/internal/openai"
+	"github.com/artschekoff/context-consolidator/internal/pty"
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	"github.com/artschekoff/context-consolidator/internal/applog"
@@ -110,16 +111,27 @@ type App struct {
 	a11yPolling    atomic.Bool
 
 	bg bgRefreshState
+
+	ptyMgr *pty.Manager
+	emit   func(name string, data ...interface{})
 }
 
 // NewApp creates a new App with uninitialized service (configured in startup).
 func NewApp() *App {
-	return &App{}
+	app := &App{}
+	app.ptyMgr = pty.NewManager()
+	return app
 }
 
 // startup is called by Wails when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	if a.emit == nil {
+		a.emit = func(name string, data ...interface{}) {
+			runtime.EventsEmit(a.ctx, name, data...)
+		}
+	}
 
 	logger, err := buildLogger()
 	if err != nil {
@@ -238,6 +250,9 @@ func (a *App) domReady(_ context.Context) {}
 // shutdown is called by Wails when the app is closing.
 func (a *App) shutdown(_ context.Context) {
 	a.stopBackgroundRefresh()
+	if a.ptyMgr != nil {
+		a.ptyMgr.CloseAll()
+	}
 	if a.hotkeyService != nil {
 		a.hotkeyService.Stop()
 	}

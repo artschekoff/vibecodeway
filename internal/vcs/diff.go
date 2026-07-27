@@ -6,9 +6,11 @@ import (
 )
 
 type FileChange struct {
-	Path   string `json:"path"`
-	Status string `json:"status"`
-	Diff   string `json:"diff"`
+	Path        string `json:"path"`
+	Status      string `json:"status"`
+	Diff        string `json:"diff"`
+	IndexStatus string `json:"indexStatus"` // staged-side status word; "" when not staged
+	WorkStatus  string `json:"workStatus"`  // worktree-side status word; "" when clean in worktree
 }
 
 func statusWord(code string) string {
@@ -24,6 +26,38 @@ func statusWord(code string) string {
 	default:
 		return "modified"
 	}
+}
+
+// statusLetterWord maps a single porcelain status letter (one side of the XY
+// code) to a word. A space (clean on that side) maps to "".
+func statusLetterWord(c byte) string {
+	switch c {
+	case 'M':
+		return "modified"
+	case 'A':
+		return "added"
+	case 'D':
+		return "deleted"
+	case 'R':
+		return "renamed"
+	case 'C':
+		return "copied"
+	case 'U':
+		return "unmerged"
+	case '?':
+		return "untracked"
+	default:
+		return ""
+	}
+}
+
+// splitStatus turns a 2-char porcelain code (XY) into (indexStatus, workStatus).
+// Untracked ("??") is treated as an unstaged-only untracked change.
+func splitStatus(code string) (indexStatus, workStatus string) {
+	if code == "??" {
+		return "", "untracked"
+	}
+	return statusLetterWord(code[0]), statusLetterWord(code[1])
 }
 
 // RepoDiff lists working-tree changes vs HEAD (plus untracked files) for repoPath.
@@ -45,6 +79,7 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 			path = path[i+4:]
 		}
 		status := statusWord(code)
+		indexStatus, workStatus := splitStatus(code)
 		var diff string
 		if status == "untracked" {
 			// Show the new file's content as an add-diff (no-index; non-zero exit is expected on diff).
@@ -56,7 +91,7 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 				diff = string(d)
 			}
 		}
-		changes = append(changes, FileChange{Path: path, Status: status, Diff: diff})
+		changes = append(changes, FileChange{Path: path, Status: status, Diff: diff, IndexStatus: indexStatus, WorkStatus: workStatus})
 	}
 	return changes, nil
 }

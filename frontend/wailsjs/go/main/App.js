@@ -58,6 +58,10 @@ export function AuthStatus() {
   return window['go']['main']['App']['AuthStatus']();
 }
 
+export function AutoLinkRepos(arg1) {
+  return window['go']['main']['App']['AutoLinkRepos'](arg1);
+}
+
 export function CancelRefresh() {
   return window['go']['main']['App']['CancelRefresh']();
 }
@@ -184,6 +188,10 @@ export function DeleteWorkflowStatus(arg1) {
 
 export function DeleteWorkspace(arg1) {
   return window['go']['main']['App']['DeleteWorkspace'](arg1);
+}
+
+export function DiscardFile(arg1, arg2) {
+  return window['go']['main']['App']['DiscardFile'](arg1, arg2);
 }
 
 export function DiscardPendingUpload(arg1) {
@@ -546,6 +554,14 @@ export function QuickAttachText(arg1, arg2) {
   return window['go']['main']['App']['QuickAttachText'](arg1, arg2);
 }
 
+export function ReadRepoFile(arg1, arg2) {
+  return window['go']['main']['App']['ReadRepoFile'](arg1, arg2);
+}
+
+export function ReadRepoFileHead(arg1, arg2) {
+  return window['go']['main']['App']['ReadRepoFileHead'](arg1, arg2);
+}
+
 export function ReadRepoFiles(arg1, arg2) {
   return window['go']['main']['App']['ReadRepoFiles'](arg1, arg2);
 }
@@ -610,6 +626,10 @@ export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
 }
 
+export function ReviewPRWithAI(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ReviewPRWithAI'](arg1, arg2, arg3, arg4);
+}
+
 export function RunAssignmentStepWithCustomPrompt(arg1, arg2, arg3) {
   return window['go']['main']['App']['RunAssignmentStepWithCustomPrompt'](arg1, arg2, arg3);
 }
@@ -624,6 +644,10 @@ export function SaveAssignmentOutput(arg1, arg2) {
 
 export function SavePersonAssignment(arg1, arg2) {
   return window['go']['main']['App']['SavePersonAssignment'](arg1, arg2);
+}
+
+export function SaveRepoFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveRepoFile'](arg1, arg2, arg3);
 }
 
 export function SearchContextIDs(arg1) {
@@ -660,6 +684,10 @@ export function SetActiveAssignmentVersion(arg1, arg2) {
 
 export function SetAppSettings(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SetAppSettings'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function SetAutoLinkRepos(arg1) {
+  return window['go']['main']['App']['SetAutoLinkRepos'](arg1);
 }
 
 export function SetContextOrg(arg1, arg2) {
@@ -706,12 +734,32 @@ export function SolveWithAI(arg1, arg2) {
   return window['go']['main']['App']['SolveWithAI'](arg1, arg2);
 }
 
+export function StageFile(arg1, arg2) {
+  return window['go']['main']['App']['StageFile'](arg1, arg2);
+}
+
 export function SwitchMainWorkingTree(arg1, arg2) {
   return window['go']['main']['App']['SwitchMainWorkingTree'](arg1, arg2);
 }
 
 export function SyncAllComments(arg1) {
   return window['go']['main']['App']['SyncAllComments'](arg1);
+}
+
+export function TerminalClose(arg1) {
+  return window['go']['main']['App']['TerminalClose'](arg1);
+}
+
+export function TerminalResize(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TerminalResize'](arg1, arg2, arg3);
+}
+
+export function TerminalStart(arg1) {
+  return window['go']['main']['App']['TerminalStart'](arg1);
+}
+
+export function TerminalWrite(arg1, arg2) {
+  return window['go']['main']['App']['TerminalWrite'](arg1, arg2);
 }
 
 export function ToggleCommentActive(arg1) {
@@ -744,6 +792,10 @@ export function ToggleSlackThreadActive(arg1) {
 
 export function ToggleUploadedFileActive(arg1) {
   return window['go']['main']['App']['ToggleUploadedFileActive'](arg1);
+}
+
+export function UnstageFile(arg1, arg2) {
+  return window['go']['main']['App']['UnstageFile'](arg1, arg2);
 }
 
 export function UpdateAIPrompt(arg1, arg2) {

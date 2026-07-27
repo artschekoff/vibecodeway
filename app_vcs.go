@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -635,6 +636,70 @@ func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
 	return a.openWithCheckout(onCheckout, w.WorktreePath)
 }
 
+// ensureWorktreeForBranch finds or creates a git worktree for (repoID, branch)
+// and returns its on-disk path. Unlike CheckoutInWorkspace it does NOT open a
+// terminal or run onCheckoutCommand — it only guarantees the worktree exists.
+// Returns "" (no error) when the repo has no accessible local path to host a
+// worktree, so callers can skip that repo.
+func (a *App) ensureWorktreeForBranch(repoID, branch string) (string, error) {
+	if ws, err := a.FindWorkspaceForBranch(repoID, branch); err == nil && ws != nil {
+		return ws.WorktreePath, nil
+	}
+	paths, err := a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
+	if err != nil || len(paths) == 0 {
+		return "", nil
+	}
+	rp := paths[0]
+	baseDir := rp.Path
+	if _, err := os.Stat(baseDir); err != nil {
+		return "", nil
+	}
+	if err := ensureWorktreesIgnored(baseDir); err != nil {
+		a.logger.Sugar().Warnf("ensureWorktreeForBranch: .gitignore update failed: %v", err)
+	}
+	// Reuse an existing on-disk worktree for the branch if one is already present.
+	if existing, err := vcs.GitWorktreeList(baseDir); err == nil {
+		for _, wt := range existing {
+			if wt.Branch == branch && wt.Path != baseDir {
+				_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
+					RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: wt.Path, Status: "active",
+				})
+				return wt.Path, nil
+			}
+		}
+	}
+	worktreePath := filepath.Join(baseDir, ".worktrees", vcs.BranchToWorktreeName(branch))
+	if err := vcs.GitWorktreeAdd(baseDir, worktreePath, branch); err != nil {
+		return "", err
+	}
+	_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
+		RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: worktreePath, Status: "active",
+	})
+	return worktreePath, nil
+}
+
+// ensureContextWorkspaces creates/finds a git worktree for every repo+branch
+// attached to contextID and returns the first worktree path (used to open a
+// single terminal). Per-repo failures are logged and skipped.
+func (a *App) ensureContextWorkspaces(contextID string) (string, error) {
+	branches, err := a.ListVCSBranches(contextID)
+	if err != nil {
+		return "", fmt.Errorf("list vcs branches: %w", err)
+	}
+	firstWorktreePath := ""
+	for _, b := range branches {
+		wt, werr := a.ensureWorktreeForBranch(b.RepoID, b.Branch)
+		if werr != nil {
+			a.logger.Sugar().Warnf("ensureContextWorkspaces: worktree for repo %s branch %s failed: %s", b.RepoID, b.Branch, werr.Error())
+			continue
+		}
+		if wt != "" && firstWorktreePath == "" {
+			firstWorktreePath = wt
+		}
+	}
+	return firstWorktreePath, nil
+}
+
 // OpenRepoPathTerminal opens the configured terminal at the given repo local path.
 func (a *App) OpenRepoPathTerminal(pathID string) error {
 	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)
@@ -835,26 +900,99 @@ func dedupeMatches(candidates []MatchedBranch) []MatchedBranch {
 	return out
 }
 
+// buildIdentifierMatchers compiles one whole-token, case-insensitive regexp per
+// non-empty, de-duplicated identifier (the context key + linked ticket keys).
+// Token boundaries are string edges or any non-alphanumeric character, so
+// "JH-1" matches "feat/JH-1-x" but not "JH-100" or "myJH-1x".
+func buildIdentifierMatchers(identifiers []string) []*regexp.Regexp {
+	var out []*regexp.Regexp
+	seen := map[string]bool{}
+	for _, id := range identifiers {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		low := strings.ToLower(id)
+		if seen[low] {
+			continue
+		}
+		seen[low] = true
+		re, err := regexp.Compile(`(?i)(?:^|[^a-zA-Z0-9])` + regexp.QuoteMeta(id) + `(?:[^a-zA-Z0-9]|$)`)
+		if err != nil {
+			continue
+		}
+		out = append(out, re)
+	}
+	return out
+}
+
+// regexMatchBranches returns the candidates whose Branch matches any matcher,
+// preserving input order and including each candidate at most once. Returns nil
+// when there are no matchers or no hits.
+func regexMatchBranches(candidates []MatchedBranch, matchers []*regexp.Regexp) []MatchedBranch {
+	if len(matchers) == 0 {
+		return nil
+	}
+	var out []MatchedBranch
+	for _, c := range candidates {
+		for _, re := range matchers {
+			if re.MatchString(c.Branch) {
+				out = append(out, c)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // contextMatchSignal builds the titles-only signal passed to the AI branch
-// matcher: the context's key plus a short summary of its Jira ticket keys
-// and summaries (no ticket bodies/comments/code).
-func (a *App) contextMatchSignal(contextID string) (key, summary string, err error) {
+// matcher: the edited context's key plus a short summary of the Jira ticket
+// keys/summaries of the edited context AND every directly-related context
+// (relations of any type). No ticket bodies/comments/code. Duplicate Jira keys
+// across contexts are collapsed. Fail-soft: a relations-lookup error falls back
+// to the edited context alone, and per-context issue errors are skipped.
+func (a *App) contextMatchSignal(contextID string) (key, summary string, ticketKeys []string, err error) {
 	ctxRow, err := a.db.GetContext(a.ctx, contextID)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
+
+	// The signal spans the edited context plus its directly-related contexts.
+	ids := []string{contextID}
+	seenID := map[string]bool{contextID: true}
+	rels, rerr := a.db.ListContextRelations(a.ctx, contextID)
+	if rerr != nil {
+		a.logger.Sugar().Warnf("AIMatchBranches: list context relations failed: %s", rerr.Error())
+	} else {
+		for _, r := range rels {
+			if r.TargetID == "" || seenID[r.TargetID] {
+				continue
+			}
+			seenID[r.TargetID] = true
+			ids = append(ids, r.TargetID)
+		}
+	}
+
 	var lines []string
+	seenKey := map[string]bool{}
 	if a.svc != nil {
-		issues, ierr := a.svc.GetIssuesWithComments(a.ctx, contextID)
-		if ierr != nil {
-			a.logger.Sugar().Warnf("AIMatchBranches: list jira issues failed: %s", ierr.Error())
-		} else {
+		for _, id := range ids {
+			issues, ierr := a.svc.GetIssuesWithComments(a.ctx, id)
+			if ierr != nil {
+				a.logger.Sugar().Warnf("AIMatchBranches: list jira issues failed: %s", ierr.Error())
+				continue
+			}
 			for _, issue := range issues {
+				if seenKey[issue.JiraKey] {
+					continue
+				}
+				seenKey[issue.JiraKey] = true
+				ticketKeys = append(ticketKeys, issue.JiraKey)
 				lines = append(lines, issue.JiraKey+": "+issue.Summary)
 			}
 		}
 	}
-	return ctxRow.Key, strings.Join(lines, "\n"), nil
+	return ctxRow.Key, strings.Join(lines, "\n"), ticketKeys, nil
 }
 
 // AIMatchBranches enumerates branches across tracked repos (capped by
@@ -863,7 +1001,7 @@ func (a *App) contextMatchSignal(contextID string) (key, summary string, err err
 // per-repo enumeration errors are skipped rather than aborting the whole
 // scan. Returns an empty slice (not nil) when there are no candidates.
 func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
-	key, summary, err := a.contextMatchSignal(contextID)
+	key, summary, ticketKeys, err := a.contextMatchSignal(contextID)
 	if err != nil {
 		return nil, err
 	}
@@ -903,6 +1041,14 @@ func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
 		return []MatchedBranch{}, nil
 	}
 
+	// Cheap deterministic pass first: match the context/ticket keys against
+	// branch names. Only fall back to the (slower, paid) AI matcher when this
+	// finds nothing.
+	matchers := buildIdentifierMatchers(append([]string{key}, ticketKeys...))
+	if hits := regexMatchBranches(candidates, matchers); len(hits) > 0 {
+		return hits, nil
+	}
+
 	titles := make([]string, len(candidates))
 	for i, c := range candidates {
 		titles[i] = c.OwnerRepo + ": " + c.Branch
@@ -920,6 +1066,48 @@ func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
 		out = append(out, candidates[i])
 	}
 	return out, nil
+}
+
+// AutoLinkRepos runs AI branch matching for contextID in the background and
+// persists the matched branches — but only if the AutoLinkReposOnContextCreate
+// setting is enabled. Fire-and-forget: the frontend calls this after a new
+// context is populated; an "autolink:done" event is emitted when finished.
+func (a *App) AutoLinkRepos(contextID string) {
+	go func() {
+		if _, err := a.autoLinkReposOnce(contextID); err != nil {
+			a.logger.Sugar().Warnf("AutoLinkRepos: %s", err.Error())
+		}
+	}()
+}
+
+// autoLinkReposOnce is the synchronous, testable core of AutoLinkRepos. It
+// returns the number of branches linked. When the setting is disabled it is a
+// no-op returning (0, nil) without invoking the matcher.
+func (a *App) autoLinkReposOnce(contextID string) (int, error) {
+	settings, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return 0, err
+	}
+	if settings == nil || !settings.AutoLinkReposOnContextCreate {
+		return 0, nil
+	}
+	matches, err := a.AIMatchBranches(contextID)
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for _, m := range matches {
+		if _, err := a.AddVCSBranch(contextID, m.Platform, m.OwnerRepo, m.Branch, m.Label); err != nil {
+			a.logger.Sugar().Warnf("AutoLinkRepos: add branch failed: %s", err.Error())
+			continue
+		}
+		added++
+	}
+	runtime.EventsEmit(a.ctx, "autolink:done", map[string]interface{}{
+		"contextId": contextID,
+		"added":     added,
+	})
+	return added, nil
 }
 
 // --- VCS Diff ---
@@ -944,6 +1132,40 @@ func dedupeRepoPaths(in []RepoChange) []RepoChange {
 		out = append(out, r)
 	}
 	return out
+}
+
+// StageFile stages repo-relative path in the repo at repoPath.
+func (a *App) StageFile(repoPath, path string) error {
+	if _, err := safeJoin(repoPath, path); err != nil {
+		return err
+	}
+	return vcs.GitStageFile(repoPath, path)
+}
+
+// UnstageFile removes repo-relative path from the index, keeping the working tree.
+func (a *App) UnstageFile(repoPath, path string) error {
+	if _, err := safeJoin(repoPath, path); err != nil {
+		return err
+	}
+	return vcs.GitUnstageFile(repoPath, path)
+}
+
+// DiscardFile discards working-tree (and staged) changes for repo-relative
+// path: tracked files are restored to HEAD; untracked files are deleted. The
+// path is containment-checked before any filesystem deletion.
+func (a *App) DiscardFile(repoPath, path string) error {
+	full, err := safeJoin(repoPath, path)
+	if err != nil {
+		return err
+	}
+	if restoreErr := vcs.GitRestoreFile(repoPath, path); restoreErr == nil {
+		return nil
+	}
+	// No HEAD entry (untracked): remove the file. `full` is guaranteed inside repoPath.
+	if rmErr := os.Remove(full); rmErr != nil {
+		return fmt.Errorf("discard %s: %w", path, rmErr)
+	}
+	return nil
 }
 
 // GetContextChanges returns the git working-tree changes for every repo

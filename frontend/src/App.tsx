@@ -10,6 +10,9 @@ import MyBoardPage from "./pages/MyBoardPage";
 import AskAIPage from "./pages/AskAIPage";
 import ActivityTimeline from "./pages/ActivityTimeline";
 import ActivityFeedPage from "./pages/ActivityFeedPage";
+import { EditorWorkspace } from "./pages/EditorWorkspace";
+import { EditorFilesProvider } from "./contexts/EditorFilesContext";
+import { EditorFileTabBar } from "./components/editor/EditorFileTabBar";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
 import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
@@ -57,6 +60,9 @@ function TabContent() {
   if (activeTab.type === "context") {
     return <ContextDetail contextId={activeTab.contextId!} tabId={activeTab.id} />;
   }
+  if (activeTab.type === "editor") {
+    return <EditorWorkspace contextId={activeTab.contextId!} />;
+  }
   return null;
 }
 
@@ -93,12 +99,21 @@ function AppShell() {
     const offHookNotify = EventsOn("hook:notify", (payload: HookNotifyPayload) => {
       SendNotification(hookNotificationOptions(payload)).catch(() => {});
     });
+    const offAutoLink = EventsOn("autolink:done", (payload: { contextId?: string; added?: number }) => {
+      if (payload?.added && payload.added > 0) {
+        showToast(`Auto-linked ${payload.added} repo${payload.added === 1 ? "" : "s"}`);
+        if (payload.contextId) {
+          window.dispatchEvent(new CustomEvent("context:updated", { detail: { id: payload.contextId } }));
+        }
+      }
+    });
     return () => {
       safeOff(offPicker, "hotkey:show-picker");
       safeOff(offA11y, "accessibility:needed");
       safeOff(offA11yGranted, "accessibility:granted");
       safeOff(offNoSelection, "hotkey:no-selection");
       safeOff(offHookNotify, "hook:notify");
+      safeOff(offAutoLink, "autolink:done");
     };
   }, [showToast]);
 
@@ -149,6 +164,9 @@ function AppShell() {
           <TabBar />
         </div>
         <div className="app-content">
+          {activeTab?.type === "editor" && activeTab.contextId && (
+            <EditorFileTabBar contextId={activeTab.contextId} />
+          )}
           <TabContent />
         </div>
       </div>
@@ -172,7 +190,9 @@ function App() {
   return (
     <PassphraseProvider>
       <TabProvider>
-        <AppShell />
+        <EditorFilesProvider>
+          <AppShell />
+        </EditorFilesProvider>
       </TabProvider>
     </PassphraseProvider>
   );
