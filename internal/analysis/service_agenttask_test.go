@@ -113,6 +113,31 @@ func TestBuildAgentTask_usesRepoPaths(t *testing.T) {
 	assert.Contains(t, out, "/tmp/repoC")
 }
 
+func TestBuildAgentTask_prefersWorktreePath(t *testing.T) {
+	svc, contextID := newAgentTaskTestService(t)
+
+	// Find repoA's id via its branch, then record a workspace (worktree) for it.
+	branches, err := svc.vcsStore.Branches.ListBranches(context.Background(), contextID)
+	require.NoError(t, err)
+	require.NotEmpty(t, branches)
+	// vcs_workspaces.repo_path_id is a NOT NULL FK into vcs_repo_paths, so a
+	// path row must exist before a workspace can reference it.
+	repoPath, err := svc.vcsStore.RepoPaths.Add(context.Background(), branches[0].RepoID, "/tmp/repoA")
+	require.NoError(t, err)
+	err = svc.vcsStore.Workspaces.Create(context.Background(), &vcsstore.VCSWorkspace{
+		RepoPathID:   repoPath.ID,
+		RepoID:       branches[0].RepoID,
+		Branch:       "main",
+		WorktreePath: "/tmp/repoA/.worktrees/main",
+		Status:       "active",
+	})
+	require.NoError(t, err)
+
+	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")
+	require.NoError(t, err)
+	assert.Contains(t, out, "/tmp/repoA/.worktrees/main") // worktree path, not the bare main path
+}
+
 func TestAgentTaskPrompt_migrationUpgradesSeededBody(t *testing.T) {
 	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)

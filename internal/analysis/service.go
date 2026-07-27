@@ -1596,11 +1596,20 @@ func (s *Service) attachedRepoLines(ctx context.Context, contextID string) []str
 		if rerr != nil {
 			continue
 		}
-		candidates := s.repoPathCandidates(ctx, b.RepoID, repo.LocalPath)
-		if len(candidates) == 0 {
-			continue
+		// Prefer an existing worktree (workspace) for this branch so the agent
+		// works in the isolated per-branch checkout; fall back to the repo's
+		// main path when no workspace has been created.
+		path := ""
+		if ws, werr := s.vcsStore.Workspaces.FindByBranch(ctx, b.RepoID, b.Branch); werr == nil && ws != nil && ws.WorktreePath != "" {
+			path = ws.WorktreePath
+		} else {
+			candidates := s.repoPathCandidates(ctx, b.RepoID, repo.LocalPath)
+			if len(candidates) == 0 {
+				continue
+			}
+			path = candidates[0]
 		}
-		line := "- " + candidates[0]
+		line := "- " + path
 		if b.Branch != "" {
 			line += " (branch " + b.Branch + ")"
 		}
