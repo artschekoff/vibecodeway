@@ -528,19 +528,25 @@ func (a *App) firstAttachedRepoPath(contextID string) (string, error) {
 	return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
 }
 
-// SolveWithAI assembles a context-grounded task instruction, opens the configured
-// coding agent + terminal at the first attached repo, and returns the instruction
-// (the frontend copies it to the clipboard for the user to paste into the agent).
+// SolveWithAI ensures a git worktree exists for every repo attached to the
+// context, assembles a context-grounded task instruction that lists those
+// worktree paths and starts with the /writing-plans + /arts-load-context skill
+// commands, opens the configured agent/terminal at the first worktree, and
+// returns the instruction (the frontend copies it to the clipboard).
 func (a *App) SolveWithAI(contextID, userPrompt string) (string, error) {
+	firstWorktreePath, err := a.ensureContextWorkspaces(contextID)
+	if err != nil {
+		return "", err
+	}
+	if firstWorktreePath == "" {
+		return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
+	}
+	// Built after the worktrees exist so attachedRepoLines surfaces their paths.
 	instruction, err := a.analysisSvc.BuildAgentTask(a.ctx, contextID, userPrompt)
 	if err != nil {
 		return "", err
 	}
-	repoPath, err := a.firstAttachedRepoPath(contextID)
-	if err != nil {
-		return "", err
-	}
-	if err := a.openWithCheckout("", repoPath); err != nil {
+	if err := a.openWithCheckout("", firstWorktreePath); err != nil {
 		return "", err
 	}
 	return instruction, nil

@@ -635,6 +635,70 @@ func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
 	return a.openWithCheckout(onCheckout, w.WorktreePath)
 }
 
+// ensureWorktreeForBranch finds or creates a git worktree for (repoID, branch)
+// and returns its on-disk path. Unlike CheckoutInWorkspace it does NOT open a
+// terminal or run onCheckoutCommand — it only guarantees the worktree exists.
+// Returns "" (no error) when the repo has no accessible local path to host a
+// worktree, so callers can skip that repo.
+func (a *App) ensureWorktreeForBranch(repoID, branch string) (string, error) {
+	if ws, err := a.FindWorkspaceForBranch(repoID, branch); err == nil && ws != nil {
+		return ws.WorktreePath, nil
+	}
+	paths, err := a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
+	if err != nil || len(paths) == 0 {
+		return "", nil
+	}
+	rp := paths[0]
+	baseDir := rp.Path
+	if _, err := os.Stat(baseDir); err != nil {
+		return "", nil
+	}
+	if err := ensureWorktreesIgnored(baseDir); err != nil {
+		a.logger.Sugar().Warnf("ensureWorktreeForBranch: .gitignore update failed: %v", err)
+	}
+	// Reuse an existing on-disk worktree for the branch if one is already present.
+	if existing, err := vcs.GitWorktreeList(baseDir); err == nil {
+		for _, wt := range existing {
+			if wt.Branch == branch && wt.Path != baseDir {
+				_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
+					RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: wt.Path, Status: "active",
+				})
+				return wt.Path, nil
+			}
+		}
+	}
+	worktreePath := filepath.Join(baseDir, ".worktrees", vcs.BranchToWorktreeName(branch))
+	if err := vcs.GitWorktreeAdd(baseDir, worktreePath, branch); err != nil {
+		return "", err
+	}
+	_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
+		RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: worktreePath, Status: "active",
+	})
+	return worktreePath, nil
+}
+
+// ensureContextWorkspaces creates/finds a git worktree for every repo+branch
+// attached to contextID and returns the first worktree path (used to open a
+// single terminal). Per-repo failures are logged and skipped.
+func (a *App) ensureContextWorkspaces(contextID string) (string, error) {
+	branches, err := a.ListVCSBranches(contextID)
+	if err != nil {
+		return "", fmt.Errorf("list vcs branches: %w", err)
+	}
+	firstWorktreePath := ""
+	for _, b := range branches {
+		wt, werr := a.ensureWorktreeForBranch(b.RepoID, b.Branch)
+		if werr != nil {
+			a.logger.Sugar().Warnf("ensureContextWorkspaces: worktree for repo %s branch %s failed: %s", b.RepoID, b.Branch, werr.Error())
+			continue
+		}
+		if wt != "" && firstWorktreePath == "" {
+			firstWorktreePath = wt
+		}
+	}
+	return firstWorktreePath, nil
+}
+
 // OpenRepoPathTerminal opens the configured terminal at the given repo local path.
 func (a *App) OpenRepoPathTerminal(pathID string) error {
 	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)
