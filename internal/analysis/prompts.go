@@ -29,7 +29,10 @@ Respond with ONLY a JSON array of the 0-based indices of matching branches (e.g.
 // used by BuildAgentTask to assemble a coding-agent instruction string from a
 // context's linked tickets and on-disk repos. Pure string assembly — no LLM
 // call is made with this prompt; it is handed to an external coding agent.
-const defaultAgentTaskPrompt = `You are a coding agent. Implement the task below using the repositories checked out on disk.
+const defaultAgentTaskPrompt = `/writing-plans
+/arts-load-context {{context_key}}
+
+You are a coding agent. Implement the task below using the git worktrees checked out on disk.
 
 ## Task
 {{user_prompt}}
@@ -40,10 +43,10 @@ const defaultAgentTaskPrompt = `You are a coding agent. Implement the task below
 ## Related tickets
 {{tickets}}
 
-## Repositories on disk (read and modify the code here)
+## Workspaces on disk (read and modify the code here)
 {{repos}}
 
-Work directly in these repositories to implement the task. Inspect the relevant files, make the changes, and keep them scoped to the task.`
+Work directly in these worktrees to implement the task. Inspect the relevant files, make the changes, and keep them scoped to the task.`
 
 // defaultContextUpdaterPrompt is the in-code fallback used when the
 // context_updater row cannot be loaded from the DB (see loadPrompt). The

@@ -112,3 +112,14 @@ func TestBuildAgentTask_usesRepoPaths(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "/tmp/repoC")
 }
+
+func TestAgentTaskPrompt_migrationUpgradesSeededBody(t *testing.T) {
+	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+
+	p, err := s.GetAIPrompt(context.Background(), "agent_task")
+	require.NoError(t, err)
+	assert.Contains(t, p.Body, "/writing-plans")
+	assert.Contains(t, p.Body, "/arts-load-context {{context_key}}")
+}
