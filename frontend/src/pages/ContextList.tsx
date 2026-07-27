@@ -75,6 +75,7 @@ import {
   // @ts-ignore
   RemoveContextRelation,
   ListWorkflowStatuses,
+  ReviewPRWithAI,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type {
@@ -110,11 +111,15 @@ function ReviewCard({
   onDismiss,
   onCheckout,
   checkoutLoading,
+  onReview,
+  reviewing,
 }: {
   review: ReviewRequest;
   onDismiss?: (id: string) => void;
   onCheckout?: () => void;
   checkoutLoading?: boolean;
+  onReview?: () => void;
+  reviewing?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const isWaiting = !!review.reviewedAt;
@@ -146,6 +151,16 @@ function ReviewCard({
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
         <div className="review-card-btns">
+          {review.headBranch && onReview && (
+            <button
+              className="vcs-checkout-btn"
+              onClick={onReview}
+              disabled={reviewing}
+              title={`Review PR #${review.prNumber} with AI`}
+            >
+              {reviewing ? <Spinner size={11} /> : "Review with AI"}
+            </button>
+          )}
           {review.headBranch && onCheckout && (
             <button
               className="review-open-btn"
@@ -224,7 +239,7 @@ interface ContextListProps {
 }
 
 export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) {
-  const { openContextTab, openNewContextTab, openSettingsTab, tabs, forceCloseTab } = useTabContext();
+  const { openContextTab, openNewContextTab, openSettingsTab, openEditorTab, tabs, forceCloseTab } = useTabContext();
   const progress = useProgress();
   const { ensurePassphrase } = usePassphrase();
 
@@ -320,6 +335,21 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     logOpen: reviewLogOpen,
     dismissLog: dismissReviewLog,
   } = useCheckout(() => {}, "No local path set for this repository. Add one in the Repositories tab.");
+
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const handleReviewWithAI = async (review: ReviewRequest) => {
+    if (!review.headBranch) return;
+    setReviewingId(review.id);
+    try {
+      const res = await ReviewPRWithAI(review.repoId, review.prNumber, review.headBranch, review.prTitle);
+      await navigator.clipboard.writeText(res.instruction).catch(() => {});
+      openEditorTab(res.contextId, res.contextKey);
+    } catch (e) {
+      setReviewCheckoutError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReviewingId(null);
+    }
+  };
 
   // ── DnD ──
   const isDraggingEnabled = !matchedIDs; // disable while searching
@@ -1270,6 +1300,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                             review={review}
                             checkoutLoading={reviewCheckoutLoading}
                             onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                            onReview={() => void handleReviewWithAI(review)}
+                            reviewing={reviewingId === review.id}
                           />
                         ))}
                       </div>
@@ -1288,6 +1320,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               onDismiss={handleDismissReview}
                               checkoutLoading={reviewCheckoutLoading}
                               onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                              onReview={() => void handleReviewWithAI(review)}
+                              reviewing={reviewingId === review.id}
                             />
                           ))}
                         </div>
@@ -1307,6 +1341,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               onDismiss={handleDismissReview}
                               checkoutLoading={reviewCheckoutLoading}
                               onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                              onReview={() => void handleReviewWithAI(review)}
+                              reviewing={reviewingId === review.id}
                             />
                           ))}
                         </div>
