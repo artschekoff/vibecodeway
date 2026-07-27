@@ -72,4 +72,17 @@ describe("ContextForm — AI Match (Git/PRs tab)", () => {
     expect(await screen.findByText("acme/api")).toBeInTheDocument();
     expect(screen.getByText(":feat/JH-4532")).toBeInTheDocument();
   });
+
+  it("opens on the Git / PRs tab when initialActiveTab is 'vcs'", () => {
+    render(
+      <ContextForm
+        initial={{ id: "ctx-1", key: "JH-1", status: "active", orgId: "o1", createdAt: "", updatedAt: "" } as any}
+        initialActiveTab="vcs"
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    const vcsTab = screen.getByRole("button", { name: /git \/ prs/i });
+    expect(vcsTab.className).toContain("ctx-tab--active");
+  });
 });
