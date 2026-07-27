@@ -96,3 +96,38 @@ func TestContextMatchSignal_DedupesSharedJiraKey(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, strings.Count(summary, "JIRA-1:"))
 }
+
+func TestBuildIdentifierMatchers_wholeTokenCaseInsensitive(t *testing.T) {
+	m := buildIdentifierMatchers([]string{"JH-1"})
+	require.Len(t, m, 1)
+	re := m[0]
+	assert.True(t, re.MatchString("feat/JH-1-add-thumbs")) // delimited by / and -
+	assert.True(t, re.MatchString("jh-1"))                 // case-insensitive, whole string
+	assert.True(t, re.MatchString("bugfix/jh-1"))          // end of string boundary
+	assert.False(t, re.MatchString("JH-100"))              // digit after -> not a token boundary
+	assert.False(t, re.MatchString("myJH-1x"))             // letters around -> not a boundary
+}
+
+func TestBuildIdentifierMatchers_skipsEmptyAndDupes(t *testing.T) {
+	m := buildIdentifierMatchers([]string{"JH-1", "", "  ", "jh-1", "JH-2"})
+	assert.Len(t, m, 2) // JH-1 (dupe jh-1 dropped), JH-2
+}
+
+func TestRegexMatchBranches_selectsHits(t *testing.T) {
+	cands := []MatchedBranch{
+		{Platform: "github", OwnerRepo: "a/b", Branch: "feat/JH-1-x"},
+		{Platform: "github", OwnerRepo: "a/b", Branch: "chore/cleanup"},
+		{Platform: "github", OwnerRepo: "c/d", Branch: "JH-2"},
+	}
+	m := buildIdentifierMatchers([]string{"JH-1", "JH-2"})
+	got := regexMatchBranches(cands, m)
+	require.Len(t, got, 2)
+	assert.Equal(t, "feat/JH-1-x", got[0].Branch)
+	assert.Equal(t, "JH-2", got[1].Branch)
+}
+
+func TestRegexMatchBranches_noMatchersOrNoHits(t *testing.T) {
+	cands := []MatchedBranch{{Branch: "chore/cleanup"}}
+	assert.Nil(t, regexMatchBranches(cands, nil))
+	assert.Nil(t, regexMatchBranches(cands, buildIdentifierMatchers([]string{"JH-9"})))
+}

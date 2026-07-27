@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -895,6 +896,51 @@ func dedupeMatches(candidates []MatchedBranch) []MatchedBranch {
 		}
 		seen[key] = true
 		out = append(out, c)
+	}
+	return out
+}
+
+// buildIdentifierMatchers compiles one whole-token, case-insensitive regexp per
+// non-empty, de-duplicated identifier (the context key + linked ticket keys).
+// Token boundaries are string edges or any non-alphanumeric character, so
+// "JH-1" matches "feat/JH-1-x" but not "JH-100" or "myJH-1x".
+func buildIdentifierMatchers(identifiers []string) []*regexp.Regexp {
+	var out []*regexp.Regexp
+	seen := map[string]bool{}
+	for _, id := range identifiers {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		low := strings.ToLower(id)
+		if seen[low] {
+			continue
+		}
+		seen[low] = true
+		re, err := regexp.Compile(`(?i)(?:^|[^a-zA-Z0-9])` + regexp.QuoteMeta(id) + `(?:[^a-zA-Z0-9]|$)`)
+		if err != nil {
+			continue
+		}
+		out = append(out, re)
+	}
+	return out
+}
+
+// regexMatchBranches returns the candidates whose Branch matches any matcher,
+// preserving input order and including each candidate at most once. Returns nil
+// when there are no matchers or no hits.
+func regexMatchBranches(candidates []MatchedBranch, matchers []*regexp.Regexp) []MatchedBranch {
+	if len(matchers) == 0 {
+		return nil
+	}
+	var out []MatchedBranch
+	for _, c := range candidates {
+		for _, re := range matchers {
+			if re.MatchString(c.Branch) {
+				out = append(out, c)
+				break
+			}
+		}
 	}
 	return out
 }
