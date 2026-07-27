@@ -196,7 +196,6 @@ export default function SettingsPage() {
         terminalAppPath.trim(),
         codingAgentApp.trim(),
       );
-      await SetAutoLinkRepos(autoLinkRepos);
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
       setTerminalAppPath(updated.terminalAppPath ?? "");
