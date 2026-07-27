@@ -216,13 +216,14 @@ const (
 
 // AppSettings holds application-level preferences stored in the local database.
 type AppSettings struct {
-	ContextRefetchEnabled     bool   `json:"contextRefetchEnabled"`
-	ContextRefetchIntervalMin int    `json:"contextRefetchIntervalMin"`
-	ReviewsRefetchEnabled     bool   `json:"reviewsRefetchEnabled"`
-	ReviewsRefetchIntervalMin int    `json:"reviewsRefetchIntervalMin"`
-	TerminalAppPath           string `json:"terminalAppPath"`
-	CodingAgentApp            string `json:"codingAgentApp"`
-	UpdatedAt                 string `json:"updatedAt"`
+	ContextRefetchEnabled        bool   `json:"contextRefetchEnabled"`
+	ContextRefetchIntervalMin    int    `json:"contextRefetchIntervalMin"`
+	ReviewsRefetchEnabled        bool   `json:"reviewsRefetchEnabled"`
+	ReviewsRefetchIntervalMin    int    `json:"reviewsRefetchIntervalMin"`
+	TerminalAppPath              string `json:"terminalAppPath"`
+	CodingAgentApp               string `json:"codingAgentApp"`
+	AutoLinkReposOnContextCreate bool   `json:"autoLinkReposOnContextCreate"`
+	UpdatedAt                    string `json:"updatedAt"`
 }
 
 // SyncSession tracks one refresh run (Refresh All or per-source).

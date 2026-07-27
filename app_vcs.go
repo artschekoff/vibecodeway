@@ -1013,6 +1013,48 @@ func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
 	return out, nil
 }
 
+// AutoLinkRepos runs AI branch matching for contextID in the background and
+// persists the matched branches — but only if the AutoLinkReposOnContextCreate
+// setting is enabled. Fire-and-forget: the frontend calls this after a new
+// context is populated; an "autolink:done" event is emitted when finished.
+func (a *App) AutoLinkRepos(contextID string) {
+	go func() {
+		if _, err := a.autoLinkReposOnce(contextID); err != nil {
+			a.logger.Sugar().Warnf("AutoLinkRepos: %s", err.Error())
+		}
+	}()
+}
+
+// autoLinkReposOnce is the synchronous, testable core of AutoLinkRepos. It
+// returns the number of branches linked. When the setting is disabled it is a
+// no-op returning (0, nil) without invoking the matcher.
+func (a *App) autoLinkReposOnce(contextID string) (int, error) {
+	settings, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return 0, err
+	}
+	if settings == nil || !settings.AutoLinkReposOnContextCreate {
+		return 0, nil
+	}
+	matches, err := a.AIMatchBranches(contextID)
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for _, m := range matches {
+		if _, err := a.AddVCSBranch(contextID, m.Platform, m.OwnerRepo, m.Branch, m.Label); err != nil {
+			a.logger.Sugar().Warnf("AutoLinkRepos: add branch failed: %s", err.Error())
+			continue
+		}
+		added++
+	}
+	runtime.EventsEmit(a.ctx, "autolink:done", map[string]interface{}{
+		"contextId": contextID,
+		"added":     added,
+	})
+	return added, nil
+}
+
 // --- VCS Diff ---
 
 // RepoChange is the working-tree diff for one repo attached to a context.

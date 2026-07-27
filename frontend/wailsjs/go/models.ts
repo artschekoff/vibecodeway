@@ -911,6 +911,7 @@ export namespace store {
 	    reviewsRefetchIntervalMin: number;
 	    terminalAppPath: string;
 	    codingAgentApp: string;
+	    autoLinkReposOnContextCreate: boolean;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -925,6 +926,7 @@ export namespace store {
 	        this.reviewsRefetchIntervalMin = source["reviewsRefetchIntervalMin"];
 	        this.terminalAppPath = source["terminalAppPath"];
 	        this.codingAgentApp = source["codingAgentApp"];
+	        this.autoLinkReposOnContextCreate = source["autoLinkReposOnContextCreate"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}

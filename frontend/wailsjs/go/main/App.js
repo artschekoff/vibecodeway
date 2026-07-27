@@ -58,6 +58,10 @@ export function AuthStatus() {
   return window['go']['main']['App']['AuthStatus']();
 }
 
+export function AutoLinkRepos(arg1) {
+  return window['go']['main']['App']['AutoLinkRepos'](arg1);
+}
+
 export function CancelRefresh() {
   return window['go']['main']['App']['CancelRefresh']();
 }
@@ -676,6 +680,10 @@ export function SetActiveAssignmentVersion(arg1, arg2) {
 
 export function SetAppSettings(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SetAppSettings'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function SetAutoLinkRepos(arg1) {
+  return window['go']['main']['App']['SetAutoLinkRepos'](arg1);
 }
 
 export function SetContextOrg(arg1, arg2) {

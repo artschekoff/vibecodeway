@@ -42,6 +42,7 @@ func (a *App) SetAppSettings(
 		reviewsIntervalMin = 1
 	}
 	codingAgentApp = strings.TrimSpace(codingAgentApp)
+	current, _ := a.db.GetAppSettings(a.ctx)
 	settings := appstore.AppSettings{
 		ContextRefetchEnabled:     contextEnabled,
 		ContextRefetchIntervalMin: contextIntervalMin,
@@ -50,11 +51,25 @@ func (a *App) SetAppSettings(
 		TerminalAppPath:           terminalAppPath,
 		CodingAgentApp:            codingAgentApp,
 	}
+	if current != nil {
+		settings.AutoLinkReposOnContextCreate = current.AutoLinkReposOnContextCreate
+	}
 	if err := a.db.SetAppSettings(a.ctx, settings); err != nil {
 		return err
 	}
 	a.restartBackgroundRefresh(settings)
 	return nil
+}
+
+// SetAutoLinkRepos toggles whether matched repos are auto-linked when a new
+// context is created. Persisted in app_settings; preserves all other fields.
+func (a *App) SetAutoLinkRepos(enabled bool) error {
+	current, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return err
+	}
+	current.AutoLinkReposOnContextCreate = enabled
+	return a.db.SetAppSettings(a.ctx, *current)
 }
 
 // --- Background refresh lifecycle ---
