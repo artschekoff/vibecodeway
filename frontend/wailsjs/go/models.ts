@@ -352,6 +352,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ReviewPRResult {
+	    contextId: string;
+	    contextKey: string;
+	    instruction: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReviewPRResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.instruction = source["instruction"];
+	    }
+	}
 	export class UploadBatchResult {
 	    files: store.ContextUploadedFile[];
 	    errors: string[];

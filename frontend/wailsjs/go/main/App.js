@@ -626,6 +626,10 @@ export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
 }
 
+export function ReviewPRWithAI(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ReviewPRWithAI'](arg1, arg2, arg3, arg4);
+}
+
 export function RunAssignmentStepWithCustomPrompt(arg1, arg2, arg3) {
   return window['go']['main']['App']['RunAssignmentStepWithCustomPrompt'](arg1, arg2, arg3);
 }
