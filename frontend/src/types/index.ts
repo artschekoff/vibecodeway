@@ -386,6 +386,7 @@ export interface AppSettings {
   reviewsRefetchIntervalMin: number;
   terminalAppPath: string;
   codingAgentApp: string;
+  autoLinkReposOnContextCreate: boolean;
   updatedAt: string;
 }
 
