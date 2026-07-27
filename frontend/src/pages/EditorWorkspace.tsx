@@ -5,6 +5,7 @@ import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { nextPaneSize, readStoredPaneSize } from "../lib/paneSize";
+import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
 
 const SIDEBAR_KEY = "context-consolidator:editor:sidebarWidth";
 const SIDEBAR_MIN = 180;
@@ -16,14 +17,11 @@ const TERMINAL_MIN = 90;
 const TERMINAL_MAX = 900;
 const TERMINAL_DEFAULT = 260;
 
-type OpenTab = { repoPath: string; repoName: string; path: string; status: string };
-const tabKey = (t: OpenTab) => `${t.repoPath}::${t.path}`;
-
 export function EditorWorkspace({ contextId }: { contextId: string }) {
   const [repoPaths, setRepoPaths] = useState<{ name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
-  const [tabs, setTabs] = useState<OpenTab[]>([]);
-  const [activeKey, setActiveKey] = useState<string>("");
+  const { getFiles, openEditorFile } = useEditorFiles();
+  const { tabs, activeKey } = getFiles(contextId);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readStoredPaneSize(localStorage.getItem(SIDEBAR_KEY), SIDEBAR_DEFAULT, SIDEBAR_MIN, SIDEBAR_MAX)
   );
@@ -48,37 +46,14 @@ export function EditorWorkspace({ contextId }: { contextId: string }) {
 
   const openFile = (repoPath: string, repoName: string, path: string, status: string) => {
     const tab: OpenTab = { repoPath, repoName, path, status };
-    const key = tabKey(tab);
-    setTabs((prev) => (prev.some((t) => tabKey(t) === key) ? prev : [...prev, tab]));
-    setActiveKey(key);
+    openEditorFile(contextId, tab);
   };
-  const closeTab = (key: string) =>
-    setTabs((prev) => {
-      const next = prev.filter((t) => tabKey(t) !== key);
-      if (activeKey === key) setActiveKey(next.length ? tabKey(next[next.length - 1]) : "");
-      return next;
-    });
 
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
 
   return (
     <div style={{ display: "flex", height: "100%" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* editor tabs */}
-        <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
-          {tabs.map((t) => {
-            const key = tabKey(t);
-            return (
-              <div key={key} style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px",
-                background: key === activeKey ? "var(--surface2)" : "transparent", fontSize: 11 }}>
-                <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text)" }}
-                  onClick={() => setActiveKey(key)}>{t.path.split("/").pop()}</button>
-                <button aria-label={`close ${t.path}`} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
-                  onClick={() => closeTab(key)}>×</button>
-              </div>
-            );
-          })}
-        </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           {active ? (
             <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} onSaved={() => { /* panel auto-polls */ }} />

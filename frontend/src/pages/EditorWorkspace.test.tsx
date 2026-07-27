@@ -15,6 +15,7 @@ const { GetContextChanges } = vi.hoisted(() => ({ GetContextChanges: vi.fn() }))
 vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
+import { EditorFilesProvider } from "../contexts/EditorFilesContext";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,7 +24,11 @@ beforeEach(() => {
 
 describe("EditorWorkspace", () => {
   it("starts terminal at first repo and opens a diff tab on file click", async () => {
-    render(<EditorWorkspace contextId="c1" />);
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider>
+    );
     await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
 
     fireEvent.click(screen.getByText("open-a"));

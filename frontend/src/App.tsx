@@ -11,6 +11,8 @@ import AskAIPage from "./pages/AskAIPage";
 import ActivityTimeline from "./pages/ActivityTimeline";
 import ActivityFeedPage from "./pages/ActivityFeedPage";
 import { EditorWorkspace } from "./pages/EditorWorkspace";
+import { EditorFilesProvider } from "./contexts/EditorFilesContext";
+import { EditorFileTabBar } from "./components/editor/EditorFileTabBar";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
 import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
@@ -153,6 +155,9 @@ function AppShell() {
           <TabBar />
         </div>
         <div className="app-content">
+          {activeTab?.type === "editor" && activeTab.contextId && (
+            <EditorFileTabBar contextId={activeTab.contextId} />
+          )}
           <TabContent />
         </div>
       </div>
@@ -176,7 +181,9 @@ function App() {
   return (
     <PassphraseProvider>
       <TabProvider>
-        <AppShell />
+        <EditorFilesProvider>
+          <AppShell />
+        </EditorFilesProvider>
       </TabProvider>
     </PassphraseProvider>
   );
