@@ -59,11 +59,12 @@ func TestContextMatchSignal_AggregatesRelatedContexts(t *testing.T) {
 	_, err = a.db.AddContextRelation(a.ctx, idA, idB, "relates-to")
 	require.NoError(t, err)
 
-	key, summary, err := a.contextMatchSignal(idA)
+	key, summary, ticketKeys, err := a.contextMatchSignal(idA)
 	require.NoError(t, err)
 	assert.Equal(t, "CTX-A", key)
 	assert.Contains(t, summary, "JIRA-1: Alpha summary")
 	assert.Contains(t, summary, "JIRA-2: Beta summary")
+	assert.ElementsMatch(t, []string{"JIRA-1", "JIRA-2"}, ticketKeys)
 }
 
 func TestContextMatchSignal_NoRelations_OnlyOwnIssues(t *testing.T) {
@@ -75,10 +76,11 @@ func TestContextMatchSignal_NoRelations_OnlyOwnIssues(t *testing.T) {
 	// Unrelated context — must NOT appear in the signal.
 	seedContextWithIssue(t, a, jiraRepo, org.ID, "CTX-B", "JIRA-2", "Beta summary")
 
-	_, summary, err := a.contextMatchSignal(idA)
+	_, summary, ticketKeys, err := a.contextMatchSignal(idA)
 	require.NoError(t, err)
 	assert.Contains(t, summary, "JIRA-1: Alpha summary")
 	assert.NotContains(t, summary, "JIRA-2")
+	assert.Equal(t, []string{"JIRA-1"}, ticketKeys)
 }
 
 func TestContextMatchSignal_DedupesSharedJiraKey(t *testing.T) {
@@ -92,9 +94,10 @@ func TestContextMatchSignal_DedupesSharedJiraKey(t *testing.T) {
 	_, err = a.db.AddContextRelation(a.ctx, idA, idB, "relates-to")
 	require.NoError(t, err)
 
-	_, summary, err := a.contextMatchSignal(idA)
+	_, summary, ticketKeys, err := a.contextMatchSignal(idA)
 	require.NoError(t, err)
 	assert.Equal(t, 1, strings.Count(summary, "JIRA-1:"))
+	assert.Equal(t, []string{"JIRA-1"}, ticketKeys)
 }
 
 func TestBuildIdentifierMatchers_wholeTokenCaseInsensitive(t *testing.T) {

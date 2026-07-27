@@ -951,10 +951,10 @@ func regexMatchBranches(candidates []MatchedBranch, matchers []*regexp.Regexp) [
 // (relations of any type). No ticket bodies/comments/code. Duplicate Jira keys
 // across contexts are collapsed. Fail-soft: a relations-lookup error falls back
 // to the edited context alone, and per-context issue errors are skipped.
-func (a *App) contextMatchSignal(contextID string) (key, summary string, err error) {
+func (a *App) contextMatchSignal(contextID string) (key, summary string, ticketKeys []string, err error) {
 	ctxRow, err := a.db.GetContext(a.ctx, contextID)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	// The signal spans the edited context plus its directly-related contexts.
@@ -987,11 +987,12 @@ func (a *App) contextMatchSignal(contextID string) (key, summary string, err err
 					continue
 				}
 				seenKey[issue.JiraKey] = true
+				ticketKeys = append(ticketKeys, issue.JiraKey)
 				lines = append(lines, issue.JiraKey+": "+issue.Summary)
 			}
 		}
 	}
-	return ctxRow.Key, strings.Join(lines, "\n"), nil
+	return ctxRow.Key, strings.Join(lines, "\n"), ticketKeys, nil
 }
 
 // AIMatchBranches enumerates branches across tracked repos (capped by
@@ -1000,7 +1001,7 @@ func (a *App) contextMatchSignal(contextID string) (key, summary string, err err
 // per-repo enumeration errors are skipped rather than aborting the whole
 // scan. Returns an empty slice (not nil) when there are no candidates.
 func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
-	key, summary, err := a.contextMatchSignal(contextID)
+	key, summary, ticketKeys, err := a.contextMatchSignal(contextID)
 	if err != nil {
 		return nil, err
 	}
@@ -1038,6 +1039,14 @@ func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
 	candidates = dedupeMatches(candidates)
 	if len(candidates) == 0 {
 		return []MatchedBranch{}, nil
+	}
+
+	// Cheap deterministic pass first: match the context/ticket keys against
+	// branch names. Only fall back to the (slower, paid) AI matcher when this
+	// finds nothing.
+	matchers := buildIdentifierMatchers(append([]string{key}, ticketKeys...))
+	if hits := regexMatchBranches(candidates, matchers); len(hits) > 0 {
+		return hits, nil
 	}
 
 	titles := make([]string, len(candidates))
