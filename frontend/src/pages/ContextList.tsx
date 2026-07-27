@@ -69,6 +69,7 @@ import {
   FetchPruneRepoPath,
   ListOrganizations,
   SetContextOrg,
+  AutoLinkRepos,
   // @ts-ignore
   AddContextRelation,
   // @ts-ignore
@@ -533,6 +534,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       for (const rel of (relationsPayload?.newRelations ?? [])) {
         try { await AddContextRelation(ctx.id, rel.targetId, rel.relationType); } catch { /* best-effort */ }
       }
+      // Background AI repo matching (no-op if the setting is off); fire-and-forget.
+      void AutoLinkRepos(ctx.id).catch(() => {});
     } finally { progress.done(); }
     setShowForm(false);
     load();

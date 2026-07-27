@@ -99,12 +99,21 @@ function AppShell() {
     const offHookNotify = EventsOn("hook:notify", (payload: HookNotifyPayload) => {
       SendNotification(hookNotificationOptions(payload)).catch(() => {});
     });
+    const offAutoLink = EventsOn("autolink:done", (payload: { contextId?: string; added?: number }) => {
+      if (payload?.added && payload.added > 0) {
+        showToast(`Auto-linked ${payload.added} repo${payload.added === 1 ? "" : "s"}`);
+        if (payload.contextId) {
+          window.dispatchEvent(new CustomEvent("context:updated", { detail: { id: payload.contextId } }));
+        }
+      }
+    });
     return () => {
       safeOff(offPicker, "hotkey:show-picker");
       safeOff(offA11y, "accessibility:needed");
       safeOff(offA11yGranted, "accessibility:granted");
       safeOff(offNoSelection, "hotkey:no-selection");
       safeOff(offHookNotify, "hook:notify");
+      safeOff(offAutoLink, "autolink:done");
     };
   }, [showToast]);
 

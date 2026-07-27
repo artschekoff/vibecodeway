@@ -11,6 +11,7 @@ import {
   AddVCSBranch,
   AddSpecificPR,
   AddUserEvent,
+  AutoLinkRepos,
 } from "../../wailsjs/go/main/App";
 import type { Context, Organization } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
@@ -182,6 +183,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
       setNewCtxOrgId("");
       // Attach immediately after creating, then dismiss (same pattern as handleAttach).
       await attachTo(ctx.id, ctx.key, resolvedOrgId);
+      void AutoLinkRepos(ctx.id).catch(() => {});
       requestAnimationFrame(() => DismissPicker().catch(() => {}));
     } catch (e) {
       setNewCtxError(e instanceof Error ? e.message : String(e));
