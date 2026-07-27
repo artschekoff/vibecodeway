@@ -138,6 +138,16 @@ func TestBuildAgentTask_prefersWorktreePath(t *testing.T) {
 	assert.Contains(t, out, "/tmp/repoA/.worktrees/main") // worktree path, not the bare main path
 }
 
+func TestBuildReviewTask(t *testing.T) {
+	svc, contextID := newAgentTaskTestService(t)
+	out, err := svc.BuildReviewTask(context.Background(), contextID, 349, "Scribe note detail")
+	require.NoError(t, err)
+	assert.Contains(t, out, "349")                // PR number
+	assert.Contains(t, out, "Scribe note detail") // PR title
+	assert.Contains(t, out, "/tmp/repoA")         // attached repo/worktree path
+	assert.Contains(t, out, "reviewer")           // review-oriented wording from the template
+}
+
 func TestAgentTaskPrompt_migrationUpgradesSeededBody(t *testing.T) {
 	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)

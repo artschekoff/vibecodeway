@@ -1639,6 +1639,24 @@ func (s *Service) BuildAgentTask(ctx context.Context, contextID, userPrompt stri
 	}), nil
 }
 
+// BuildReviewTask assembles the PR-review instruction string for contextID from
+// the "pr_review" prompt: the context key, PR number/title, and the on-disk
+// worktree paths of the context's repos. Pure string assembly — no LLM call.
+func (s *Service) BuildReviewTask(ctx context.Context, contextID string, prNumber int, prTitle string) (string, error) {
+	c, err := s.store.GetContext(ctx, contextID)
+	if err != nil {
+		return "", err
+	}
+	repoLines := s.attachedRepoLines(ctx, contextID)
+	tmpl := s.loadPrompt(ctx, "pr_review", defaultPRReviewPrompt)
+	return applyPlaceholders(tmpl, map[string]string{
+		"context_key": c.Key,
+		"pr_number":   fmt.Sprintf("%d", prNumber),
+		"pr_title":    prTitle,
+		"repos":       strings.Join(repoLines, "\n"),
+	}), nil
+}
+
 // buildCodebaseContext lists the repo tree, asks the AI to select up to a
 // handful of relevant files, reads them, and formats them as fenced code
 // blocks for injection into the assignment prompt. Any failure along the way
