@@ -1,16 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { TabProvider, useTabContext } from "./contexts/TabContext";
 import { PassphraseProvider } from "./contexts/PassphraseContext";
-import ContextList from "./pages/ContextList";
-import ContextDetail from "./pages/ContextDetail";
-import Settings from "./pages/Settings";
-import AppLogsPage from "./pages/AppLogsPage";
-import PromptsPage from "./pages/PromptsPage";
-import MyBoardPage from "./pages/MyBoardPage";
-import AskAIPage from "./pages/AskAIPage";
-import ActivityTimeline from "./pages/ActivityTimeline";
-import ActivityFeedPage from "./pages/ActivityFeedPage";
-import { EditorWorkspace } from "./pages/EditorWorkspace";
+import { TabContent } from "./components/TabContent";
 import { EditorFilesProvider } from "./contexts/EditorFilesContext";
 import { EditorFileTabBar } from "./components/editor/EditorFileTabBar";
 import HamburgerMenu from "./components/HamburgerMenu";
@@ -34,37 +25,7 @@ const safeOff = (off: unknown, event: string) => {
 };
 
 // ─── Tab content renderer ────────────────────────────────────────────────────
-
-function TabContent() {
-  const { tabs, activeTabId } = useTabContext();
-  const activeTab = tabs.find((t) => t.id === activeTabId);
-
-  if (!activeTab) {
-    return (
-      <div className="empty-state" style={{ margin: "auto", padding: "40px", textAlign: "center" }}>
-        <p style={{ color: "var(--text-muted)" }}>Open an organization from the ☰ menu to get started.</p>
-      </div>
-    );
-  }
-
-  if (activeTab.type === "settings") return <Settings />;
-  if (activeTab.type === "logs") return <AppLogsPage />;
-  if (activeTab.type === "prompts") return <PromptsPage />;
-  if (activeTab.type === "board") return <MyBoardPage />;
-  if (activeTab.type === "ask") return <AskAIPage />;
-  if (activeTab.type === "timeline") return <ActivityTimeline />;
-  if (activeTab.type === "activity-feed") return <ActivityFeedPage />;
-  if (activeTab.type === "org") {
-    return <ContextList orgId={activeTab.orgId!} tabId={activeTab.id} />;
-  }
-  if (activeTab.type === "context") {
-    return <ContextDetail contextId={activeTab.contextId!} tabId={activeTab.id} />;
-  }
-  if (activeTab.type === "editor") {
-    return <EditorWorkspace contextId={activeTab.contextId!} contextKey={activeTab.contextKey} />;
-  }
-  return null;
-}
+// TabContent (keep-alive editor tabs) lives in ./components/TabContent.
 
 // ─── Main app shell ──────────────────────────────────────────────────────────
 
