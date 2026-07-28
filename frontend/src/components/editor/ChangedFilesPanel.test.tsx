@@ -13,6 +13,7 @@ import { ChangedFilesPanel } from "./ChangedFilesPanel";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   StageFile.mockResolvedValue(undefined);
   UnstageFile.mockResolvedValue(undefined);
   DiscardFile.mockResolvedValue(undefined);
@@ -54,6 +55,21 @@ describe("ChangedFilesPanel", () => {
     expect(screen.getByText("Local Changes")).toBeInTheDocument();
     // a.ts appears once under each group.
     expect(screen.getAllByText("a.ts")).toHaveLength(2);
+  });
+
+  it("collapses and expands a section when its header is clicked", async () => {
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
+
+    // Collapse "Local Changes" — its files disappear.
+    fireEvent.click(screen.getByText("Local Changes"));
+    expect(screen.queryByText("work.ts")).not.toBeInTheDocument();
+    // Other sections are unaffected.
+    expect(screen.getByText("staged.ts")).toBeInTheDocument();
+
+    // Expand again — files return.
+    fireEvent.click(screen.getByText("Local Changes"));
+    expect(screen.getByText("work.ts")).toBeInTheDocument();
   });
 
   it("opens the diff when a filename is clicked", async () => {

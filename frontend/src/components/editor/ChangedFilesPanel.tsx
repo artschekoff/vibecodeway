@@ -20,10 +20,42 @@ const nameBtnStyle: React.CSSProperties = {
 const actionBtnStyle: React.CSSProperties = {
   background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 2px",
 };
+const headerBtnStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 4, width: "100%", background: "none", border: "none",
+  cursor: "pointer", padding: 0, margin: "2px 0", textAlign: "left",
+  fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)",
+};
+const chevronStyle: React.CSSProperties = { width: 10, display: "inline-block", fontSize: 9 };
+
+const COLLAPSE_KEY = "context-consolidator:changedfiles:collapsed";
+
+function loadCollapsed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
 
 export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
   const mountedRef = useRef(true);
+
+  const toggleSection = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
+      } catch {
+        /* ignore persistence failures */
+      }
+      return next;
+    });
+  };
 
   const load = useCallback(async () => {
     try {
@@ -73,14 +105,19 @@ export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
         // the PR that's also edited locally appears in both).
         const staged = files.filter((f) => f.indexStatus);
         const unstaged = files.filter((f) => f.workStatus);
+        const bKey = `${repo.repoName}:branch`;
+        const sKey = `${repo.repoName}:staged`;
+        const lKey = `${repo.repoName}:local`;
         return (
           <div key={repo.repoName} style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{repo.repoName}</div>
 
             {branch.length > 0 && (
               <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", margin: "2px 0" }}>Branch Changes</div>
-                {branch.map((f) => (
+                <button style={headerBtnStyle} onClick={() => toggleSection(bKey)}>
+                  <span style={chevronStyle}>{collapsed.has(bKey) ? "▸" : "▾"}</span>Branch Changes
+                </button>
+                {!collapsed.has(bKey) && branch.map((f) => (
                   <div key={`b:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.commitStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus)}>{f.path}</button>
@@ -91,8 +128,10 @@ export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
 
             {staged.length > 0 && (
               <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", margin: "2px 0" }}>Staged Changes</div>
-                {staged.map((f) => (
+                <button style={headerBtnStyle} onClick={() => toggleSection(sKey)}>
+                  <span style={chevronStyle}>{collapsed.has(sKey) ? "▸" : "▾"}</span>Staged Changes
+                </button>
+                {!collapsed.has(sKey) && staged.map((f) => (
                   <div key={`s:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.indexStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.indexStatus)}>{f.path}</button>
@@ -104,8 +143,10 @@ export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
 
             {unstaged.length > 0 && (
               <div>
-                <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", margin: "2px 0" }}>Local Changes</div>
-                {unstaged.map((f) => (
+                <button style={headerBtnStyle} onClick={() => toggleSection(lKey)}>
+                  <span style={chevronStyle}>{collapsed.has(lKey) ? "▸" : "▾"}</span>Local Changes
+                </button>
+                {!collapsed.has(lKey) && unstaged.map((f) => (
                   <div key={`w:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.workStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus)}>{f.path}</button>
