@@ -528,6 +528,22 @@ func ensureWorktreesIgnored(baseDir string) error {
 // Returns nil, nil if no workspace exists.
 // Falls back to scanning registered local paths via git worktree list when no DB record exists,
 // and auto-persists any discovered worktree so future lookups are instant.
+// samePath reports whether two paths point at the same location, resolving
+// symlinks first. git worktree list returns canonical paths (e.g. /private/var
+// on macOS) while a registered repo path may be a symlink (e.g. /var), so a
+// plain string compare would wrongly treat the main checkout as a worktree.
+func samePath(p, q string) bool {
+	if p == q {
+		return true
+	}
+	rp, errP := filepath.EvalSymlinks(p)
+	rq, errQ := filepath.EvalSymlinks(q)
+	if errP == nil && errQ == nil {
+		return rp == rq
+	}
+	return filepath.Clean(p) == filepath.Clean(q)
+}
+
 func (a *App) FindWorkspaceForBranch(repoID, branch string) (*vcsstore.VCSWorkspace, error) {
 	// Fast path: DB record exists.
 	if ws, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, repoID, branch); err != nil || ws != nil {
@@ -544,7 +560,7 @@ func (a *App) FindWorkspaceForBranch(repoID, branch string) (*vcsstore.VCSWorksp
 			continue
 		}
 		for _, wt := range worktrees {
-			if wt.Branch != branch || wt.Path == rp.Path {
+			if wt.Branch != branch || samePath(wt.Path, rp.Path) {
 				continue
 			}
 			ws := &vcsstore.VCSWorkspace{
@@ -660,7 +676,7 @@ func (a *App) ensureWorktreeForBranch(repoID, branch string) (string, error) {
 	// Reuse an existing on-disk worktree for the branch if one is already present.
 	if existing, err := vcs.GitWorktreeList(baseDir); err == nil {
 		for _, wt := range existing {
-			if wt.Branch == branch && wt.Path != baseDir {
+			if wt.Branch == branch && !samePath(wt.Path, baseDir) {
 				_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
 					RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: wt.Path, Status: "active",
 				})
