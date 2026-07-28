@@ -66,14 +66,28 @@ export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
     <div style={{ overflowY: "auto", padding: "8px 10px" }}>
       {repos.map((repo) => {
         const files = repo.files ?? [];
+        // Branch (PR) changes vs the base branch — the full committed set, shown
+        // on top like GitHub. Read-only: nothing to stage/discard.
+        const branch = files.filter((f) => f.commitStatus);
+        // Local uncommitted changes (independent of the branch list — a file in
+        // the PR that's also edited locally appears in both).
         const staged = files.filter((f) => f.indexStatus);
         const unstaged = files.filter((f) => f.workStatus);
-        // Committed changes vs the base branch, with no pending working-tree edit
-        // — read-only (opening shows the diff vs base); nothing to stage/discard.
-        const branch = files.filter((f) => f.commitStatus && !f.indexStatus && !f.workStatus);
         return (
           <div key={repo.repoName} style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{repo.repoName}</div>
+
+            {branch.length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", margin: "2px 0" }}>Branch Changes</div>
+                {branch.map((f) => (
+                  <div key={`b:${f.path}`} style={rowStyle}>
+                    <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.commitStatus)}</span>
+                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus)}>{f.path}</button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {staged.length > 0 && (
               <div style={{ marginBottom: 6 }}>
@@ -90,25 +104,13 @@ export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
 
             {unstaged.length > 0 && (
               <div>
-                <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", margin: "2px 0" }}>Changes</div>
+                <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", margin: "2px 0" }}>Local Changes</div>
                 {unstaged.map((f) => (
                   <div key={`w:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.workStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus)}>{f.path}</button>
                     <button aria-label={`discard ${f.path}`} title="Discard" style={actionBtnStyle} onClick={() => onDiscard(repo.repoPath, f.path)}>↺</button>
                     <button aria-label={`stage ${f.path}`} title="Stage" style={actionBtnStyle} onClick={() => void act(StageFile, repo.repoPath, f.path)}>+</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {branch.length > 0 && (
-              <div>
-                <div style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", margin: "2px 0" }}>Branch Changes</div>
-                {branch.map((f) => (
-                  <div key={`b:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.commitStatus)}</span>
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus)}>{f.path}</button>
                   </div>
                 ))}
               </div>

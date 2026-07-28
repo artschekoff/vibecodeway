@@ -29,12 +29,31 @@ beforeEach(() => {
 });
 
 describe("ChangedFilesPanel", () => {
-  it("groups files into Staged Changes and Changes", async () => {
+  it("groups files into Staged Changes and Local Changes", async () => {
     render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Staged Changes")).toBeInTheDocument());
-    expect(screen.getByText("Changes")).toBeInTheDocument();
+    expect(screen.getByText("Local Changes")).toBeInTheDocument();
     expect(screen.getByText("staged.ts")).toBeInTheDocument();
     expect(screen.getByText("work.ts")).toBeInTheDocument();
+  });
+
+  it("shows a file that is both in the PR and edited locally in both groups", async () => {
+    GetContextChanges.mockResolvedValue([
+      {
+        repoName: "acme/api",
+        repoPath: "/r/api",
+        files: [
+          // Same path: one branch (PR) entry + one local working-tree entry.
+          { path: "a.ts", status: "modified", diff: "", indexStatus: "", workStatus: "", commitStatus: "modified" },
+          { path: "a.ts", status: "modified", diff: "", indexStatus: "", workStatus: "modified", commitStatus: "" },
+        ],
+      },
+    ]);
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Branch Changes")).toBeInTheDocument());
+    expect(screen.getByText("Local Changes")).toBeInTheDocument();
+    // a.ts appears once under each group.
+    expect(screen.getAllByText("a.ts")).toHaveLength(2);
   });
 
   it("opens the diff when a filename is clicked", async () => {

@@ -75,6 +75,43 @@ func TestRepoDiff_BranchVsBase(t *testing.T) {
 	assert.NotContains(t, byPath, "base.txt")
 }
 
+// A file that is part of the branch (committed vs base) AND has a local
+// uncommitted edit must appear in BOTH views: the branch-vs-base list (the PR
+// stays complete, GitHub-style) and the working-tree list (local changes). The
+// two are independent — no cross-group dedup.
+func TestRepoDiff_committedFileWithLocalEditAppearsInBothGroups(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("base\n"), 0o644))
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "base")
+
+	git(t, dir, "checkout", "-b", "feat")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("committed\n"), 0o644))
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "feat")
+	// Local uncommitted edit to a file that is already in the PR.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("locally edited\n"), 0o644))
+
+	changes, err := RepoDiff(dir)
+	require.NoError(t, err)
+
+	var hasBranch, hasLocal bool
+	for _, c := range changes {
+		if c.Path != "a.txt" {
+			continue
+		}
+		if c.CommitStatus != "" {
+			hasBranch = true
+		}
+		if c.WorkStatus != "" || c.IndexStatus != "" {
+			hasLocal = true
+		}
+	}
+	assert.True(t, hasBranch, "a.txt must stay in the branch-vs-base (PR) list")
+	assert.True(t, hasLocal, "a.txt must also appear as a local working-tree change")
+}
+
 func TestRepoDiff_IndexAndWorkStatus(t *testing.T) {
 	dir := t.TempDir()
 	git(t, dir, "init")

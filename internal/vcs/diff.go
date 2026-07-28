@@ -69,8 +69,10 @@ func splitStatus(code string) (indexStatus, workStatus string) {
 //     checked-out worktree, where the working tree is clean and git status is
 //     empty.
 //
-// Working-tree entries win when a path appears in both (they carry the
-// stage/discard-able index/work status); branch-only files carry CommitStatus.
+// The two views are independent (no cross-group dedup): a file that is part of
+// the branch AND has a local uncommitted edit appears in both — once with
+// CommitStatus (the PR stays complete, GitHub-style) and once with
+// index/work status (the local change).
 func RepoDiff(repoPath string) ([]FileChange, error) {
 	// git status --porcelain gives the file list + codes.
 	out, err := exec.Command("git", "-C", repoPath, "status", "--porcelain").Output()
@@ -78,7 +80,6 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 		return nil, err
 	}
 	var changes []FileChange
-	seen := map[string]bool{}
 	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
 		if len(line) < 4 {
 			continue
@@ -102,7 +103,6 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 				diff = string(d)
 			}
 		}
-		seen[path] = true
 		changes = append(changes, FileChange{Path: path, Status: status, Diff: diff, IndexStatus: indexStatus, WorkStatus: workStatus})
 	}
 
@@ -115,12 +115,8 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 				if len(fields) < 2 {
 					continue
 				}
-				code := fields[0]                // e.g. "M", "A", "D", "R100"
-				path := fields[len(fields)-1]    // rename: old \t new — take new
-				if seen[path] {
-					continue // already shown as a working-tree change
-				}
-				seen[path] = true
+				code := fields[0]             // e.g. "M", "A", "D", "R100"
+				path := fields[len(fields)-1] // rename: old \t new — take new
 				word := statusLetterWord(code[0])
 				if word == "" {
 					word = "modified"
