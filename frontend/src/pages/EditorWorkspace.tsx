@@ -100,7 +100,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
             {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
           </select>
         )}
-        <ChangedFilesPanel contextId={contextId} onOpenFile={openFile} />
+        <ChangedFilesPanel contextId={contextId} onOpenFile={openFile} activeRepoPath={cwd} />
       </aside>
     </div>
   );

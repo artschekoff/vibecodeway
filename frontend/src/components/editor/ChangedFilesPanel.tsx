@@ -5,6 +5,9 @@ import { main } from "../../../wailsjs/go/models";
 type Props = {
   contextId: string;
   onOpenFile: (repoPath: string, repoName: string, path: string, status: string) => void;
+  // When set, show only the repo whose repoPath matches (follows the editor's
+  // repo selector). Unset => show all repos.
+  activeRepoPath?: string;
 };
 
 const POLL_MS = 2000;
@@ -38,7 +41,7 @@ function loadCollapsed(): Set<string> {
   }
 }
 
-export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
+export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
   const mountedRef = useRef(true);
@@ -90,13 +93,15 @@ export function ChangedFilesPanel({ contextId, onOpenFile }: Props) {
 
   const statusLetter = (s: string) => (s ? s.charAt(0).toUpperCase() : "");
 
-  if (repos.length === 0) {
+  const shown = activeRepoPath ? repos.filter((r) => r.repoPath === activeRepoPath) : repos;
+
+  if (shown.length === 0) {
     return <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 12 }}>No changes</div>;
   }
 
   return (
     <div style={{ overflowY: "auto", padding: "8px 10px" }}>
-      {repos.map((repo) => {
+      {shown.map((repo) => {
         const files = repo.files ?? [];
         // Branch (PR) changes vs the base branch — the full committed set, shown
         // on top like GitHub. Read-only: nothing to stage/discard.

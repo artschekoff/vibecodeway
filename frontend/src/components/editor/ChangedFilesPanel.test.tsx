@@ -57,6 +57,17 @@ describe("ChangedFilesPanel", () => {
     expect(screen.getAllByText("a.ts")).toHaveLength(2);
   });
 
+  it("shows only the active repo's files when activeRepoPath is set", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "api.ts", status: "modified", diff: "", indexStatus: "", workStatus: "modified" }] },
+      { repoName: "acme/rdbms", repoPath: "/r/rdbms", files: [{ path: "db.ts", status: "modified", diff: "", indexStatus: "", workStatus: "modified" }] },
+    ]);
+    render(<ChangedFilesPanel contextId="c1" activeRepoPath="/r/rdbms" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("db.ts")).toBeInTheDocument());
+    expect(screen.queryByText("api.ts")).not.toBeInTheDocument();
+    expect(screen.queryByText("acme/api")).not.toBeInTheDocument();
+  });
+
   it("collapses and expands a section when its header is clicked", async () => {
     render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
