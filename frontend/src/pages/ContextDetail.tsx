@@ -108,6 +108,7 @@ import { SolveWithAIModal } from "../components/SolveWithAIModal";
 import FileDiff from "../components/FileDiff";
 import { PRStatusBadge } from "../components/PRStatusBadge";
 import { OpenEditorPicker } from "../components/OpenEditorPicker";
+import { WorkspacePicker } from "../components/WorkspacePicker";
 import { useOpenContextEditor } from "../lib/useOpenContextEditor";
 
 // ── Task list helpers ────────────────────────────────────────────────────────
@@ -2587,6 +2588,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           error={editorOpener.error}
           loading={editorOpener.loading}
           onConfirm={(pathId, branch) => void editorOpener.confirmPick(pathId, branch)}
+          onCancel={editorOpener.cancel}
+        />
+      )}
+      {editorOpener.workspacePicker && (
+        <WorkspacePicker
+          worktrees={editorOpener.workspacePicker.worktrees}
+          onPick={(p) => editorOpener.confirmWorkspace(p)}
           onCancel={editorOpener.cancel}
         />
       )}
