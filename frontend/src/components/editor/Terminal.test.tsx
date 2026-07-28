@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const onDataHandlers: Array<(d: string) => void> = [];
 const writeSpy = vi.fn();
+const fitSpy = vi.fn();
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: vi.fn().mockImplementation(function () {
@@ -17,7 +18,19 @@ vi.mock("@xterm/xterm", () => ({
     };
   }),
 }));
-vi.mock("@xterm/addon-fit", () => ({ FitAddon: vi.fn().mockImplementation(function () { return { fit: vi.fn() }; }) }));
+vi.mock("@xterm/addon-fit", () => ({ FitAddon: vi.fn().mockImplementation(function () { return { fit: fitSpy }; }) }));
+
+// jsdom has no ResizeObserver; capture the callback so we can simulate a resize.
+let roCallback: ResizeObserverCallback | null = null;
+const observeSpy = vi.fn();
+const disconnectSpy = vi.fn();
+class ResizeObserverMock {
+  constructor(cb: ResizeObserverCallback) { roCallback = cb; }
+  observe = observeSpy;
+  unobserve = vi.fn();
+  disconnect = disconnectSpy;
+}
+globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 
 const { TerminalStart, TerminalWrite, TerminalClose, TerminalResize } = vi.hoisted(() => ({
   TerminalStart: vi.fn(), TerminalWrite: vi.fn(), TerminalClose: vi.fn(), TerminalResize: vi.fn(),
@@ -39,5 +52,22 @@ describe("Terminal", () => {
     await waitFor(() => expect(TerminalStart).toHaveBeenCalledWith("/repo/x"));
     onDataHandlers[0]?.("ls\n");
     expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "ls\n");
+  });
+
+  it("refits and resizes the PTY when its container resizes", async () => {
+    render(<Terminal cwd="/repo/x" />);
+    await waitFor(() => expect(TerminalStart).toHaveBeenCalled());
+    // Session established → initial resize sent.
+    await waitFor(() => expect(TerminalResize).toHaveBeenCalled());
+    expect(observeSpy).toHaveBeenCalled();
+
+    fitSpy.mockClear();
+    TerminalResize.mockClear();
+
+    // Simulate a pane-drag resize (no window 'resize' event fires for that).
+    roCallback?.([], {} as ResizeObserver);
+
+    expect(fitSpy).toHaveBeenCalled();
+    expect(TerminalResize).toHaveBeenCalledWith("sess-1", 80, 24);
   });
 });

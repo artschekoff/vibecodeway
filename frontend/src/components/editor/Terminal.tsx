@@ -44,8 +44,16 @@ export function Terminal({ cwd }: { cwd: string }) {
     };
     window.addEventListener("resize", onResize);
 
+    // Refit when the host element itself resizes — e.g. dragging the pane
+    // splitter, which changes the container height without firing a window
+    // 'resize' event. Without this the terminal keeps its old rows/cols and
+    // leaves empty space in the enlarged pane.
+    const resizeObserver = new ResizeObserver(() => onResize());
+    resizeObserver.observe(host);
+
     return () => {
       cancelled = true;
+      resizeObserver.disconnect();
       window.removeEventListener("resize", onResize);
       disposeInput.dispose();
       offData?.();
