@@ -40,6 +40,21 @@ describe("EditorPRInfo", () => {
     expect(BrowserOpenURL).toHaveBeenCalledWith("https://github.com/juna-health/juna-api/pull/349");
   });
 
+  it("shows only the selected repo's PR when activeRepoId is set", async () => {
+    const other = { ...pr, id: "pr2", repoId: "r2", title: "Other repo PR", url: "https://x/2" };
+    GetVCSPRsForContext.mockResolvedValue([pr, other]);
+    render(<EditorPRInfo contextId="ctx1" activeRepoId="r2" />);
+    await waitFor(() => expect(screen.getByText("Other repo PR")).toBeInTheDocument());
+    expect(screen.queryByText("Add note composer")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing when the selected repo has no PR", async () => {
+    GetVCSPRsForContext.mockResolvedValue([pr]);
+    const { container } = render(<EditorPRInfo contextId="ctx1" activeRepoId="no-such-repo" />);
+    await waitFor(() => expect(GetVCSPRsForContext).toHaveBeenCalled());
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("renders nothing when there are no linked PRs", async () => {
     GetVCSPRsForContext.mockResolvedValue([]);
     const { container } = render(<EditorPRInfo contextId="ctx1" />);

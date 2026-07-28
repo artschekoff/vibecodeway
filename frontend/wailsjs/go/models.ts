@@ -407,6 +407,7 @@ export namespace main {
 	    }
 	}
 	export class RepoChange {
+	    repoId: string;
 	    repoName: string;
 	    repoPath: string;
 	    files: vcs.FileChange[];
@@ -417,6 +418,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repoId = source["repoId"];
 	        this.repoName = source["repoName"];
 	        this.repoPath = source["repoPath"];
 	        this.files = this.convertValues(source["files"], vcs.FileChange);

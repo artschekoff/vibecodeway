@@ -55,6 +55,7 @@ func TestGetContextChanges_usesRepoPaths(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, changes, 1)
 	require.Equal(t, dir, changes[0].RepoPath)
+	require.Equal(t, repo.ID, changes[0].RepoID)
 	require.NotEmpty(t, changes[0].Files)
 }
 

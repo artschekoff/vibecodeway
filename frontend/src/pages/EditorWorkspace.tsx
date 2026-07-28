@@ -20,7 +20,7 @@ const TERMINAL_MAX = 900;
 const TERMINAL_DEFAULT = 260;
 
 export function EditorWorkspace({ contextId, contextKey, initialCwd }: { contextId: string; contextKey?: string; initialCwd?: string }) {
-  const [repoPaths, setRepoPaths] = useState<{ name: string; path: string }[]>([]);
+  const [repoPaths, setRepoPaths] = useState<{ id: string; name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
   const { getFiles, openEditorFile } = useEditorFiles();
   const { tabs, activeKey } = getFiles(contextId);
@@ -39,7 +39,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
       if (!active) return;
       const paths = (repos ?? [])
         .filter((r) => r.repoPath)
-        .map((r) => ({ name: r.repoName, path: r.repoPath }));
+        .map((r) => ({ id: r.repoId, name: r.repoName, path: r.repoPath }));
       setRepoPaths(paths);
       if (paths.length > 0) {
         const preferred = initialCwd && paths.some((p) => p.path === initialCwd) ? initialCwd : paths[0].path;
@@ -55,9 +55,10 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
   };
 
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
+  const activeRepoId = useMemo(() => repoPaths.find((r) => r.path === cwd)?.id, [repoPaths, cwd]);
 
   return (
-    <div style={{ display: "flex", height: "100%" }}>
+    <div style={{ display: "flex", height: "100%", flex: 1, minWidth: 0, width: "100%" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           {active ? (
@@ -94,7 +95,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
             </div>
           </div>
         )}
-        <EditorPRInfo contextId={contextId} />
+        <EditorPRInfo contextId={contextId} activeRepoId={activeRepoId} />
         {repoPaths.length > 1 && (
           <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
             {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}

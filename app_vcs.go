@@ -1122,6 +1122,7 @@ func (a *App) autoLinkReposOnce(contextID string) (int, error) {
 
 // RepoChange is the working-tree diff for one repo attached to a context.
 type RepoChange struct {
+	RepoID   string           `json:"repoId"`
 	RepoName string           `json:"repoName"` // owner/name
 	RepoPath string           `json:"repoPath"`
 	Files    []vcs.FileChange `json:"files"`
@@ -1211,7 +1212,7 @@ func (a *App) GetContextChanges(contextID string) ([]RepoChange, error) {
 			if info, serr := os.Stat(path); serr != nil || !info.IsDir() {
 				continue
 			}
-			repos = append(repos, RepoChange{RepoName: repo.Owner + "/" + repo.Name, RepoPath: path})
+			repos = append(repos, RepoChange{RepoID: b.RepoID, RepoName: repo.Owner + "/" + repo.Name, RepoPath: path})
 			break // one (first existing) path per repo
 		}
 	}
