@@ -6,6 +6,7 @@ import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { nextPaneSize, readStoredPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
+import { editorModeForKey, editorModeLabel } from "../lib/contextMode";
 
 const SIDEBAR_KEY = "context-consolidator:editor:sidebarWidth";
 const SIDEBAR_MIN = 180;
@@ -17,7 +18,7 @@ const TERMINAL_MIN = 90;
 const TERMINAL_MAX = 900;
 const TERMINAL_DEFAULT = 260;
 
-export function EditorWorkspace({ contextId }: { contextId: string }) {
+export function EditorWorkspace({ contextId, contextKey }: { contextId: string; contextKey?: string }) {
   const [repoPaths, setRepoPaths] = useState<{ name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
   const { getFiles, openEditorFile } = useEditorFiles();
@@ -76,6 +77,19 @@ export function EditorWorkspace({ contextId }: { contextId: string }) {
         onResize={(dx) => setSidebarWidth((w) => nextPaneSize(w, -dx, SIDEBAR_MIN, SIDEBAR_MAX))}
       />
       <aside style={{ width: sidebarWidth, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        {contextKey && (
+          <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+            <div
+              title={contextKey}
+              style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              {contextKey}
+            </div>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginTop: 2 }}>
+              {editorModeLabel(editorModeForKey(contextKey))}
+            </div>
+          </div>
+        )}
         {repoPaths.length > 1 && (
           <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
             {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}

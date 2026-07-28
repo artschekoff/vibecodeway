@@ -34,4 +34,24 @@ describe("EditorWorkspace", () => {
     fireEvent.click(screen.getByText("open-a"));
     await waitFor(() => expect(screen.getByTestId("diff")).toHaveTextContent("src/a.ts"));
   });
+
+  it("shows the context key and Context Editing mode in the header", async () => {
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" contextKey="JH-3940" />
+      </EditorFilesProvider>
+    );
+    await waitFor(() => expect(screen.getByText("JH-3940")).toBeInTheDocument());
+    expect(screen.getByText("Context Editing")).toBeInTheDocument();
+  });
+
+  it("shows PR Review mode for a PR-review context key", async () => {
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" contextKey="juna-health/juna-api#4521" />
+      </EditorFilesProvider>
+    );
+    await waitFor(() => expect(screen.getByText("juna-health/juna-api#4521")).toBeInTheDocument());
+    expect(screen.getByText("PR Review")).toBeInTheDocument();
+  });
 });

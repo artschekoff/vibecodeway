@@ -61,7 +61,7 @@ function TabContent() {
     return <ContextDetail contextId={activeTab.contextId!} tabId={activeTab.id} />;
   }
   if (activeTab.type === "editor") {
-    return <EditorWorkspace contextId={activeTab.contextId!} />;
+    return <EditorWorkspace contextId={activeTab.contextId!} contextKey={activeTab.contextKey} />;
   }
   return null;
 }
