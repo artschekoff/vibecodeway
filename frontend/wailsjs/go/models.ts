@@ -314,8 +314,27 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class EditorWorktree {
+	    repoId: string;
+	    repoName: string;
+	    branch: string;
+	    worktreePath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EditorWorktree(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repoId = source["repoId"];
+	        this.repoName = source["repoName"];
+	        this.branch = source["branch"];
+	        this.worktreePath = source["worktreePath"];
+	    }
+	}
 	export class ContextEditorPrep {
 	    ready: boolean;
+	    worktrees: EditorWorktree[];
 	    choices: EditorRepoChoice[];
 	
 	    static createFrom(source: any = {}) {
@@ -325,6 +344,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ready = source["ready"];
+	        this.worktrees = this.convertValues(source["worktrees"], EditorWorktree);
 	        this.choices = this.convertValues(source["choices"], EditorRepoChoice);
 	    }
 	
@@ -346,6 +366,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	
 	export class MatchedBranch {
 	    platform: string;

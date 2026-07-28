@@ -698,22 +698,14 @@ func (a *App) ensureWorktreeForBranch(repoID, branch string) (string, error) {
 // attached to contextID and returns the first worktree path (used to open a
 // single terminal). Per-repo failures are logged and skipped.
 func (a *App) ensureContextWorkspaces(contextID string) (string, error) {
-	branches, err := a.ListVCSBranches(contextID)
+	wts, err := a.contextWorktrees(contextID)
 	if err != nil {
-		return "", fmt.Errorf("list vcs branches: %w", err)
+		return "", err
 	}
-	firstWorktreePath := ""
-	for _, b := range branches {
-		wt, werr := a.ensureWorktreeForBranch(b.RepoID, b.Branch)
-		if werr != nil {
-			a.logger.Sugar().Warnf("ensureContextWorkspaces: worktree for repo %s branch %s failed: %s", b.RepoID, b.Branch, werr.Error())
-			continue
-		}
-		if wt != "" && firstWorktreePath == "" {
-			firstWorktreePath = wt
-		}
+	if len(wts) == 0 {
+		return "", nil
 	}
-	return firstWorktreePath, nil
+	return wts[0].WorktreePath, nil
 }
 
 // OpenRepoPathTerminal opens the configured terminal at the given repo local path.
