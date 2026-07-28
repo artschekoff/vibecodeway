@@ -4,6 +4,7 @@ import { Terminal } from "../components/editor/Terminal";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
+import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { nextPaneSize, readStoredPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
 import { editorModeForKey, editorModeLabel } from "../lib/contextMode";
@@ -90,6 +91,7 @@ export function EditorWorkspace({ contextId, contextKey }: { contextId: string; 
             </div>
           </div>
         )}
+        <EditorPRInfo contextId={contextId} />
         {repoPaths.length > 1 && (
           <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
             {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}

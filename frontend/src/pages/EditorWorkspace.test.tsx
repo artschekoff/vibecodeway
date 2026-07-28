@@ -10,6 +10,9 @@ vi.mock("../components/editor/ChangedFilesPanel", () => ({
     <button onClick={() => onOpenFile("/r/api", "acme/api", "src/a.ts", "modified")}>open-a</button>
   ),
 }));
+vi.mock("../components/editor/EditorPRInfo", () => ({
+  EditorPRInfo: ({ contextId }: { contextId: string }) => <div data-testid="pr-info">{contextId}</div>,
+}));
 
 const { GetContextChanges } = vi.hoisted(() => ({ GetContextChanges: vi.fn() }));
 vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges }));
@@ -53,5 +56,14 @@ describe("EditorWorkspace", () => {
     );
     await waitFor(() => expect(screen.getByText("juna-health/juna-api#4521")).toBeInTheDocument());
     expect(screen.getByText("PR Review")).toBeInTheDocument();
+  });
+
+  it("renders the PR info block for the context", async () => {
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" contextKey="juna-health/juna-api#349" />
+      </EditorFilesProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1"));
   });
 });
