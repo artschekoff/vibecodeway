@@ -1183,8 +1183,14 @@ func (a *App) GetContextChanges(contextID string) ([]RepoChange, error) {
 		if rerr != nil {
 			continue
 		}
-		// Paths live in vcs_repo_paths; local_path is a legacy fallback.
+		// Prefer the branch's worktree (e.g. the PR checkout from "Review with
+		// AI") so the editor's terminal, diff, and changed-files panel operate on
+		// it rather than the repo's main checkout.
 		var candidates []string
+		if ws, werr := a.vcsStore.Workspaces.FindByBranch(a.ctx, b.RepoID, b.Branch); werr == nil && ws != nil && ws.WorktreePath != "" {
+			candidates = append(candidates, ws.WorktreePath)
+		}
+		// Paths live in vcs_repo_paths; local_path is a legacy fallback.
 		if paths, perr := a.vcsStore.RepoPaths.ListForRepo(a.ctx, b.RepoID); perr == nil {
 			for _, p := range paths {
 				candidates = append(candidates, p.Path)
