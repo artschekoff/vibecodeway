@@ -43,6 +43,31 @@ func TestReadRepoFileHead_committedAndUntracked(t *testing.T) {
 	require.Equal(t, "", untrackedHead)
 }
 
+func TestReadRepoFileBase_returnsBaseBranchVersion(t *testing.T) {
+	dir := gitInitRepo(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("base\n"), 0o644))
+	require.NoError(t, exec.Command("git", "-C", dir, "add", "a.txt").Run())
+	require.NoError(t, exec.Command("git", "-C", dir, "commit", "-m", "base").Run())
+	require.NoError(t, exec.Command("git", "-C", dir, "branch", "-M", "main").Run())
+
+	// Feature branch commits a change; working tree is clean.
+	require.NoError(t, exec.Command("git", "-C", dir, "checkout", "-b", "feat").Run())
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("feature\n"), 0o644))
+	require.NoError(t, exec.Command("git", "-C", dir, "add", "a.txt").Run())
+	require.NoError(t, exec.Command("git", "-C", dir, "commit", "-m", "feat").Run())
+
+	app := &App{}
+	// Base version (main), not HEAD — the diff view compares against this.
+	base, err := app.ReadRepoFileBase(dir, "a.txt")
+	require.NoError(t, err)
+	require.Equal(t, "base\n", base)
+
+	// HEAD still reflects the committed feature version.
+	head, err := app.ReadRepoFileHead(dir, "a.txt")
+	require.NoError(t, err)
+	require.Equal(t, "feature\n", head)
+}
+
 func TestSaveRepoFile(t *testing.T) {
 	dir := gitInitRepo(t)
 	app := &App{}

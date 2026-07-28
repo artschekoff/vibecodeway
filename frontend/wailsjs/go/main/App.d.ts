@@ -112,6 +112,8 @@ export function DismissPicker():Promise<void>;
 
 export function DismissReviewRequest(arg1:string):Promise<void>;
 
+export function EnsureContextEditorWorkspace(arg1:string):Promise<main.ContextEditorPrep>;
+
 export function FetchPruneRepoPath(arg1:string):Promise<void>;
 
 export function FindWorkspaceForBranch(arg1:string,arg2:string):Promise<vcsstore.VCSWorkspace>;
@@ -287,6 +289,8 @@ export function PreviewSlackDMs(arg1:string,arg2:string):Promise<string>;
 export function QuickAttachText(arg1:string,arg2:string):Promise<store.ContextText>;
 
 export function ReadRepoFile(arg1:string,arg2:string):Promise<string>;
+
+export function ReadRepoFileBase(arg1:string,arg2:string):Promise<string>;
 
 export function ReadRepoFileHead(arg1:string,arg2:string):Promise<string>;
 

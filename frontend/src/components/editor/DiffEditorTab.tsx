@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
-import { ReadRepoFile, ReadRepoFileHead, SaveRepoFile } from "../../../wailsjs/go/main/App";
+import { ReadRepoFile, ReadRepoFileBase, SaveRepoFile } from "../../../wailsjs/go/main/App";
 import { setupMonaco } from "../../lib/monacoSetup";
 
 type ModifiedGetter = { getModifiedEditor: () => { getValue: () => string } };
@@ -28,7 +28,7 @@ export function DiffEditorTab({
 
   useEffect(() => {
     let active = true;
-    void Promise.all([ReadRepoFileHead(repoPath, path), ReadRepoFile(repoPath, path)])
+    void Promise.all([ReadRepoFileBase(repoPath, path), ReadRepoFile(repoPath, path)])
       .then(([head, work]) => {
         if (!active) return;
         setOriginal(head);

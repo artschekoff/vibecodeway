@@ -11,16 +11,16 @@ vi.mock("@monaco-editor/react", () => ({
   },
 }));
 
-const { ReadRepoFile, ReadRepoFileHead, SaveRepoFile } = vi.hoisted(() => ({
-  ReadRepoFile: vi.fn(), ReadRepoFileHead: vi.fn(), SaveRepoFile: vi.fn(),
+const { ReadRepoFile, ReadRepoFileBase, SaveRepoFile } = vi.hoisted(() => ({
+  ReadRepoFile: vi.fn(), ReadRepoFileBase: vi.fn(), SaveRepoFile: vi.fn(),
 }));
-vi.mock("../../../wailsjs/go/main/App", () => ({ ReadRepoFile, ReadRepoFileHead, SaveRepoFile }));
+vi.mock("../../../wailsjs/go/main/App", () => ({ ReadRepoFile, ReadRepoFileBase, SaveRepoFile }));
 
 import { DiffEditorTab } from "./DiffEditorTab";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  ReadRepoFileHead.mockResolvedValue("old\n");
+  ReadRepoFileBase.mockResolvedValue("old\n");
   ReadRepoFile.mockResolvedValue("new\n");
   SaveRepoFile.mockResolvedValue(undefined);
 });
@@ -31,7 +31,7 @@ describe("DiffEditorTab", () => {
     render(<DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={onSaved} />);
 
     await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
-    expect(ReadRepoFileHead).toHaveBeenCalledWith("/r/api", "src/a.ts");
+    expect(ReadRepoFileBase).toHaveBeenCalledWith("/r/api", "src/a.ts");
     expect(ReadRepoFile).toHaveBeenCalledWith("/r/api", "src/a.ts");
 
     // Simulate Monaco mounting with an editor whose modified model has edits.

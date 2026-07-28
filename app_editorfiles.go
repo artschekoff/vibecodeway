@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/artschekoff/context-consolidator/internal/vcs"
 )
 
 // safeJoin resolves path relative to repoPath and guarantees the result stays
@@ -83,6 +85,27 @@ func (a *App) ReadRepoFileHead(repoPath, path string) (string, error) {
 	out, err := exec.Command("git", "-C", repoPath, "show", "HEAD:"+path).Output()
 	if err != nil {
 		// Not in HEAD (new/untracked/added) -> empty original for the diff.
+		return "", nil
+	}
+	return string(out), nil
+}
+
+// ReadRepoFileBase returns the file content at the branch's base (the merge-base
+// with the repo's default branch), so the diff view shows the branch's full
+// change — committed + uncommitted — not just uncommitted edits vs HEAD. When no
+// base can be determined (e.g. the checkout sits on the default branch), it
+// falls back to the HEAD content, matching ReadRepoFileHead. Not present at the
+// base (a file the branch added) -> ("", nil), an empty original for the diff.
+func (a *App) ReadRepoFileBase(repoPath, path string) (string, error) {
+	if _, err := safeJoin(repoPath, path); err != nil {
+		return "", nil
+	}
+	ref := "HEAD"
+	if mb := vcs.MergeBaseAgainstDefault(repoPath); mb != "" {
+		ref = mb
+	}
+	out, err := exec.Command("git", "-C", repoPath, "show", ref+":"+path).Output()
+	if err != nil {
 		return "", nil
 	}
 	return string(out), nil

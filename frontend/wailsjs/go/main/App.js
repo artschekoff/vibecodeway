@@ -206,6 +206,10 @@ export function DismissReviewRequest(arg1) {
   return window['go']['main']['App']['DismissReviewRequest'](arg1);
 }
 
+export function EnsureContextEditorWorkspace(arg1) {
+  return window['go']['main']['App']['EnsureContextEditorWorkspace'](arg1);
+}
+
 export function FetchPruneRepoPath(arg1) {
   return window['go']['main']['App']['FetchPruneRepoPath'](arg1);
 }
@@ -556,6 +560,10 @@ export function QuickAttachText(arg1, arg2) {
 
 export function ReadRepoFile(arg1, arg2) {
   return window['go']['main']['App']['ReadRepoFile'](arg1, arg2);
+}
+
+export function ReadRepoFileBase(arg1, arg2) {
+  return window['go']['main']['App']['ReadRepoFileBase'](arg1, arg2);
 }
 
 export function ReadRepoFileHead(arg1, arg2) {

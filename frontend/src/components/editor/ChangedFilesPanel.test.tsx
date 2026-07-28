@@ -67,4 +67,24 @@ describe("ChangedFilesPanel", () => {
     await waitFor(() => expect(DiscardFile).toHaveBeenCalledWith("/r/api", "work.ts"));
     confirmSpy.mockRestore();
   });
+
+  it("shows committed branch changes read-only (no stage/discard)", async () => {
+    GetContextChanges.mockResolvedValue([
+      {
+        repoName: "acme/api",
+        repoPath: "/r/api",
+        files: [
+          { path: "feature.ts", status: "added", diff: "", indexStatus: "", workStatus: "", commitStatus: "added" },
+        ],
+      },
+    ]);
+    const onOpenFile = vi.fn();
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={onOpenFile} />);
+    await waitFor(() => expect(screen.getByText("Branch Changes")).toBeInTheDocument());
+    // Read-only: no stage/discard actions for a committed-only file.
+    expect(screen.queryByLabelText("stage feature.ts")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("discard feature.ts")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("feature.ts"));
+    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "feature.ts", "added");
+  });
 });

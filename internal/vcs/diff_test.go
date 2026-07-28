@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,6 +40,39 @@ func TestRepoDiff(t *testing.T) {
 	assert.Contains(t, byPath["a.txt"].Diff, "+two")
 	require.Contains(t, byPath, "b.txt")
 	assert.Equal(t, "untracked", byPath["b.txt"].Status)
+}
+
+// A worktree/checkout of a feature branch has a clean working tree, so
+// `git status` is empty — but the branch's committed changes vs the base branch
+// must still surface in the panel. RepoDiff must include branch-vs-base commits.
+func TestRepoDiff_BranchVsBase(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "base.txt"), []byte("base\n"), 0o644))
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "base")
+
+	// Feature branch with a committed change; working tree stays clean.
+	git(t, dir, "checkout", "-b", "feat")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("feature\n"), 0o644))
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "add feature")
+
+	// Sanity: working tree is clean, so the old status-only behavior sees nothing.
+	status, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	require.NoError(t, err)
+	require.Empty(t, strings.TrimSpace(string(status)), "working tree must be clean for this test")
+
+	changes, err := RepoDiff(dir)
+	require.NoError(t, err)
+	byPath := map[string]FileChange{}
+	for _, c := range changes {
+		byPath[c.Path] = c
+	}
+	require.Contains(t, byPath, "feature.txt", "branch's committed file must appear vs base")
+	assert.Equal(t, "added", byPath["feature.txt"].CommitStatus)
+	// base.txt is unchanged vs base — must NOT appear.
+	assert.NotContains(t, byPath, "base.txt")
 }
 
 func TestRepoDiff_IndexAndWorkStatus(t *testing.T) {
