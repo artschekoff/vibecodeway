@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
+import { ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Code, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -106,6 +106,8 @@ import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import CheckoutLogModal from "../components/CheckoutLogModal";
 import { SolveWithAIModal } from "../components/SolveWithAIModal";
 import FileDiff from "../components/FileDiff";
+import { OpenEditorPicker } from "../components/OpenEditorPicker";
+import { useOpenContextEditor } from "../lib/useOpenContextEditor";
 
 // ── Task list helpers ────────────────────────────────────────────────────────
 
@@ -500,6 +502,7 @@ function getAvatarColor(name: string): string {
 export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextDetailProps) {
   const id = contextId;
   const { closeTab, navigateBack, openContextTab, openEditorTab } = useTabContext();
+  const editorOpener = useOpenContextEditor(openEditorTab);
   const progress = useProgress();
   const { ensurePassphrase } = usePassphrase();
   const [detail, setDetail] = useState<service.ContextDetail | null>(null);
@@ -1742,6 +1745,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             <Bot size={16} /> Solve with AI
           </button>
           <button
+            className="btn-secondary"
+            onClick={() => void editorOpener.open(contextId, context.key)}
+            disabled={editorOpener.loading}
+            title="Open the context's workspace in the editor"
+          >
+            <Code size={16} /> Open Editor
+          </button>
+          <button
             className="btn-primary"
             onClick={() => void handleRefresh()}
             disabled={refreshing}
@@ -2613,8 +2624,23 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         <SolveWithAIModal
           contextId={contextId}
           onClose={() => setSolveOpen(false)}
-          onOpenEditor={() => openEditorTab(contextId, context.key)}
+          onOpenEditor={() => void editorOpener.open(contextId, context.key)}
         />
+      )}
+      {editorOpener.picker && (
+        <OpenEditorPicker
+          choices={editorOpener.picker.choices}
+          error={editorOpener.error}
+          loading={editorOpener.loading}
+          onConfirm={(pathId, branch) => void editorOpener.confirmPick(pathId, branch)}
+          onCancel={editorOpener.cancel}
+        />
+      )}
+      {editorOpener.error && !editorOpener.picker && (
+        <div style={{ position: "fixed", bottom: 16, right: 16, background: "var(--surface)", border: "1px solid #dc2626", color: "#dc2626", padding: "8px 12px", borderRadius: 6, fontSize: 12, zIndex: 60 }}>
+          {editorOpener.error}
+          <button aria-label="Dismiss" onClick={() => editorOpener.setError(null)} style={{ marginLeft: 8, background: "none", border: "none", color: "inherit", cursor: "pointer" }}>×</button>
+        </div>
       )}
       {reasoningGraphFor && (() => {
         const pa = personAssignments.find(p => p.id === reasoningGraphFor);
