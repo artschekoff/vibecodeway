@@ -19,7 +19,7 @@ const TERMINAL_MIN = 90;
 const TERMINAL_MAX = 900;
 const TERMINAL_DEFAULT = 260;
 
-export function EditorWorkspace({ contextId, contextKey }: { contextId: string; contextKey?: string }) {
+export function EditorWorkspace({ contextId, contextKey, initialCwd }: { contextId: string; contextKey?: string; initialCwd?: string }) {
   const [repoPaths, setRepoPaths] = useState<{ name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
   const { getFiles, openEditorFile } = useEditorFiles();
@@ -41,7 +41,10 @@ export function EditorWorkspace({ contextId, contextKey }: { contextId: string; 
         .filter((r) => r.repoPath)
         .map((r) => ({ name: r.repoName, path: r.repoPath }));
       setRepoPaths(paths);
-      if (paths.length > 0) setCwd((prev) => prev || paths[0].path);
+      if (paths.length > 0) {
+        const preferred = initialCwd && paths.some((p) => p.path === initialCwd) ? initialCwd : paths[0].path;
+        setCwd((prev) => prev || preferred);
+      }
     });
     return () => { active = false; };
   }, [contextId]);

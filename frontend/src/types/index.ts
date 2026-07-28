@@ -643,6 +643,7 @@ export interface Tab {
   orgName?: string;    // org display name; stored on context tabs for fallback org-tab creation
   contextId?: string;  // present when type === "context"
   contextKey?: string; // raw context key without org prefix; used for display in TabItem
+  initialCwd?: string;  // editor tab: worktree path to open the terminal in initially
   title: string;
   pinned: boolean;
 }

@@ -66,4 +66,18 @@ describe("EditorWorkspace", () => {
     );
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1"));
   });
+
+  it("opens the terminal at initialCwd when provided", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [] },
+      { repoName: "acme/rdbms", repoPath: "/r/rdbms", files: [] },
+    ]);
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" initialCwd="/r/rdbms" />
+      </EditorFilesProvider>
+    );
+    // Terminal mock renders its cwd as text.
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/rdbms"));
+  });
 });

@@ -52,7 +52,7 @@ export function TabContent() {
     <>
       {editorTabs.map((t) => (
         <div key={t.id} style={{ display: t.id === activeTabId ? "flex" : "none", height: "100%", minHeight: 0 }}>
-          <EditorWorkspace contextId={t.contextId!} contextKey={t.contextKey} />
+          <EditorWorkspace contextId={t.contextId!} contextKey={t.contextKey} initialCwd={t.initialCwd} />
         </div>
       ))}
       {activeTab.type !== "editor" && <NonEditorContent tab={activeTab} />}
