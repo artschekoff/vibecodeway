@@ -201,6 +201,18 @@ func (a *App) ListRepoBranches(platform, ownerRepo string) ([]string, error) {
 
 // GetVCSPRsForContext returns stored PRs (with comments) for a context.
 // PRs are refreshed via the existing RefreshContext flow.
+// RefreshContextPRs re-syncs pull requests for the context's registered VCS
+// branches from the remote (gh pr list --head <branch>) and returns the fresh
+// list. Unlike RefreshContext (which also re-hits Jira/Slack and swallows VCS
+// warnings), this is PR-only and surfaces the sync error to the caller so the
+// editor can show it instead of silently rendering nothing.
+func (a *App) RefreshContextPRs(contextID string) ([]vcsstore.PullRequest, error) {
+	if _, err := a.vcsSvc.Refresh(a.ctx, contextID); err != nil {
+		return nil, fmt.Errorf("refresh PRs for context: %w", err)
+	}
+	return a.GetVCSPRsForContext(contextID)
+}
+
 func (a *App) GetVCSPRsForContext(contextID string) ([]vcsstore.PullRequest, error) {
 	prs, err := a.vcsStore.PullRequests.ListPRsForContext(a.ctx, contextID)
 	if err != nil {
@@ -293,6 +305,16 @@ func (a *App) RefreshPendingReviews() error {
 // DismissReviewRequest hides a "waiting for author" item from the Code Reviews page.
 func (a *App) DismissReviewRequest(id string) error {
 	return a.vcsStore.ReviewRequests.DismissReviewRequest(a.ctx, id)
+}
+
+// MarkReviewRequestViewed marks a single Code-Reviews item as seen (clears its "new" dot).
+func (a *App) MarkReviewRequestViewed(id string) error {
+	return a.vcsStore.ReviewRequests.MarkReviewRequestViewed(a.ctx, id)
+}
+
+// MarkAllReviewRequestsViewed marks every pending Code-Reviews item as seen.
+func (a *App) MarkAllReviewRequestsViewed() error {
+	return a.vcsStore.ReviewRequests.MarkAllReviewRequestsViewed(a.ctx)
 }
 
 // --- Repo Local Path ---

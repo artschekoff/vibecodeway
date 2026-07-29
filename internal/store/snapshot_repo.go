@@ -170,6 +170,34 @@ func (s *Store) OverrideCurrentStep(ctx context.Context, contextID, description 
 	return nil
 }
 
+// FlagNeedsAttention sets a context's status to needs_attention and records a
+// status-log entry with `reason` — but only on a real transition (the previous
+// status was something else), so repeated sync notifications don't spam the log.
+// Source is "system". This is what lets the UI show WHY a context needs
+// attention (auto-flips previously recorded no reason).
+func (s *Store) FlagNeedsAttention(ctx context.Context, contextID, reason string) error {
+	var prev string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT status FROM context_snapshots WHERE context_id = ?`, contextID).Scan(&prev)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("read snapshot status: %w", err)
+	}
+	if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
+		return err
+	}
+	if prev == "needs_attention" {
+		return nil // already flagged — keep the original reason
+	}
+	var prevID *string
+	if latest, lerr := s.GetLatestStatusLogEntry(ctx, contextID); lerr == nil && latest != nil {
+		prevID = &latest.ID
+	}
+	if _, err := s.AppendStatusLog(ctx, contextID, "needs_attention", reason, "system", prevID); err != nil {
+		return fmt.Errorf("append status log: %w", err)
+	}
+	return nil
+}
+
 // SetSnapshotStatus updates only the status field on a context snapshot.
 // Creates a minimal snapshot row if none exists yet.
 func (s *Store) SetSnapshotStatus(ctx context.Context, contextID, slug string) error {

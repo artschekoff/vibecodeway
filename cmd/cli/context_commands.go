@@ -12,11 +12,6 @@ func newContextListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context-list",
 		Short: "List contexts",
-		Long: `List active contexts with their UUID, key, status, and item counts.
-
-Output: JSON array of context objects.`,
-		Example: `  context-consolidator-cli context-list
-  context-consolidator-cli context-list --include-archived`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			env, err := openServiceEnv()
@@ -40,7 +35,12 @@ Output: JSON array of context objects.`,
 		},
 	}
 	cmd.Flags().BoolVar(&includeArchived, "include-archived", false, "Include archived contexts")
-	return cmd
+	return setAgentDocs(cmd,
+		"List contexts with UUID, key, status, and item counts. By default only active contexts are returned.",
+		"--include-archived bool (optional; default false)",
+		`[{"id":"uuid","key":"string","status":"active|archived","orgId":"string","issueCount":"int",...}]`,
+		`context-consolidator-cli context-list`,
+	)
 }
 
 func newContextCreateCmd() *cobra.Command {
@@ -48,12 +48,6 @@ func newContextCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context-create",
 		Short: "Create a new context",
-		Long: `Create a new context with a unique key tied to an organization.
-
-Required: --key, --org-id
-
-Output: JSON context object (id, key, orgId, status, createdAt, updatedAt).`,
-		Example: `  context-consolidator-cli context-create --key sprint-42 --org-id org-abc123`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if key == "" {
 				return fmt.Errorf("--key is required")
@@ -79,7 +73,12 @@ Output: JSON context object (id, key, orgId, status, createdAt, updatedAt).`,
 	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID the context belongs to")
 	_ = cmd.MarkFlagRequired("key")
 	_ = cmd.MarkFlagRequired("org-id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Create a new context with a unique key tied to an organization.",
+		"--key STRING (required)\n--org-id STRING (required)",
+		`{"id":"uuid","key":"string","orgId":"string","status":"active","createdAt":"RFC3339","updatedAt":"RFC3339"}`,
+		`context-consolidator-cli context-create --key sprint-42 --org-id org-abc123`,
+	)
 }
 
 func newContextUpdateCmd() *cobra.Command {
@@ -87,14 +86,6 @@ func newContextUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context-update",
 		Short: "Update a context",
-		Long: `Update the key or status of a context.
-
-Required: --id
-Optional: --key (new key), --status (active|archived)
-
-Output: JSON context object.`,
-		Example: `  context-consolidator-cli context-update --id <uuid> --key sprint-43
-  context-consolidator-cli context-update --id <uuid> --status archived`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -117,7 +108,12 @@ Output: JSON context object.`,
 	cmd.Flags().StringVar(&key, "key", "", "New context key")
 	cmd.Flags().StringVar(&status, "status", "", "New status (active|archived)")
 	_ = cmd.MarkFlagRequired("id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Update the key or status of a context.",
+		"--id UUID (required)\n--key STRING (optional)\n--status active|archived (optional)",
+		`{"id":"uuid","key":"string","status":"active|archived",...}`,
+		`context-consolidator-cli context-update --id <uuid> --key sprint-43`,
+	)
 }
 
 func newContextDeleteCmd() *cobra.Command {
@@ -125,13 +121,6 @@ func newContextDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context-delete",
 		Short: "Delete a context and all its data",
-		Long: `Permanently delete a context and all its associated data (Jira issues, Slack
-channels/threads/DMs, text entries, uploaded files). This cannot be undone.
-
-Required: --id
-
-Output: JSON {"deleted": "<uuid>"}.`,
-		Example: `  context-consolidator-cli context-delete --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -151,7 +140,12 @@ Output: JSON {"deleted": "<uuid>"}.`,
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Permanently delete a context and all associated data (Jira, Slack, text, files). Cannot be undone.",
+		"--id UUID (required)",
+		`{"deleted":"uuid"}`,
+		`context-consolidator-cli context-delete --id <uuid>`,
+	)
 }
 
 func newContextToggleStatusCmd() *cobra.Command {
@@ -159,12 +153,6 @@ func newContextToggleStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context-toggle-status",
 		Short: "Toggle a context between active and archived",
-		Long: `Toggle a context between active and archived status.
-
-Required: --id
-
-Output: JSON context object with updated status.`,
-		Example: `  context-consolidator-cli context-toggle-status --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -185,7 +173,12 @@ Output: JSON context object with updated status.`,
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Toggle a context between active and archived status.",
+		"--id UUID (required)",
+		`{"id":"uuid","key":"string","status":"active|archived",...}`,
+		`context-consolidator-cli context-toggle-status --id <uuid>`,
+	)
 }
 
 func newContextGetCmd() *cobra.Command {
@@ -193,13 +186,6 @@ func newContextGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context-get",
 		Short: "Get full context detail",
-		Long: `Get full context detail including Jira config, Slack config, and item counts.
-
-Provide either --context-id or --context-key.
-
-Output: JSON context detail object.`,
-		Example: `  context-consolidator-cli context-get --context-key sprint-42
-  context-consolidator-cli context-get --context-id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			env, err := openServiceEnv()
@@ -221,7 +207,12 @@ Output: JSON context detail object.`,
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	cmd.Flags().StringVar(&contextKey, "context-key", "", "Context key")
-	return cmd
+	return setAgentDocs(cmd,
+		"Get full context detail including Jira config, Slack config, issues, and item counts.",
+		"--context-id UUID | --context-key STRING (one required)",
+		`{"id":"uuid","key":"string","jiraConfig":{...},"slackConfig":{...},"issues":[...],...}`,
+		`context-consolidator-cli context-get --context-key sprint-42`,
+	)
 }
 
 func newSetJiraConfigCmd() *cobra.Command {
@@ -229,13 +220,6 @@ func newSetJiraConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set-jira-config",
 		Short: "Set the Jira JQL search query for a context",
-		Long: `Set the JQL search query used by jira-search to discover new issues for a context.
-
-Required: --context-id
-Optional: --search-query (JQL string; omit to clear)
-
-Output: JSON context object.`,
-		Example: `  context-consolidator-cli set-jira-config --context-id <uuid> --search-query "project = JH AND sprint = 42"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if contextID == "" {
 				return fmt.Errorf("--context-id is required")
@@ -257,7 +241,12 @@ Output: JSON context object.`,
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	cmd.Flags().StringVar(&searchQuery, "search-query", "", "JQL query")
 	_ = cmd.MarkFlagRequired("context-id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Set the JQL search query used by jira-search to discover new issues for a context. Omit --search-query to clear.",
+		"--context-id UUID (required)\n--search-query STRING (optional JQL; omit to clear)",
+		`{"id":"uuid","key":"string","jiraConfig":{"searchQuery":"string"},...}`,
+		`context-consolidator-cli set-jira-config --context-id <uuid> --search-query "project = JH AND sprint = 42"`,
+	)
 }
 
 func newSetSlackConfigCmd() *cobra.Command {
@@ -265,13 +254,6 @@ func newSetSlackConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set-slack-config",
 		Short: "Set the Slack config for a context",
-		Long: `Set the Slack workspace and default search query for a context.
-
-Required: --context-id
-Optional: --workspace (workspace name), --search-query (Slack search string)
-
-Output: JSON context object.`,
-		Example: `  context-consolidator-cli set-slack-config --context-id <uuid> --workspace myworkspace --search-query "in:general"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if contextID == "" {
 				return fmt.Errorf("--context-id is required")
@@ -294,5 +276,10 @@ Output: JSON context object.`,
 	cmd.Flags().StringVar(&workspace, "workspace", "", "Slack workspace name")
 	cmd.Flags().StringVar(&searchQuery, "search-query", "", "Slack search query")
 	_ = cmd.MarkFlagRequired("context-id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Set the Slack workspace and default search query for a context.",
+		"--context-id UUID (required)\n--workspace STRING (optional)\n--search-query STRING (optional)",
+		`{"id":"uuid","key":"string","slackConfig":{"workspace":"string","searchQuery":"string"},...}`,
+		`context-consolidator-cli set-slack-config --context-id <uuid> --workspace myworkspace --search-query "in:general"`,
+	)
 }

@@ -16,8 +16,15 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
   ),
 }));
 
-const { GetContextChanges } = vi.hoisted(() => ({ GetContextChanges: vi.fn() }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges }));
+const { GetContextChanges, RefreshContext, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite } = vi.hoisted(() => ({
+  GetContextChanges: vi.fn(),
+  RefreshContext: vi.fn(),
+  GetEditorSettings: vi.fn(),
+  SetEditorSettings: vi.fn(),
+  ListTerminalCommands: vi.fn().mockResolvedValue([]),
+  TerminalWrite: vi.fn(),
+}));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";
@@ -25,6 +32,9 @@ import { EditorFilesProvider } from "../contexts/EditorFilesContext";
 beforeEach(() => {
   vi.clearAllMocks();
   GetContextChanges.mockResolvedValue([{ repoName: "acme/api", repoPath: "/r/api", files: [] }]);
+  RefreshContext.mockResolvedValue({});
+  GetEditorSettings.mockResolvedValue("");
+  SetEditorSettings.mockResolvedValue(undefined);
 });
 
 describe("EditorWorkspace", () => {
@@ -48,6 +58,19 @@ describe("EditorWorkspace", () => {
     );
     await waitFor(() => expect(screen.getByText("JH-3940")).toBeInTheDocument());
     expect(screen.getByText("Context Editing")).toBeInTheDocument();
+  });
+
+  it("copies the context name to the clipboard", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" contextKey="JH-3940" />
+      </EditorFilesProvider>
+    );
+    await waitFor(() => expect(screen.getByText("JH-3940")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "copy context name" }));
+    expect(writeText).toHaveBeenCalledWith("JH-3940");
   });
 
   it("shows PR Review mode for a PR-review context key", async () => {
@@ -85,6 +108,21 @@ describe("EditorWorkspace", () => {
     expect(style).toContain("min-width: 0");
   });
 
+  it("refresh button re-asks GitHub then re-fetches the context", async () => {
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
+    GetContextChanges.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: /refresh from github/i }));
+
+    await waitFor(() => expect(RefreshContext).toHaveBeenCalledWith("c1"));
+    await waitFor(() => expect(GetContextChanges).toHaveBeenCalled());
+  });
+
   it("opens the terminal at initialCwd when provided", async () => {
     GetContextChanges.mockResolvedValue([
       { repoId: "id-api", repoName: "acme/api", repoPath: "/r/api", files: [] },
@@ -97,6 +135,26 @@ describe("EditorWorkspace", () => {
     );
     // Terminal mock renders its cwd as text.
     await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/rdbms"));
+  });
+
+  it("does not repo-filter the PR head in a single-repo context (PR review mode)", async () => {
+    // A PR-review context has exactly one repo and one PR. Narrowing the PR head
+    // by activeRepoId is meaningless here and, if the derived id fails to match
+    // the PR's repoId for any reason, it would hide the sole PR entirely
+    // (regression). With one repo we must pass no activeRepoId so the head always
+    // shows.
+    GetContextChanges.mockResolvedValue([
+      { repoId: "id-api", repoName: "acme/api", repoPath: "/r/api", files: [] },
+    ]);
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider>
+    );
+    // Wait until the repo has loaded (terminal is rooted at its path) so we assert
+    // the resolved state, not the transient empty-cwd first render.
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
+    expect(screen.getByTestId("pr-info")).toHaveTextContent("c1:none");
   });
 
   it("passes the selected repo's id to the PR head and updates it when the selector changes", async () => {
@@ -112,8 +170,10 @@ describe("EditorWorkspace", () => {
     // Defaults to the first repo's id.
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1:id-api"));
 
-    // Switching the repo selector re-targets the PR head at the new repo.
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "/r/rdbms" } });
+    // Switching the repo selector re-targets the PR head at the new repo. Scope
+    // to the repo <select> (the terminal command selector is also a combobox).
+    const repoSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="/r/rdbms"]'))!;
+    fireEvent.change(repoSelect, { target: { value: "/r/rdbms" } });
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1:id-rdbms"));
   });
 });

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { X, Pin, Globe, FileCode2, Settings, ScrollText, Sparkles, LayoutDashboard } from "lucide-react";
 import {
   DndContext,
@@ -15,6 +15,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useTabContext } from "../contexts/TabContext";
+import { useContextBadges, type ContextBadge } from "../hooks/useContextBadges";
+import { TabContextMenu } from "./TabContextMenu";
 import type { Tab } from "../types";
 
 const ORG_COLORS = [
@@ -71,8 +73,8 @@ function shortLabel(tab: Tab): string {
   return tab.contextKey ?? tab.title ?? "…";
 }
 
-function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; orgColor?: string }) {
-  const { setActiveTab, closeTab, pinTab, unpinTab } = useTabContext();
+function TabItem({ tab, isActive, orgColor, badge, onOpenMenu }: { tab: Tab; isActive: boolean; orgColor?: string; badge?: ContextBadge; onOpenMenu: (x: number, y: number, tab: Tab) => void }) {
+  const { setActiveTab, closeTab, unpinTab } = useTabContext();
   const {
     attributes,
     listeners,
@@ -102,14 +104,17 @@ function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; org
       onClick={() => setActiveTab(tab.id)}
       onContextMenu={(e) => {
         e.preventDefault();
-        tab.pinned ? unpinTab(tab.id) : pinTab(tab.id);
+        onOpenMenu(e.clientX, e.clientY, tab);
       }}
       title={tab.pinned ? `${label} (pinned)` : label}
       {...attributes}
       {...listeners}
     >
-      <div className="tab-item__icon">
+      <div className={`tab-item__icon${badge?.needsAttention ? " tab-item__icon--attention" : ""}`}>
         <TabIcon tab={tab} orgColor={orgColor} />
+        {badge && badge.unviewedCount > 0 && (
+          <span className="tab-item__badge">{badge.unviewedCount > 99 ? "99+" : badge.unviewedCount}</span>
+        )}
       </div>
       <span className={`tab-item__title${isOrg ? " tab-item__title--org" : ""}`}>
         {label}
@@ -140,7 +145,9 @@ function TabItem({ tab, isActive, orgColor }: { tab: Tab; isActive: boolean; org
 }
 
 export default function TabBar() {
-  const { tabs, activeTabId, reorderTabs } = useTabContext();
+  const { tabs, activeTabId, reorderTabs, forceCloseTab, closeAllTabs, pinTab, unpinTab } = useTabContext();
+  const badges = useContextBadges(activeTabId);
+  const [menu, setMenu] = useState<{ x: number; y: number; tab: Tab } | null>(null);
   const orgColorMap = useOrgColorMap(tabs);
   const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs]);
 
@@ -165,11 +172,29 @@ export default function TabBar() {
             const orgId = tab.type === "org" ? tab.orgId : tab.type === "context" ? tab.orgId : undefined;
             const orgColor = orgId ? orgColorMap.get(orgId) : undefined;
             return (
-              <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} orgColor={orgColor} />
+              <TabItem
+                key={tab.id}
+                tab={tab}
+                isActive={tab.id === activeTabId}
+                orgColor={orgColor}
+                badge={tab.contextId ? badges.get(tab.contextId) : undefined}
+                onOpenMenu={(x, y, tab) => setMenu({ x, y, tab })}
+              />
             );
           })}
         </div>
       </SortableContext>
+      {menu && (
+        <TabContextMenu
+          x={menu.x}
+          y={menu.y}
+          isPinned={!!menu.tab.pinned}
+          onClose={() => forceCloseTab(menu.tab.id)}
+          onCloseAll={() => closeAllTabs()}
+          onTogglePin={() => (menu.tab.pinned ? unpinTab(menu.tab.id) : pinTab(menu.tab.id))}
+          onDismiss={() => setMenu(null)}
+        />
+      )}
     </DndContext>
   );
 }

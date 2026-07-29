@@ -55,6 +55,14 @@ type PRData struct {
 	CIStatus  string
 	CreatedAt string
 	UpdatedAt string
+	Reviewers []ReviewerDecision `json:"reviewers,omitempty"`
+}
+
+// ReviewerDecision is one reviewer's latest effective decision on a PR.
+type ReviewerDecision struct {
+	Login       string `json:"login"`
+	State       string `json:"state"` // approved | changes_requested | commented
+	SubmittedAt string `json:"submittedAt"`
 }
 
 // CommentData contains a single comment fetched from a PR.

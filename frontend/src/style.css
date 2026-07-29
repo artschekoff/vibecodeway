@@ -5487,6 +5487,7 @@ select {
   border-radius: 8px;
   flex-shrink: 0;
   transition: background 0.15s;
+  position: relative;
 }
 
 .tab-item--active .tab-item__icon {
@@ -6576,4 +6577,31 @@ select {
 @keyframes typing-bounce {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
   30% { transform: translateY(-5px); opacity: 1; }
+}
+
+/* Inline git blame marker in the Monaco glyph margin (blame toggle). */
+.blame-glyph {
+  background: var(--accent, #2563eb);
+  width: 3px !important;
+  margin-left: 3px;
+  opacity: 0.6;
+}
+
+/* Sidebar context-plate badges: new-item count + needs-attention icon color. */
+.tab-item__icon--attention { color: var(--warning, #f0a500); }
+.tab-item__badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent, #58a6ff);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
 }

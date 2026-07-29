@@ -49,22 +49,22 @@ type ContextVCSBranch struct {
 
 // PullRequest represents a PR/MR stored for a branch.
 type PullRequest struct {
-	ID            string      `json:"id"`
-	RepoID        string      `json:"repoId"`
-	BranchID      string      `json:"branchId"`
-	PRNumber      int         `json:"prNumber"`
-	Title         string      `json:"title"`
-	Author        string      `json:"author"`
-	State         string      `json:"state"`
-	IsDraft       bool        `json:"isDraft"`
-	ReviewStatus  string      `json:"reviewStatus"`
-	URL           string      `json:"url"`
-	HeadBranch    string      `json:"headBranch"`
+	ID           string `json:"id"`
+	RepoID       string `json:"repoId"`
+	BranchID     string `json:"branchId"`
+	PRNumber     int    `json:"prNumber"`
+	Title        string `json:"title"`
+	Author       string `json:"author"`
+	State        string `json:"state"`
+	IsDraft      bool   `json:"isDraft"`
+	ReviewStatus string `json:"reviewStatus"`
+	URL          string `json:"url"`
+	HeadBranch   string `json:"headBranch"`
 	// Mergeable is the GitHub mergeability status: "MERGEABLE", "CONFLICTING", or "UNKNOWN".
 	Mergeable string `json:"mergeable"`
 	// CIStatus is the aggregated status-check rollup: "PENDING", "SUCCESS", "FAILURE", or "".
-	CIStatus    string      `json:"ciStatus"`
-	PRCreatedAt string      `json:"prCreatedAt"`
+	CIStatus      string      `json:"ciStatus"`
+	PRCreatedAt   string      `json:"prCreatedAt"`
 	PRUpdatedAt   string      `json:"prUpdatedAt"`
 	FetchedAt     string      `json:"fetchedAt"`
 	ViewedAt      *string     `json:"viewedAt"`
@@ -97,21 +97,30 @@ type PRComment struct {
 
 // ReviewRequest represents a PR where this user's review has been requested.
 type ReviewRequest struct {
-	ID           string  `json:"id"`
-	RepoID       string  `json:"repoId"`
-	PRNumber     int     `json:"prNumber"`
-	PRTitle      string  `json:"prTitle"`
-	PRAuthor     string  `json:"prAuthor"`
-	PRURL        string  `json:"prUrl"`
-	ReviewStatus string  `json:"reviewStatus"`
-	HeadBranch   string  `json:"headBranch"`
-	RequestedAt  string  `json:"requestedAt"`
-	FetchedAt    string  `json:"fetchedAt"`
+	ID           string `json:"id"`
+	RepoID       string `json:"repoId"`
+	PRNumber     int    `json:"prNumber"`
+	PRTitle      string `json:"prTitle"`
+	PRAuthor     string `json:"prAuthor"`
+	PRURL        string `json:"prUrl"`
+	ReviewStatus string `json:"reviewStatus"`
+	HeadBranch   string `json:"headBranch"`
+	RequestedAt  string `json:"requestedAt"`
+	FetchedAt    string `json:"fetchedAt"`
 	// ReviewedAt is set when the item disappears from GitHub's review-requested list
 	// (user submitted a review). NULL = still actively pending.
-	ReviewedAt  *string `json:"reviewedAt,omitempty"`
+	ReviewedAt *string `json:"reviewedAt,omitempty"`
 	// DismissedAt is set when the user manually dismisses a "waiting for author" item.
-	DismissedAt *string `json:"dismissedAt,omitempty"`
+	DismissedAt *string            `json:"dismissedAt,omitempty"`
+	ViewedAt    *string            `json:"viewedAt,omitempty"`
+	Reviewers   []ReviewerDecision `json:"reviewers,omitempty"`
+}
+
+// ReviewerDecision is one reviewer's latest decision on a PR.
+type ReviewerDecision struct {
+	Login       string `json:"login"`
+	State       string `json:"state"` // approved | changes_requested | commented
+	SubmittedAt string `json:"submittedAt"`
 }
 
 // VCSPlatformInfo describes a platform with its enabled flag.

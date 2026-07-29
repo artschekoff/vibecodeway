@@ -12,12 +12,6 @@ func newFileListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "file-list",
 		Short: "List uploaded files for a context",
-		Long: `List uploaded document files stored for a context.
-
-Required: --context-id
-
-Output: JSON array of file objects (id, name, fileType, isActive, createdAt, updatedAt).`,
-		Example: `  context-consolidator-cli file-list --context-id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if contextID == "" {
 				return fmt.Errorf("--context-id is required")
@@ -38,7 +32,12 @@ Output: JSON array of file objects (id, name, fileType, isActive, createdAt, upd
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return cmd
+	return setAgentDocs(cmd,
+		"List uploaded document files stored for a context.",
+		"--context-id UUID (required)",
+		`[{"id":"uuid","name":"string","fileType":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}]`,
+		`context-consolidator-cli file-list --context-id <uuid>`,
+	)
 }
 
 func newFileDeleteCmd() *cobra.Command {
@@ -46,12 +45,6 @@ func newFileDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "file-delete",
 		Short: "Delete an uploaded file",
-		Long: `Permanently delete an uploaded file from a context.
-
-Required: --id
-
-Output: JSON {"deleted": "<uuid>"}.`,
-		Example: `  context-consolidator-cli file-delete --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -71,7 +64,12 @@ Output: JSON {"deleted": "<uuid>"}.`,
 	}
 	cmd.Flags().StringVar(&id, "id", "", "File record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Permanently delete an uploaded file from a context.",
+		"--id UUID (required)",
+		`{"deleted":"uuid"}`,
+		`context-consolidator-cli file-delete --id <uuid>`,
+	)
 }
 
 func newFileToggleCmd() *cobra.Command {
@@ -79,12 +77,6 @@ func newFileToggleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "file-toggle",
 		Short: "Toggle is_active for an uploaded file",
-		Long: `Toggle is_active for an uploaded file. Inactive files are excluded from context loads.
-
-Required: --id
-
-Output: JSON file object with updated isActive.`,
-		Example: `  context-consolidator-cli file-toggle --id <uuid>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if id == "" {
 				return fmt.Errorf("--id is required")
@@ -105,5 +97,10 @@ Output: JSON file object with updated isActive.`,
 	}
 	cmd.Flags().StringVar(&id, "id", "", "File record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return cmd
+	return setAgentDocs(cmd,
+		"Toggle is_active for an uploaded file. Inactive files are excluded from context loads.",
+		"--id UUID (required)",
+		`{"id":"uuid","name":"string","fileType":"string","isActive":"bool",...}`,
+		`context-consolidator-cli file-toggle --id <uuid>`,
+	)
 }

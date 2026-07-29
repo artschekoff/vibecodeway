@@ -28,6 +28,7 @@ interface TabContextValue {
   openActivityFeedTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
+  closeAllTabs: () => void;
   pinTab: (tabId: string) => void;
   unpinTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
@@ -253,6 +254,14 @@ export function TabProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const closeAllTabs = useCallback(() => {
+    setTabs((prev) => {
+      const next = prev.filter((t) => t.pinned);
+      setActiveTabId((active) => (next.some((t) => t.id === active) ? active : next[0]?.id ?? null));
+      return next;
+    });
+  }, []);
+
   const pinTab = useCallback((tabId: string) => {
     setTabs((prev) =>
       prev.map((t) => (t.id === tabId ? { ...t, pinned: true } : t))
@@ -348,6 +357,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openActivityFeedTab,
         closeTab,
         forceCloseTab,
+        closeAllTabs,
         pinTab,
         unpinTab,
         setActiveTab,

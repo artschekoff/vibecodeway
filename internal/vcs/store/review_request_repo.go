@@ -3,6 +3,7 @@ package vcsstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -21,8 +22,11 @@ func NewReviewRequestRepo(db *sql.DB) *ReviewRequestRepo { return &ReviewRequest
 // UpsertReviewRequest creates or updates a review request identified by (repoID, prNumber).
 // When an existing record is updated (PR re-appears in the review list), reviewed_at and
 // dismissed_at are cleared so it shows as a fresh pending review again.
-func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt string) (bool, error) {
+func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, reviewersJSON string) (bool, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
+	if reviewersJSON == "" {
+		reviewersJSON = "[]"
+	}
 
 	var existing string
 	err := r.db.QueryRowContext(ctx,
@@ -31,13 +35,14 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 	).Scan(&existing)
 
 	if err == nil {
-		// Record exists — update and clear reviewed_at / dismissed_at (it's active again).
+		// Existing row: refresh fields + reviewers, clear reviewed/dismissed, KEEP viewed_at.
 		_, err = r.db.ExecContext(ctx, `
 			UPDATE vcs_review_requests
 			SET pr_title = ?, pr_author = ?, pr_url = ?, review_status = ?,
-			    head_branch = ?, requested_at = ?, fetched_at = ?, reviewed_at = NULL, dismissed_at = NULL
+			    head_branch = ?, requested_at = ?, fetched_at = ?, reviewers = ?,
+			    reviewed_at = NULL, dismissed_at = NULL
 			WHERE id = ?
-		`, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, existing)
+		`, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, existing)
 		return false, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -48,9 +53,9 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO vcs_review_requests
 			(id, repo_id, pr_number, pr_title, pr_author, pr_url,
-			 review_status, head_branch, requested_at, fetched_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now)
+			 review_status, head_branch, requested_at, fetched_at, reviewers)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON)
 	if err != nil {
 		return false, fmt.Errorf("insert review request: %w", err)
 	}
@@ -105,6 +110,22 @@ func (r *ReviewRequestRepo) DismissReviewRequest(ctx context.Context, id string)
 	return err
 }
 
+// MarkReviewRequestViewed records that the user has looked at a review item.
+func (r *ReviewRequestRepo) MarkReviewRequestViewed(ctx context.Context, id string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_review_requests SET viewed_at = ? WHERE id = ? AND viewed_at IS NULL`, now, id)
+	return err
+}
+
+// MarkAllReviewRequestsViewed marks every non-dismissed review item as viewed.
+func (r *ReviewRequestRepo) MarkAllReviewRequestsViewed(ctx context.Context) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_review_requests SET viewed_at = ? WHERE viewed_at IS NULL AND dismissed_at IS NULL`, now)
+	return err
+}
+
 // SetReviewStatus updates only the review_status for a stored review request,
 // leaving reviewed_at/dismissed_at untouched. Used to relabel dropped PRs as
 // "merged"/"closed" without changing their waiting state.
@@ -119,7 +140,8 @@ func (r *ReviewRequestRepo) SetReviewStatus(ctx context.Context, repoID string, 
 func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID string) ([]ReviewRequest, error) {
 	q := `
 		SELECT id, repo_id, pr_number, pr_title, pr_author, pr_url,
-		       review_status, head_branch, requested_at, fetched_at, reviewed_at, dismissed_at
+		       review_status, head_branch, requested_at, fetched_at, reviewed_at, dismissed_at,
+		       viewed_at, reviewers
 		FROM vcs_review_requests
 		WHERE dismissed_at IS NULL`
 	var args []any
@@ -138,12 +160,16 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 	var result []ReviewRequest
 	for rows.Next() {
 		var rr ReviewRequest
+		var reviewersJSON string
 		if err := rows.Scan(
 			&rr.ID, &rr.RepoID, &rr.PRNumber, &rr.PRTitle, &rr.PRAuthor,
 			&rr.PRURL, &rr.ReviewStatus, &rr.HeadBranch, &rr.RequestedAt, &rr.FetchedAt,
-			&rr.ReviewedAt, &rr.DismissedAt,
+			&rr.ReviewedAt, &rr.DismissedAt, &rr.ViewedAt, &reviewersJSON,
 		); err != nil {
 			return nil, fmt.Errorf("scan review request: %w", err)
+		}
+		if reviewersJSON != "" && reviewersJSON != "[]" {
+			_ = json.Unmarshal([]byte(reviewersJSON), &rr.Reviewers)
 		}
 		result = append(result, rr)
 	}

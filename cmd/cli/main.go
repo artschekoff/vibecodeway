@@ -1,9 +1,10 @@
 // Command context-consolidator-cli is the CLI entry point for the context-consolidator.
-// It exposes write operations (add-text, add-file) that can be called from the MCP
-// server, the GUI, or directly from the terminal.
+// It exposes read/write operations that can be called from the GUI or directly
+// from the terminal (including by coding agents via `describe`).
 //
 // Usage:
 //
+//	context-consolidator-cli describe
 //	context-consolidator-cli add-text --context-key sprint-42 --file-path notes.md
 //	context-consolidator-cli add-file --context-key sprint-42 --file-path spec.pdf
 package main
@@ -15,15 +16,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func main() {
+var version = "dev"
+
+func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "context-consolidator-cli",
-		Short:         "CLI for context-consolidator write operations",
+		Short:         "CLI for context-consolidator (JSON in/out for coding agents)",
+		Long:          "context-consolidator-cli — manage local Jira/Slack/text contexts. Every command emits JSON on stdout. Run `describe` for the full machine-readable schema (description, input, output, flags).",
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// Keep shell-completion out of `describe` and help — no output schema.
+	root.CompletionOptions.HiddenDefaultCmd = true
 
-	// Text / file write (Phase A)
+	root.AddCommand(newDescribeCmd())
+
+	// Text / file write
 	root.AddCommand(newAddTextCmd())
 	root.AddCommand(newAddFileCmd())
 
@@ -82,7 +91,11 @@ func main() {
 	root.AddCommand(newGetAISettingsCmd())
 	root.AddCommand(newSetAISettingsCmd())
 
-	if err := root.Execute(); err != nil {
+	return root
+}
+
+func main() {
+	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "context-consolidator-cli: %v\n", err)
 		os.Exit(1)
 	}

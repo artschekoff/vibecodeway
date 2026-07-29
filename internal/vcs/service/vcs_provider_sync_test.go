@@ -10,17 +10,17 @@ import (
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	_ "modernc.org/sqlite"
 	"go.uber.org/zap"
+	_ "modernc.org/sqlite"
 )
 
 // mockRunner is a test double for vcs.VCSRunner.
 type mockRunner struct {
-	platform             vcs.Platform
-	reviewRequests       []vcs.PRData
-	reviewRequestsErr    error
-	changesRequested     []vcs.PRData
-	changesRequestedErr  error
+	platform            vcs.Platform
+	reviewRequests      []vcs.PRData
+	reviewRequestsErr   error
+	changesRequested    []vcs.PRData
+	changesRequestedErr error
 }
 
 func (m *mockRunner) Platform() vcs.Platform { return m.platform }
@@ -48,8 +48,8 @@ func (m *mockRunner) StartDeviceAuth(_ context.Context) (*vcs.DeviceCodeInfo, er
 func (m *mockRunner) CompleteDeviceAuth(_ context.Context, _ string, _ int) (vcs.AuthResult, error) {
 	return vcs.AuthResult{}, nil
 }
-func (m *mockRunner) GetAuthUser(_ context.Context) (string, error)          { return "me", nil }
-func (m *mockRunner) SetToken(_ string)                                        {}
+func (m *mockRunner) GetAuthUser(_ context.Context) (string, error) { return "me", nil }
+func (m *mockRunner) SetToken(_ string)                             {}
 func (m *mockRunner) GetRepoDescription(_ context.Context, _, _ string) (string, error) {
 	return "", nil
 }
@@ -94,6 +94,8 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			fetched_at    TEXT NOT NULL,
 			reviewed_at   TEXT,
 			dismissed_at  TEXT,
+			viewed_at     TEXT,
+			reviewers     TEXT NOT NULL DEFAULT '',
 			UNIQUE (repo_id, pr_number)
 		);
 	`)
@@ -222,6 +224,35 @@ func TestSyncReviewRequests_ChangesRequestedQueryErrorIsNonFatal(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, reviews, 1, "PR from first query is stored despite second query failing")
 	assert.Equal(t, 7, reviews[0].PRNumber)
+}
+
+func TestSyncReviewRequests_PersistsReviewerDecisions(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		reviewRequests: []vcs.PRData{
+			{
+				Number: 3, Title: "With reviewers", Author: "author", URL: "u3",
+				ReviewStatus: "review_required", CreatedAt: "2026-01-01T00:00:00Z",
+				Reviewers: []vcs.ReviewerDecision{
+					{Login: "alice", State: "approved", SubmittedAt: "2026-01-01T10:00:00Z"},
+				},
+			},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "org", "repo")
+	require.NoError(t, err)
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	reviews, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, reviews, 1)
+	require.Len(t, reviews[0].Reviewers, 1, "reviewer decision must round-trip through the DB")
+	assert.Equal(t, "alice", reviews[0].Reviewers[0].Login)
+	assert.Equal(t, "approved", reviews[0].Reviewers[0].State)
 }
 
 func TestSyncReviewRequests_NoPlatformRunner_ReturnsError(t *testing.T) {

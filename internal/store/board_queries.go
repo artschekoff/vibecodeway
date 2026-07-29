@@ -47,11 +47,26 @@ type BoardPR struct {
 	PRUpdatedAt  string `json:"prUpdatedAt"`
 }
 
+// BoardJiraAssignment is one Jira issue assigned to the current user, persisted
+// as a personal to-do item. Seen is false until the user has viewed it in the
+// Activity Feed.
+type BoardJiraAssignment struct {
+	Key       string `json:"key"`
+	Summary   string `json:"summary"`
+	Status    string `json:"status"`
+	IssueType string `json:"issueType"`
+	Priority  string `json:"priority"`
+	Created   string `json:"created"`
+	Seen      bool   `json:"seen"`
+	FetchedAt string `json:"fetchedAt"`
+}
+
 // MyBoardData aggregates all sections of the My Board page.
 type MyBoardData struct {
-	Blockers      []BoardBlocker    `json:"blockers"`
-	MyAssignments []BoardAssignment `json:"myAssignments"`
-	MyOpenPRs     []BoardPR         `json:"myOpenPRs"`
+	Blockers             []BoardBlocker        `json:"blockers"`
+	MyAssignments        []BoardAssignment     `json:"myAssignments"`
+	MyOpenPRs            []BoardPR             `json:"myOpenPRs"`
+	MyAssignedJiraIssues []BoardJiraAssignment `json:"myAssignedJiraIssues"`
 }
 
 // ListBoardBlockers returns recent blocker_identified events across all contexts, newest first.

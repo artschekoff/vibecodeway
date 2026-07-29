@@ -1,8 +1,8 @@
 # context-consolidator
 
-A desktop app and MCP server for managing Jira search contexts locally.
+A desktop app and CLI for managing Jira/Slack search contexts locally.
 
-Save named JQL queries as "contexts", fetch matching issues and their comments into a local SQLite database, and feed the data to AI tools via MCP.
+Save named JQL queries as "contexts", fetch matching issues and their comments into a local SQLite database, and feed the data to coding agents via `context-consolidator-cli`.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ Save named JQL queries as "contexts", fetch matching issues and their comments i
 
 ### Jira Authentication
 
-Before using the app or MCP server, authenticate with Jira:
+Before using the app or CLI, authenticate with Jira:
 
 1. Ensure `acli` is available in your `PATH`:
    ```bash
@@ -28,21 +28,21 @@ Before using the app or MCP server, authenticate with Jira:
    acli jira auth status
    ```
 
-Both the desktop app and the MCP server require a valid `acli` session. If not authenticated, the GUI shows a warning banner and the MCP server returns an error on tool calls that hit Jira.
+The desktop app and CLI require a valid `acli` session. If not authenticated, the GUI shows a warning banner and Jira CLI commands return an error.
 
 ## What it does
 
-- **Contexts** — named collections of Jira issues, each tied to a JQL query
+- **Contexts** — named collections of Jira issues, Slack threads, text notes, and files
 - **Refresh** — run the saved JQL again, see which issues are new, select what to add
 - **Comments** — full comment history per issue, deduplicated on sync
-- **MCP server** — lets AI tools (Cursor, etc.) query contexts and trigger syncs via stdio
+- **CLI** — JSON in/out for coding agents (`describe` emits the full command schema)
 
 ## Binaries
 
 | Binary | Purpose |
 |--------|---------|
 | `context-consolidator` | Wails desktop app (GUI) |
-| `context-consolidator-mcp` | stdio MCP server for AI clients |
+| `context-consolidator-cli` | CLI for agents and terminal use |
 
 Both share the same SQLite database at `~/.context-consolidator/context_consolidator.db`.
 
@@ -52,48 +52,36 @@ Both share the same SQLite database at `~/.context-consolidator/context_consolid
 # Install frontend dependencies
 make setup
 
-# Run the desktop app in dev mode
+# Run the desktop app in dev mode (also installs the CLI)
 make dev
 
 # Build the desktop app
 make build-desktop
 
-# Build the MCP server
-make build-mcp
+# Build / install the CLI
+make build-cli
+make install-cli
 ```
 
-## MCP Setup (Cursor)
+## CLI for coding agents
 
-Add to your Cursor `mcp.json`:
+Every command prints JSON to stdout. Load the machine-readable schema first:
 
-```json
-{
-  "mcpServers": {
-    "context-consolidator": {
-      "type": "stdio",
-      "command": "/path/to/bin/context-consolidator-mcp",
-      "env": {
-        "SLACK_MCP_PASSPHRASE": "<your-slack-passphrase>"
-      }
-    }
-  }
-}
+```bash
+context-consolidator-cli describe
 ```
 
-`SLACK_MCP_PASSPHRASE` is injected into every `slack-cli` invocation. If you don't use Slack integration, you can omit it.
+Each entry includes `description`, `input`, `output`, `flags`, and `example`. Prefer `describe` over scraping `--help`.
 
-### MCP Tools
+### Typical agent workflow
 
-| Tool | Description |
-|------|-------------|
-| `context_list` | List all saved contexts |
-| `context_search` | Run JQL and get diff of new vs existing issues |
-| `context_add` | Add selected issues + sync comments |
-| `context_get` | Get full context with all issues and comments |
+1. `context-consolidator-cli context-list` → see available contexts
+2. `context-consolidator-cli context-get --context-key my-context` → load full context
+3. `context-consolidator-cli jira-search --context-key my-context` → see what's new in Jira
+4. `context-consolidator-cli jira-add --context-id ... --jira-keys JH-1,JH-5` → add chosen issues
 
-### Typical AI workflow
+Slash command `/context-consolidator-prime` loads the schema and routes to the right CLI call.
 
-1. `context_list` → see available contexts
-2. `context_search(context_key="my-context")` → see what's new in Jira
-3. `context_add(context_id="...", jira_keys="JH-1,JH-5")` → add chosen issues
-4. `context_get(context_key="my-context")` → read all data for analysis
+### Slack passphrase
+
+When Slack integration is used, set `CONTEXT_CONSOLIDATOR_PASSPHRASE` (GUI) / the passphrase the app injects into `slack-cli` via `SLACK_MCP_PASSPHRASE`. If you don't use Slack, you can omit it.

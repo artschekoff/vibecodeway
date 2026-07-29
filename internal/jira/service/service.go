@@ -1,4 +1,4 @@
-// Package service contains business logic shared by both the Wails GUI and MCP server.
+// Package service contains business logic shared by both the Wails GUI and CLI.
 package service
 
 import (

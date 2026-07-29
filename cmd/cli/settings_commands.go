@@ -22,13 +22,9 @@ type aiSettingsResult struct {
 }
 
 func newAuthStatusCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "auth-status",
 		Short: "Return the current acli authentication status",
-		Long: `Return the current Jira/Slack authentication status for the acli tool.
-
-Output: JSON {"status": "<value>"} where value is one of: authenticated, unauthenticated, error.`,
-		Example: `  context-consolidator-cli auth-status`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			env, err := openServiceEnv()
@@ -44,18 +40,18 @@ Output: JSON {"status": "<value>"} where value is one of: authenticated, unauthe
 			return writeJSON(map[string]string{"status": status})
 		},
 	}
+	return setAgentDocs(cmd,
+		"Return the current Jira authentication status for the acli tool.",
+		"(none)",
+		`{"status":"authenticated|unauthenticated|error"}`,
+		`context-consolidator-cli auth-status`,
+	)
 }
 
 func newGetAISettingsCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "ai-settings-get",
 		Short: "Get AI configuration metadata including source (env or db)",
-		Long: `Get AI configuration metadata. The source field indicates whether the active API
-key comes from an environment variable (env) or the database (db). Keys are never
-included in the output — only whether they are set.
-
-Output: JSON {provider, hasKey, hasOpenAIKey, hasAnthropicKey, model, baseUrl, source, updatedAt}.`,
-		Example: `  context-consolidator-cli ai-settings-get`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			env, err := openServiceEnv()
@@ -80,6 +76,12 @@ Output: JSON {provider, hasKey, hasOpenAIKey, hasAnthropicKey, model, baseUrl, s
 			})
 		},
 	}
+	return setAgentDocs(cmd,
+		"Get AI configuration metadata. source is env or db. Keys are never included — only whether they are set.",
+		"(none)",
+		`{"provider":"string","hasKey":"bool","hasOpenAIKey":"bool","hasAnthropicKey":"bool","model":"string","baseUrl":"string","source":"env|db","updatedAt":"RFC3339"}`,
+		`context-consolidator-cli ai-settings-get`,
+	)
 }
 
 func newSetAISettingsCmd() *cobra.Command {
@@ -87,14 +89,6 @@ func newSetAISettingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ai-settings-set",
 		Short: "Set AI configuration (provider, keys, model, baseURL)",
-		Long: `Set AI configuration. Keys are stored in plain text in the database.
-Any flag left empty retains its current value.
-
-Optional: --provider (openai|anthropic|local), --api-key, --anthropic-key, --model, --base-url
-
-Output: JSON AI settings object (keys are redacted).`,
-		Example: `  context-consolidator-cli ai-settings-set --provider openai --model gpt-4o
-  context-consolidator-cli ai-settings-set --provider anthropic --anthropic-key sk-ant-...`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			env, err := openServiceEnv()
@@ -124,5 +118,10 @@ Output: JSON AI settings object (keys are redacted).`,
 	cmd.Flags().StringVar(&anthropicKey, "anthropic-key", "", "Anthropic API key")
 	cmd.Flags().StringVar(&model, "model", "", "Model name, e.g. gpt-4o or claude-3-5-sonnet-20241022")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Custom base URL for local/proxy providers")
-	return cmd
+	return setAgentDocs(cmd,
+		"Set AI configuration. Keys are stored in plain text in the database. Any flag left empty retains its current value.",
+		"--provider openai|anthropic|local (optional)\n--api-key STRING (optional)\n--anthropic-key STRING (optional)\n--model STRING (optional)\n--base-url STRING (optional)",
+		`{"provider":"string","hasKey":"bool","model":"string","baseUrl":"string",...}`,
+		`context-consolidator-cli ai-settings-set --provider openai --model gpt-4o`,
+	)
 }

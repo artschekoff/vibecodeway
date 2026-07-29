@@ -49,7 +49,11 @@ func (c *Client) GetInstanceURL(ctx context.Context) string {
 func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error) {
 	flags := []string{
 		"--jql", jql,
-		"--fields", "key,summary,status,assignee,issuetype",
+		// NOTE: acli's workitem search rejects fields outside its allowlist —
+		// "created" is NOT permitted here (unlike the REST API), so requesting it
+		// makes the whole search fail. priority is allowed. See parseSearchResults:
+		// Created stays "" for search results (acli can't return it here).
+		"--fields", "key,summary,status,assignee,issuetype,priority",
 		"--json",
 	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "search"}, nil, flags)
@@ -110,6 +114,8 @@ func parseSearchResults(raw string) ([]SearchResult, error) {
 			Status:    item.field("status"),
 			Assignee:  item.field("assignee"),
 			IssueType: item.field("issuetype"),
+			Priority:  item.field("priority"),
+			Created:   item.field("created"),
 		})
 	}
 	return results, nil

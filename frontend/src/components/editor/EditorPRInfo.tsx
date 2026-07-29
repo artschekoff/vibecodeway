@@ -11,7 +11,7 @@ import { countUnreadComments } from "../../lib/prComments";
  * PR linked to the context in context-editing mode. Renders nothing when there
  * are no linked PRs.
  */
-export function EditorPRInfo({ contextId, activeRepoId }: { contextId: string; activeRepoId?: string }) {
+export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { contextId: string; activeRepoId?: string; refreshSignal?: number }) {
   const [prs, setPrs] = useState<PullRequest[]>([]);
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export function EditorPRInfo({ contextId, activeRepoId }: { contextId: string; a
       .then((rows) => { if (active) setPrs((rows as PullRequest[]) ?? []); })
       .catch(() => { if (active) setPrs([]); });
     return () => { active = false; };
-  }, [contextId]);
+  }, [contextId, refreshSignal]);
 
   // Follow the editor's repo selector: show only the selected repo's PR(s).
   // Unset => show every linked PR (backward compatible with single-repo contexts).

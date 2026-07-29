@@ -22,6 +22,8 @@ export function AddSlackChannels(arg1:string,arg2:string,arg3:Array<slackstore.S
 
 export function AddSpecificPR(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
 
+export function AddTerminalCommand(arg1:string,arg2:string):Promise<store.TerminalCommand>;
+
 export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo>;
 
 export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.Event>;
@@ -96,6 +98,8 @@ export function DeleteSlackDMConfig(arg1:string):Promise<void>;
 
 export function DeleteSlackThread(arg1:string):Promise<void>;
 
+export function DeleteTerminalCommand(arg1:string):Promise<void>;
+
 export function DeleteUploadedFile(arg1:string):Promise<void>;
 
 export function DeleteUserEvent(arg1:string,arg2:string):Promise<void>;
@@ -135,6 +139,16 @@ export function GetActivityFeed(arg1:number):Promise<Array<store.ActivityFeedIte
 export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
+
+export function GetEditorSettings():Promise<string>;
+
+export function SetEditorSettings(arg1:string):Promise<void>;
+
+export function FileHistory(arg1:string,arg2:string):Promise<Array<main.FileCommit>>;
+
+export function FileDiffAtCommit(arg1:string,arg2:string,arg3:string):Promise<main.FileDiff>;
+
+export function FileBlame(arg1:string,arg2:string):Promise<Array<main.BlameLine>>;
 
 export function GetContextChanges(arg1:string):Promise<Array<main.RepoChange>>;
 
@@ -227,6 +241,8 @@ export function ListSlackDMConfigs(arg1:string):Promise<Array<slackstore.SlackDM
 export function ListSlackThreads(arg1:string):Promise<Array<slackstore.SlackThread>>;
 
 export function ListSlackWorkspaces():Promise<Array<service.SlackWorkspaceResult>>;
+
+export function ListTerminalCommands():Promise<Array<store.TerminalCommand>>;
 
 export function ListTrackedRepos(arg1:string):Promise<Array<vcsstore.VCSRepo>>;
 
@@ -419,6 +435,8 @@ export function UpdateContext(arg1:string,arg2:string,arg3:string):Promise<store
 export function UpdateKeybinding(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
+
+export function UpdateTerminalCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function UpdateTrackedRepoMeta(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

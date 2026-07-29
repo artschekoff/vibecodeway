@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { GetContextChanges } from "../../wailsjs/go/main/App";
-import { Terminal } from "../components/editor/Terminal";
+import { RefreshCw, Copy, Check } from "lucide-react";
+import { GetContextChanges, RefreshContext } from "../../wailsjs/go/main/App";
+import { TerminalPanel } from "../components/editor/TerminalPanel";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { nextPaneSize, readStoredPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
+import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
 import { editorModeForKey, editorModeLabel } from "../lib/contextMode";
 
 const SIDEBAR_KEY = "context-consolidator:editor:sidebarWidth";
@@ -22,6 +24,9 @@ const TERMINAL_DEFAULT = 260;
 export function EditorWorkspace({ contextId, contextKey, initialCwd }: { contextId: string; contextKey?: string; initialCwd?: string }) {
   const [repoPaths, setRepoPaths] = useState<{ id: string; name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { getFiles, openEditorFile } = useEditorFiles();
   const { tabs, activeKey } = getFiles(contextId);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
@@ -47,22 +52,38 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
       }
     });
     return () => { active = false; };
-  }, [contextId]);
+  }, [contextId, refreshSignal]);
 
   const openFile = (repoPath: string, repoName: string, path: string, status: string) => {
     const tab: OpenTab = { repoPath, repoName, path, status };
     openEditorFile(contextId, tab);
   };
 
+  // Re-ask GitHub for the freshest PR/branch state, then bump refreshSignal so the
+  // PR head, changed-files list and open diffs all re-fetch and re-render.
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await RefreshContext(contextId);
+    } catch {
+      /* fail-soft: still re-read local state below */
+    } finally {
+      setRefreshSignal((n) => n + 1);
+      setRefreshing(false);
+    }
+  };
+
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
   const activeRepoId = useMemo(() => repoPaths.find((r) => r.path === cwd)?.id, [repoPaths, cwd]);
 
   return (
+    <EditorSettingsProvider>
     <div style={{ display: "flex", height: "100%", flex: 1, minWidth: 0, width: "100%" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           {active ? (
-            <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} onSaved={() => { /* panel auto-polls */ }} />
+            <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} refreshSignal={refreshSignal} onSaved={() => { /* panel auto-polls */ }} />
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 16 }}>Select a changed file to view its diff.</div>
           )}
@@ -73,7 +94,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
           onResize={(dy) => setTerminalHeight((h) => nextPaneSize(h, -dy, TERMINAL_MIN, TERMINAL_MAX))}
         />
         <div style={{ height: terminalHeight, borderTop: "1px solid var(--border)" }}>
-          {cwd ? <Terminal key={cwd} cwd={cwd} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
+          {cwd ? <TerminalPanel spawnCwd={cwd} contextName={contextKey} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
         </div>
       </div>
       <ResizeHandle
@@ -84,25 +105,55 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
       <aside style={{ width: sidebarWidth, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         {contextKey && (
           <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-            <div
-              title={contextKey}
-              style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            >
-              {contextKey}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <div
+                title={contextKey}
+                style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              >
+                {contextKey}
+              </div>
+              <button
+                aria-label="copy context name"
+                title={copied ? "Copied" : "Copy context name"}
+                onClick={() => {
+                  void navigator.clipboard?.writeText(contextKey);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1200);
+                }}
+                style={{ display: "flex", flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+              </button>
             </div>
             <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginTop: 2 }}>
               {editorModeLabel(editorModeForKey(contextKey))}
             </div>
           </div>
         )}
-        <EditorPRInfo contextId={contextId} activeRepoId={activeRepoId} />
+        {/* Narrow the PR head by repo only when the selector is meaningful (>1 repo).
+            A single-repo context (e.g. PR review) has one PR that IS the subject —
+            filtering there can only hide it, never usefully narrow. */}
+        <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined} refreshSignal={refreshSignal} />
         {repoPaths.length > 1 && (
           <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
             {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
           </select>
         )}
-        <ChangedFilesPanel contextId={contextId} onOpenFile={openFile} activeRepoPath={cwd} />
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px 0" }}>
+          <button
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            title="Refresh from GitHub"
+            aria-label="Refresh from GitHub"
+            style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: refreshing ? "default" : "pointer", color: "var(--text-muted)", fontSize: 11, padding: 2 }}
+          >
+            <RefreshCw size={12} className={refreshing ? "spinning" : undefined} />
+            Refresh
+          </button>
+        </div>
+        <ChangedFilesPanel contextId={contextId} onOpenFile={openFile} activeRepoPath={cwd} refreshSignal={refreshSignal} />
       </aside>
     </div>
+    </EditorSettingsProvider>
   );
 }

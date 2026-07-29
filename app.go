@@ -169,8 +169,8 @@ func (a *App) startup(ctx context.Context) {
 		if inserted {
 			a.dispatchContextHooks(contextID, "jira_update")
 		}
-		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
-			a.logger.Warn("jira notify: set snapshot status failed",
+		if err := s.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
+			a.logger.Warn("jira notify: flag needs_attention failed",
 				zap.String("contextID", contextID), zap.Error(err))
 		}
 		return nil
@@ -194,8 +194,8 @@ func (a *App) startup(ctx context.Context) {
 		if inserted {
 			a.dispatchContextHooks(contextID, "pr_update")
 		}
-		if err := s.SetSnapshotStatus(ctx, contextID, "needs_attention"); err != nil {
-			a.logger.Warn("vcs notify: set snapshot status failed",
+		if err := s.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
+			a.logger.Warn("vcs notify: flag needs_attention failed",
 				zap.String("contextID", contextID), zap.Error(err))
 		}
 		return nil
@@ -442,7 +442,7 @@ func (a *App) AddIssuesToContext(contextID string, jiraKeys []string) (int, erro
 	if err != nil {
 		return added, err
 	}
-	// Sync comments (best-effort — mirrors the MCP path)
+	// Sync comments (best-effort — same path as CLI jira-add)
 	if _, syncErr := a.svc.SyncAllComments(a.ctx, contextID); syncErr != nil {
 		a.logger.Sugar().Warnf("sync comments after issue add: %v", syncErr)
 	}
@@ -464,6 +464,24 @@ func (a *App) SyncAllComments(contextID string) (int, error) {
 // RefreshContext re-fetches field values and comments for every existing item in the
 // context (issues, Slack threads, pull requests). It does NOT run JQL or add new items.
 // Progress events ("refresh:progress") are emitted via the Wails runtime before each provider.
+// notifyReason builds a short human-readable reason for an automatic status flip
+// to needs_attention, from a change notification's fields. Shown next to the
+// context Status so the user can see WHY it needs attention.
+func notifyReason(entityType, eventType, oldValue, newValue string) string {
+	label := strings.TrimSpace(entityType + " " + eventType)
+	if label == "" {
+		label = "activity"
+	}
+	switch {
+	case oldValue != "" && newValue != "":
+		return fmt.Sprintf("New %s (%s → %s)", label, oldValue, newValue)
+	case newValue != "":
+		return fmt.Sprintf("New %s: %s", label, newValue)
+	default:
+		return fmt.Sprintf("New %s", label)
+	}
+}
+
 func (a *App) RefreshContext(contextID string) (*jiraservice.RefreshResult, error) {
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.cancelMu.Lock()
@@ -1184,10 +1202,16 @@ func (a *App) GetMyBoard(personName string) (*appstore.MyBoardData, error) {
 		return nil, fmt.Errorf("board prs: %w", err)
 	}
 
+	jiraIssues, err := a.db.ListBoardJiraAssignments(a.ctx, "priority")
+	if err != nil {
+		return nil, fmt.Errorf("board jira assignments: %w", err)
+	}
+
 	return &appstore.MyBoardData{
-		Blockers:      blockers,
-		MyAssignments: assignments,
-		MyOpenPRs:     prs,
+		Blockers:             blockers,
+		MyAssignments:        assignments,
+		MyOpenPRs:            prs,
+		MyAssignedJiraIssues: jiraIssues,
 	}, nil
 }
 

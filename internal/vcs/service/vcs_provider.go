@@ -3,6 +3,7 @@ package vcsservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -400,9 +401,19 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		activeNumbers := make([]int, 0, len(merged))
 		for _, pr := range merged {
 			activeNumbers = append(activeNumbers, pr.Number)
+			reviewersJSON := "[]"
+			if len(pr.Reviewers) > 0 {
+				out := make([]vcsstore.ReviewerDecision, 0, len(pr.Reviewers))
+				for _, d := range pr.Reviewers {
+					out = append(out, vcsstore.ReviewerDecision{Login: d.Login, State: d.State, SubmittedAt: d.SubmittedAt})
+				}
+				if b, err := json.Marshal(out); err == nil {
+					reviewersJSON = string(b)
+				}
+			}
 			insertedRR, err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
-				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt,
+				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, reviewersJSON,
 			)
 			if err != nil {
 				p.logger.Warn("vcs: upsert review request failed",

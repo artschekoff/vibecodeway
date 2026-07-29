@@ -26,6 +26,10 @@ export function AddSpecificPR(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['AddSpecificPR'](arg1, arg2, arg3, arg4);
 }
 
+export function AddTerminalCommand(arg1, arg2) {
+  return window['go']['main']['App']['AddTerminalCommand'](arg1, arg2);
+}
+
 export function AddTrackedRepo(arg1, arg2) {
   return window['go']['main']['App']['AddTrackedRepo'](arg1, arg2);
 }
@@ -174,6 +178,10 @@ export function DeleteSlackThread(arg1) {
   return window['go']['main']['App']['DeleteSlackThread'](arg1);
 }
 
+export function DeleteTerminalCommand(arg1) {
+  return window['go']['main']['App']['DeleteTerminalCommand'](arg1);
+}
+
 export function DeleteUploadedFile(arg1) {
   return window['go']['main']['App']['DeleteUploadedFile'](arg1);
 }
@@ -252,6 +260,26 @@ export function GetAppLogs(arg1) {
 
 export function GetAppSettings() {
   return window['go']['main']['App']['GetAppSettings']();
+}
+
+export function GetEditorSettings() {
+  return window['go']['main']['App']['GetEditorSettings']();
+}
+
+export function SetEditorSettings(arg1) {
+  return window['go']['main']['App']['SetEditorSettings'](arg1);
+}
+
+export function FileHistory(arg1, arg2) {
+  return window['go']['main']['App']['FileHistory'](arg1, arg2);
+}
+
+export function FileDiffAtCommit(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FileDiffAtCommit'](arg1, arg2, arg3);
+}
+
+export function FileBlame(arg1, arg2) {
+  return window['go']['main']['App']['FileBlame'](arg1, arg2);
 }
 
 export function GetContextChanges(arg1) {
@@ -436,6 +464,10 @@ export function ListSlackThreads(arg1) {
 
 export function ListSlackWorkspaces() {
   return window['go']['main']['App']['ListSlackWorkspaces']();
+}
+
+export function ListTerminalCommands() {
+  return window['go']['main']['App']['ListTerminalCommands']();
 }
 
 export function ListTrackedRepos(arg1) {
@@ -820,6 +852,10 @@ export function UpdateKeybinding(arg1, arg2, arg3) {
 
 export function UpdateOrganization(arg1, arg2) {
   return window['go']['main']['App']['UpdateOrganization'](arg1, arg2);
+}
+
+export function UpdateTerminalCommand(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateTerminalCommand'](arg1, arg2, arg3);
 }
 
 export function UpdateTrackedRepoMeta(arg1, arg2, arg3, arg4) {

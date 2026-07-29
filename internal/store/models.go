@@ -223,6 +223,7 @@ type AppSettings struct {
 	TerminalAppPath              string `json:"terminalAppPath"`
 	CodingAgentApp               string `json:"codingAgentApp"`
 	AutoLinkReposOnContextCreate bool   `json:"autoLinkReposOnContextCreate"`
+	EditorSettings               string `json:"editorSettings"` // opaque JSON blob owned by the frontend
 	UpdatedAt                    string `json:"updatedAt"`
 }
 
@@ -417,6 +418,17 @@ type Keybinding struct {
 	ModifierKeys string `json:"modifierKeys"` // e.g. "cmd,shift"
 	KeyCode      string `json:"keyCode"`      // e.g. "c"
 	UpdatedAt    string `json:"updatedAt"`
+}
+
+// TerminalCommand is a user-configured command shown in the editor terminal's
+// command selector. Command may contain placeholder tokens (e.g. <context-name>)
+// substituted at insert time.
+type TerminalCommand struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Command   string `json:"command"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // AIPrompt is a user-editable prompt template stored in the database.

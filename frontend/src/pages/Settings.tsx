@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, GetKeybindings, UpdateKeybinding } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, GetKeybindings, UpdateKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
+import type { store } from "../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
 import { useTabContext } from "../contexts/TabContext";
@@ -75,6 +76,17 @@ export default function SettingsPage() {
   const [refetchMessage, setRefetchMessage] = useState("");
   const [savingTerminal, setSavingTerminal] = useState(false);
   const [terminalMessage, setTerminalMessage] = useState("");
+
+  const [commands, setCommands] = useState<store.TerminalCommand[]>([]);
+  const loadCommands = useCallback(async () => {
+    try { setCommands((await ListTerminalCommands()) ?? []); } catch { /* keep last known */ }
+  }, []);
+  useEffect(() => { void loadCommands(); }, [loadCommands]);
+  const addCommand = async () => { await AddTerminalCommand("", ""); await loadCommands(); };
+  const saveCommand = async (c: store.TerminalCommand) => { await UpdateTerminalCommand(c.id, c.title, c.command); await loadCommands(); };
+  const deleteCommand = async (id: string) => { await DeleteTerminalCommand(id); await loadCommands(); };
+  const setCommandField = (id: string, field: "title" | "command", value: string) =>
+    setCommands((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } as store.TerminalCommand : c)));
 
   useEffect(() => {
     let cancelled = false;
@@ -484,6 +496,28 @@ export default function SettingsPage() {
                 {savingTerminal ? "Saving…" : "Save"}
               </button>
             </div>
+          </div>
+        </section>
+
+        <section className="detail-section">
+          <div className="detail-section-header">
+            <span className="detail-section-title">Terminal commands</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 14px" }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Selectable above the terminal. Use <code>&lt;context-name&gt;</code> to insert the current context name. Inserting types the command (no Enter).
+            </div>
+            {commands.map((c) => (
+              <div key={c.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input style={{ width: 140, fontSize: 12 }} placeholder="Title" value={c.title}
+                  onChange={(e) => setCommandField(c.id, "title", e.target.value)} />
+                <input style={{ flex: 1, fontSize: 12 }} placeholder="Command" value={c.command}
+                  onChange={(e) => setCommandField(c.id, "command", e.target.value)} />
+                <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => void saveCommand(c)}>Save</button>
+                <button className="btn-danger" style={{ fontSize: 11 }} aria-label="delete command" onClick={() => void deleteCommand(c.id)}>Delete</button>
+              </div>
+            ))}
+            <button className="btn-secondary" style={{ fontSize: 11, alignSelf: "flex-start" }} onClick={() => void addCommand()}>+ Add command</button>
           </div>
         </section>
 

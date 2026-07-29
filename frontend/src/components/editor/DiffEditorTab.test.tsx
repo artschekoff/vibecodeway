@@ -11,24 +11,38 @@ vi.mock("@monaco-editor/react", () => ({
   },
 }));
 
-const { ReadRepoFile, ReadRepoFileBase, SaveRepoFile } = vi.hoisted(() => ({
+const {
+  ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
+  FileBlame, FileHistory, FileDiffAtCommit,
+} = vi.hoisted(() => ({
   ReadRepoFile: vi.fn(), ReadRepoFileBase: vi.fn(), SaveRepoFile: vi.fn(),
+  GetEditorSettings: vi.fn(), SetEditorSettings: vi.fn(),
+  FileBlame: vi.fn(), FileHistory: vi.fn(), FileDiffAtCommit: vi.fn(),
 }));
-vi.mock("../../../wailsjs/go/main/App", () => ({ ReadRepoFile, ReadRepoFileBase, SaveRepoFile }));
+vi.mock("../../../wailsjs/go/main/App", () => ({
+  ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
+  FileBlame, FileHistory, FileDiffAtCommit,
+}));
 
 import { DiffEditorTab } from "./DiffEditorTab";
+import { EditorSettingsProvider } from "../../contexts/EditorSettingsContext";
 
 beforeEach(() => {
   vi.clearAllMocks();
   ReadRepoFileBase.mockResolvedValue("old\n");
   ReadRepoFile.mockResolvedValue("new\n");
   SaveRepoFile.mockResolvedValue(undefined);
+  GetEditorSettings.mockResolvedValue("");
+  SetEditorSettings.mockResolvedValue(undefined);
+  FileBlame.mockResolvedValue([]);
+  FileHistory.mockResolvedValue([{ hash: "a".repeat(40), author: "T", date: "2026-07-28", subject: "init" }]);
+  FileDiffAtCommit.mockResolvedValue({ before: "a\n", after: "b\n" });
 });
 
 describe("DiffEditorTab", () => {
   it("loads head+working and saves the modified model value", async () => {
     const onSaved = vi.fn();
-    render(<DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={onSaved} />);
+    render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={onSaved} /></EditorSettingsProvider>);
 
     await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
     expect(ReadRepoFileBase).toHaveBeenCalledWith("/r/api", "src/a.ts");
@@ -40,5 +54,29 @@ describe("DiffEditorTab", () => {
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() => expect(SaveRepoFile).toHaveBeenCalledWith("/r/api", "src/a.ts", "edited\n"));
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("opens the file history modal and loads the file's commits", async () => {
+    render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={vi.fn()} /></EditorSettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "file history" }));
+
+    await waitFor(() => expect(FileHistory).toHaveBeenCalledWith("/r/api", "src/a.ts"));
+    expect(screen.getByText(/History:/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("init")).toBeInTheDocument());
+  });
+
+  it("fullscreen button expands the tab to a fixed overlay and back", async () => {
+    const { container } = render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={vi.fn()} /></EditorSettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
+    const root = container.firstChild as HTMLElement;
+    expect(root.getAttribute("style")).not.toContain("position: fixed");
+
+    fireEvent.click(screen.getByRole("button", { name: "fullscreen editor" }));
+    expect(root.getAttribute("style")).toContain("position: fixed");
+
+    fireEvent.click(screen.getByRole("button", { name: "exit fullscreen" }));
+    expect(root.getAttribute("style")).not.toContain("position: fixed");
   });
 });

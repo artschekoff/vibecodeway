@@ -20,6 +20,8 @@ vi.mock("../contexts/TabContext", () => ({
   }),
 }));
 
+vi.mock("../hooks/useContextBadges", () => ({ useContextBadges: () => new Map() }));
+
 import TabBar from "./TabBar";
 
 beforeEach(() => {

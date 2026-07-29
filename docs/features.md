@@ -59,14 +59,11 @@ Desktop app (Wails: Go backend + React frontend). Aggregates developer context f
 - **Terminal integration**: `openTerminalAt()` opens configured terminal app at worktree path
 - Local branch listing per repo
 
-## MCP Server
+## CLI (`context-consolidator-cli`)
 
-- Standalone MCP server (`cmd/mcp`) exposing tools to AI agents:
-  - `load_context` — full context dump (Jira, Slack, text, repos/PRs)
-  - `context_list` — list contexts with status and issue count
-  - `context_search` — run saved JQL and diff against current context
-  - `context_assignments` — load person assignments
-  - `context_add` / `context_add_text` / `context_add_file` — add content programmatically
+- JSON in/out CLI for coding agents and terminal use (`describe` emits the full schema)
+- Context CRUD, text/file entries, Jira search/add/sync/refresh, Slack channels/threads/DMs
+- Slash command `/context-consolidator-prime` loads available tools via `describe`
 
 ## Settings & Configuration
 

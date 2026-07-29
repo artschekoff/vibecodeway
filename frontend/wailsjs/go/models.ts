@@ -442,6 +442,58 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class FileCommit {
+	    hash: string;
+	    author: string;
+	    date: string;
+	    subject: string;
+
+	    static createFrom(source: any = {}) {
+	        return new FileCommit(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.author = source["author"];
+	        this.date = source["date"];
+	        this.subject = source["subject"];
+	    }
+	}
+	export class FileDiff {
+	    before: string;
+	    after: string;
+
+	    static createFrom(source: any = {}) {
+	        return new FileDiff(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.before = source["before"];
+	        this.after = source["after"];
+	    }
+	}
+	export class BlameLine {
+	    line: number;
+	    commit: string;
+	    author: string;
+	    date: string;
+	    summary: string;
+
+	    static createFrom(source: any = {}) {
+	        return new BlameLine(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.commit = source["commit"];
+	        this.author = source["author"];
+	        this.date = source["date"];
+	        this.summary = source["summary"];
+	    }
+	}
 	export class ReviewPRResult {
 	    contextId: string;
 	    contextKey: string;
@@ -1018,8 +1070,9 @@ export namespace store {
 	    terminalAppPath: string;
 	    codingAgentApp: string;
 	    autoLinkReposOnContextCreate: boolean;
+	    editorSettings: string;
 	    updatedAt: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
 	    }
@@ -1033,6 +1086,7 @@ export namespace store {
 	        this.terminalAppPath = source["terminalAppPath"];
 	        this.codingAgentApp = source["codingAgentApp"];
 	        this.autoLinkReposOnContextCreate = source["autoLinkReposOnContextCreate"];
+	        this.editorSettings = source["editorSettings"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
@@ -1809,6 +1863,26 @@ export namespace store {
 	        this.description = source["description"];
 	        this.modifierKeys = source["modifierKeys"];
 	        this.keyCode = source["keyCode"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class TerminalCommand {
+	    id: string;
+	    title: string;
+	    command: string;
+	    createdAt: string;
+	    updatedAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new TerminalCommand(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.command = source["command"];
+	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}

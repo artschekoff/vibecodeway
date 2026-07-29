@@ -361,15 +361,15 @@ func (r *Runner) GetPRByNumber(ctx context.Context, owner, repo string, prNumber
 
 // ghPR is the JSON shape returned by `gh pr list --json ...` for PR list queries.
 type ghPR struct {
-	Number         int            `json:"number"`
-	Title          string         `json:"title"`
-	Author         struct{ Login string } `json:"author"`
-	State          string         `json:"state"`
-	IsDraft        bool           `json:"isDraft"`
-	ReviewDecision string         `json:"reviewDecision"`
-	URL            string         `json:"url"`
-	HeadRefName    string         `json:"headRefName"`
-	Mergeable      string         `json:"mergeable"`
+	Number            int                    `json:"number"`
+	Title             string                 `json:"title"`
+	Author            struct{ Login string } `json:"author"`
+	State             string                 `json:"state"`
+	IsDraft           bool                   `json:"isDraft"`
+	ReviewDecision    string                 `json:"reviewDecision"`
+	URL               string                 `json:"url"`
+	HeadRefName       string                 `json:"headRefName"`
+	Mergeable         string                 `json:"mergeable"`
 	StatusCheckRollup []struct {
 		State string `json:"state"`
 	} `json:"statusCheckRollup"`
@@ -451,24 +451,32 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 	if err != nil {
 		return nil, err
 	}
-	r.annotateReReviews(ctx, owner, repo, prs)
+	reviewsByPR := r.annotateReReviews(ctx, owner, repo, prs)
+
+	for i := range prs {
+		raw, ok := reviewsByPR[prs[i].Number]
+		if !ok {
+			continue // best-effort: no reviews fetched → leave Reviewers empty
+		}
+		prs[i].Reviewers = latestReviewerDecisions(raw, prs[i].Author)
+	}
+
 	return prs, nil
 }
 
-// annotateReReviews flags PRs whose authenticated-user review was dismissed (needs re-approval).
+// annotateReReviews flags PRs whose authenticated-user review was dismissed (needs re-approval),
+// and returns the raw reviews payload fetched per PR so callers can reuse it (e.g. to derive
+// each reviewer's latest decision) without a second fetch of the same endpoint.
 // Best-effort: any auth/API failure leaves PRs unannotated rather than failing the list.
-// ponytail: one reviews API call per still-requested PR; fine at tens of PRs. If this gets
-// hot, request the `latestReviews` field on the `gh pr list` call and drop the per-PR fetch.
-func (r *Runner) annotateReReviews(ctx context.Context, owner, repo string, prs []vcs.PRData) {
+// ponytail: one reviews API call per PR; fine at tens of PRs. If this gets hot, request the
+// `latestReviews` field on the `gh pr list` call and drop the per-PR fetch.
+func (r *Runner) annotateReReviews(ctx context.Context, owner, repo string, prs []vcs.PRData) map[int][]byte {
+	reviewsByNumber := make(map[int][]byte)
 	login, err := r.GetAuthUser(ctx)
 	if err != nil || login == "" {
-		return
+		return reviewsByNumber
 	}
-	reviewsByNumber := make(map[int][]byte)
 	for _, pr := range prs {
-		if pr.ReviewStatus != "review_required" {
-			continue // only a freshly-requested PR can be a dismissed re-request
-		}
 		raw, err := r.apiPaginated(ctx,
 			fmt.Sprintf("repos/%s/%s/pulls/%d/reviews?per_page=100", owner, repo, pr.Number))
 		if err != nil {
@@ -477,6 +485,7 @@ func (r *Runner) annotateReReviews(ctx context.Context, owner, repo string, prs 
 		reviewsByNumber[pr.Number] = raw
 	}
 	applyReReviewStatus(prs, reviewsByNumber, login)
+	return reviewsByNumber
 }
 
 // ListChangesRequestedByUser fetches open PRs where the authenticated user submitted
@@ -535,15 +544,15 @@ func (r *Runner) ListRepoBranches(ctx context.Context, owner, repo string) ([]st
 // fetchReviewComments fetches inline PR review thread comments via the GitHub API.
 func (r *Runner) fetchReviewComments(ctx context.Context, repoPath string, prNumber int) ([]vcs.CommentData, error) {
 	type ghComment struct {
-		ID          int64  `json:"id"`
-		Body        string `json:"body"`
-		User        struct{ Login string } `json:"user"`
-		Path        string `json:"path"`
-		Line        *int   `json:"line"`
-		OriginalLine *int  `json:"original_line"`
-		InReplyToID *int64 `json:"in_reply_to_id"`
-		CreatedAt   string `json:"created_at"`
-		UpdatedAt   string `json:"updated_at"`
+		ID           int64                  `json:"id"`
+		Body         string                 `json:"body"`
+		User         struct{ Login string } `json:"user"`
+		Path         string                 `json:"path"`
+		Line         *int                   `json:"line"`
+		OriginalLine *int                   `json:"original_line"`
+		InReplyToID  *int64                 `json:"in_reply_to_id"`
+		CreatedAt    string                 `json:"created_at"`
+		UpdatedAt    string                 `json:"updated_at"`
 		// subject_type will be "line" for inline comments
 	}
 
@@ -589,11 +598,11 @@ func (r *Runner) fetchReviewComments(ctx context.Context, repoPath string, prNum
 // fetchIssueComments fetches conversation comments on the PR thread.
 func (r *Runner) fetchIssueComments(ctx context.Context, repoPath string, prNumber int) ([]vcs.CommentData, error) {
 	type ghComment struct {
-		ID        int64  `json:"id"`
-		Body      string `json:"body"`
+		ID        int64                  `json:"id"`
+		Body      string                 `json:"body"`
 		User      struct{ Login string } `json:"user"`
-		CreatedAt string `json:"created_at"`
-		UpdatedAt string `json:"updated_at"`
+		CreatedAt string                 `json:"created_at"`
+		UpdatedAt string                 `json:"updated_at"`
 	}
 
 	out, err := r.apiPaginated(ctx, fmt.Sprintf("repos/%s/issues/%d/comments?per_page=100", repoPath, prNumber))
@@ -625,11 +634,11 @@ func (r *Runner) fetchIssueComments(ctx context.Context, repoPath string, prNumb
 // fetchReviews fetches PR reviews (submitted review bodies).
 func (r *Runner) fetchReviews(ctx context.Context, repoPath string, prNumber int) ([]vcs.CommentData, error) {
 	type ghReview struct {
-		ID          int64  `json:"id"`
-		Body        string `json:"body"`
+		ID          int64                  `json:"id"`
+		Body        string                 `json:"body"`
 		User        struct{ Login string } `json:"user"`
-		State       string `json:"state"` // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED
-		SubmittedAt string `json:"submitted_at"`
+		State       string                 `json:"state"` // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED
+		SubmittedAt string                 `json:"submitted_at"`
 	}
 
 	out, err := r.apiPaginated(ctx, fmt.Sprintf("repos/%s/pulls/%d/reviews?per_page=100", repoPath, prNumber))
@@ -787,8 +796,13 @@ func latestReviewStateFromJSON(raw []byte, login string) string {
 
 // applyReReviewStatus rewrites ReviewStatus to reviewStatusReReviewRequired for any PR
 // whose latest review by `login` was DISMISSED — a prior approval that went stale.
+// Only PRs currently marked "review_required" are eligible, matching the original
+// behavior where reviews were fetched solely for those PRs.
 func applyReReviewStatus(prs []vcs.PRData, reviewsByNumber map[int][]byte, login string) {
 	for i := range prs {
+		if prs[i].ReviewStatus != "review_required" {
+			continue // only a freshly-requested PR can be a dismissed re-request
+		}
 		raw, ok := reviewsByNumber[prs[i].Number]
 		if !ok {
 			continue
@@ -797,6 +811,56 @@ func applyReReviewStatus(prs []vcs.PRData, reviewsByNumber map[int][]byte, login
 			prs[i].ReviewStatus = reviewStatusReReviewRequired
 		}
 	}
+}
+
+// latestReviewerDecisions collapses a PR's chronological review list into each
+// reviewer's latest EFFECTIVE decision. APPROVED/CHANGES_REQUESTED override an
+// earlier COMMENTED; a reviewer with only COMMENTED shows as "commented". The PR
+// author's self-reviews are excluded.
+func latestReviewerDecisions(raw []byte, prAuthor string) []vcs.ReviewerDecision {
+	type ghReview struct {
+		User        struct{ Login string } `json:"user"`
+		State       string                 `json:"state"`
+		SubmittedAt string                 `json:"submitted_at"`
+	}
+	var reviews []ghReview
+	if err := json.Unmarshal(raw, &reviews); err != nil {
+		return nil
+	}
+	// Reviews come oldest-first; keep the last decisive state per login, else COMMENTED.
+	decisive := map[string]vcs.ReviewerDecision{}
+	commented := map[string]vcs.ReviewerDecision{}
+	order := []string{}
+	seen := map[string]bool{}
+	for _, rv := range reviews {
+		login := rv.User.Login
+		if login == "" || login == prAuthor {
+			continue
+		}
+		if !seen[login] {
+			seen[login] = true
+			order = append(order, login)
+		}
+		switch rv.State {
+		case "APPROVED":
+			decisive[login] = vcs.ReviewerDecision{Login: login, State: "approved", SubmittedAt: rv.SubmittedAt}
+		case "CHANGES_REQUESTED":
+			decisive[login] = vcs.ReviewerDecision{Login: login, State: "changes_requested", SubmittedAt: rv.SubmittedAt}
+		case "DISMISSED":
+			delete(decisive, login)
+		case "COMMENTED":
+			commented[login] = vcs.ReviewerDecision{Login: login, State: "commented", SubmittedAt: rv.SubmittedAt}
+		}
+	}
+	out := make([]vcs.ReviewerDecision, 0, len(order))
+	for _, login := range order {
+		if d, ok := decisive[login]; ok {
+			out = append(out, d)
+		} else if d, ok := commented[login]; ok {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // mapReviewDecision converts a GitHub reviewDecision enum to our internal review_status.

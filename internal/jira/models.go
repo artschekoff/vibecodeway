@@ -14,6 +14,8 @@ type SearchResult struct {
 	Status    string `json:"status"`
 	Assignee  string `json:"assignee"`
 	IssueType string `json:"issuetype"`
+	Priority  string `json:"priority"`
+	Created   string `json:"created"`
 }
 
 // IssueDetail represents a full issue returned by jira workitem view.

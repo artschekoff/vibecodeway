@@ -8,6 +8,9 @@ type Props = {
   // When set, show only the repo whose repoPath matches (follows the editor's
   // repo selector). Unset => show all repos.
   activeRepoPath?: string;
+  // Bumped by the sidebar Refresh button to force an immediate re-fetch (the panel
+  // also polls on its own interval).
+  refreshSignal?: number;
 };
 
 const POLL_MS = 2000;
@@ -41,7 +44,7 @@ function loadCollapsed(): Set<string> {
   }
 }
 
-export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath }: Props) {
+export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refreshSignal }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
   const mountedRef = useRef(true);
@@ -71,11 +74,12 @@ export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath }: Pro
 
   useEffect(() => {
     let active = true;
+    mountedRef.current = true; // re-arm on every (re)run — deps now include refreshSignal
     const tick = async () => { if (active) await load(); };
     void tick();
     const t = setInterval(tick, POLL_MS);
     return () => { active = false; mountedRef.current = false; clearInterval(t); };
-  }, [load]);
+  }, [load, refreshSignal]);
 
   const act = async (fn: (repoPath: string, path: string) => Promise<void>, repoPath: string, path: string) => {
     try {

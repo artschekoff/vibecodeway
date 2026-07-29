@@ -156,5 +156,5 @@ func TestAgentTaskPrompt_migrationUpgradesSeededBody(t *testing.T) {
 	p, err := s.GetAIPrompt(context.Background(), "agent_task")
 	require.NoError(t, err)
 	assert.Contains(t, p.Body, "/writing-plans")
-	assert.Contains(t, p.Body, "/arts-load-context {{context_key}}")
+	assert.Contains(t, p.Body, "/context-consolidator-load-context {{context_key}}")
 }

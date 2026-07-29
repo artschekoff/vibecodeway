@@ -30,7 +30,7 @@ Respond with ONLY a JSON array of the 0-based indices of matching branches (e.g.
 // context's linked tickets and on-disk repos. Pure string assembly — no LLM
 // call is made with this prompt; it is handed to an external coding agent.
 const defaultAgentTaskPrompt = `/writing-plans
-/arts-load-context {{context_key}}
+/context-consolidator-load-context {{context_key}}
 
 You are a coding agent. Implement the task below using the git worktrees checked out on disk.
 
@@ -52,7 +52,7 @@ Work directly in these worktrees to implement the task. Inspect the relevant fil
 // used by BuildReviewTask to assemble a PR-review instruction string for an
 // external coding agent. Pure string assembly — no LLM call is made with
 // this prompt.
-const defaultPRReviewPrompt = `/arts-load-context {{context_key}}
+const defaultPRReviewPrompt = `/context-consolidator-load-context {{context_key}}
 
 You are a senior code reviewer. Review pull request #{{pr_number}} — {{pr_title}}.
 

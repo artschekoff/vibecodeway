@@ -5,8 +5,10 @@ import "@xterm/xterm/css/xterm.css";
 import { TerminalStart, TerminalWrite, TerminalResize, TerminalClose } from "../../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 
-export function Terminal({ cwd }: { cwd: string }) {
+export function Terminal({ cwd, onSession }: { cwd: string; onSession?: (sessionId: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const onSessionRef = useRef(onSession);
+  onSessionRef.current = onSession;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -16,7 +18,7 @@ export function Terminal({ cwd }: { cwd: string }) {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
-    fit.fit();
+    if (host.offsetWidth && host.offsetHeight) fit.fit();
 
     let sessionID = "";
     let cancelled = false;
@@ -29,9 +31,10 @@ export function Terminal({ cwd }: { cwd: string }) {
         return;
       }
       sessionID = id;
+      onSessionRef.current?.(id);
       offData = EventsOn(`term:data:${id}`, (chunk: string) => term.write(chunk));
       offExit = EventsOn(`term:exit:${id}`, () => term.write("\r\n[process exited]\r\n"));
-      void TerminalResize(id, term.cols, term.rows);
+      onResize(); // guarded fit + PTY resize (skips if the tab is hidden)
     });
 
     const disposeInput = term.onData((data) => {
@@ -39,6 +42,11 @@ export function Terminal({ cwd }: { cwd: string }) {
     });
 
     const onResize = () => {
+      // Skip while the host has no layout box — e.g. the editor tab is hidden
+      // (display:none), which collapses it to 0×0. FitAddon then proposes 1×1,
+      // and resizing the PTY to one column makes the shell redraw its prompt
+      // one char per line with split escape codes. Refit on return to visible.
+      if (!host.offsetWidth || !host.offsetHeight) return;
       fit.fit();
       if (sessionID) void TerminalResize(sessionID, term.cols, term.rows);
     };
@@ -59,6 +67,7 @@ export function Terminal({ cwd }: { cwd: string }) {
       offData?.();
       offExit?.();
       if (sessionID) {
+        onSessionRef.current?.("");
         void TerminalClose(sessionID);
         EventsOff(`term:data:${sessionID}`);
         EventsOff(`term:exit:${sessionID}`);
