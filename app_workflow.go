@@ -546,8 +546,10 @@ func (a *App) SolveWithAI(contextID, userPrompt string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := a.openWithCheckout("", firstWorktreePath); err != nil {
-		return "", err
-	}
+	// Consolidated with "Open Editor": the frontend opens the in-app editor after
+	// this returns (SolveWithAIModal.onOpenEditor), so we no longer launch a
+	// separate external agent via openWithCheckout — that was a double open. The
+	// task instruction is returned + copied to the clipboard to paste into the
+	// editor's terminal.
 	return instruction, nil
 }

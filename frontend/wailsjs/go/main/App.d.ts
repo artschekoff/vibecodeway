@@ -66,6 +66,8 @@ export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
 export function CreateContextEventHook(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.ContextEventHook>;
 
+export function CreateContextFromJiraIssue(arg1:string,arg2:string):Promise<store.Context>;
+
 export function CreateGlobalEventHook(arg1:string,arg2:string,arg3:string):Promise<store.GlobalEventHook>;
 
 export function CreateOrgUser(arg1:string,arg2:string,arg3:string):Promise<store.User>;

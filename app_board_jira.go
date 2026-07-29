@@ -6,6 +6,23 @@ import (
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 )
 
+// CreateContextFromJiraIssue creates a new context (keyed by the Jira issue key)
+// in the given org and attaches the issue to it, so a board to-do item becomes a
+// tracked context. Returns the new context (its id/key let the board link to it).
+func (a *App) CreateContextFromJiraIssue(orgID, jiraKey string) (*appstore.Context, error) {
+	if orgID == "" {
+		return nil, fmt.Errorf("orgID is required to create a context")
+	}
+	c, err := a.cliRunner.CreateContext(a.ctx, jiraKey, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("create context for %s: %w", jiraKey, err)
+	}
+	if _, err := a.AddIssuesToContext(c.ID, []string{jiraKey}); err != nil {
+		return c, fmt.Errorf("context created but attaching %s failed: %w", jiraKey, err)
+	}
+	return c, nil
+}
+
 // RefreshMyAssignedJiraIssues fetches the current user's assigned Jira issues,
 // persists them (preserving the seen flag for known keys), and returns the list
 // sorted by orderBy ("priority" default, or "created").

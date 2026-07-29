@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
-import { ExternalLink, RefreshCw, AlertTriangle, GitPullRequest, ClipboardList, Eye } from "lucide-react";
-import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues } from "../../wailsjs/go/main/App";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { ExternalLink, RefreshCw, AlertTriangle, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus } from "lucide-react";
+import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { useTabContext } from "../contexts/TabContext";
 import type { store, vcsstore } from "../../wailsjs/go/models";
 
 const PERSON_NAME_KEY = "cc:board-person-name";
+const PRIORITY_RANK: Record<string, number> = { Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1 };
+type JiraSort = "priority" | "status" | "date";
 
 export default function MyBoardPage() {
   const [personName, setPersonName] = useState(() => localStorage.getItem(PERSON_NAME_KEY) ?? "");
@@ -17,7 +19,28 @@ export default function MyBoardPage() {
   const [jiraIssues, setJiraIssues] = useState<store.BoardJiraAssignment[]>([]);
   const [refreshingJira, setRefreshingJira] = useState(false);
   const [jiraError, setJiraError] = useState("");
+  const [orgs, setOrgs] = useState<store.Organization[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const [jiraBaseUrl, setJiraBaseUrl] = useState("");
+  const [creatingKey, setCreatingKey] = useState("");
+  const [copiedKey, setCopiedKey] = useState("");
+  const [jiraSort, setJiraSort] = useState<JiraSort>("priority");
   const { openContextTab } = useTabContext();
+
+  // Client-side sort of the assigned issues (instant, no re-fetch). Note: acli's
+  // search can't return the Jira created date, so "date" falls back to fetchedAt.
+  const sortedJira = useMemo(() => {
+    const arr = [...jiraIssues];
+    if (jiraSort === "status") {
+      arr.sort((a, b) => (a.status || "").localeCompare(b.status || ""));
+    } else if (jiraSort === "date") {
+      const d = (x: store.BoardJiraAssignment) => x.created || x.fetchedAt || "";
+      arr.sort((a, b) => d(b).localeCompare(d(a)));
+    } else {
+      arr.sort((a, b) => (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0));
+    }
+    return arr;
+  }, [jiraIssues, jiraSort]);
 
   const load = useCallback(async (name: string) => {
     setLoading(true);
@@ -56,6 +79,40 @@ export default function MyBoardPage() {
     };
     void init();
   }, [load]);
+
+  // Load orgs (for "Create context") + the Jira base URL (for per-ticket links) once.
+  useEffect(() => {
+    void ListOrganizations().then((rows) => {
+      const list = (rows as store.Organization[]) ?? [];
+      setOrgs(list);
+      setSelectedOrgId((prev) => prev || list[0]?.id || "");
+    }).catch(() => { /* no orgs */ });
+    void GetJiraInstanceURL().then((u) => setJiraBaseUrl(u ?? "")).catch(() => { /* no jira */ });
+  }, []);
+
+  const jiraUrl = (key: string) => (jiraBaseUrl ? `${jiraBaseUrl}/browse/${key}` : "");
+
+  const copyJiraLink = (key: string) => {
+    const u = jiraUrl(key);
+    if (!u) return;
+    void navigator.clipboard?.writeText(u);
+    setCopiedKey(key);
+    window.setTimeout(() => setCopiedKey((k) => (k === key ? "" : k)), 1200);
+  };
+
+  const createContextForIssue = async (key: string) => {
+    if (!selectedOrgId) { setJiraError("Pick an organization to create a context."); return; }
+    setCreatingKey(key);
+    setJiraError("");
+    try {
+      await CreateContextFromJiraIssue(selectedOrgId, key);
+      await load(personName); // re-read the board so the row shows the new context link
+    } catch (e) {
+      setJiraError(e instanceof Error ? e.message : "Failed to create context");
+    } finally {
+      setCreatingKey("");
+    }
+  };
 
   const handleNameSave = () => {
     const trimmed = nameInput.trim();
@@ -160,7 +217,19 @@ export default function MyBoardPage() {
             onClick={() => void refreshJira()} disabled={refreshingJira}>
             {refreshingJira ? "Refreshing…" : "Refresh"}
           </button>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>by priority</span>
+          <select aria-label="sort assigned jira" style={{ fontSize: 11 }} value={jiraSort}
+            onChange={(e) => setJiraSort(e.target.value as JiraSort)} title="Sort assigned issues">
+            <option value="priority">Priority</option>
+            <option value="status">Status</option>
+            <option value="date">Date</option>
+          </select>
+          {orgs.length > 1 && (
+            <select aria-label="organization for new contexts" style={{ fontSize: 11, marginLeft: "auto" }}
+              value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)}
+              title="Organization used when creating a context from a ticket">
+              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          )}
         </div>
         {jiraError && (
           <div className="board-section-empty" style={{ color: "var(--danger, #e5534b)" }}>{jiraError}</div>
@@ -169,13 +238,33 @@ export default function MyBoardPage() {
           <div className="board-section-empty">No assigned Jira issues. Hit Refresh to fetch them.</div>
         ) : (
           <div className="board-section-items">
-            {jiraIssues.map((it) => (
+            {sortedJira.map((it) => (
               <div key={it.key} className="board-item" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontWeight: 600 }}>{it.key}</span>
-                <span style={{ flex: 1 }}>{it.summary}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{it.status}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{it.priority}</span>
-                {!it.seen && <span className="board-badge-new" style={{ fontSize: 10, color: "var(--accent)" }}>new</span>}
+                <span style={{ fontWeight: 600, flexShrink: 0 }}>{it.key}</span>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={it.summary}>{it.summary}</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{it.status}</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{it.priority}</span>
+                {!it.seen && <span className="board-badge-new" style={{ fontSize: 10, color: "var(--accent)", flexShrink: 0 }}>new</span>}
+                {jiraBaseUrl && (
+                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`open ${it.key} in Jira`} title="Open in Jira"
+                    onClick={() => BrowserOpenURL(jiraUrl(it.key))}><ExternalLink size={11} /></button>
+                )}
+                {jiraBaseUrl && (
+                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`copy ${it.key} link`} title={copiedKey === it.key ? "Copied" : "Copy Jira link"}
+                    onClick={() => copyJiraLink(it.key)}>{copiedKey === it.key ? <Check size={11} /> : <Copy size={11} />}</button>
+                )}
+                {it.contextId ? (
+                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`open context ${it.contextKey}`} title={`Open context ${it.contextKey}`}
+                    onClick={() => openContextTab(it.contextId!, it.contextKey!)}>
+                    <FolderPlus size={11} /> {it.contextKey}
+                  </button>
+                ) : (
+                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`create context from ${it.key}`}
+                    title="Create a context from this ticket" disabled={creatingKey === it.key || (orgs.length > 0 && !selectedOrgId)}
+                    onClick={() => void createContextForIssue(it.key)}>
+                    {creatingKey === it.key ? "Creating…" : <><FolderPlus size={11} /> Create context</>}
+                  </button>
+                )}
               </div>
             ))}
           </div>

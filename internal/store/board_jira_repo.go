@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -71,9 +72,17 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 // ListBoardJiraAssignments returns the persisted assignments sorted by orderBy
 // ("priority" default, or "created").
 func (s *Store) ListBoardJiraAssignments(ctx context.Context, orderBy string) ([]BoardJiraAssignment, error) {
+	// LEFT JOIN to surface an existing context link. A key can live in several
+	// contexts (UNIQUE is per (context_id, jira_key)); pick one deterministically
+	// via MIN(context_id) so each assignment yields exactly one row.
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT jira_key, summary, status, issue_type, priority, created, seen, fetched_at
-		FROM board_jira_assignments `+jiraAssignmentsOrderBy(orderBy))
+		SELECT b.jira_key, b.summary, b.status, b.issue_type, b.priority, b.created, b.seen, b.fetched_at,
+		       ji.context_id, c.key
+		FROM board_jira_assignments b
+		LEFT JOIN (SELECT jira_key, MIN(context_id) AS context_id FROM jira_issues GROUP BY jira_key) ji
+		       ON ji.jira_key = b.jira_key
+		LEFT JOIN contexts c ON c.id = ji.context_id
+		`+jiraAssignmentsOrderBy(orderBy))
 	if err != nil {
 		return nil, fmt.Errorf("list board jira: %w", err)
 	}
@@ -83,10 +92,15 @@ func (s *Store) ListBoardJiraAssignments(ctx context.Context, orderBy string) ([
 	for rows.Next() {
 		var it BoardJiraAssignment
 		var seen int
-		if err := rows.Scan(&it.Key, &it.Summary, &it.Status, &it.IssueType, &it.Priority, &it.Created, &seen, &it.FetchedAt); err != nil {
+		var ctxID, ctxKey sql.NullString
+		if err := rows.Scan(&it.Key, &it.Summary, &it.Status, &it.IssueType, &it.Priority, &it.Created, &seen, &it.FetchedAt, &ctxID, &ctxKey); err != nil {
 			return nil, fmt.Errorf("scan board jira: %w", err)
 		}
 		it.Seen = seen != 0
+		if ctxID.Valid && ctxID.String != "" {
+			id, key := ctxID.String, ctxKey.String
+			it.ContextID, it.ContextKey = &id, &key
+		}
 		out = append(out, it)
 	}
 	return out, rows.Err()

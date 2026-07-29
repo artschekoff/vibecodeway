@@ -111,7 +111,7 @@ export function SolveWithAIModal({ contextId, onClose, onOpenEditor }: Props) {
         )}
         {done && (
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-            Command copied to clipboard — paste it into the agent that just opened.
+            Task copied to clipboard — paste it into the terminal of the editor that just opened.
           </div>
         )}
       </div>

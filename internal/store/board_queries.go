@@ -59,6 +59,10 @@ type BoardJiraAssignment struct {
 	Created   string `json:"created"`
 	Seen      bool   `json:"seen"`
 	FetchedAt string `json:"fetchedAt"`
+	// ContextID/ContextKey are set when this assignment's Jira key already belongs
+	// to a context (so the board can show/open the linked context). Nil otherwise.
+	ContextID  *string `json:"contextId,omitempty"`
+	ContextKey *string `json:"contextKey,omitempty"`
 }
 
 // MyBoardData aggregates all sections of the My Board page.

@@ -114,6 +114,10 @@ export function CreateContextEventHook(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CreateContextEventHook'](arg1, arg2, arg3, arg4);
 }
 
+export function CreateContextFromJiraIssue(arg1, arg2) {
+  return window['go']['main']['App']['CreateContextFromJiraIssue'](arg1, arg2);
+}
+
 export function CreateGlobalEventHook(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateGlobalEventHook'](arg1, arg2, arg3);
 }
