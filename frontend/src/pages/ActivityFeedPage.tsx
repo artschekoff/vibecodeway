@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { RefreshCw } from "lucide-react";
-import { GetActivityFeed, SearchContextIDs } from "../../wailsjs/go/main/App";
+import { GetActivityFeed, SearchContextIDs, ListMyAssignedJiraIssues, MarkMyAssignedJiraIssuesSeen } from "../../wailsjs/go/main/App";
 import { useTabContext } from "../contexts/TabContext";
 import type { ActivityFeedItem } from "../types";
 import { activitySource, describeActivity } from "../lib/activityFeed";
+import type { store } from "../../wailsjs/go/models";
 
 export default function ActivityFeedPage() {
   const { openContextTab } = useTabContext();
@@ -11,6 +12,7 @@ export default function ActivityFeedPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [matchedIDs, setMatchedIDs] = useState<Set<string> | null>(null);
+  const [assignedJira, setAssignedJira] = useState<store.BoardJiraAssignment[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const load = useCallback(() => {
@@ -19,6 +21,13 @@ export default function ActivityFeedPage() {
       .then((res) => setItems((res ?? []) as unknown as ActivityFeedItem[]))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
+    void ListMyAssignedJiraIssues("priority")
+      .then((rows) => {
+        const unseen = (rows ?? []).filter((r) => !r.seen);
+        setAssignedJira(unseen);
+        if (unseen.length > 0) void MarkMyAssignedJiraIssuesSeen();
+      })
+      .catch(() => setAssignedJira([]));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -78,6 +87,14 @@ export default function ActivityFeedPage() {
           </p>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {assignedJira.map((it) => (
+            <div key={`jira-${it.key}`} className="activity-item" style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 8px" }}>
+              <span>Jira</span>
+              <span data-testid="assigned-jira-desc" style={{ flex: 1 }}>{it.summary}</span>
+              <span style={{ fontWeight: 600 }}>{it.key}</span>
+              <span className="board-badge-new" style={{ fontSize: 10, color: "var(--accent)" }}>new</span>
+            </div>
+          ))}
           {filtered.map((item) => {
             const source = activitySource(item);
             return (

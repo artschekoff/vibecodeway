@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Copy, Check } from "lucide-react";
-import { GetContextChanges, RefreshContext } from "../../wailsjs/go/main/App";
+import { GetContextChanges, RefreshContext, RefreshContextPRs } from "../../wailsjs/go/main/App";
 import { TerminalPanel } from "../components/editor/TerminalPanel";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
@@ -26,6 +26,8 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
   const [cwd, setCwd] = useState<string>("");
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [prRefreshing, setPrRefreshing] = useState(false);
+  const [prRefreshError, setPrRefreshError] = useState("");
   const [copied, setCopied] = useState(false);
   const { getFiles, openEditorFile } = useEditorFiles();
   const { tabs, activeKey } = getFiles(contextId);
@@ -71,6 +73,23 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
     } finally {
       setRefreshSignal((n) => n + 1);
       setRefreshing(false);
+    }
+  };
+
+  // PR-only re-sync: pulls the freshest PRs for the context's branches from the
+  // remote and re-renders EditorPRInfo. Surfaces the error inline (RefreshContext
+  // swallows VCS failures), so a failed sync is visible instead of showing nothing.
+  const handleRefreshPRs = async () => {
+    if (prRefreshing) return;
+    setPrRefreshing(true);
+    setPrRefreshError("");
+    try {
+      await RefreshContextPRs(contextId);
+      setRefreshSignal((n) => n + 1);
+    } catch (e) {
+      setPrRefreshError(e instanceof Error ? e.message : "Failed to refresh PRs");
+    } finally {
+      setPrRefreshing(false);
     }
   };
 
@@ -129,6 +148,23 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
               {editorModeLabel(editorModeForKey(contextKey))}
             </div>
           </div>
+        )}
+        {/* Always-visible PR header so a just-created PR can be pulled even when
+            none are cached yet (EditorPRInfo renders nothing at zero PRs). */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
+          <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)" }}>Pull requests</span>
+          <button
+            onClick={() => void handleRefreshPRs()}
+            disabled={prRefreshing}
+            title="Refresh PRs from GitHub"
+            aria-label="refresh PRs"
+            style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: prRefreshing ? "default" : "pointer", color: "var(--text-muted)", fontSize: 11, padding: 2 }}
+          >
+            <RefreshCw size={12} className={prRefreshing ? "spinning" : undefined} />
+          </button>
+        </div>
+        {prRefreshError && (
+          <div style={{ fontSize: 11, color: "var(--danger, #e5534b)", padding: "4px 12px" }}>{prRefreshError}</div>
         )}
         {/* Narrow the PR head by repo only when the selector is meaningful (>1 repo).
             A single-repo context (e.g. PR review) has one PR that IS the subject —

@@ -32,6 +32,12 @@ class ResizeObserverMock {
 }
 globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 
+// jsdom reports offsetWidth/offsetHeight as 0 for every element. Terminal skips
+// fit/resize when its host has no layout box (hidden tab); give elements a real
+// size here so the "visible terminal" path (fit + PTY resize) is exercised.
+Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, value: 800 });
+Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, value: 600 });
+
 const { TerminalStart, TerminalWrite, TerminalClose, TerminalResize } = vi.hoisted(() => ({
   TerminalStart: vi.fn(), TerminalWrite: vi.fn(), TerminalClose: vi.fn(), TerminalResize: vi.fn(),
 }));

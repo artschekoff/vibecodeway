@@ -74,6 +74,8 @@ export namespace jira {
 	    status: string;
 	    assignee: string;
 	    issuetype: string;
+	    priority: string;
+	    created: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchResult(source);
@@ -86,6 +88,8 @@ export namespace jira {
 	        this.status = source["status"];
 	        this.assignee = source["assignee"];
 	        this.issuetype = source["issuetype"];
+	        this.priority = source["priority"];
+	        this.created = source["created"];
 	    }
 	}
 
@@ -280,6 +284,26 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class BlameLine {
+	    line: number;
+	    commit: string;
+	    author: string;
+	    date: string;
+	    summary: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlameLine(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.commit = source["commit"];
+	        this.author = source["author"];
+	        this.date = source["date"];
+	        this.summary = source["summary"];
+	    }
+	}
 	export class EditorRepoChoice {
 	    repoId: string;
 	    repoName: string;
@@ -368,6 +392,38 @@ export namespace main {
 	}
 	
 	
+	export class FileCommit {
+	    hash: string;
+	    author: string;
+	    date: string;
+	    subject: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileCommit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.author = source["author"];
+	        this.date = source["date"];
+	        this.subject = source["subject"];
+	    }
+	}
+	export class FileDiff {
+	    before: string;
+	    after: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.before = source["before"];
+	        this.after = source["after"];
+	    }
+	}
 	export class MatchedBranch {
 	    platform: string;
 	    ownerRepo: string;
@@ -441,58 +497,6 @@ export namespace main {
 		    }
 		    return a;
 		}
-	}
-	export class FileCommit {
-	    hash: string;
-	    author: string;
-	    date: string;
-	    subject: string;
-
-	    static createFrom(source: any = {}) {
-	        return new FileCommit(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.hash = source["hash"];
-	        this.author = source["author"];
-	        this.date = source["date"];
-	        this.subject = source["subject"];
-	    }
-	}
-	export class FileDiff {
-	    before: string;
-	    after: string;
-
-	    static createFrom(source: any = {}) {
-	        return new FileDiff(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.before = source["before"];
-	        this.after = source["after"];
-	    }
-	}
-	export class BlameLine {
-	    line: number;
-	    commit: string;
-	    author: string;
-	    date: string;
-	    summary: string;
-
-	    static createFrom(source: any = {}) {
-	        return new BlameLine(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.line = source["line"];
-	        this.commit = source["commit"];
-	        this.author = source["author"];
-	        this.date = source["date"];
-	        this.summary = source["summary"];
-	    }
 	}
 	export class ReviewPRResult {
 	    contextId: string;
@@ -1072,7 +1076,7 @@ export namespace store {
 	    autoLinkReposOnContextCreate: boolean;
 	    editorSettings: string;
 	    updatedAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
 	    }
@@ -1180,6 +1184,32 @@ export namespace store {
 	        this.summary = source["summary"];
 	        this.timestamp = source["timestamp"];
 	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class BoardJiraAssignment {
+	    key: string;
+	    summary: string;
+	    status: string;
+	    issueType: string;
+	    priority: string;
+	    created: string;
+	    seen: boolean;
+	    fetchedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardJiraAssignment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.summary = source["summary"];
+	        this.status = source["status"];
+	        this.issueType = source["issueType"];
+	        this.priority = source["priority"];
+	        this.created = source["created"];
+	        this.seen = source["seen"];
+	        this.fetchedAt = source["fetchedAt"];
 	    }
 	}
 	export class BoardPR {
@@ -1866,26 +1896,6 @@ export namespace store {
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
-	export class TerminalCommand {
-	    id: string;
-	    title: string;
-	    command: string;
-	    createdAt: string;
-	    updatedAt: string;
-
-	    static createFrom(source: any = {}) {
-	        return new TerminalCommand(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.title = source["title"];
-	        this.command = source["command"];
-	        this.createdAt = source["createdAt"];
-	        this.updatedAt = source["updatedAt"];
-	    }
-	}
 	export class Message {
 	    id: string;
 	    authorId?: string;
@@ -1930,6 +1940,7 @@ export namespace store {
 	    blockers: BoardBlocker[];
 	    myAssignments: BoardAssignment[];
 	    myOpenPRs: BoardPR[];
+	    myAssignedJiraIssues: BoardJiraAssignment[];
 	
 	    static createFrom(source: any = {}) {
 	        return new MyBoardData(source);
@@ -1940,6 +1951,7 @@ export namespace store {
 	        this.blockers = this.convertValues(source["blockers"], BoardBlocker);
 	        this.myAssignments = this.convertValues(source["myAssignments"], BoardAssignment);
 	        this.myOpenPRs = this.convertValues(source["myOpenPRs"], BoardPR);
+	        this.myAssignedJiraIssues = this.convertValues(source["myAssignedJiraIssues"], BoardJiraAssignment);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2078,6 +2090,26 @@ export namespace store {
 	
 	
 	
+	export class TerminalCommand {
+	    id: string;
+	    title: string;
+	    command: string;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.command = source["command"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class UnresolvedAuthor {
 	    sourceId: string;
 	    sourceLabel: string;
@@ -2438,6 +2470,22 @@ export namespace vcsstore {
 		    return a;
 		}
 	}
+	export class ReviewerDecision {
+	    login: string;
+	    state: string;
+	    submittedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReviewerDecision(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.login = source["login"];
+	        this.state = source["state"];
+	        this.submittedAt = source["submittedAt"];
+	    }
+	}
 	export class ReviewRequest {
 	    id: string;
 	    repoId: string;
@@ -2451,6 +2499,8 @@ export namespace vcsstore {
 	    fetchedAt: string;
 	    reviewedAt?: string;
 	    dismissedAt?: string;
+	    viewedAt?: string;
+	    reviewers?: ReviewerDecision[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ReviewRequest(source);
@@ -2470,8 +2520,29 @@ export namespace vcsstore {
 	        this.fetchedAt = source["fetchedAt"];
 	        this.reviewedAt = source["reviewedAt"];
 	        this.dismissedAt = source["dismissedAt"];
+	        this.viewedAt = source["viewedAt"];
+	        this.reviewers = this.convertValues(source["reviewers"], ReviewerDecision);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
+	
 	export class VCSAuth {
 	    id: string;
 	    platform: string;

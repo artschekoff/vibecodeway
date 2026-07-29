@@ -222,6 +222,18 @@ export function FetchPruneRepoPath(arg1) {
   return window['go']['main']['App']['FetchPruneRepoPath'](arg1);
 }
 
+export function FileBlame(arg1, arg2) {
+  return window['go']['main']['App']['FileBlame'](arg1, arg2);
+}
+
+export function FileDiffAtCommit(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FileDiffAtCommit'](arg1, arg2, arg3);
+}
+
+export function FileHistory(arg1, arg2) {
+  return window['go']['main']['App']['FileHistory'](arg1, arg2);
+}
+
 export function FindWorkspaceForBranch(arg1, arg2) {
   return window['go']['main']['App']['FindWorkspaceForBranch'](arg1, arg2);
 }
@@ -262,26 +274,6 @@ export function GetAppSettings() {
   return window['go']['main']['App']['GetAppSettings']();
 }
 
-export function GetEditorSettings() {
-  return window['go']['main']['App']['GetEditorSettings']();
-}
-
-export function SetEditorSettings(arg1) {
-  return window['go']['main']['App']['SetEditorSettings'](arg1);
-}
-
-export function FileHistory(arg1, arg2) {
-  return window['go']['main']['App']['FileHistory'](arg1, arg2);
-}
-
-export function FileDiffAtCommit(arg1, arg2, arg3) {
-  return window['go']['main']['App']['FileDiffAtCommit'](arg1, arg2, arg3);
-}
-
-export function FileBlame(arg1, arg2) {
-  return window['go']['main']['App']['FileBlame'](arg1, arg2);
-}
-
 export function GetContextChanges(arg1) {
   return window['go']['main']['App']['GetContextChanges'](arg1);
 }
@@ -300,6 +292,10 @@ export function GetContextRelations(arg1) {
 
 export function GetContextSnapshot(arg1) {
   return window['go']['main']['App']['GetContextSnapshot'](arg1);
+}
+
+export function GetEditorSettings() {
+  return window['go']['main']['App']['GetEditorSettings']();
 }
 
 export function GetEstimationHistory(arg1) {
@@ -434,6 +430,10 @@ export function ListMessages(arg1) {
   return window['go']['main']['App']['ListMessages'](arg1);
 }
 
+export function ListMyAssignedJiraIssues(arg1) {
+  return window['go']['main']['App']['ListMyAssignedJiraIssues'](arg1);
+}
+
 export function ListOrgUsers(arg1) {
   return window['go']['main']['App']['ListOrgUsers'](arg1);
 }
@@ -498,6 +498,10 @@ export function LoadSlackContext(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['LoadSlackContext'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
+export function MarkAllReviewRequestsViewed() {
+  return window['go']['main']['App']['MarkAllReviewRequestsViewed']();
+}
+
 export function MarkAssignmentsOutdated(arg1) {
   return window['go']['main']['App']['MarkAssignmentsOutdated'](arg1);
 }
@@ -522,12 +526,20 @@ export function MarkIssueViewed(arg1) {
   return window['go']['main']['App']['MarkIssueViewed'](arg1);
 }
 
+export function MarkMyAssignedJiraIssuesSeen() {
+  return window['go']['main']['App']['MarkMyAssignedJiraIssuesSeen']();
+}
+
 export function MarkPRCommentViewed(arg1) {
   return window['go']['main']['App']['MarkPRCommentViewed'](arg1);
 }
 
 export function MarkPRViewed(arg1) {
   return window['go']['main']['App']['MarkPRViewed'](arg1);
+}
+
+export function MarkReviewRequestViewed(arg1) {
+  return window['go']['main']['App']['MarkReviewRequestViewed'](arg1);
 }
 
 export function MarkSlackChannelAllViewed(arg1) {
@@ -620,6 +632,14 @@ export function RefreshAllContexts() {
 
 export function RefreshContext(arg1) {
   return window['go']['main']['App']['RefreshContext'](arg1);
+}
+
+export function RefreshContextPRs(arg1) {
+  return window['go']['main']['App']['RefreshContextPRs'](arg1);
+}
+
+export function RefreshMyAssignedJiraIssues(arg1) {
+  return window['go']['main']['App']['RefreshMyAssignedJiraIssues'](arg1);
 }
 
 export function RefreshPendingReviews() {
@@ -744,6 +764,10 @@ export function SetContextsOrder(arg1) {
 
 export function SetCurrentAssignmentStep(arg1, arg2) {
   return window['go']['main']['App']['SetCurrentAssignmentStep'](arg1, arg2);
+}
+
+export function SetEditorSettings(arg1) {
+  return window['go']['main']['App']['SetEditorSettings'](arg1);
 }
 
 export function SetJiraBaseURL(arg1, arg2) {

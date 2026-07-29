@@ -505,6 +505,12 @@ export interface VCSAuth {
   updatedAt: string;
 }
 
+export interface ReviewerDecision {
+  login: string;
+  state: string;
+  submittedAt: string;
+}
+
 export interface ReviewRequest {
   id: string;
   repoId: string;
@@ -518,6 +524,8 @@ export interface ReviewRequest {
   fetchedAt: string;
   reviewedAt?: string;
   dismissedAt?: string;
+  viewedAt?: string;
+  reviewers?: ReviewerDecision[];
 }
 
 // --- Context Relations ---

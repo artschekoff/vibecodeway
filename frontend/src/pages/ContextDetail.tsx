@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
-import { ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Code, Copy, ExternalLink, GitBranch, GitPullRequest, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
+import { ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Code, Copy, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
 import {
   GetContextDetail,
   RefreshContext,
@@ -280,6 +280,12 @@ function PRCard({ pr, vcsBranches, onMarkPRViewed, onMarkCommentViewed, checkout
           <GitPullRequest size={13} className="pr-type-icon" />
           <span className="pr-number">#{pr.prNumber}</span>
           <span className="pr-title">{pr.title}</span>
+          {unresolvedComments.length > 0 && (
+            <span className="pr-unresolved-count" title={`${unresolvedComments.length} unresolved comment(s)`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
+              <MessageSquare size={11} /> {unresolvedComments.length}
+            </span>
+          )}
         </div>
         <div className="pr-card-actions">
           {pr.url && (

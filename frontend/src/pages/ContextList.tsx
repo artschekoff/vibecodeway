@@ -56,6 +56,8 @@ import {
   AddRepoLocalPath,
   RemoveRepoLocalPath,
   DismissReviewRequest,
+  MarkReviewRequestViewed,
+  MarkAllReviewRequestsViewed,
   OpenWorkspaceTerminal,
   OpenRepoPathTerminal,
   ListWorkspaces,
@@ -113,6 +115,8 @@ function ReviewCard({
   checkoutLoading,
   onReview,
   reviewing,
+  isUnviewed,
+  onMarkViewed,
 }: {
   review: ReviewRequest;
   onDismiss?: (id: string) => void;
@@ -120,6 +124,8 @@ function ReviewCard({
   checkoutLoading?: boolean;
   onReview?: () => void;
   reviewing?: boolean;
+  isUnviewed?: boolean;
+  onMarkViewed?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const isWaiting = !!review.reviewedAt;
@@ -137,6 +143,13 @@ function ReviewCard({
   return (
     <div className={`review-card${isWaiting ? " review-card--waiting" : ""}`}>
       <div className="review-card-top">
+        {isUnviewed && (
+          <span
+            data-testid="review-new"
+            title="Not viewed yet"
+            style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }}
+          />
+        )}
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
         {isWaiting && !status.terminal ? (
@@ -148,13 +161,27 @@ function ReviewCard({
           </span>
         )}
       </div>
+      {review.reviewers && review.reviewers.length > 0 && (
+        <div className="review-reviewers" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+          {review.reviewers.map((rv) => (
+            <span
+              key={rv.login}
+              className={`pr-status-badge${rv.state === "approved" ? " pr-status--approved" : rv.state === "changes_requested" ? " pr-status--changes-requested" : ""}`}
+              style={{ fontSize: 10 }}
+              title={`${rv.login}: ${rv.state}`}
+            >
+              {rv.state === "approved" ? "✓" : rv.state === "changes_requested" ? "✗" : "💬"} <span>{rv.login}</span>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
         <div className="review-card-btns">
           {review.headBranch && onReview && (
             <button
               className="vcs-checkout-btn"
-              onClick={onReview}
+              onClick={() => { onMarkViewed?.(); onReview(); }}
               disabled={reviewing}
               title={`Review PR #${review.prNumber} with AI`}
             >
@@ -164,7 +191,7 @@ function ReviewCard({
           {review.headBranch && onCheckout && (
             <button
               className="review-open-btn"
-              onClick={onCheckout}
+              onClick={() => { onMarkViewed?.(); onCheckout(); }}
               disabled={checkoutLoading}
               title={`Checkout ${review.headBranch} in workspace`}
             >
@@ -177,7 +204,7 @@ function ReviewCard({
             </button>
           )}
           {review.prUrl && (
-            <button className="review-open-btn" onClick={() => BrowserOpenURL(review.prUrl)} title="Open PR">
+            <button className="review-open-btn" onClick={() => { onMarkViewed?.(); BrowserOpenURL(review.prUrl); }} title="Open PR">
               Open <ExternalLink size={11} />
             </button>
           )}
@@ -740,6 +767,25 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     catch (e) { setError(String(e)); }
   };
 
+  const handleMarkAllReviewsViewed = async () => {
+    try { await MarkAllReviewRequestsViewed(); await loadReviews(); }
+    catch (e) { setError(String(e)); }
+  };
+
+  const handleMarkReviewViewed = (id: string) => {
+    void MarkReviewRequestViewed(id).then(() => loadReviews());
+  };
+
+  // Dismiss every merged/closed (terminal) review across all repos in one go.
+  const handleCleanupReviews = async () => {
+    const terminal = repoGroups.flatMap((g) => g.reviews).filter((r) => reviewStatusMeta(r.reviewStatus).terminal);
+    if (terminal.length === 0) return;
+    try {
+      await Promise.all(terminal.map((r) => DismissReviewRequest(r.id)));
+      await loadReviews();
+    } catch (e) { setError(String(e)); }
+  };
+
   const handleAddRepo = async () => {
     const trimmed = addOwnerRepo.trim();
     if (!trimmed || !trimmed.includes("/")) { setAddRepoError("Enter owner/repo (e.g. octocat/hello-world)"); return; }
@@ -1227,15 +1273,47 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         {activeTab === "reviews" && (
           <>
             {/* Repo management moved to Repositories tab */}
-            <div style={{ padding: "8px 16px", fontSize: 12, color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
-              Repositories managed in the{" "}
-              <button
-                style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 12, padding: 0 }}
-                onClick={() => switchTab("repositories")}
-              >
-                Repositories tab
-              </button>
-              .
+            <div style={{ padding: "8px 16px", fontSize: 12, color: "var(--text-muted)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span>
+                Repositories managed in the{" "}
+                <button
+                  style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 12, padding: 0 }}
+                  onClick={() => switchTab("repositories")}
+                >
+                  Repositories tab
+                </button>
+                .
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {(() => {
+                  const unviewed = repoGroups.flatMap((g) => g.reviews).filter((r) => !r.viewedAt && !r.dismissedAt).length;
+                  return unviewed > 0 ? (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 11, whiteSpace: "nowrap" }}
+                      aria-label="mark all reviews viewed"
+                      title="Mark all review items as seen"
+                      onClick={() => void handleMarkAllReviewsViewed()}
+                    >
+                      Mark all viewed ({unviewed})
+                    </button>
+                  ) : null;
+                })()}
+                {(() => {
+                  const mergedClosed = repoGroups.flatMap((g) => g.reviews).filter((r) => reviewStatusMeta(r.reviewStatus).terminal).length;
+                  return mergedClosed > 0 ? (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 11, whiteSpace: "nowrap" }}
+                      aria-label="cleanup merged and closed reviews"
+                      title="Dismiss all merged/closed reviews"
+                      onClick={() => void handleCleanupReviews()}
+                    >
+                      Cleanup merged/closed ({mergedClosed})
+                    </button>
+                  ) : null;
+                })()}
+              </div>
             </div>
 
             {/* Reviews grouped by repo */}
@@ -1302,6 +1380,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                             onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
                             onReview={() => void handleReviewWithAI(review)}
                             reviewing={reviewingId === review.id}
+                            isUnviewed={!review.viewedAt}
+                            onMarkViewed={() => handleMarkReviewViewed(review.id)}
                           />
                         ))}
                       </div>
@@ -1322,6 +1402,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
                               onReview={() => void handleReviewWithAI(review)}
                               reviewing={reviewingId === review.id}
+                              isUnviewed={!review.viewedAt}
+                              onMarkViewed={() => handleMarkReviewViewed(review.id)}
                             />
                           ))}
                         </div>
@@ -1343,6 +1425,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
                               onReview={() => void handleReviewWithAI(review)}
                               reviewing={reviewingId === review.id}
+                              isUnviewed={!review.viewedAt}
+                              onMarkViewed={() => handleMarkReviewViewed(review.id)}
                             />
                           ))}
                         </div>

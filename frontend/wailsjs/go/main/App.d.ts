@@ -120,6 +120,12 @@ export function EnsureContextEditorWorkspace(arg1:string):Promise<main.ContextEd
 
 export function FetchPruneRepoPath(arg1:string):Promise<void>;
 
+export function FileBlame(arg1:string,arg2:string):Promise<Array<main.BlameLine>>;
+
+export function FileDiffAtCommit(arg1:string,arg2:string,arg3:string):Promise<main.FileDiff>;
+
+export function FileHistory(arg1:string,arg2:string):Promise<Array<main.FileCommit>>;
+
 export function FindWorkspaceForBranch(arg1:string,arg2:string):Promise<vcsstore.VCSWorkspace>;
 
 export function GenerateEventsFromMessages(arg1:string):Promise<Array<store.Event>>;
@@ -140,16 +146,6 @@ export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
 
-export function GetEditorSettings():Promise<string>;
-
-export function SetEditorSettings(arg1:string):Promise<void>;
-
-export function FileHistory(arg1:string,arg2:string):Promise<Array<main.FileCommit>>;
-
-export function FileDiffAtCommit(arg1:string,arg2:string,arg3:string):Promise<main.FileDiff>;
-
-export function FileBlame(arg1:string,arg2:string):Promise<Array<main.BlameLine>>;
-
 export function GetContextChanges(arg1:string):Promise<Array<main.RepoChange>>;
 
 export function GetContextDetail(arg1:string):Promise<service.ContextDetail>;
@@ -159,6 +155,8 @@ export function GetContextParticipants(arg1:string):Promise<Array<string>>;
 export function GetContextRelations(arg1:string):Promise<Array<store.ContextRelation>>;
 
 export function GetContextSnapshot(arg1:string):Promise<store.ContextSnapshot>;
+
+export function GetEditorSettings():Promise<string>;
 
 export function GetEstimationHistory(arg1:string):Promise<Array<store.EstimationLog>>;
 
@@ -226,6 +224,8 @@ export function ListLocalBranches(arg1:string):Promise<Array<vcs.LocalBranch>>;
 
 export function ListMessages(arg1:string):Promise<Array<store.Message>>;
 
+export function ListMyAssignedJiraIssues(arg1:string):Promise<Array<store.BoardJiraAssignment>>;
+
 export function ListOrgUsers(arg1:string):Promise<Array<store.User>>;
 
 export function ListOrganizations():Promise<Array<store.Organization>>;
@@ -258,6 +258,8 @@ export function ListWorkspaces(arg1:string):Promise<Array<vcsstore.VCSWorkspace>
 
 export function LoadSlackContext(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string):Promise<void>;
 
+export function MarkAllReviewRequestsViewed():Promise<void>;
+
 export function MarkAssignmentsOutdated(arg1:string):Promise<Record<string, number>>;
 
 export function MarkBranchAllViewed(arg1:string):Promise<void>;
@@ -270,9 +272,13 @@ export function MarkIssueAllViewed(arg1:string):Promise<void>;
 
 export function MarkIssueViewed(arg1:string):Promise<void>;
 
+export function MarkMyAssignedJiraIssuesSeen():Promise<void>;
+
 export function MarkPRCommentViewed(arg1:string):Promise<void>;
 
 export function MarkPRViewed(arg1:string):Promise<void>;
+
+export function MarkReviewRequestViewed(arg1:string):Promise<void>;
 
 export function MarkSlackChannelAllViewed(arg1:string):Promise<void>;
 
@@ -319,6 +325,10 @@ export function RefinePersonAssignment(arg1:string,arg2:string,arg3:string):Prom
 export function RefreshAllContexts():Promise<Array<service.ReloadAllResult>>;
 
 export function RefreshContext(arg1:string):Promise<service.RefreshResult>;
+
+export function RefreshContextPRs(arg1:string):Promise<Array<vcsstore.PullRequest>>;
+
+export function RefreshMyAssignedJiraIssues(arg1:string):Promise<Array<store.BoardJiraAssignment>>;
 
 export function RefreshPendingReviews():Promise<void>;
 
@@ -381,6 +391,8 @@ export function SetContextWorkflowStatus(arg1:string,arg2:string,arg3:string):Pr
 export function SetContextsOrder(arg1:Array<string>):Promise<void>;
 
 export function SetCurrentAssignmentStep(arg1:string,arg2:string):Promise<store.PersonAssignment>;
+
+export function SetEditorSettings(arg1:string):Promise<void>;
 
 export function SetJiraBaseURL(arg1:string,arg2:string):Promise<void>;
 

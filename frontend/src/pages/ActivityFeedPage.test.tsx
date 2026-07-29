@@ -7,11 +7,13 @@ vi.mock("../contexts/TabContext", () => ({
   useTabContext: () => ({ openContextTab }),
 }));
 
-const { GetActivityFeed, SearchContextIDs } = vi.hoisted(() => ({
+const { GetActivityFeed, SearchContextIDs, ListMyAssignedJiraIssues, MarkMyAssignedJiraIssuesSeen } = vi.hoisted(() => ({
   GetActivityFeed: vi.fn(),
   SearchContextIDs: vi.fn(),
+  ListMyAssignedJiraIssues: vi.fn().mockResolvedValue([]),
+  MarkMyAssignedJiraIssuesSeen: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetActivityFeed, SearchContextIDs }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetActivityFeed, SearchContextIDs, ListMyAssignedJiraIssues, MarkMyAssignedJiraIssuesSeen }));
 
 import ActivityFeedPage from "./ActivityFeedPage";
 

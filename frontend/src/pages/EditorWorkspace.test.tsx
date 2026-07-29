@@ -16,15 +16,16 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
   ),
 }));
 
-const { GetContextChanges, RefreshContext, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite } = vi.hoisted(() => ({
+const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   RefreshContext: vi.fn(),
+  RefreshContextPRs: vi.fn(),
   GetEditorSettings: vi.fn(),
   SetEditorSettings: vi.fn(),
   ListTerminalCommands: vi.fn().mockResolvedValue([]),
   TerminalWrite: vi.fn(),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";
@@ -175,5 +176,29 @@ describe("EditorWorkspace", () => {
     const repoSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="/r/rdbms"]'))!;
     fireEvent.change(repoSelect, { target: { value: "/r/rdbms" } });
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1:id-rdbms"));
+  });
+
+  it("shows an always-visible refresh-PRs button that re-syncs PRs on click", async () => {
+    RefreshContextPRs.mockResolvedValue([]);
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider>
+    );
+    // Button is present even though EditorPRInfo (mocked) shows no PRs.
+    const btn = await screen.findByRole("button", { name: /refresh prs/i });
+    fireEvent.click(btn);
+    await waitFor(() => expect(RefreshContextPRs).toHaveBeenCalledWith("c1"));
+  });
+
+  it("surfaces a PR-refresh error inline instead of failing silently", async () => {
+    RefreshContextPRs.mockRejectedValue(new Error("gh auth failed"));
+    render(
+      <EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider>
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /refresh prs/i }));
+    await waitFor(() => expect(screen.getByText("gh auth failed")).toBeInTheDocument());
   });
 });

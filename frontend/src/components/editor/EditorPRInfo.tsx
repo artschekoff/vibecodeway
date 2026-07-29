@@ -32,6 +32,7 @@ export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { conte
     <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 10 }}>
       {shown.map((pr) => {
         const unread = countUnreadComments(pr.comments);
+        const unresolved = (pr.comments ?? []).filter((c) => !c.isResolved).length;
         return (
           <div key={pr.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <button
@@ -55,6 +56,11 @@ export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { conte
               {unread > 0 && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={`${unread} unread comment(s)`}>
                   <MessageSquare size={11} /> {unread}
+                </span>
+              )}
+              {unresolved > 0 && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--danger, #e5534b)" }} title={`${unresolved} unresolved comment(s)`}>
+                  ⚠ {unresolved}
                 </span>
               )}
             </div>
