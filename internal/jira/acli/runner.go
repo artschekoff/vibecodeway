@@ -47,6 +47,7 @@ var allowedSubcmds = map[string]bool{
 	"jira workitem search":       true,
 	"jira workitem view":         true,
 	"jira workitem comment list": true,
+	"jira workitem transition":   true, // write: transitions an issue to a target status
 	"jira auth status":           true,
 }
 

@@ -18,11 +18,13 @@ const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
  * switches. A terminal's PTY is closed only when it is removed via its × button.
  * New terminals open in the active terminal's folder.
  */
-export function TerminalPanel({ spawnCwd, contextName }: { spawnCwd: string; contextName?: string }) {
+export function TerminalPanel({ spawnCwd, contextName, pendingInsert }: { spawnCwd: string; contextName?: string; pendingInsert?: { text: string; id: number } }) {
   const [terminals, setTerminals] = useState<{ key: string; cwd: string }[]>([]);
   const [activeKey, setActiveKey] = useState<string>("");
   const seededRef = useRef(false);
   const sessionByKey = useRef<Map<string, string>>(new Map());
+  const wrapperByKey = useRef<Map<string, HTMLDivElement>>(new Map());
+  const lastInsertId = useRef(0);
   const { commands } = useTerminalCommands();
 
   const setSession = (key: string, sessionId: string) => {
@@ -30,11 +32,34 @@ export function TerminalPanel({ spawnCwd, contextName }: { spawnCwd: string; con
     else sessionByKey.current.delete(key);
   };
 
+  // Move keyboard focus into the active xterm so the user can immediately edit /
+  // press Enter after text is inserted (otherwise focus stays on the palette
+  // <select>). `.xterm-helper-textarea` is xterm's hidden input; optional-chained
+  // so it's a no-op under the test mock.
+  const focusActiveTerminal = () => {
+    wrapperByKey.current.get(activeKey)
+      ?.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea")
+      ?.focus();
+  };
+
+  // Type externally-requested text (e.g. "Ask AI" from the diff editor) into the
+  // active terminal — never appends Enter, so the user reviews before sending.
+  useEffect(() => {
+    if (!pendingInsert || pendingInsert.id === lastInsertId.current) return;
+    lastInsertId.current = pendingInsert.id;
+    const sid = sessionByKey.current.get(activeKey);
+    if (sid && pendingInsert.text) {
+      void TerminalWrite(sid, pendingInsert.text);
+      focusActiveTerminal();
+    }
+  }, [pendingInsert, activeKey]);
+
   const insertCommand = (command: string) => {
     const sid = sessionByKey.current.get(activeKey);
     if (!sid) return;
     const text = applyPlaceholders(command, { "context-name": contextName ?? "" });
     if (text) void TerminalWrite(sid, text); // type only — never append Enter
+    focusActiveTerminal();
   };
 
   // Auto-create the first terminal once a repo path is known (once).
@@ -115,7 +140,9 @@ export function TerminalPanel({ spawnCwd, contextName }: { spawnCwd: string; con
       </div>
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {terminals.map((t) => (
-          <div key={t.key} style={{ position: "absolute", inset: 0, display: t.key === activeKey ? "block" : "none" }}>
+          <div key={t.key}
+            ref={(el) => { if (el) wrapperByKey.current.set(t.key, el); else wrapperByKey.current.delete(t.key); }}
+            style={{ position: "absolute", inset: 0, display: t.key === activeKey ? "block" : "none" }}>
             <Terminal cwd={t.cwd} onSession={(id) => setSession(t.key, id)} />
           </div>
         ))}

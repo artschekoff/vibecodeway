@@ -47,6 +47,7 @@ function loadCollapsed(): Set<string> {
 export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refreshSignal }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
+  const [filter, setFilter] = useState("");
   const mountedRef = useRef(true);
 
   const toggleSection = (key: string) => {
@@ -103,10 +104,20 @@ export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refre
     return <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 12 }}>No changes</div>;
   }
 
+  const q = filter.trim().toLowerCase();
+  const matchFile = (p: string) => !q || p.toLowerCase().includes(q);
+
   return (
     <div style={{ overflowY: "auto", padding: "8px 10px" }}>
+      <input
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter files…"
+        aria-label="filter changed files"
+        style={{ width: "100%", boxSizing: "border-box", fontSize: 11, marginBottom: 8, padding: "3px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)" }}
+      />
       {shown.map((repo) => {
-        const files = repo.files ?? [];
+        const files = (repo.files ?? []).filter((f) => matchFile(f.path));
         // Branch (PR) changes vs the base branch — the full committed set, shown
         // on top like GitHub. Read-only: nothing to stage/discard.
         const branch = files.filter((f) => f.commitStatus);
@@ -114,6 +125,7 @@ export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refre
         // the PR that's also edited locally appears in both).
         const staged = files.filter((f) => f.indexStatus);
         const unstaged = files.filter((f) => f.workStatus);
+        if (files.length === 0) return null; // filtered out entirely
         const bKey = `${repo.repoName}:branch`;
         const sKey = `${repo.repoName}:staged`;
         const lKey = `${repo.repoName}:local`;

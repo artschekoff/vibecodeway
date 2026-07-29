@@ -43,6 +43,7 @@ import {
   MarkContextAllViewed,
   MarkIssueViewed,
   MarkIssueAllViewed,
+  TransitionJiraIssue,
   MarkCommentViewed,
   MarkSlackThreadViewed,
   MarkSlackChannelAllViewed,
@@ -975,6 +976,16 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     try {
       await DeleteJiraIssue(issueId);
       showToast("Issue removed");
+      load(true);
+    } catch (e) {
+      showToast(String(e), "error");
+    }
+  };
+
+  const handleTransitionIssue = async (jiraKey: string, status: string) => {
+    try {
+      await TransitionJiraIssue(jiraKey, status);
+      showToast(`${jiraKey} → ${status}`);
       load(true);
     } catch (e) {
       showToast(String(e), "error");
@@ -1956,6 +1967,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                         const vb = vcsBranches.find((b) => b.repo?.name === repoName);
                         if (vb) void handleCheckout(branchName, vb.repoId);
                       },
+                      onChangeStatus: (jiraKey: string, status: string) => void handleTransitionIssue(jiraKey, status),
+                      statusOptions: [...new Set([...issues.map((i) => i.status), "To Do", "In Progress", "In Review", "Done"].filter(Boolean))],
                     };
                     for (const issue of parents) {
                       rows.push(<IssueCard key={issue.id} issue={issue} {...baseProps} />);

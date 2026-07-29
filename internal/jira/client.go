@@ -76,6 +76,18 @@ func (c *Client) ViewIssue(ctx context.Context, key string) (*IssueDetail, error
 	return parseIssueDetail(out)
 }
 
+// TransitionIssue moves a work item to the target status (by name). acli resolves
+// the matching workflow transition; an invalid target for the issue's current
+// status returns an error. --yes skips the interactive confirmation.
+func (c *Client) TransitionIssue(ctx context.Context, key, status string) error {
+	_, err := c.runner.Run(ctx, []string{"jira", "workitem", "transition"}, nil,
+		[]string{"--key", key, "--status", status, "--yes"})
+	if err != nil {
+		return fmt.Errorf("jira transition %s -> %q: %w", key, status, err)
+	}
+	return nil
+}
+
 // ListComments returns all comments for an issue.
 func (c *Client) ListComments(ctx context.Context, key string) ([]Comment, error) {
 	flags := []string{

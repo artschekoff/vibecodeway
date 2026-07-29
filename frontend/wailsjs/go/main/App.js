@@ -862,6 +862,10 @@ export function ToggleUploadedFileActive(arg1) {
   return window['go']['main']['App']['ToggleUploadedFileActive'](arg1);
 }
 
+export function TransitionJiraIssue(arg1, arg2) {
+  return window['go']['main']['App']['TransitionJiraIssue'](arg1, arg2);
+}
+
 export function UnstageFile(arg1, arg2) {
   return window['go']['main']['App']['UnstageFile'](arg1, arg2);
 }

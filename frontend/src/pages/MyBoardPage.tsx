@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ExternalLink, RefreshCw, AlertTriangle, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus } from "lucide-react";
+import { ExternalLink, RefreshCw, AlertTriangle, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen } from "lucide-react";
 import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { useTabContext } from "../contexts/TabContext";
@@ -25,7 +25,16 @@ export default function MyBoardPage() {
   const [creatingKey, setCreatingKey] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [jiraSort, setJiraSort] = useState<JiraSort>("priority");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
   const { openContextTab } = useTabContext();
+
+  // Distinct filter options present in the current issues.
+  const statusOptions = useMemo(() => [...new Set(jiraIssues.map((i) => i.status).filter(Boolean))].sort(), [jiraIssues]);
+  const priorityOptions = useMemo(() => {
+    const present = new Set(jiraIssues.map((i) => i.priority).filter(Boolean));
+    return ["Highest", "High", "Medium", "Low", "Lowest"].filter((p) => present.has(p));
+  }, [jiraIssues]);
 
   // Client-side sort of the assigned issues (instant, no re-fetch). Note: acli's
   // search can't return the Jira created date, so "date" falls back to fetchedAt.
@@ -41,6 +50,11 @@ export default function MyBoardPage() {
     }
     return arr;
   }, [jiraIssues, jiraSort]);
+
+  const visibleJira = useMemo(
+    () => sortedJira.filter((i) => (!statusFilter || i.status === statusFilter) && (!priorityFilter || i.priority === priorityFilter)),
+    [sortedJira, statusFilter, priorityFilter],
+  );
 
   const load = useCallback(async (name: string) => {
     setLoading(true);
@@ -219,10 +233,24 @@ export default function MyBoardPage() {
           </button>
           <select aria-label="sort assigned jira" style={{ fontSize: 11 }} value={jiraSort}
             onChange={(e) => setJiraSort(e.target.value as JiraSort)} title="Sort assigned issues">
-            <option value="priority">Priority</option>
-            <option value="status">Status</option>
-            <option value="date">Date</option>
+            <option value="priority">Sort: Priority</option>
+            <option value="status">Sort: Status</option>
+            <option value="date">Sort: Date</option>
           </select>
+          {statusOptions.length > 0 && (
+            <select aria-label="filter by status" style={{ fontSize: 11 }} value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)} title="Filter by status">
+              <option value="">All statuses</option>
+              {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+          {priorityOptions.length > 0 && (
+            <select aria-label="filter by priority" style={{ fontSize: 11 }} value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)} title="Filter by priority">
+              <option value="">All priorities</option>
+              {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
           {orgs.length > 1 && (
             <select aria-label="organization for new contexts" style={{ fontSize: 11, marginLeft: "auto" }}
               value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)}
@@ -236,35 +264,35 @@ export default function MyBoardPage() {
         )}
         {jiraIssues.length === 0 ? (
           <div className="board-section-empty">No assigned Jira issues. Hit Refresh to fetch them.</div>
+        ) : visibleJira.length === 0 ? (
+          <div className="board-section-empty">No issues match the filter.</div>
         ) : (
           <div className="board-section-items">
-            {sortedJira.map((it) => (
+            {visibleJira.map((it) => (
               <div key={it.key} className="board-item" style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span style={{ fontWeight: 600, flexShrink: 0 }}>{it.key}</span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={it.summary}>{it.summary}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{it.status}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{it.priority}</span>
-                {!it.seen && <span className="board-badge-new" style={{ fontSize: 10, color: "var(--accent)", flexShrink: 0 }}>new</span>}
-                {jiraBaseUrl && (
-                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`open ${it.key} in Jira`} title="Open in Jira"
-                    onClick={() => BrowserOpenURL(jiraUrl(it.key))}><ExternalLink size={11} /></button>
-                )}
-                {jiraBaseUrl && (
-                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`copy ${it.key} link`} title={copiedKey === it.key ? "Copied" : "Copy Jira link"}
-                    onClick={() => copyJiraLink(it.key)}>{copiedKey === it.key ? <Check size={11} /> : <Copy size={11} />}</button>
-                )}
-                {it.contextId ? (
-                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`open context ${it.contextKey}`} title={`Open context ${it.contextKey}`}
-                    onClick={() => openContextTab(it.contextId!, it.contextKey!)}>
-                    <FolderPlus size={11} /> {it.contextKey}
-                  </button>
-                ) : (
-                  <button className="board-open-btn" style={{ flexShrink: 0 }} aria-label={`create context from ${it.key}`}
-                    title="Create a context from this ticket" disabled={creatingKey === it.key || (orgs.length > 0 && !selectedOrgId)}
-                    onClick={() => void createContextForIssue(it.key)}>
-                    {creatingKey === it.key ? "Creating…" : <><FolderPlus size={11} /> Create context</>}
-                  </button>
-                )}
+                <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {it.status && <span className="board-chip" title="Status">{it.status}</span>}
+                  {it.priority && <span className="board-chip" title="Priority">{it.priority}</span>}
+                  {!it.seen && <span className="board-badge-new" style={{ fontSize: 10, color: "var(--accent)" }}>new</span>}
+                  {jiraBaseUrl && (
+                    <button className="board-icon-btn" aria-label={`open ${it.key} in Jira`} title="Open in Jira"
+                      onClick={() => BrowserOpenURL(jiraUrl(it.key))}><ExternalLink size={12} /></button>
+                  )}
+                  {jiraBaseUrl && (
+                    <button className="board-icon-btn" aria-label={`copy ${it.key} link`} title={copiedKey === it.key ? "Copied" : "Copy Jira link"}
+                      onClick={() => copyJiraLink(it.key)}>{copiedKey === it.key ? <Check size={12} /> : <Copy size={12} />}</button>
+                  )}
+                  {it.contextId ? (
+                    <button className="board-icon-btn" style={{ color: "var(--accent)" }} aria-label={`open context ${it.contextKey}`} title={`Open context ${it.contextKey}`}
+                      onClick={() => openContextTab(it.contextId!, it.contextKey!)}><FolderOpen size={12} /></button>
+                  ) : (
+                    <button className="board-icon-btn" aria-label={`create context from ${it.key}`}
+                      title="Create a context from this ticket" disabled={creatingKey === it.key || (orgs.length > 0 && !selectedOrgId)}
+                      onClick={() => void createContextForIssue(it.key)}>{creatingKey === it.key ? "…" : <FolderPlus size={12} />}</button>
+                  )}
+                </span>
               </div>
             ))}
           </div>

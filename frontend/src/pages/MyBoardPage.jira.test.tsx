@@ -69,6 +69,22 @@ describe("MyBoardPage — My Jira To-Do", () => {
     await waitFor(() => expect(H.CreateContextFromJiraIssue).toHaveBeenCalledWith("o1", "JH-1"));
   });
 
+  it("filters the list by status", async () => {
+    H.GetMyBoard.mockResolvedValue({
+      blockers: [], myAssignments: [], myOpenPRs: [],
+      myAssignedJiraIssues: [
+        { key: "JH-1", summary: "Fix login", status: "To Do", issueType: "Task", priority: "High", created: "", seen: false, fetchedAt: "" },
+        { key: "JH-2", summary: "Ship it", status: "Done", issueType: "Task", priority: "Low", created: "", seen: false, fetchedAt: "" },
+      ],
+    });
+    render(<MyBoardPage />);
+    await waitFor(() => expect(screen.getByText("Fix login")).toBeInTheDocument());
+    expect(screen.getByText("Ship it")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: /filter by status/i }), { target: { value: "Done" } });
+    await waitFor(() => expect(screen.queryByText("Fix login")).not.toBeInTheDocument());
+    expect(screen.getByText("Ship it")).toBeInTheDocument();
+  });
+
   it("shows an Open-context button when the ticket is already linked", async () => {
     H.GetMyBoard.mockResolvedValue({
       blockers: [], myAssignments: [], myOpenPRs: [],

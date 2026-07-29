@@ -25,6 +25,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
   const [repoPaths, setRepoPaths] = useState<{ id: string; name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [pendingTerminalInsert, setPendingTerminalInsert] = useState<{ text: string; id: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [prRefreshing, setPrRefreshing] = useState(false);
   const [prRefreshError, setPrRefreshError] = useState("");
@@ -102,7 +103,9 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           {active ? (
-            <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} refreshSignal={refreshSignal} onSaved={() => { /* panel auto-polls */ }} />
+            <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} refreshSignal={refreshSignal}
+              onSaved={() => { /* panel auto-polls */ }}
+              onAskAi={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))} />
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 16 }}>Select a changed file to view its diff.</div>
           )}
@@ -113,7 +116,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
           onResize={(dy) => setTerminalHeight((h) => nextPaneSize(h, -dy, TERMINAL_MIN, TERMINAL_MAX))}
         />
         <div style={{ height: terminalHeight, borderTop: "1px solid var(--border)" }}>
-          {cwd ? <TerminalPanel spawnCwd={cwd} contextName={contextKey} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
+          {cwd ? <TerminalPanel spawnCwd={cwd} contextName={contextKey} pendingInsert={pendingTerminalInsert ?? undefined} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
         </div>
       </div>
       <ResizeHandle

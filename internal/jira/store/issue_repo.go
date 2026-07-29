@@ -181,6 +181,17 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 }
 
 // SetIssueMessageID sets the message_id FK on a jira_issues row.
+// UpdateIssueStatusByKey updates the locally-stored status for every row with the
+// given Jira key (an issue may be linked to several contexts). Called after a
+// successful remote transition so the UI reflects the new status immediately.
+func (r *Repo) UpdateIssueStatusByKey(ctx context.Context, jiraKey, status string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE jira_issues SET status = ? WHERE jira_key = ?`, status, jiraKey)
+	if err != nil {
+		return fmt.Errorf("update issue status %s: %w", jiraKey, err)
+	}
+	return nil
+}
+
 func (r *Repo) SetIssueMessageID(ctx context.Context, issueID, messageID string) error {
 	_, err := r.db.ExecContext(ctx,
 		"UPDATE jira_issues SET message_id = ? WHERE id = ?", messageID, issueID)

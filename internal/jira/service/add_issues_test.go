@@ -45,6 +45,10 @@ func (f *fakeJira) ListComments(_ context.Context, _ string) ([]jira.Comment, er
 	return nil, nil
 }
 
+func (f *fakeJira) TransitionIssue(_ context.Context, _, _ string) error {
+	return nil
+}
+
 func (f *fakeJira) AuthStatus(_ context.Context) (string, error) {
 	return "", nil
 }

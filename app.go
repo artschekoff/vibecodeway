@@ -283,6 +283,12 @@ func (a *App) GetJiraInstanceURL() string {
 	return a.svc.GetJiraInstanceURL(a.ctx)
 }
 
+// TransitionJiraIssue changes a Jira issue's status remotely (sent to Jira via
+// acli) and updates the local copy. status is the target status name.
+func (a *App) TransitionJiraIssue(key, status string) error {
+	return a.svc.TransitionJiraIssue(a.ctx, key, status)
+}
+
 // SetSlackPassphrase stores the SLACK_MCP_PASSPHRASE value that will be injected
 // as an environment variable into every subsequent slack-cli invocation.
 func (a *App) SetSlackPassphrase(passphrase string) error {

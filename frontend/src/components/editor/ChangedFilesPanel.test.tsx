@@ -133,4 +133,13 @@ describe("ChangedFilesPanel", () => {
     fireEvent.click(screen.getByText("feature.ts"));
     expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "feature.ts", "added");
   });
+
+  it("filters files by name", async () => {
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("staged.ts")).toBeInTheDocument());
+    expect(screen.getByText("work.ts")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("filter changed files"), { target: { value: "staged" } });
+    expect(screen.getByText("staged.ts")).toBeInTheDocument();
+    expect(screen.queryByText("work.ts")).not.toBeInTheDocument();
+  });
 });

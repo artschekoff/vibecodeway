@@ -13,15 +13,15 @@ vi.mock("@monaco-editor/react", () => ({
 
 const {
   ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
-  FileBlame, FileHistory, FileDiffAtCommit,
+  FileBlame, FileHistory, FileDiffAtCommit, DiscardFile,
 } = vi.hoisted(() => ({
   ReadRepoFile: vi.fn(), ReadRepoFileBase: vi.fn(), SaveRepoFile: vi.fn(),
   GetEditorSettings: vi.fn(), SetEditorSettings: vi.fn(),
-  FileBlame: vi.fn(), FileHistory: vi.fn(), FileDiffAtCommit: vi.fn(),
+  FileBlame: vi.fn(), FileHistory: vi.fn(), FileDiffAtCommit: vi.fn(), DiscardFile: vi.fn(),
 }));
 vi.mock("../../../wailsjs/go/main/App", () => ({
   ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
-  FileBlame, FileHistory, FileDiffAtCommit,
+  FileBlame, FileHistory, FileDiffAtCommit, DiscardFile,
 }));
 
 import { DiffEditorTab } from "./DiffEditorTab";
@@ -78,5 +78,18 @@ describe("DiffEditorTab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "exit fullscreen" }));
     expect(root.getAttribute("style")).not.toContain("position: fixed");
+  });
+
+  it("reverts the whole file via DiscardFile", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onSaved = vi.fn();
+    DiscardFile.mockResolvedValue(undefined);
+    render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={onSaved} /></EditorSettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
+
+    fireEvent.click(await screen.findByRole("button", { name: /revert all changes/i }));
+
+    await waitFor(() => expect(DiscardFile).toHaveBeenCalledWith("/r/api", "src/a.ts"));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 });

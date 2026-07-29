@@ -41,11 +41,13 @@ interface Props {
   onMarkCommentViewed?: (id: string) => void;
   jiraBaseUrl?: string;
   onCheckoutBranch?: (branchName: string, repoName: string) => void;
+  onChangeStatus?: (jiraKey: string, status: string) => void;
+  statusOptions?: string[];
 }
 
 const BRANCH_CREATED_RE = /^Branch (\S+) created in (\S+) from /i;
 
-export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl, onCheckoutBranch }: Props) {
+export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteComment, onToggleIssue, onToggleComment, onMarkIssueViewed, onMarkCommentViewed, jiraBaseUrl, onCheckoutBranch, onChangeStatus, statusOptions }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmIssue, setConfirmIssue] = useState(false);
@@ -94,7 +96,22 @@ export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteCom
         </div>
         <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{issue.summary}</span>
         <div className="issue-meta">
-          <span className="status-badge">{issue.status}</span>
+          {onChangeStatus ? (
+            <select
+              className="status-badge status-select"
+              value={issue.status}
+              aria-label={`status of ${issue.jiraKey}`}
+              title="Change status (sent to Jira)"
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => { e.stopPropagation(); onChangeStatus(issue.jiraKey, e.target.value); }}
+            >
+              {[...new Set([issue.status, ...(statusOptions ?? [])].filter(Boolean))].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="status-badge">{issue.status}</span>
+          )}
         </div>
         <div className="card-actions">
           <span

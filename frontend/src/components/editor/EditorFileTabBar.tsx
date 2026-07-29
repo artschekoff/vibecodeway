@@ -2,6 +2,20 @@ import { useState } from "react";
 import { useEditorFiles, tabKey } from "../../contexts/EditorFilesContext";
 import { TabContextMenu } from "../TabContextMenu";
 
+// Middle-truncated filename ("denial-intelligence.sch…test.ts"): the start span
+// shrinks with an ellipsis while the last few chars (extension) stay visible.
+// CSS text-overflow can only ellipsize the end, hence the two-span split.
+function TabName({ name }: { name: string }) {
+  const tail = name.length > 8 ? name.slice(-7) : "";
+  const head = tail ? name.slice(0, -7) : name;
+  return (
+    <span style={{ display: "flex", minWidth: 0, overflow: "hidden" }} title={name}>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{head}</span>
+      {tail && <span style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{tail}</span>}
+    </span>
+  );
+}
+
 export function EditorFileTabBar({ contextId }: { contextId: string }) {
   const { getFiles, closeEditorFile, setActiveEditorFile, pinEditorFile, closeAllEditorFiles } = useEditorFiles();
   const { tabs, activeKey } = getFiles(contextId);
@@ -13,14 +27,17 @@ export function EditorFileTabBar({ contextId }: { contextId: string }) {
         const key = tabKey(t);
         return (
           <div key={key} style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px",
+            width: 150, flexShrink: 0, boxSizing: "border-box", whiteSpace: "nowrap",
             background: key === activeKey ? "var(--surface2)" : "transparent", fontSize: 11 }}
             onContextMenu={(e) => {
               e.preventDefault();
               setMenu({ x: e.clientX, y: e.clientY, key, pinned: !!t.pinned });
             }}>
-            <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text)" }}
-              onClick={() => setActiveEditorFile(contextId, key)}>{t.path.split("/").pop()}</button>
-            <button aria-label={`close ${t.path}`} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+            <button style={{ flex: 1, minWidth: 0, display: "flex", overflow: "hidden", background: "none", border: "none", cursor: "pointer", color: "var(--text)", padding: 0, textAlign: "left" }}
+              onClick={() => setActiveEditorFile(contextId, key)}>
+              <TabName name={t.path.split("/").pop() ?? t.path} />
+            </button>
+            <button aria-label={`close ${t.path}`} style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
               onClick={() => closeEditorFile(contextId, key)}>×</button>
           </div>
         );

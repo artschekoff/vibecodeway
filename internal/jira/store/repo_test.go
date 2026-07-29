@@ -364,6 +364,25 @@ func TestFindContextsByJiraKeys(t *testing.T) {
 	})
 }
 
+func TestUpdateIssueStatusByKey(t *testing.T) {
+	s, repo := openTestDB(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ctx", org.ID)
+	require.NoError(t, err)
+	_, err = repo.UpsertIssue(ctx, c.ID, "PROJ-1", "Summary", "To Do", "alice", "Story", "", "", "", "")
+	require.NoError(t, err)
+
+	require.NoError(t, repo.UpdateIssueStatusByKey(ctx, "PROJ-1", "In Progress"))
+
+	issues, err := repo.GetIssuesByContext(ctx, c.ID, false)
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, "In Progress", issues[0].Status)
+}
+
 func TestUpsertIssue_StatusChange(t *testing.T) {
 	s, repo := openTestDB(t)
 	ctx := context.Background()

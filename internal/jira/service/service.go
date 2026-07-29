@@ -32,6 +32,7 @@ type JiraAPI interface {
 	commentLister
 	ViewIssue(ctx context.Context, key string) (*jira.IssueDetail, error)
 	Search(ctx context.Context, jql string) ([]jira.SearchResult, error)
+	TransitionIssue(ctx context.Context, key, status string) error
 	AuthStatus(ctx context.Context) (string, error)
 	GetInstanceURL(ctx context.Context) string
 }
@@ -1314,6 +1315,21 @@ func (svc *ContextService) ToggleUploadedFileActive(ctx context.Context, id stri
 
 // SearchJQL runs an arbitrary JQL query and returns matching issues.
 // This is intended for query preview / validation without saving to a context.
+// TransitionJiraIssue transitions a Jira issue to a target status remotely (via
+// acli) and then updates the locally-stored status so the UI reflects it.
+func (svc *ContextService) TransitionJiraIssue(ctx context.Context, key, status string) error {
+	if key == "" || status == "" {
+		return fmt.Errorf("issue key and target status are required")
+	}
+	if err := svc.jira.TransitionIssue(ctx, key, status); err != nil {
+		return err
+	}
+	if err := svc.jiraRepo.UpdateIssueStatusByKey(ctx, key, status); err != nil {
+		svc.logger.Warn("transition: local status update failed", zap.String("key", key), zap.Error(err))
+	}
+	return nil
+}
+
 func (svc *ContextService) SearchJQL(ctx context.Context, jql string) ([]jira.SearchResult, error) {
 	if jql == "" {
 		return nil, fmt.Errorf("jql query is required")

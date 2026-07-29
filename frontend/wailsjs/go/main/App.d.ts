@@ -440,6 +440,8 @@ export function ToggleSlackThreadActive(arg1:string):Promise<slackstore.SlackThr
 
 export function ToggleUploadedFileActive(arg1:string):Promise<store.ContextUploadedFile>;
 
+export function TransitionJiraIssue(arg1:string,arg2:string):Promise<void>;
+
 export function UnstageFile(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;

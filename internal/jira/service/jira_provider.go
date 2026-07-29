@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/artschekoff/context-consolidator/internal/jira"
 	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
 	"github.com/artschekoff/context-consolidator/internal/provider"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
@@ -51,6 +52,37 @@ func (p *JiraProvider) IsConfigured(ctx context.Context, contextID string) (bool
 // Refresh re-fetches field values and comments for every issue already stored in contextID.
 // It does NOT run the JQL query or add new issues.
 // Stats.ItemsRefreshed = issues updated; Stats.NewItems = new comments inserted.
+// upsertWithMessage persists an issue detail and mirrors it into the message store.
+// Shared by Refresh's existing-issue pass and its newly-discovered-children pass.
+func (p *JiraProvider) upsertWithMessage(ctx context.Context, contextID string, detail *jira.IssueDetail) (jirastore.IssueUpsertResult, error) {
+	res, err := p.jiraRepo.UpsertIssue(ctx, contextID,
+		detail.Key, detail.Summary, detail.Status, detail.Assignee,
+		detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
+		detail.Priority,
+	)
+	if err != nil {
+		return res, err
+	}
+	if p.msgWriter != nil {
+		authorID := p.msgWriter.ResolveAuthor(ctx, "jira", detail.Assignee)
+		msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
+			ContextID:  contextID,
+			SourceID:   "jira",
+			ExternalID: detail.Key,
+			Title:      detail.Summary,
+			Body:       detail.Description,
+			RawAuthor:  detail.Assignee,
+			AuthorID:   authorID,
+			CreatedAt:  detail.Updated,
+			UpdatedAt:  detail.Updated,
+		})
+		if msgID != "" {
+			_ = p.jiraRepo.SetIssueMessageID(ctx, res.ID, msgID)
+		}
+	}
+	return res, nil
+}
+
 func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.Stats, error) {
 	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, false)
 	if err != nil {
@@ -60,6 +92,13 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 	if len(issues) == 0 {
 		return provider.Stats{}, nil
 	}
+
+	storedKeys := make(map[string]bool, len(issues))
+	for _, iss := range issues {
+		storedKeys[iss.JiraKey] = true
+	}
+	var childMu sync.Mutex
+	childCandidates := make(map[string]bool)
 
 	workers := min(5, len(issues))
 	jobs := make(chan jirastore.Issue, len(issues))
@@ -81,11 +120,7 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 					p.logger.Warn("jira refresh: view issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
 					continue
 				}
-				res, err := p.jiraRepo.UpsertIssue(ctx, contextID,
-					detail.Key, detail.Summary, detail.Status, detail.Assignee,
-					detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
-					detail.Priority,
-				)
+				res, err := p.upsertWithMessage(ctx, contextID, detail)
 				if err != nil {
 					p.logger.Warn("jira refresh: upsert issue failed", zap.String("key", issue.JiraKey), zap.Error(err))
 					continue
@@ -99,28 +134,52 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 						notifications.Add(1)
 					}
 				}
-				if p.msgWriter != nil {
-					authorID := p.msgWriter.ResolveAuthor(ctx, "jira", detail.Assignee)
-					msgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
-						ContextID:  contextID,
-						SourceID:   "jira",
-						ExternalID: detail.Key,
-						Title:      detail.Summary,
-						Body:       detail.Description,
-						RawAuthor:  detail.Assignee,
-						AuthorID:   authorID,
-						CreatedAt:  detail.Updated,
-						UpdatedAt:  detail.Updated,
-					})
-					if msgID != "" {
-						_ = p.jiraRepo.SetIssueMessageID(ctx, res.ID, msgID)
+				// Collect new subtasks so children created after the initial add are
+				// pulled in on refresh (matches AddIssuesToContext discovery).
+				if len(detail.Subtasks) > 0 {
+					childMu.Lock()
+					for _, sub := range detail.Subtasks {
+						if !storedKeys[sub.Key] {
+							childCandidates[sub.Key] = true
+						}
 					}
+					childMu.Unlock()
 				}
 				refreshed.Add(1)
 			}
 		}()
 	}
 	wg.Wait()
+
+	// Next-gen Jira projects don't list children in the subtasks field; find them
+	// via JQL. ponytail: one query per stored issue, serial — contexts hold a handful.
+	for key := range storedKeys {
+		children, err := p.jira.Search(ctx, fmt.Sprintf("parent = %q", key))
+		if err != nil {
+			p.logger.Warn("jira refresh: child search failed", zap.String("key", key), zap.Error(err))
+			continue
+		}
+		for _, ch := range children {
+			if !storedKeys[ch.Key] {
+				childCandidates[ch.Key] = true
+			}
+		}
+	}
+
+	// Upsert newly discovered children (one level deep, like AddIssuesToContext).
+	// TouchContext isn't needed here; RefreshContext tags these as new via the sync session.
+	for key := range childCandidates {
+		detail, err := p.jira.ViewIssue(ctx, key)
+		if err != nil {
+			p.logger.Warn("jira refresh: view child failed", zap.String("key", key), zap.Error(err))
+			continue
+		}
+		if _, err := p.upsertWithMessage(ctx, contextID, detail); err != nil {
+			p.logger.Warn("jira refresh: upsert child failed", zap.String("key", key), zap.Error(err))
+			continue
+		}
+		refreshed.Add(1)
+	}
 
 	newComments, err := p.syncComments(ctx, contextID, issues)
 	if err != nil {
