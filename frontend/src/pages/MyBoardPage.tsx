@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ExternalLink, RefreshCw, AlertTriangle, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen } from "lucide-react";
+import { ExternalLink, RefreshCw, AlertTriangle, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare } from "lucide-react";
 import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { useTabContext } from "../contexts/TabContext";
@@ -314,6 +314,11 @@ export default function MyBoardPage() {
             </span>
             <span className="board-pr-number">#{pr.prNumber}</span>
             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }} title={pr.title}>{pr.title}</span>
+            {pr.unresolvedCount > 0 && (
+              <span className="board-badge" title={`${pr.unresolvedCount} unresolved comment(s)`} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                <MessageSquare size={11} /> {pr.unresolvedCount}
+              </span>
+            )}
             {pr.isDraft && <span className="board-badge board-badge--draft">draft</span>}
             {pr.ciStatus === "FAILURE" && <span className="board-badge board-badge--fail">CI</span>}
             {pr.reviewStatus === "changes_requested" && <span className="board-badge board-badge--changes">changes</span>}

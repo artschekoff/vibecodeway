@@ -427,6 +427,8 @@ type TerminalCommand struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
 	Command   string `json:"command"`
+	// SendEnter: when true, selecting the command also sends Enter so it runs.
+	SendEnter bool   `json:"sendEnter"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
 }

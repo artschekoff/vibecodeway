@@ -82,10 +82,10 @@ export default function SettingsPage() {
     try { setCommands((await ListTerminalCommands()) ?? []); } catch { /* keep last known */ }
   }, []);
   useEffect(() => { void loadCommands(); }, [loadCommands]);
-  const addCommand = async () => { await AddTerminalCommand("", ""); await loadCommands(); };
-  const saveCommand = async (c: store.TerminalCommand) => { await UpdateTerminalCommand(c.id, c.title, c.command); await loadCommands(); };
+  const addCommand = async () => { await AddTerminalCommand("", "", false); await loadCommands(); };
+  const saveCommand = async (c: store.TerminalCommand) => { await UpdateTerminalCommand(c.id, c.title, c.command, c.sendEnter); await loadCommands(); };
   const deleteCommand = async (id: string) => { await DeleteTerminalCommand(id); await loadCommands(); };
-  const setCommandField = (id: string, field: "title" | "command", value: string) =>
+  const setCommandField = (id: string, field: "title" | "command" | "sendEnter", value: string | boolean) =>
     setCommands((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } as store.TerminalCommand : c)));
 
   useEffect(() => {
@@ -505,7 +505,7 @@ export default function SettingsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 14px" }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              Selectable above the terminal. Use <code>&lt;context-name&gt;</code> to insert the current context name. Inserting types the command (no Enter).
+              Selectable above the terminal. Use <code>&lt;context-name&gt;</code> to insert the current context name. Inserting types the command; enable <strong>Send enter</strong> to also run it.
             </div>
             {commands.map((c) => (
               <div key={c.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -513,6 +513,10 @@ export default function SettingsPage() {
                   onChange={(e) => setCommandField(c.id, "title", e.target.value)} />
                 <input style={{ flex: 1, fontSize: 12 }} placeholder="Command" value={c.command}
                   onChange={(e) => setCommandField(c.id, "command", e.target.value)} />
+                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }} title="Also send Enter so the command runs">
+                  <input type="checkbox" checked={c.sendEnter} onChange={(e) => setCommandField(c.id, "sendEnter", e.target.checked)} />
+                  Send enter
+                </label>
                 <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => void saveCommand(c)}>Save</button>
                 <button className="btn-danger" style={{ fontSize: 11 }} aria-label="delete command" onClick={() => void deleteCommand(c.id)}>Delete</button>
               </div>

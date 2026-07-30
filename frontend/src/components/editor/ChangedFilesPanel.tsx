@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GetContextChanges, StageFile, UnstageFile, DiscardFile } from "../../../wailsjs/go/main/App";
+import { Copy, Terminal } from "lucide-react";
+import { GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
 import { main } from "../../../wailsjs/go/models";
 
 type Props = {
   contextId: string;
   onOpenFile: (repoPath: string, repoName: string, path: string, status: string) => void;
+  // Open a new in-app terminal at the repo's local path.
+  onOpenTerminal?: (repoPath: string) => void;
   // When set, show only the repo whose repoPath matches (follows the editor's
   // repo selector). Unset => show all repos.
   activeRepoPath?: string;
@@ -44,7 +47,7 @@ function loadCollapsed(): Set<string> {
   }
 }
 
-export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refreshSignal }: Props) {
+export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activeRepoPath, refreshSignal }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
   const [filter, setFilter] = useState("");
@@ -90,8 +93,9 @@ export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refre
     }
   };
 
-  const onDiscard = (repoPath: string, path: string) => {
-    if (window.confirm(`Discard changes to ${path}? This cannot be undone.`)) {
+  const onDiscard = async (repoPath: string, path: string) => {
+    // Native dialog — window.confirm() is a no-op in the Wails webview.
+    if (await ConfirmAction("Discard changes", `Discard changes to ${path}? This cannot be undone.`)) {
       void act(DiscardFile, repoPath, path);
     }
   };
@@ -131,7 +135,11 @@ export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refre
         const lKey = `${repo.repoName}:local`;
         return (
           <div key={repo.repoName} style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{repo.repoName}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span style={{ flex: 1, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={repo.repoPath}>{repo.repoName}</span>
+              <button aria-label={`copy path for ${repo.repoName}`} title="Copy repo path" style={actionBtnStyle} onClick={() => void navigator.clipboard?.writeText(repo.repoPath)}><Copy size={12} /></button>
+              <button aria-label={`open terminal in ${repo.repoName}`} title="Open terminal here" style={actionBtnStyle} onClick={() => onOpenTerminal?.(repo.repoPath)}><Terminal size={12} /></button>
+            </div>
 
             {branch.length > 0 && (
               <div style={{ marginBottom: 6 }}>
@@ -171,7 +179,7 @@ export function ChangedFilesPanel({ contextId, onOpenFile, activeRepoPath, refre
                   <div key={`w:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.workStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus)}>{f.path}</button>
-                    <button aria-label={`discard ${f.path}`} title="Discard" style={actionBtnStyle} onClick={() => onDiscard(repo.repoPath, f.path)}>↺</button>
+                    <button aria-label={`discard ${f.path}`} title="Discard" style={actionBtnStyle} onClick={() => void onDiscard(repo.repoPath, f.path)}>↺</button>
                     <button aria-label={`stage ${f.path}`} title="Stage" style={actionBtnStyle} onClick={() => void act(StageFile, repo.repoPath, f.path)}>+</button>
                   </div>
                 ))}

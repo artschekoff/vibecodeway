@@ -1231,7 +1231,8 @@ export namespace store {
 	    isDraft: boolean;
 	    state: string;
 	    prUpdatedAt: string;
-	
+	    unresolvedCount: number;
+
 	    static createFrom(source: any = {}) {
 	        return new BoardPR(source);
 	    }
@@ -1252,6 +1253,7 @@ export namespace store {
 	        this.isDraft = source["isDraft"];
 	        this.state = source["state"];
 	        this.prUpdatedAt = source["prUpdatedAt"];
+	        this.unresolvedCount = source["unresolvedCount"];
 	    }
 	}
 	export class BusinessContextSummary {
@@ -2098,18 +2100,20 @@ export namespace store {
 	    id: string;
 	    title: string;
 	    command: string;
+	    sendEnter: boolean;
 	    createdAt: string;
 	    updatedAt: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new TerminalCommand(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.command = source["command"];
+	        this.sendEnter = source["sendEnter"];
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	    }

@@ -3,6 +3,7 @@ import { RefreshCw, Copy, Check } from "lucide-react";
 import { GetContextChanges, RefreshContext, RefreshContextPRs } from "../../wailsjs/go/main/App";
 import { TerminalPanel } from "../components/editor/TerminalPanel";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
+import { FileTreePanel } from "../components/editor/FileTreePanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { EditorPRInfo } from "../components/editor/EditorPRInfo";
@@ -25,7 +26,9 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
   const [repoPaths, setRepoPaths] = useState<{ id: string; name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [sidebarTab, setSidebarTab] = useState<"files" | "git">("git");
   const [pendingTerminalInsert, setPendingTerminalInsert] = useState<{ text: string; id: number } | null>(null);
+  const [pendingTerminalOpen, setPendingTerminalOpen] = useState<{ cwd: string; id: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [prRefreshing, setPrRefreshing] = useState(false);
   const [prRefreshError, setPrRefreshError] = useState("");
@@ -95,7 +98,8 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
   };
 
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
-  const activeRepoId = useMemo(() => repoPaths.find((r) => r.path === cwd)?.id, [repoPaths, cwd]);
+  const activeRepo = useMemo(() => repoPaths.find((r) => r.path === cwd), [repoPaths, cwd]);
+  const activeRepoId = activeRepo?.id;
 
   return (
     <EditorSettingsProvider>
@@ -116,7 +120,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
           onResize={(dy) => setTerminalHeight((h) => nextPaneSize(h, -dy, TERMINAL_MIN, TERMINAL_MAX))}
         />
         <div style={{ height: terminalHeight, borderTop: "1px solid var(--border)" }}>
-          {cwd ? <TerminalPanel spawnCwd={cwd} contextName={contextKey} pendingInsert={pendingTerminalInsert ?? undefined} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
+          {cwd ? <TerminalPanel spawnCwd={cwd} contextName={contextKey} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
         </div>
       </div>
       <ResizeHandle
@@ -152,45 +156,68 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
             </div>
           </div>
         )}
-        {/* Always-visible PR header so a just-created PR can be pulled even when
-            none are cached yet (EditorPRInfo renders nothing at zero PRs). */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
-          <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)" }}>Pull requests</span>
-          <button
-            onClick={() => void handleRefreshPRs()}
-            disabled={prRefreshing}
-            title="Refresh PRs from GitHub"
-            aria-label="refresh PRs"
-            style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: prRefreshing ? "default" : "pointer", color: "var(--text-muted)", fontSize: 11, padding: 2 }}
-          >
-            <RefreshCw size={12} className={prRefreshing ? "spinning" : undefined} />
-          </button>
+        {/* Files (full repo tree) vs Git (changes + PRs), like VSCode's activity bar. */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+          {(["files", "git"] as const).map((t) => (
+            <button key={t} onClick={() => setSidebarTab(t)} aria-label={`${t} tab`}
+              style={{ flex: 1, padding: "6px 8px", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.4,
+                background: sidebarTab === t ? "var(--surface2)" : "transparent",
+                color: sidebarTab === t ? "var(--text)" : "var(--text-muted)",
+                border: "none", borderBottom: sidebarTab === t ? "2px solid var(--accent, #7aa2f7)" : "2px solid transparent",
+                cursor: "pointer" }}>
+              {t === "files" ? "Files" : "Git"}
+            </button>
+          ))}
         </div>
-        {prRefreshError && (
-          <div style={{ fontSize: 11, color: "var(--danger, #e5534b)", padding: "4px 12px" }}>{prRefreshError}</div>
-        )}
-        {/* Narrow the PR head by repo only when the selector is meaningful (>1 repo).
-            A single-repo context (e.g. PR review) has one PR that IS the subject —
-            filtering there can only hide it, never usefully narrow. */}
-        <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined} refreshSignal={refreshSignal} />
         {repoPaths.length > 1 && (
           <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
             {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
           </select>
         )}
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px 0" }}>
-          <button
-            onClick={() => void handleRefresh()}
-            disabled={refreshing}
-            title="Refresh from GitHub"
-            aria-label="Refresh from GitHub"
-            style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: refreshing ? "default" : "pointer", color: "var(--text-muted)", fontSize: 11, padding: 2 }}
-          >
-            <RefreshCw size={12} className={refreshing ? "spinning" : undefined} />
-            Refresh
-          </button>
-        </div>
-        <ChangedFilesPanel contextId={contextId} onOpenFile={openFile} activeRepoPath={cwd} refreshSignal={refreshSignal} />
+
+        {sidebarTab === "files" ? (
+          cwd ? (
+            <FileTreePanel repoPath={cwd} repoName={activeRepo?.name ?? ""} onOpenFile={openFile} />
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 12 }}>No repo on disk.</div>
+          )
+        ) : (
+          <>
+            {/* Always-visible PR header so a just-created PR can be pulled even when
+                none are cached yet (EditorPRInfo renders nothing at zero PRs). */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)" }}>Pull requests</span>
+              <button
+                onClick={() => void handleRefreshPRs()}
+                disabled={prRefreshing}
+                title="Refresh PRs from GitHub"
+                aria-label="refresh PRs"
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: prRefreshing ? "default" : "pointer", color: "var(--text-muted)", fontSize: 11, padding: 2 }}
+              >
+                <RefreshCw size={12} className={prRefreshing ? "spinning" : undefined} />
+              </button>
+            </div>
+            {prRefreshError && (
+              <div style={{ fontSize: 11, color: "var(--danger, #e5534b)", padding: "4px 12px" }}>{prRefreshError}</div>
+            )}
+            <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined} refreshSignal={refreshSignal} />
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px 0" }}>
+              <button
+                onClick={() => void handleRefresh()}
+                disabled={refreshing}
+                title="Refresh from GitHub"
+                aria-label="Refresh from GitHub"
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: refreshing ? "default" : "pointer", color: "var(--text-muted)", fontSize: 11, padding: 2 }}
+              >
+                <RefreshCw size={12} className={refreshing ? "spinning" : undefined} />
+                Refresh
+              </button>
+            </div>
+            <ChangedFilesPanel contextId={contextId} onOpenFile={openFile}
+              onOpenTerminal={(repoPath) => setPendingTerminalOpen((prev) => ({ cwd: repoPath, id: (prev?.id ?? 0) + 1 }))}
+              activeRepoPath={cwd} refreshSignal={refreshSignal} />
+          </>
+        )}
       </aside>
     </div>
     </EditorSettingsProvider>

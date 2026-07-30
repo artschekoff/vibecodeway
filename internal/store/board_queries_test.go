@@ -153,6 +153,14 @@ func TestListBoardPRsByAuthor_withData(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// Two comments on the PR: one unresolved, one resolved. Only the unresolved
+	// one counts toward UnresolvedCount.
+	_, err = db.db.ExecContext(ctx,
+		`INSERT INTO vcs_pr_comments (id, pr_id, external_id, is_resolved) VALUES
+		 ('cm-1', 'pr-1', 'e1', 0), ('cm-2', 'pr-1', 'e2', 1)`,
+	)
+	require.NoError(t, err)
+
 	prs, err := db.ListBoardPRsByAuthor(ctx, "carol")
 	require.NoError(t, err)
 	require.Len(t, prs, 1)
@@ -164,6 +172,7 @@ func TestListBoardPRsByAuthor_withData(t *testing.T) {
 	assert.Equal(t, "Add feature", prs[0].Title)
 	assert.Equal(t, "open", prs[0].State)
 	assert.False(t, prs[0].IsDraft)
+	assert.Equal(t, 1, prs[0].UnresolvedCount)
 
 	// Non-matching author returns nothing
 	none, err := db.ListBoardPRsByAuthor(ctx, "alice")

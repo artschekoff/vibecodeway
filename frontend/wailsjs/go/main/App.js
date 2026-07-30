@@ -26,8 +26,8 @@ export function AddSpecificPR(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['AddSpecificPR'](arg1, arg2, arg3, arg4);
 }
 
-export function AddTerminalCommand(arg1, arg2) {
-  return window['go']['main']['App']['AddTerminalCommand'](arg1, arg2);
+export function AddTerminalCommand(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AddTerminalCommand'](arg1, arg2, arg3);
 }
 
 export function AddTrackedRepo(arg1, arg2) {
@@ -68,6 +68,10 @@ export function AutoLinkRepos(arg1) {
 
 export function CancelRefresh() {
   return window['go']['main']['App']['CancelRefresh']();
+}
+
+export function ConfirmAction(arg1, arg2) {
+  return window['go']['main']['App']['ConfirmAction'](arg1, arg2);
 }
 
 export function CheckAccessibility() {
@@ -886,8 +890,8 @@ export function UpdateOrganization(arg1, arg2) {
   return window['go']['main']['App']['UpdateOrganization'](arg1, arg2);
 }
 
-export function UpdateTerminalCommand(arg1, arg2, arg3) {
-  return window['go']['main']['App']['UpdateTerminalCommand'](arg1, arg2, arg3);
+export function UpdateTerminalCommand(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateTerminalCommand'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateTrackedRepoMeta(arg1, arg2, arg3, arg4) {

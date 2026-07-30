@@ -45,6 +45,8 @@ type BoardPR struct {
 	IsDraft      bool   `json:"isDraft"`
 	State        string `json:"state"`
 	PRUpdatedAt  string `json:"prUpdatedAt"`
+	// UnresolvedCount is the number of unresolved comments on the PR.
+	UnresolvedCount int `json:"unresolvedCount"`
 }
 
 // BoardJiraAssignment is one Jira issue assigned to the current user, persisted
@@ -141,7 +143,8 @@ func (s *Store) ListBoardPRsByAuthor(ctx context.Context, author string) ([]Boar
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, b.context_id, c.key, r.name,
 		       p.pr_number, p.title, p.url, p.head_branch,
-		       p.review_status, p.ci_status, p.mergeable, p.is_draft, p.state, p.pr_updated_at
+		       p.review_status, p.ci_status, p.mergeable, p.is_draft, p.state, p.pr_updated_at,
+		       (SELECT COUNT(*) FROM vcs_pr_comments cm WHERE cm.pr_id = p.id AND cm.is_resolved = 0)
 		FROM vcs_pull_requests p
 		JOIN context_vcs_branches b ON b.id = p.branch_id
 		JOIN contexts c ON c.id = b.context_id
@@ -162,6 +165,7 @@ func (s *Store) ListBoardPRsByAuthor(ctx context.Context, author string) ([]Boar
 			&p.ID, &p.ContextID, &p.ContextKey, &p.RepoName,
 			&p.PRNumber, &p.Title, &p.URL, &p.HeadBranch,
 			&p.ReviewStatus, &p.CIStatus, &p.Mergeable, &isDraftInt, &p.State, &p.PRUpdatedAt,
+			&p.UnresolvedCount,
 		); err != nil {
 			return nil, fmt.Errorf("scan board pr: %w", err)
 		}

@@ -84,7 +84,7 @@ describe("Settings terminal commands", () => {
     renderSettings();
     await waitFor(() => expect(H.ListTerminalCommands).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: /add command/i }));
-    await waitFor(() => expect(H.AddTerminalCommand).toHaveBeenCalledWith("", ""));
+    await waitFor(() => expect(H.AddTerminalCommand).toHaveBeenCalledWith("", "", false));
   });
 
   it("deletes a command", async () => {

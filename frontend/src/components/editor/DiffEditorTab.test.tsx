@@ -13,15 +13,16 @@ vi.mock("@monaco-editor/react", () => ({
 
 const {
   ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
-  FileBlame, FileHistory, FileDiffAtCommit, DiscardFile,
+  FileBlame, FileHistory, FileDiffAtCommit, DiscardFile, ConfirmAction,
 } = vi.hoisted(() => ({
   ReadRepoFile: vi.fn(), ReadRepoFileBase: vi.fn(), SaveRepoFile: vi.fn(),
   GetEditorSettings: vi.fn(), SetEditorSettings: vi.fn(),
   FileBlame: vi.fn(), FileHistory: vi.fn(), FileDiffAtCommit: vi.fn(), DiscardFile: vi.fn(),
+  ConfirmAction: vi.fn(),
 }));
 vi.mock("../../../wailsjs/go/main/App", () => ({
   ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
-  FileBlame, FileHistory, FileDiffAtCommit, DiscardFile,
+  FileBlame, FileHistory, FileDiffAtCommit, DiscardFile, ConfirmAction,
 }));
 
 import { DiffEditorTab } from "./DiffEditorTab";
@@ -81,7 +82,7 @@ describe("DiffEditorTab", () => {
   });
 
   it("reverts the whole file via DiscardFile", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    ConfirmAction.mockResolvedValue(true);
     const onSaved = vi.fn();
     DiscardFile.mockResolvedValue(undefined);
     render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={onSaved} /></EditorSettingsProvider>);

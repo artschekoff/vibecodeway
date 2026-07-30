@@ -24,17 +24,19 @@ func TestTerminalCommands_CRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, list)
 
-	cmd, err := s.AddTerminalCommand(ctx, "Inject", "/load-context <context-name>")
+	cmd, err := s.AddTerminalCommand(ctx, "Inject", "/load-context <context-name>", true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, cmd.ID)
 	assert.Equal(t, "/load-context <context-name>", cmd.Command)
+	assert.True(t, cmd.SendEnter)
 
-	require.NoError(t, s.UpdateTerminalCommand(ctx, cmd.ID, "Inject ctx", "/load <context-name>"))
+	require.NoError(t, s.UpdateTerminalCommand(ctx, cmd.ID, "Inject ctx", "/load <context-name>", false))
 	list, err = s.ListTerminalCommands(ctx)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, "Inject ctx", list[0].Title)
 	assert.Equal(t, "/load <context-name>", list[0].Command)
+	assert.False(t, list[0].SendEnter)
 
 	require.NoError(t, s.DeleteTerminalCommand(ctx, cmd.ID))
 	list, err = s.ListTerminalCommands(ctx)

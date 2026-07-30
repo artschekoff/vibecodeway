@@ -1,13 +1,14 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { GetContextChanges, StageFile, UnstageFile, DiscardFile } = vi.hoisted(() => ({
+const { GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   StageFile: vi.fn(),
   UnstageFile: vi.fn(),
   DiscardFile: vi.fn(),
+  ConfirmAction: vi.fn(),
 }));
-vi.mock("../../../wailsjs/go/main/App", () => ({ GetContextChanges, StageFile, UnstageFile, DiscardFile }));
+vi.mock("../../../wailsjs/go/main/App", () => ({ GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction }));
 
 import { ChangedFilesPanel } from "./ChangedFilesPanel";
 
@@ -17,6 +18,7 @@ beforeEach(() => {
   StageFile.mockResolvedValue(undefined);
   UnstageFile.mockResolvedValue(undefined);
   DiscardFile.mockResolvedValue(undefined);
+  ConfirmAction.mockResolvedValue(true);
   GetContextChanges.mockResolvedValue([
     {
       repoName: "acme/api",
@@ -106,12 +108,19 @@ describe("ChangedFilesPanel", () => {
   });
 
   it("discards an unstaged file after confirmation", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText("discard work.ts"));
     await waitFor(() => expect(DiscardFile).toHaveBeenCalledWith("/r/api", "work.ts"));
-    confirmSpy.mockRestore();
+  });
+
+  it("does not discard when the confirmation is declined", async () => {
+    ConfirmAction.mockResolvedValue(false);
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("discard work.ts"));
+    await waitFor(() => expect(ConfirmAction).toHaveBeenCalled());
+    expect(DiscardFile).not.toHaveBeenCalled();
   });
 
   it("shows committed branch changes read-only (no stage/discard)", async () => {
@@ -132,6 +141,18 @@ describe("ChangedFilesPanel", () => {
     expect(screen.queryByLabelText("discard feature.ts")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("feature.ts"));
     expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "feature.ts", "added");
+  });
+
+  it("copies the repo path and opens a terminal from the repo header", async () => {
+    const onOpenTerminal = vi.fn();
+    const writeText = vi.fn();
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} onOpenTerminal={onOpenTerminal} />);
+    await waitFor(() => expect(screen.getByText("acme/api")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("copy path for acme/api"));
+    expect(writeText).toHaveBeenCalledWith("/r/api");
+    fireEvent.click(screen.getByLabelText("open terminal in acme/api"));
+    expect(onOpenTerminal).toHaveBeenCalledWith("/r/api");
   });
 
   it("filters files by name", async () => {

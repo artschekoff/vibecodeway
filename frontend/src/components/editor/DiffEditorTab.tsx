@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
 import { History, ScrollText, Maximize2, Minimize2, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
-import { ReadRepoFile, ReadRepoFileBase, SaveRepoFile, FileBlame, DiscardFile } from "../../../wailsjs/go/main/App";
+import { ReadRepoFile, ReadRepoFileBase, SaveRepoFile, FileBlame, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
 import { setupMonaco } from "../../lib/monacoSetup";
 import { useEditorSettings, toMonacoOptions } from "../../contexts/EditorSettingsContext";
 import { EditorSettingsMenu } from "./EditorSettingsMenu";
@@ -246,7 +246,7 @@ export function DiffEditorTab({
   const acceptAll = () => { clearHunkWidgets(); }; // keep everything; just dismiss the hunk buttons
 
   const revertAll = async () => {
-    if (!window.confirm(`Revert ALL changes in ${path} to the base version? This cannot be undone.`)) return;
+    if (!(await ConfirmAction("Revert changes", `Revert ALL changes in ${path} to the base version? This cannot be undone.`))) return;
     setError(null);
     try {
       await DiscardFile(repoPath, path);

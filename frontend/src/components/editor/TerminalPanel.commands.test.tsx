@@ -21,7 +21,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   TerminalWrite.mockResolvedValue(undefined);
   ListTerminalCommands.mockResolvedValue([
-    { id: "c1", title: "Inject", command: "/load-context <context-name>", createdAt: "", updatedAt: "" },
+    { id: "c1", title: "Inject", command: "/load-context <context-name>", sendEnter: false, createdAt: "", updatedAt: "" },
+    { id: "c2", title: "Run", command: "npm test", sendEnter: true, createdAt: "", updatedAt: "" },
   ]);
 });
 
@@ -34,5 +35,13 @@ describe("TerminalPanel command selector", () => {
     await waitFor(() =>
       expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "/load-context tell-us-more-fin")
     );
+  });
+
+  it("appends Enter (\\r) when the command has sendEnter", async () => {
+    render(<TerminalPanel spawnCwd="/r/api" contextName="ctx" />);
+    await waitFor(() => expect(screen.getByTestId("term")).toBeInTheDocument());
+    const select = await screen.findByLabelText("Insert terminal command");
+    fireEvent.change(select, { target: { value: "c2" } });
+    await waitFor(() => expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "npm test\r"));
   });
 });

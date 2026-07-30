@@ -42,6 +42,31 @@ func TestRepoDiff(t *testing.T) {
 	assert.Equal(t, "untracked", byPath["b.txt"].Status)
 }
 
+// A brand-new untracked directory must expand into its individual files, not
+// collapse into a single "dir/" entry — otherwise the editor tries to open a
+// directory as a file and shows an empty diff.
+func TestRepoDiff_UntrackedDirectoryExpandsToFiles(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o644))
+	git(t, dir, "add", "a.txt")
+	git(t, dir, "commit", "-m", "init")
+	// A wholly-untracked new directory with a file inside.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "src", "newfeature"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "src", "newfeature", "index.ts"), []byte("export const x = 1\n"), 0o644))
+
+	changes, err := RepoDiff(dir)
+	require.NoError(t, err)
+
+	byPath := map[string]FileChange{}
+	for _, c := range changes {
+		byPath[c.Path] = c
+	}
+	require.Contains(t, byPath, "src/newfeature/index.ts", "untracked file must be listed individually")
+	assert.Equal(t, "untracked", byPath["src/newfeature/index.ts"].Status)
+	assert.NotContains(t, byPath, "src/newfeature/", "the collapsed directory entry must not appear")
+}
+
 // A worktree/checkout of a feature branch has a clean working tree, so
 // `git status` is empty — but the branch's committed changes vs the base branch
 // must still surface in the panel. RepoDiff must include branch-vs-base commits.

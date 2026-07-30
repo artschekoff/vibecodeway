@@ -74,8 +74,10 @@ func splitStatus(code string) (indexStatus, workStatus string) {
 // CommitStatus (the PR stays complete, GitHub-style) and once with
 // index/work status (the local change).
 func RepoDiff(repoPath string) ([]FileChange, error) {
-	// git status --porcelain gives the file list + codes.
-	out, err := exec.Command("git", "-C", repoPath, "status", "--porcelain").Output()
+	// git status --porcelain gives the file list + codes. --untracked-files=all
+	// expands wholly-untracked directories into their individual files instead of
+	// collapsing them to a single "dir/" entry (which the editor can't open/diff).
+	out, err := exec.Command("git", "-C", repoPath, "status", "--porcelain", "--untracked-files=all").Output()
 	if err != nil {
 		return nil, err
 	}

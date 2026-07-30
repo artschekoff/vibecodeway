@@ -22,7 +22,7 @@ export function AddSlackChannels(arg1:string,arg2:string,arg3:Array<slackstore.S
 
 export function AddSpecificPR(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
 
-export function AddTerminalCommand(arg1:string,arg2:string):Promise<store.TerminalCommand>;
+export function AddTerminalCommand(arg1:string,arg2:string,arg3:boolean):Promise<store.TerminalCommand>;
 
 export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo>;
 
@@ -43,6 +43,8 @@ export function AuthStatus():Promise<string>;
 export function AutoLinkRepos(arg1:string):Promise<void>;
 
 export function CancelRefresh():Promise<void>;
+
+export function ConfirmAction(arg1:string,arg2:string):Promise<boolean>;
 
 export function CheckAccessibility():Promise<boolean>;
 
@@ -452,7 +454,7 @@ export function UpdateKeybinding(arg1:string,arg2:string,arg3:string):Promise<vo
 
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
 
-export function UpdateTerminalCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function UpdateTerminalCommand(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
 export function UpdateTrackedRepoMeta(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

@@ -7,14 +7,15 @@ func (a *App) ListTerminalCommands() ([]appstore.TerminalCommand, error) {
 	return a.db.ListTerminalCommands(a.ctx)
 }
 
-// AddTerminalCommand creates a terminal command (title + command text).
-func (a *App) AddTerminalCommand(title, command string) (*appstore.TerminalCommand, error) {
-	return a.db.AddTerminalCommand(a.ctx, title, command)
+// AddTerminalCommand creates a terminal command (title + command text). When
+// sendEnter is true, selecting the command also sends Enter so it runs.
+func (a *App) AddTerminalCommand(title, command string, sendEnter bool) (*appstore.TerminalCommand, error) {
+	return a.db.AddTerminalCommand(a.ctx, title, command, sendEnter)
 }
 
-// UpdateTerminalCommand edits a command's title and command text.
-func (a *App) UpdateTerminalCommand(id, title, command string) error {
-	return a.db.UpdateTerminalCommand(a.ctx, id, title, command)
+// UpdateTerminalCommand edits a command's title, command text, and send-enter flag.
+func (a *App) UpdateTerminalCommand(id, title, command string, sendEnter bool) error {
+	return a.db.UpdateTerminalCommand(a.ctx, id, title, command, sendEnter)
 }
 
 // DeleteTerminalCommand removes a command by id.

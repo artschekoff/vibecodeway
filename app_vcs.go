@@ -1199,6 +1199,25 @@ func (a *App) DiscardFile(repoPath, path string) error {
 	return nil
 }
 
+// ConfirmAction shows a native Yes/No dialog and reports whether the user
+// confirmed. Used instead of window.confirm(), which the Wails WKWebView does
+// not reliably support (it returns false without ever prompting), silently
+// no-opping confirm-gated actions like file revert/discard.
+func (a *App) ConfirmAction(title, message string) (bool, error) {
+	sel, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+		Type:          runtime.QuestionDialog,
+		Title:         title,
+		Message:       message,
+		Buttons:       []string{"Yes", "No"},
+		DefaultButton: "Yes",
+		CancelButton:  "No",
+	})
+	if err != nil {
+		return false, err
+	}
+	return sel == "Yes", nil
+}
+
 // GetContextChanges returns the git working-tree changes for every repo
 // attached to contextID (deduped, only repos whose LocalPath exists on
 // disk). Diffing is fail-soft: a repo that errors during diff is left with
