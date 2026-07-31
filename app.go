@@ -185,6 +185,13 @@ func (a *App) startup(ctx context.Context) {
 			a.dispatchContextHooks(cid, "code_review")
 		}
 	})
+	a.vcsSvc.WithCommentNotifyFunc(func(ctx context.Context, contextID, prID, externalID, author, body string) {
+		summary := "New comment"
+		if author != "" {
+			summary = "New comment from " + author
+		}
+		a.emitDomainEvent(contextID, appstore.EventTypeCommentAdded, appstore.EventSourceGitHub, externalID, author, summary)
+	})
 	vcsProvider := a.vcsSvc
 
 	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)

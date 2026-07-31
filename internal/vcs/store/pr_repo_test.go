@@ -54,16 +54,16 @@ func TestListCommentsForPRs(t *testing.T) {
 	pr2ID := pr2Result.ID
 
 	// Insert 1 comment on PR1
-	_, err = vcsStore.PullRequests.UpsertComment(ctx, pr1ID, "ext-1", nil,
+	_, _, err = vcsStore.PullRequests.UpsertComment(ctx, pr1ID, "ext-1", nil,
 		"review", "alice", "LGTM", nil, nil, false, nil, now, now)
 	require.NoError(t, err)
 
 	// Insert 2 comments on PR2
-	_, err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-2", nil,
+	_, _, err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-2", nil,
 		"review", "bob", "Needs work", nil, nil, false, nil, now, now)
 	require.NoError(t, err)
 
-	_, err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-3", nil,
+	_, _, err = vcsStore.PullRequests.UpsertComment(ctx, pr2ID, "ext-3", nil,
 		"review", "carol", "Agreed", nil, nil, false, nil, now, now)
 	require.NoError(t, err)
 
@@ -79,4 +79,45 @@ func TestListCommentsForPRs(t *testing.T) {
 	empty, err := vcsStore.PullRequests.ListCommentsForPRs(ctx, nil)
 	require.NoError(t, err)
 	assert.Empty(t, empty)
+}
+
+func TestUpsertCommentReportsIsNew(t *testing.T) {
+	s, vcsStore := openTestDB(t)
+	ctx := context.Background()
+
+	// Create a context
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
+	require.NoError(t, err)
+
+	// Create a VCS repo
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "owner", "repo")
+	require.NoError(t, err)
+
+	// Create a branch
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "main", "")
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	prResult, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 1,
+		"PR 1", "alice", "open", "approved", "https://example.com/pr/1",
+		"feature-1", "mergeable", "success", false, now, now)
+	require.NoError(t, err)
+	prID := prResult.ID
+
+	// First upsert of (prID, externalID) inserts a brand-new comment.
+	_, isNew, err := vcsStore.PullRequests.UpsertComment(ctx, prID, "ext-new", nil,
+		"review", "alice", "nit", nil, nil, false, nil,
+		"2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z")
+	require.NoError(t, err)
+	assert.True(t, isNew, "first upsert of a new (prID, externalID) should report isNew=true")
+
+	// Second upsert of the SAME (prID, externalID) updates the existing comment.
+	_, isNew, err = vcsStore.PullRequests.UpsertComment(ctx, prID, "ext-new", nil,
+		"review", "alice", "nit edited", nil, nil, false, nil,
+		"2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z")
+	require.NoError(t, err)
+	assert.False(t, isNew, "second upsert of an existing (prID, externalID) should report isNew=false")
 }

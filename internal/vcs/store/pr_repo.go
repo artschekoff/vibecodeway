@@ -197,8 +197,9 @@ func (r *PRRepo) scanPRs(rows *sql.Rows) ([]PullRequest, error) {
 }
 
 // UpsertComment creates or updates a PR comment identified by (prID, externalID).
-// Returns the internal comment ID and any error.
-func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, parentID *string, commentType, author, body string, path *string, line *int, isResolved bool, inReplyToID *string, createdAt, updatedAt string) (string, error) {
+// Returns the internal comment ID, whether a new comment was inserted (true) vs.
+// an existing one updated (false), and any error.
+func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, parentID *string, commentType, author, body string, path *string, line *int, isResolved bool, inReplyToID *string, createdAt, updatedAt string) (string, bool, error) {
 	var existing string
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id FROM vcs_pr_comments WHERE pr_id = ? AND external_id = ?`,
@@ -216,10 +217,10 @@ func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, par
 			    is_resolved = ?, in_reply_to_id = ?, comment_updated_at = ?
 			WHERE id = ?
 		`, parentID, commentType, author, body, path, line, resolved, inReplyToID, updatedAt, existing)
-		return existing, err
+		return existing, false, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("query vcs comment: %w", err)
+		return "", false, fmt.Errorf("query vcs comment: %w", err)
 	}
 
 	id := uuid.New().String()
@@ -235,9 +236,9 @@ func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, par
 	`, id, prID, externalID, parentID, commentType, author, body, path, line,
 		resolved, inReplyToID, createdAt, updatedAt)
 	if err != nil {
-		return "", fmt.Errorf("insert vcs comment: %w", err)
+		return "", false, fmt.Errorf("insert vcs comment: %w", err)
 	}
-	return id, nil
+	return id, true, nil
 }
 
 // ListCommentsForPR returns all comments for a PR as a flat list (no tree building).

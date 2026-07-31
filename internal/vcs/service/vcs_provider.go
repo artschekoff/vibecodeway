@@ -43,15 +43,19 @@ type NotifyFunc func(ctx context.Context, contextID, entityType, entityID, event
 // ReviewNotifyFunc is invoked once when a brand-new review request is inserted.
 type ReviewNotifyFunc func(ctx context.Context, repoID string, prNumber int)
 
+// CommentNotifyFunc is invoked once when a brand-new PR comment is inserted.
+type CommentNotifyFunc func(ctx context.Context, contextID, prID, externalID, author, body string)
+
 // VCSProvider implements provider.Provider for VCS platforms (GitHub, GitLab, Linear).
 // It dispatches to the appropriate VCSRunner based on the platform stored with each repo.
 type VCSProvider struct {
-	store        *vcsstore.Store
-	runners      map[vcs.Platform]vcs.VCSRunner
-	logger       *zap.Logger
-	notify       NotifyFunc       // nil = no-op
-	reviewNotify ReviewNotifyFunc // nil = no-op
-	msgWriter    appstore.MessageWriter
+	store         *vcsstore.Store
+	runners       map[vcs.Platform]vcs.VCSRunner
+	logger        *zap.Logger
+	notify        NotifyFunc        // nil = no-op
+	reviewNotify  ReviewNotifyFunc  // nil = no-op
+	commentNotify CommentNotifyFunc // nil = no-op
+	msgWriter     appstore.MessageWriter
 }
 
 // NewVCSProvider constructs a VCSProvider with the given runner implementations.
@@ -69,6 +73,9 @@ func (p *VCSProvider) WithNotifyFunc(fn NotifyFunc) { p.notify = fn }
 
 // WithReviewNotifyFunc sets the callback invoked when a new review request appears.
 func (p *VCSProvider) WithReviewNotifyFunc(fn ReviewNotifyFunc) { p.reviewNotify = fn }
+
+// WithCommentNotifyFunc sets the callback invoked when a new PR comment appears.
+func (p *VCSProvider) WithCommentNotifyFunc(fn CommentNotifyFunc) { p.commentNotify = fn }
 
 // Name implements provider.Provider.
 func (p *VCSProvider) Name() string { return "vcs" }
@@ -252,7 +259,7 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 					}
 
 					for _, c := range comments {
-						cID, err := p.store.PullRequests.UpsertComment(ctx,
+						cID, isNew, err := p.store.PullRequests.UpsertComment(ctx,
 							prID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
 							c.Path, c.Line, c.IsResolved, c.InReplyToID,
 							c.CreatedAt, c.UpdatedAt,
@@ -261,6 +268,9 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 							p.logger.Warn("vcs sync: upsert comment failed",
 								zap.String("externalID", c.ExternalID), zap.Error(err))
 							continue
+						}
+						if isNew && p.commentNotify != nil {
+							p.commentNotify(ctx, contextID, prID, cID, c.Author, c.Body)
 						}
 						mu.Lock()
 						stats.NewItems++
