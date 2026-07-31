@@ -161,20 +161,7 @@ func (a *App) startup(ctx context.Context) {
 	slackRepo := slackstore.NewRepo(s.DB())
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
-	jiraProvider.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		inserted, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
-		if err != nil {
-			return err
-		}
-		if inserted {
-			a.dispatchContextHooks(contextID, "jira_update")
-		}
-		if err := s.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
-			a.logger.Warn("jira notify: flag needs_attention failed",
-				zap.String("contextID", contextID), zap.Error(err))
-		}
-		return nil
-	})
+	jiraProvider.WithNotifyFunc(a.onJiraNotify)
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger, s)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
@@ -486,6 +473,24 @@ func notifyReason(entityType, eventType, oldValue, newValue string) string {
 	default:
 		return fmt.Sprintf("New %s", label)
 	}
+}
+
+// onJiraNotify records a detected Jira change: de-duped notification, needs-attention
+// flag, hook dispatch, and (on a newly-inserted notification) a timeline event.
+func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+	if err != nil {
+		return err
+	}
+	if inserted {
+		a.dispatchContextHooks(contextID, "jira_update")
+		a.emitDomainEvent(contextID, eventType, appstore.EventSourceJira, entityID, "", notifyReason(entityType, eventType, oldValue, newValue))
+	}
+	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
+		a.logger.Warn("jira notify: flag needs_attention failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	return nil
 }
 
 // emitDomainEvent appends a deterministic domain event to the timeline. It is
