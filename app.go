@@ -174,17 +174,7 @@ func (a *App) startup(ctx context.Context) {
 		ghRunner.SetToken(auth.Token)
 	}
 	a.vcsSvc.WithNotifyFunc(a.onVCSNotify)
-	a.vcsSvc.WithReviewNotifyFunc(func(ctx context.Context, repoID string, prNumber int) {
-		ctxIDs, err := s.ContextIDsForRepo(ctx, repoID)
-		if err != nil {
-			a.logger.Warn("hooks: contexts for repo failed",
-				zap.String("repoID", repoID), zap.Error(err))
-			return
-		}
-		for _, cid := range ctxIDs {
-			a.dispatchContextHooks(cid, "code_review")
-		}
-	})
+	a.vcsSvc.WithReviewNotifyFunc(a.onReviewNotify)
 	a.vcsSvc.WithCommentNotifyFunc(func(ctx context.Context, contextID, prID, externalID, author, body string) {
 		summary := "New comment"
 		if author != "" {
@@ -503,6 +493,27 @@ func (a *App) onVCSNotify(ctx context.Context, contextID, entityType, entityID, 
 			zap.String("contextID", contextID), zap.Error(err))
 	}
 	return nil
+}
+
+// onReviewNotify records a new PR review request: dispatches code-review hooks for
+// any linked work contexts, and records a review_requested event on the repo's
+// synthetic "<repo> — reviews" context (review requests belong to no work context).
+func (a *App) onReviewNotify(ctx context.Context, repoID, repoName string, prNumber int, prTitle, prAuthor string) {
+	if ctxIDs, err := a.db.ContextIDsForRepo(ctx, repoID); err == nil {
+		for _, cid := range ctxIDs {
+			a.dispatchContextHooks(cid, "code_review")
+		}
+	} else {
+		a.logger.Warn("review notify: contexts for repo failed", zap.String("repoID", repoID), zap.Error(err))
+	}
+	reviewCtx, err := a.reviewContextForRepo(repoID, repoName)
+	if err != nil {
+		a.logger.Warn("review notify: review context failed", zap.String("repoID", repoID), zap.Error(err))
+		return
+	}
+	summary := fmt.Sprintf("Review requested: PR #%d %s", prNumber, prTitle)
+	a.emitDomainEvent(reviewCtx, appstore.EventTypeReviewRequested, appstore.EventSourceGitHub,
+		fmt.Sprintf("%s#%d", repoName, prNumber), prAuthor, summary)
 }
 
 // reviewContextForRepo gets or creates the synthetic "PR Review" context for a

@@ -41,7 +41,9 @@ func formatVCSDateTime(s string) string {
 type NotifyFunc func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error
 
 // ReviewNotifyFunc is invoked once when a brand-new review request is inserted.
-type ReviewNotifyFunc func(ctx context.Context, repoID string, prNumber int)
+// repoName, prTitle, and prAuthor are included so callers can record a
+// human-readable domain event without a second lookup.
+type ReviewNotifyFunc func(ctx context.Context, repoID, repoName string, prNumber int, prTitle, prAuthor string)
 
 // CommentNotifyFunc is invoked once when a brand-new PR comment is inserted.
 type CommentNotifyFunc func(ctx context.Context, contextID, prID, externalID, author, body string)
@@ -430,7 +432,7 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 					zap.Int("pr", pr.Number), zap.Error(err))
 			}
 			if insertedRR && p.reviewNotify != nil {
-				p.reviewNotify(ctx, repo.ID, pr.Number)
+				p.reviewNotify(ctx, repo.ID, repo.Name, pr.Number, pr.Title, pr.Author)
 			}
 		}
 
