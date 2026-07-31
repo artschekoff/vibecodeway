@@ -14,6 +14,7 @@ import (
 
 	"github.com/artschekoff/context-consolidator/internal/agent"
 	"github.com/artschekoff/context-consolidator/internal/analysis"
+	"github.com/artschekoff/context-consolidator/internal/applog"
 	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
 	"github.com/artschekoff/context-consolidator/internal/extract"
 	"github.com/artschekoff/context-consolidator/internal/hotkey"
@@ -25,7 +26,6 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/pty"
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	"github.com/artschekoff/context-consolidator/internal/applog"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
 	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
@@ -485,6 +485,26 @@ func notifyReason(entityType, eventType, oldValue, newValue string) string {
 		return fmt.Sprintf("New %s: %s", label, newValue)
 	default:
 		return fmt.Sprintf("New %s", label)
+	}
+}
+
+// emitDomainEvent appends a deterministic domain event to the timeline. It is
+// best-effort: a failed event write logs and returns without disrupting the
+// caller's sync, so the timeline can never block a refresh.
+func (a *App) emitDomainEvent(contextID, eventType, sourceType, sourceID, author, summary string) {
+	if contextID == "" || eventType == "" {
+		return
+	}
+	if _, err := a.db.AddEvent(a.ctx, appstore.Event{
+		ContextID:  contextID,
+		Type:       eventType,
+		SourceType: sourceType,
+		SourceID:   sourceID,
+		Author:     author,
+		Summary:    summary,
+	}); err != nil {
+		a.logger.Warn("emit domain event failed",
+			zap.String("contextID", contextID), zap.String("type", eventType), zap.Error(err))
 	}
 }
 

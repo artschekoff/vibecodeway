@@ -270,6 +270,8 @@ const (
 	EventTypeCurrentStepOverride    = "current_step_override"
 	EventTypeNextStepRecommendation = "next_step_recommendation"
 	EventTypeUserNote               = "user_note"
+	EventTypeCommentAdded           = "comment_added"
+	EventTypeReviewRequested        = "review_requested"
 )
 
 // Event source type constants.
@@ -424,9 +426,9 @@ type Keybinding struct {
 // command selector. Command may contain placeholder tokens (e.g. <context-name>)
 // substituted at insert time.
 type TerminalCommand struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Command   string `json:"command"`
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Command string `json:"command"`
 	// SendEnter: when true, selecting the command also sends Enter so it runs.
 	SendEnter bool   `json:"sendEnter"`
 	CreatedAt string `json:"createdAt"`
