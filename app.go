@@ -505,6 +505,40 @@ func (a *App) onVCSNotify(ctx context.Context, contextID, entityType, entityID, 
 	return nil
 }
 
+// reviewContextForRepo gets or creates the synthetic "PR Review" context for a
+// repo, used to house review-request events for PRs that belong to no existing
+// work context. The context key is "<repoName> — reviews" and is idempotent:
+// repeated calls for the same repo return the same context ID.
+func (a *App) reviewContextForRepo(repoID, repoName string) (string, error) {
+	key := repoName + " — reviews"
+	if c, err := a.db.GetContextByKey(a.ctx, key); err == nil && c != nil {
+		return c.ID, nil
+	}
+
+	orgID := ""
+	if ids, err := a.db.ContextIDsForRepo(a.ctx, repoID); err == nil && len(ids) > 0 {
+		if c, err := a.db.GetContext(a.ctx, ids[0]); err == nil && c != nil {
+			orgID = c.OrgID
+		}
+	}
+	if orgID == "" {
+		orgs, err := a.db.ListOrganizations(a.ctx)
+		if err != nil {
+			return "", err
+		}
+		if len(orgs) == 0 {
+			return "", errors.New("no organization available for review context")
+		}
+		orgID = orgs[0].ID
+	}
+
+	c, err := a.db.CreateContext(a.ctx, key, orgID)
+	if err != nil {
+		return "", err
+	}
+	return c.ID, nil
+}
+
 // emitDomainEvent appends a deterministic domain event to the timeline. It is
 // best-effort: a failed event write logs and returns without disrupting the
 // caller's sync, so the timeline can never block a refresh.
