@@ -173,20 +173,7 @@ func (a *App) startup(ctx context.Context) {
 	if auth, err := a.vcsStore.Auth.GetAuth(ctx, "github"); err == nil && auth.Token != "" {
 		ghRunner.SetToken(auth.Token)
 	}
-	a.vcsSvc.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		inserted, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
-		if err != nil {
-			return err
-		}
-		if inserted {
-			a.dispatchContextHooks(contextID, "pr_update")
-		}
-		if err := s.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
-			a.logger.Warn("vcs notify: flag needs_attention failed",
-				zap.String("contextID", contextID), zap.Error(err))
-		}
-		return nil
-	})
+	a.vcsSvc.WithNotifyFunc(a.onVCSNotify)
 	a.vcsSvc.WithReviewNotifyFunc(func(ctx context.Context, repoID string, prNumber int) {
 		ctxIDs, err := s.ContextIDsForRepo(ctx, repoID)
 		if err != nil {
@@ -488,6 +475,24 @@ func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID,
 	}
 	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
 		a.logger.Warn("jira notify: flag needs_attention failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	return nil
+}
+
+// onVCSNotify records a detected PR change: de-duped notification, needs-attention
+// flag, hook dispatch, and (on a newly-inserted notification) a timeline event.
+func (a *App) onVCSNotify(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+	if err != nil {
+		return err
+	}
+	if inserted {
+		a.dispatchContextHooks(contextID, "pr_update")
+		a.emitDomainEvent(contextID, eventType, appstore.EventSourceGitHub, entityID, "", notifyReason(entityType, eventType, oldValue, newValue))
+	}
+	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
+		a.logger.Warn("vcs notify: flag needs_attention failed",
 			zap.String("contextID", contextID), zap.Error(err))
 	}
 	return nil
