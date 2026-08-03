@@ -29,7 +29,7 @@ Respond with ONLY a JSON array of the 0-based indices of matching branches (e.g.
 // used by BuildAgentTask to assemble a coding-agent instruction string from a
 // context's linked tickets and on-disk repos. Pure string assembly — no LLM
 // call is made with this prompt; it is handed to an external coding agent.
-const defaultAgentTaskPrompt = `/writing-plans
+const defaultAgentTaskPrompt = `/superpowers:writing-plans
 /context-consolidator-load-context {{context_key}}
 
 You are a coding agent. Implement the task below using the git worktrees checked out on disk.
