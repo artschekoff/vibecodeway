@@ -100,7 +100,7 @@ func (s *Store) UpsertSnapshot(ctx context.Context, sn *ContextSnapshot) error {
 		  ai_next_steps_long        = excluded.ai_next_steps_long,
 		  last_analyzed_session_id  = excluded.last_analyzed_session_id,
 		  analyzed_at               = excluded.analyzed_at,
-		  analyzed_through          = excluded.analyzed_through,
+		  analyzed_through          = COALESCE(excluded.analyzed_through, context_snapshots.analyzed_through),
 		  is_stale                  = excluded.is_stale,
 		  version                   = excluded.version,
 		  estimated_hours           = excluded.estimated_hours,
