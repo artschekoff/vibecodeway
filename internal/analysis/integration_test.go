@@ -145,7 +145,7 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 	)
 	require.NoError(t, err)
 
-	_, err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, _, err = vcsStore.PullRequests.UpsertComment(ctx,
 		prResult.ID,
 		"gh-comment-9901",
 		nil,
@@ -363,7 +363,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	)
 	require.NoError(t, err)
 
-	_, err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, _, err = vcsStore.PullRequests.UpsertComment(ctx,
 		prResult.ID,
 		"gh-review-pr221-1",
 		nil,
@@ -376,7 +376,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	)
 	require.NoError(t, err)
 
-	_, err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, _, err = vcsStore.PullRequests.UpsertComment(ctx,
 		prResult.ID,
 		"gh-review-pr221-2",
 		nil,

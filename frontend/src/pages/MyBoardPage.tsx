@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ExternalLink, RefreshCw, AlertTriangle, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare } from "lucide-react";
+import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare } from "lucide-react";
 import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { useTabContext } from "../contexts/TabContext";
@@ -8,6 +8,14 @@ import type { store, vcsstore } from "../../wailsjs/go/models";
 const PERSON_NAME_KEY = "cc:board-person-name";
 const PRIORITY_RANK: Record<string, number> = { Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1 };
 type JiraSort = "priority" | "status" | "date";
+
+// ponytail: minute/hour/day granularity is enough for a feed; no i18n lib.
+function timeAgo(iso: string): string {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
 
 export default function MyBoardPage() {
   const [personName, setPersonName] = useState(() => localStorage.getItem(PERSON_NAME_KEY) ?? "");
@@ -175,6 +183,27 @@ export default function MyBoardPage() {
       </div>
 
       {error && <div className="board-error">{error}</div>}
+
+      {/* Section 0: Recent Activity */}
+      <BoardSection
+        icon={<Activity size={14} />}
+        title="Recent Activity"
+        count={data?.recentActivity?.length ?? 0}
+        empty="No recent activity."
+      >
+        {data?.recentActivity?.map((e) => (
+          <div key={e.eventId} className="board-card">
+            <div className="board-card-context"
+              onClick={() => openContextTab(e.contextId, e.contextKey)}
+              title="Open context"
+            >
+              {e.contextKey}
+            </div>
+            <div className="board-card-body">{e.summary || e.type}</div>
+            <div className="board-card-meta">{timeAgo(e.createdAt)}</div>
+          </div>
+        ))}
+      </BoardSection>
 
       {/* Section 1: My Blockers */}
       <BoardSection

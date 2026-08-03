@@ -14,6 +14,7 @@ import (
 
 	"github.com/artschekoff/context-consolidator/internal/agent"
 	"github.com/artschekoff/context-consolidator/internal/analysis"
+	"github.com/artschekoff/context-consolidator/internal/applog"
 	cliclient "github.com/artschekoff/context-consolidator/internal/cli"
 	"github.com/artschekoff/context-consolidator/internal/extract"
 	"github.com/artschekoff/context-consolidator/internal/hotkey"
@@ -25,7 +26,6 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/pty"
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	"github.com/artschekoff/context-consolidator/internal/applog"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
 	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
@@ -161,20 +161,7 @@ func (a *App) startup(ctx context.Context) {
 	slackRepo := slackstore.NewRepo(s.DB())
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
-	jiraProvider.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		inserted, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
-		if err != nil {
-			return err
-		}
-		if inserted {
-			a.dispatchContextHooks(contextID, "jira_update")
-		}
-		if err := s.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
-			a.logger.Warn("jira notify: flag needs_attention failed",
-				zap.String("contextID", contextID), zap.Error(err))
-		}
-		return nil
-	})
+	jiraProvider.WithNotifyFunc(a.onJiraNotify)
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger, s)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
@@ -186,30 +173,14 @@ func (a *App) startup(ctx context.Context) {
 	if auth, err := a.vcsStore.Auth.GetAuth(ctx, "github"); err == nil && auth.Token != "" {
 		ghRunner.SetToken(auth.Token)
 	}
-	a.vcsSvc.WithNotifyFunc(func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-		inserted, err := s.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
-		if err != nil {
-			return err
+	a.vcsSvc.WithNotifyFunc(a.onVCSNotify)
+	a.vcsSvc.WithReviewNotifyFunc(a.onReviewNotify)
+	a.vcsSvc.WithCommentNotifyFunc(func(ctx context.Context, contextID, prID, externalID, author, body string) {
+		summary := "New comment"
+		if author != "" {
+			summary = "New comment from " + author
 		}
-		if inserted {
-			a.dispatchContextHooks(contextID, "pr_update")
-		}
-		if err := s.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
-			a.logger.Warn("vcs notify: flag needs_attention failed",
-				zap.String("contextID", contextID), zap.Error(err))
-		}
-		return nil
-	})
-	a.vcsSvc.WithReviewNotifyFunc(func(ctx context.Context, repoID string, prNumber int) {
-		ctxIDs, err := s.ContextIDsForRepo(ctx, repoID)
-		if err != nil {
-			a.logger.Warn("hooks: contexts for repo failed",
-				zap.String("repoID", repoID), zap.Error(err))
-			return
-		}
-		for _, cid := range ctxIDs {
-			a.dispatchContextHooks(cid, "code_review")
-		}
+		a.emitDomainEvent(contextID, appstore.EventTypeCommentAdded, appstore.EventSourceGitHub, externalID, author, summary)
 	})
 	vcsProvider := a.vcsSvc
 
@@ -485,6 +456,117 @@ func notifyReason(entityType, eventType, oldValue, newValue string) string {
 		return fmt.Sprintf("New %s: %s", label, newValue)
 	default:
 		return fmt.Sprintf("New %s", label)
+	}
+}
+
+// onJiraNotify records a detected Jira change: de-duped notification, needs-attention
+// flag, hook dispatch, and (on a newly-inserted notification) a timeline event.
+func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+	if err != nil {
+		return err
+	}
+	if inserted {
+		a.dispatchContextHooks(contextID, "jira_update")
+		a.emitDomainEvent(contextID, eventType, appstore.EventSourceJira, entityID, "", notifyReason(entityType, eventType, oldValue, newValue))
+	}
+	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
+		a.logger.Warn("jira notify: flag needs_attention failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	return nil
+}
+
+// onVCSNotify records a detected PR change: de-duped notification, needs-attention
+// flag, hook dispatch, and (on a newly-inserted notification) a timeline event.
+func (a *App) onVCSNotify(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
+	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+	if err != nil {
+		return err
+	}
+	if inserted {
+		a.dispatchContextHooks(contextID, "pr_update")
+		a.emitDomainEvent(contextID, eventType, appstore.EventSourceGitHub, entityID, "", notifyReason(entityType, eventType, oldValue, newValue))
+	}
+	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
+		a.logger.Warn("vcs notify: flag needs_attention failed",
+			zap.String("contextID", contextID), zap.Error(err))
+	}
+	return nil
+}
+
+// onReviewNotify records a new PR review request: dispatches code-review hooks for
+// any linked work contexts, and records a review_requested event on the repo's
+// synthetic "<repo> — reviews" context (review requests belong to no work context).
+func (a *App) onReviewNotify(ctx context.Context, repoID, repoName string, prNumber int, prTitle, prAuthor string) {
+	if ctxIDs, err := a.db.ContextIDsForRepo(ctx, repoID); err == nil {
+		for _, cid := range ctxIDs {
+			a.dispatchContextHooks(cid, "code_review")
+		}
+	} else {
+		a.logger.Warn("review notify: contexts for repo failed", zap.String("repoID", repoID), zap.Error(err))
+	}
+	reviewCtx, err := a.reviewContextForRepo(repoID, repoName)
+	if err != nil {
+		a.logger.Warn("review notify: review context failed", zap.String("repoID", repoID), zap.Error(err))
+		return
+	}
+	summary := fmt.Sprintf("Review requested: PR #%d %s", prNumber, prTitle)
+	a.emitDomainEvent(reviewCtx, appstore.EventTypeReviewRequested, appstore.EventSourceGitHub,
+		fmt.Sprintf("%s#%d", repoName, prNumber), prAuthor, summary)
+}
+
+// reviewContextForRepo gets or creates the synthetic "PR Review" context for a
+// repo, used to house review-request events for PRs that belong to no existing
+// work context. The context key is "<repoName> — reviews" and is idempotent:
+// repeated calls for the same repo return the same context ID.
+func (a *App) reviewContextForRepo(repoID, repoName string) (string, error) {
+	key := repoName + " — reviews"
+	if c, err := a.db.GetContextByKey(a.ctx, key); err == nil && c != nil {
+		return c.ID, nil
+	}
+
+	orgID := ""
+	if ids, err := a.db.ContextIDsForRepo(a.ctx, repoID); err == nil && len(ids) > 0 {
+		if c, err := a.db.GetContext(a.ctx, ids[0]); err == nil && c != nil {
+			orgID = c.OrgID
+		}
+	}
+	if orgID == "" {
+		orgs, err := a.db.ListOrganizations(a.ctx)
+		if err != nil {
+			return "", err
+		}
+		if len(orgs) == 0 {
+			return "", errors.New("no organization available for review context")
+		}
+		orgID = orgs[0].ID
+	}
+
+	c, err := a.db.CreateContext(a.ctx, key, orgID)
+	if err != nil {
+		return "", err
+	}
+	return c.ID, nil
+}
+
+// emitDomainEvent appends a deterministic domain event to the timeline. It is
+// best-effort: a failed event write logs and returns without disrupting the
+// caller's sync, so the timeline can never block a refresh.
+func (a *App) emitDomainEvent(contextID, eventType, sourceType, sourceID, author, summary string) {
+	if contextID == "" || eventType == "" {
+		return
+	}
+	if _, err := a.db.AddEvent(a.ctx, appstore.Event{
+		ContextID:  contextID,
+		Type:       eventType,
+		SourceType: sourceType,
+		SourceID:   sourceID,
+		Author:     author,
+		Summary:    summary,
+	}); err != nil {
+		a.logger.Warn("emit domain event failed",
+			zap.String("contextID", contextID), zap.String("type", eventType), zap.Error(err))
 	}
 }
 
@@ -1213,11 +1295,17 @@ func (a *App) GetMyBoard(personName string) (*appstore.MyBoardData, error) {
 		return nil, fmt.Errorf("board jira assignments: %w", err)
 	}
 
+	recent, err := a.db.ListBoardRecentEvents(a.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("board recent events: %w", err)
+	}
+
 	return &appstore.MyBoardData{
 		Blockers:             blockers,
 		MyAssignments:        assignments,
 		MyOpenPRs:            prs,
 		MyAssignedJiraIssues: jiraIssues,
+		RecentActivity:       recent,
 	}, nil
 }
 

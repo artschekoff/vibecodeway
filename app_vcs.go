@@ -168,7 +168,7 @@ func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int)
 		return nil
 	}
 	for _, c := range comments {
-		if _, err := a.vcsStore.PullRequests.UpsertComment(a.ctx,
+		if _, _, err := a.vcsStore.PullRequests.UpsertComment(a.ctx,
 			res.ID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
 			c.Path, c.Line, c.IsResolved, c.InReplyToID,
 			c.CreatedAt, c.UpdatedAt,

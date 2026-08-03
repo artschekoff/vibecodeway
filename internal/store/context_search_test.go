@@ -154,7 +154,7 @@ func TestSearchIndexesPRContent(t *testing.T) {
 	require.NoError(t, err, "upsert pr")
 	prID := prResult.ID
 
-	_, err = vcsStore.PullRequests.UpsertComment(ctx, prID, "ext-1", nil,
+	_, _, err = vcsStore.PullRequests.UpsertComment(ctx, prID, "ext-1", nil,
 		"conversation", "bob", "quokka edge case", nil, nil, false, nil, "", "")
 	require.NoError(t, err, "upsert pr comment")
 

@@ -1156,14 +1156,14 @@ func (s *Service) GenerateEventsFromMessages(ctx context.Context, contextID stri
 		return nil, fmt.Errorf("get context: %w", err)
 	}
 
-	existing, err := s.store.ListEvents(ctx, contextID)
-	if err != nil {
-		return nil, fmt.Errorf("list events: %w", err)
+	snapshot, _ := s.store.GetSnapshot(ctx, contextID)
+	var watermark string
+	if snapshot != nil && snapshot.AnalyzedThrough != nil {
+		watermark = *snapshot.AnalyzedThrough
 	}
 	var since time.Time
-	for _, e := range existing {
-		t, _ := time.Parse(time.RFC3339, e.Timestamp)
-		if t.After(since) {
+	if watermark != "" {
+		if t, perr := time.Parse(time.RFC3339, watermark); perr == nil {
 			since = t
 		}
 	}
@@ -1172,11 +1172,13 @@ func (s *Service) GenerateEventsFromMessages(ctx context.Context, contextID stri
 	if err != nil {
 		return nil, fmt.Errorf("list messages: %w", err)
 	}
+	// ListMessagesSince uses created_at >= since, so the boundary message(s) would
+	// be re-processed. Drop everything already at/behind the watermark.
+	msgs = messagesAfterWatermark(msgs, watermark)
 	if len(msgs) == 0 {
 		return nil, nil
 	}
 
-	snapshot, _ := s.store.GetSnapshot(ctx, contextID)
 	extracted, err := s.extractEvents(ctx, ctxRow.Key, formatMessages(msgs), nextStepsForPrompt{}, snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("extract events: %w", err)
@@ -1192,10 +1194,59 @@ func (s *Service) GenerateEventsFromMessages(ctx context.Context, contextID stri
 		}
 		saved = append(saved, *ev)
 	}
+
+	// Advance the watermark to the newest processed message so a re-run with no
+	// new messages extracts nothing (fixes duplicate-on-refresh). Advance based on
+	// messages processed, not events saved — messages the AI found nothing in are
+	// still "processed" and must not be re-fed.
+	if newWM := maxMessageCreatedAt(msgs); newWM != "" {
+		if err := s.store.SetAnalyzedThrough(ctx, contextID, newWM); err != nil {
+			s.logger.Warn("GenerateEventsFromMessages: advance watermark failed", zap.Error(err))
+		}
+	}
 	if len(saved) > 0 {
 		_ = s.store.MarkSnapshotStale(ctx, contextID)
 	}
 	return saved, nil
+}
+
+// messagesAfterWatermark returns messages whose CreatedAt is strictly after the
+// RFC3339 watermark. Empty watermark returns msgs unchanged. Messages with an
+// unparseable CreatedAt are kept (fail-open — better a possible dup than a drop).
+func messagesAfterWatermark(msgs []appstore.Message, watermark string) []appstore.Message {
+	if watermark == "" {
+		return msgs
+	}
+	wm, err := time.Parse(time.RFC3339, watermark)
+	if err != nil {
+		return msgs
+	}
+	out := make([]appstore.Message, 0, len(msgs))
+	for _, m := range msgs {
+		t, perr := time.Parse(time.RFC3339, m.CreatedAt)
+		if perr != nil || t.After(wm) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// maxMessageCreatedAt returns the latest parseable CreatedAt among msgs (RFC3339
+// string), or "" if none parse.
+func maxMessageCreatedAt(msgs []appstore.Message) string {
+	var maxT time.Time
+	var maxS string
+	for _, m := range msgs {
+		t, err := time.Parse(time.RFC3339, m.CreatedAt)
+		if err != nil {
+			continue
+		}
+		if t.After(maxT) {
+			maxT = t
+			maxS = m.CreatedAt
+		}
+	}
+	return maxS
 }
 
 // GenerateSinglePersonAssignment produces a focused, implementation-ready technical assignment

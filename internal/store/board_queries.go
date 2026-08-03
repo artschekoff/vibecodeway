@@ -16,6 +16,18 @@ type BoardBlocker struct {
 	CreatedAt  string `json:"createdAt"`
 }
 
+// BoardRecentEvent is a deterministic activity event enriched with its context key.
+type BoardRecentEvent struct {
+	EventID    string `json:"eventId"`
+	ContextID  string `json:"contextId"`
+	ContextKey string `json:"contextKey"`
+	Type       string `json:"type"`
+	SourceType string `json:"sourceType"`
+	Author     string `json:"author"`
+	Summary    string `json:"summary"`
+	CreatedAt  string `json:"createdAt"`
+}
+
 // BoardAssignment is a PersonAssignment enriched with its context key.
 type BoardAssignment struct {
 	ID              string  `json:"id"`
@@ -73,6 +85,7 @@ type MyBoardData struct {
 	MyAssignments        []BoardAssignment     `json:"myAssignments"`
 	MyOpenPRs            []BoardPR             `json:"myOpenPRs"`
 	MyAssignedJiraIssues []BoardJiraAssignment `json:"myAssignedJiraIssues"`
+	RecentActivity       []BoardRecentEvent    `json:"recentActivity"`
 }
 
 // ListBoardBlockers returns recent blocker_identified events across all contexts, newest first.
@@ -96,6 +109,37 @@ func (s *Store) ListBoardBlockers(ctx context.Context) ([]BoardBlocker, error) {
 		var b BoardBlocker
 		if err := rows.Scan(&b.EventID, &b.ContextID, &b.ContextKey, &b.Author, &b.Summary, &b.Timestamp, &b.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan board blocker: %w", err)
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// ListBoardRecentEvents returns the newest deterministic activity events across
+// all contexts (status changes, PR changes, comments, review requests).
+// ponytail: returns last 50, no pagination until needed.
+func (s *Store) ListBoardRecentEvents(ctx context.Context) ([]BoardRecentEvent, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT e.id, e.context_id, c.key, e.type, e.source_type, e.author, e.summary, e.created_at
+		FROM event_log e
+		JOIN contexts c ON c.id = e.context_id
+		WHERE e.type IN (
+			'jira_status_changed','pr_merged','pr_closed','pr_conflict','pr_review_changed',
+			'ready_to_merge','ci_success','ci_failure','ci_pending','comment_added','review_requested'
+		)
+		ORDER BY e.created_at DESC
+		LIMIT 50
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list board recent events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []BoardRecentEvent
+	for rows.Next() {
+		var b BoardRecentEvent
+		if err := rows.Scan(&b.EventID, &b.ContextID, &b.ContextKey, &b.Type, &b.SourceType, &b.Author, &b.Summary, &b.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan board recent event: %w", err)
 		}
 		out = append(out, b)
 	}
