@@ -12,9 +12,9 @@ import (
 func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnapshot, error) {
 	var sn ContextSnapshot
 	var (
-		isStaleInt, overriddenInt   int
-		estimatedHours              sql.NullFloat64
-		estimatedCompletionDate     sql.NullString
+		isStaleInt, overriddenInt int
+		estimatedHours            sql.NullFloat64
+		estimatedCompletionDate   sql.NullString
 	)
 	err := s.db.QueryRowContext(ctx, `
 		SELECT context_id,
@@ -23,7 +23,7 @@ func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnap
 		       status,
 		       ai_next_steps_short, ai_next_steps_mid, ai_next_steps_long,
 		       user_next_steps_short, user_next_steps_mid, user_next_steps_long,
-		       last_analyzed_session_id, analyzed_at, is_stale, version,
+		       last_analyzed_session_id, analyzed_at, analyzed_through, is_stale, version,
 		       estimated_hours, estimated_completion_date,
 		       estimation_confidence, estimation_basis
 		FROM context_snapshots WHERE context_id = ?
@@ -34,7 +34,7 @@ func (s *Store) GetSnapshot(ctx context.Context, contextID string) (*ContextSnap
 		&sn.Status,
 		&sn.AINextStepsShort, &sn.AINextStepsMid, &sn.AINextStepsLong,
 		&sn.UserNextStepsShort, &sn.UserNextStepsMid, &sn.UserNextStepsLong,
-		&sn.LastAnalyzedSessionID, &sn.AnalyzedAt, &isStaleInt, &sn.Version,
+		&sn.LastAnalyzedSessionID, &sn.AnalyzedAt, &sn.AnalyzedThrough, &isStaleInt, &sn.Version,
 		&estimatedHours, &estimatedCompletionDate,
 		&sn.EstimationConfidence, &sn.EstimationBasis,
 	)
@@ -82,10 +82,10 @@ func (s *Store) UpsertSnapshot(ctx context.Context, sn *ContextSnapshot) error {
 		   status,
 		   ai_next_steps_short, ai_next_steps_mid, ai_next_steps_long,
 		   user_next_steps_short, user_next_steps_mid, user_next_steps_long,
-		   last_analyzed_session_id, analyzed_at, is_stale, version,
+		   last_analyzed_session_id, analyzed_at, analyzed_through, is_stale, version,
 		   estimated_hours, estimated_completion_date,
 		   estimation_confidence, estimation_basis)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(context_id) DO UPDATE SET
 		  current_step_desc         = excluded.current_step_desc,
 		  current_step_confidence   = excluded.current_step_confidence,
@@ -100,6 +100,7 @@ func (s *Store) UpsertSnapshot(ctx context.Context, sn *ContextSnapshot) error {
 		  ai_next_steps_long        = excluded.ai_next_steps_long,
 		  last_analyzed_session_id  = excluded.last_analyzed_session_id,
 		  analyzed_at               = excluded.analyzed_at,
+		  analyzed_through          = excluded.analyzed_through,
 		  is_stale                  = excluded.is_stale,
 		  version                   = excluded.version,
 		  estimated_hours           = excluded.estimated_hours,
@@ -113,7 +114,7 @@ func (s *Store) UpsertSnapshot(ctx context.Context, sn *ContextSnapshot) error {
 		sn.Status,
 		sn.AINextStepsShort, sn.AINextStepsMid, sn.AINextStepsLong,
 		sn.UserNextStepsShort, sn.UserNextStepsMid, sn.UserNextStepsLong,
-		sn.LastAnalyzedSessionID, sn.AnalyzedAt, isStaleInt, sn.Version,
+		sn.LastAnalyzedSessionID, sn.AnalyzedAt, sn.AnalyzedThrough, isStaleInt, sn.Version,
 		sn.EstimatedHours, sn.EstimatedCompletionDate,
 		sn.EstimationConfidence, sn.EstimationBasis,
 	)
@@ -208,6 +209,21 @@ func (s *Store) SetSnapshotStatus(ctx context.Context, contextID, slug string) e
 	`, contextID, slug)
 	if err != nil {
 		return fmt.Errorf("set snapshot status: %w", err)
+	}
+	return nil
+}
+
+// SetAnalyzedThrough advances the event-extraction watermark for a context,
+// creating a minimal snapshot row if none exists yet (upsert). The watermark
+// is the max message timestamp already processed for events.
+func (s *Store) SetAnalyzedThrough(ctx context.Context, contextID, ts string) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO context_snapshots (context_id, analyzed_through)
+		VALUES (?, ?)
+		ON CONFLICT(context_id) DO UPDATE SET analyzed_through = excluded.analyzed_through
+	`, contextID, ts)
+	if err != nil {
+		return fmt.Errorf("set analyzed_through: %w", err)
 	}
 	return nil
 }

@@ -311,6 +311,7 @@ type ContextSnapshot struct {
 
 	LastAnalyzedSessionID *string `json:"lastAnalyzedSessionId,omitempty"`
 	AnalyzedAt            *string `json:"analyzedAt,omitempty"`
+	AnalyzedThrough       *string `json:"analyzedThrough,omitempty"`
 	IsStale               bool    `json:"isStale"`
 	Version               int     `json:"version"`
 
