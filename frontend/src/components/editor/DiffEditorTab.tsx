@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
 import { History, ScrollText, Maximize2, Minimize2, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
-import { ReadRepoFile, ReadRepoFileBase, SaveRepoFile, FileBlame, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
+import { ReadRepoFile, ReadRepoFileBase, ReadRepoFileHead, SaveRepoFile, FileBlame, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
 import { setupMonaco } from "../../lib/monacoSetup";
 import { useEditorSettings, toMonacoOptions } from "../../contexts/EditorSettingsContext";
 import { EditorSettingsMenu } from "./EditorSettingsMenu";
@@ -38,8 +38,8 @@ const iconBtn = (active: boolean): React.CSSProperties => ({
 });
 
 export function DiffEditorTab({
-  repoPath, path, onSaved, refreshSignal, onAskAi,
-}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void }) {
+  repoPath, path, onSaved, refreshSignal, onAskAi, baseMode = "branch",
+}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void; baseMode?: "branch" | "head" }) {
   const [original, setOriginal] = useState<string | null>(null);
   const [modified, setModified] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -190,7 +190,11 @@ export function DiffEditorTab({
 
   useEffect(() => {
     let active = true;
-    void Promise.all([ReadRepoFileBase(repoPath, path), ReadRepoFile(repoPath, path)])
+    // "head" (Staged/Local/file-tree) diffs against HEAD so only uncommitted
+    // edits show; "branch" (Branch Changes) diffs against the merge-base for the
+    // full branch/PR change.
+    const readBase = baseMode === "head" ? ReadRepoFileHead : ReadRepoFileBase;
+    void Promise.all([readBase(repoPath, path), ReadRepoFile(repoPath, path)])
       .then(([head, work]) => {
         if (!active) return;
         setOriginal(head);
@@ -198,7 +202,7 @@ export function DiffEditorTab({
       })
       .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); });
     return () => { active = false; };
-  }, [repoPath, path, refreshSignal, localReload]);
+  }, [repoPath, path, refreshSignal, localReload, baseMode]);
 
   // Rebuild the per-hunk accept/reject widgets whenever the diff content reloads.
   useEffect(() => { const t = setTimeout(buildHunkWidgets, 50); return () => clearTimeout(t); }, [original, modified, refreshSignal]);

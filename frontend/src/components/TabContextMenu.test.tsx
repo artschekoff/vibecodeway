@@ -3,9 +3,9 @@ import { describe, it, expect, vi } from "vitest";
 import { TabContextMenu } from "./TabContextMenu";
 
 function setup(isPinned = false) {
-  const onClose = vi.fn(), onCloseAll = vi.fn(), onTogglePin = vi.fn(), onDismiss = vi.fn();
-  render(<TabContextMenu x={10} y={20} isPinned={isPinned} onClose={onClose} onCloseAll={onCloseAll} onTogglePin={onTogglePin} onDismiss={onDismiss} />);
-  return { onClose, onCloseAll, onTogglePin, onDismiss };
+  const onClose = vi.fn(), onCloseOthers = vi.fn(), onTogglePin = vi.fn(), onDismiss = vi.fn();
+  render(<TabContextMenu x={10} y={20} isPinned={isPinned} onClose={onClose} onCloseOthers={onCloseOthers} onTogglePin={onTogglePin} onDismiss={onDismiss} />);
+  return { onClose, onCloseOthers, onTogglePin, onDismiss };
 }
 
 describe("TabContextMenu", () => {
@@ -16,10 +16,10 @@ describe("TabContextMenu", () => {
     expect(onDismiss).toHaveBeenCalled();
   });
 
-  it("Close all fires onCloseAll", () => {
-    const { onCloseAll } = setup();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Close all" }));
-    expect(onCloseAll).toHaveBeenCalled();
+  it("Close all but this fires onCloseOthers", () => {
+    const { onCloseOthers } = setup();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Close all but this" }));
+    expect(onCloseOthers).toHaveBeenCalled();
   });
 
   it("shows Pin when unpinned and Unpin when pinned", () => {

@@ -60,8 +60,8 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
     return () => { active = false; };
   }, [contextId, refreshSignal]);
 
-  const openFile = (repoPath: string, repoName: string, path: string, status: string) => {
-    const tab: OpenTab = { repoPath, repoName, path, status };
+  const openFile = (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head" = "head") => {
+    const tab: OpenTab = { repoPath, repoName, path, status, baseMode };
     openEditorFile(contextId, tab);
   };
 
@@ -107,7 +107,7 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           {active ? (
-            <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} refreshSignal={refreshSignal}
+            <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} baseMode={active.baseMode} refreshSignal={refreshSignal}
               onSaved={() => { /* panel auto-polls */ }}
               onAskAi={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))} />
           ) : (

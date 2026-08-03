@@ -1186,32 +1186,6 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
-	export class BoardRecentEvent {
-	    eventId: string;
-	    contextId: string;
-	    contextKey: string;
-	    type: string;
-	    sourceType: string;
-	    author: string;
-	    summary: string;
-	    createdAt: string;
-
-	    static createFrom(source: any = {}) {
-	        return new BoardRecentEvent(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.eventId = source["eventId"];
-	        this.contextId = source["contextId"];
-	        this.contextKey = source["contextKey"];
-	        this.type = source["type"];
-	        this.sourceType = source["sourceType"];
-	        this.author = source["author"];
-	        this.summary = source["summary"];
-	        this.createdAt = source["createdAt"];
-	    }
-	}
 	export class BoardJiraAssignment {
 	    key: string;
 	    summary: string;
@@ -1258,7 +1232,7 @@ export namespace store {
 	    state: string;
 	    prUpdatedAt: string;
 	    unresolvedCount: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BoardPR(source);
 	    }
@@ -1280,6 +1254,32 @@ export namespace store {
 	        this.state = source["state"];
 	        this.prUpdatedAt = source["prUpdatedAt"];
 	        this.unresolvedCount = source["unresolvedCount"];
+	    }
+	}
+	export class BoardRecentEvent {
+	    eventId: string;
+	    contextId: string;
+	    contextKey: string;
+	    type: string;
+	    sourceType: string;
+	    author: string;
+	    summary: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardRecentEvent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.eventId = source["eventId"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.type = source["type"];
+	        this.sourceType = source["sourceType"];
+	        this.author = source["author"];
+	        this.summary = source["summary"];
+	        this.createdAt = source["createdAt"];
 	    }
 	}
 	export class BusinessContextSummary {
@@ -1488,6 +1488,7 @@ export namespace store {
 	    userNextStepsLong: string;
 	    lastAnalyzedSessionId?: string;
 	    analyzedAt?: string;
+	    analyzedThrough?: string;
 	    isStale: boolean;
 	    version: number;
 	    latestStatusLogEntry?: StatusLogEntry;
@@ -1519,6 +1520,7 @@ export namespace store {
 	        this.userNextStepsLong = source["userNextStepsLong"];
 	        this.lastAnalyzedSessionId = source["lastAnalyzedSessionId"];
 	        this.analyzedAt = source["analyzedAt"];
+	        this.analyzedThrough = source["analyzedThrough"];
 	        this.isStale = source["isStale"];
 	        this.version = source["version"];
 	        this.latestStatusLogEntry = this.convertValues(source["latestStatusLogEntry"], StatusLogEntry);
@@ -1974,11 +1976,11 @@ export namespace store {
 	    myOpenPRs: BoardPR[];
 	    myAssignedJiraIssues: BoardJiraAssignment[];
 	    recentActivity: BoardRecentEvent[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new MyBoardData(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.blockers = this.convertValues(source["blockers"], BoardBlocker);
@@ -2131,11 +2133,11 @@ export namespace store {
 	    sendEnter: boolean;
 	    createdAt: string;
 	    updatedAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TerminalCommand(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];

@@ -17,7 +17,7 @@ function TabName({ name }: { name: string }) {
 }
 
 export function EditorFileTabBar({ contextId }: { contextId: string }) {
-  const { getFiles, closeEditorFile, setActiveEditorFile, pinEditorFile, closeAllEditorFiles } = useEditorFiles();
+  const { getFiles, closeEditorFile, setActiveEditorFile, pinEditorFile, closeOtherEditorFiles } = useEditorFiles();
   const { tabs, activeKey } = getFiles(contextId);
   const [menu, setMenu] = useState<{ x: number; y: number; key: string; pinned: boolean } | null>(null);
   if (tabs.length === 0) return null;
@@ -48,7 +48,7 @@ export function EditorFileTabBar({ contextId }: { contextId: string }) {
           y={menu.y}
           isPinned={menu.pinned}
           onClose={() => closeEditorFile(contextId, menu.key)}
-          onCloseAll={() => closeAllEditorFiles(contextId)}
+          onCloseOthers={() => closeOtherEditorFiles(contextId, menu.key)}
           onTogglePin={() => pinEditorFile(contextId, menu.key, !menu.pinned)}
           onDismiss={() => setMenu(null)}
         />

@@ -7,7 +7,7 @@ type Props = {
   repoPath: string;
   repoName: string;
   // Same signature as the changed-files panel; status is "" for a plain file.
-  onOpenFile: (repoPath: string, repoName: string, path: string, status: string) => void;
+  onOpenFile: (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head") => void;
   // Open a new in-app terminal at this repo's local path.
   onOpenTerminal?: (repoPath: string) => void;
 };
@@ -74,7 +74,7 @@ export function FileTreePanel({ repoPath, repoName, onOpenFile, onOpenTerminal }
           <div key={`f:${n.path}`} style={{ ...rowStyle, paddingLeft: indent }}>
             <span style={gutter} />
             <File size={13} style={iconStyle} />
-            <button style={nameBtnStyle} title={n.path} onClick={() => onOpenFile(repoPath, repoName, n.path, "")}>{n.name}</button>
+            <button style={nameBtnStyle} title={n.path} onClick={() => onOpenFile(repoPath, repoName, n.path, "", "head")}>{n.name}</button>
           </div>,
         ];
       }

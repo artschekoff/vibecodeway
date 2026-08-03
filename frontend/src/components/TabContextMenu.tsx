@@ -3,7 +3,7 @@ export type TabContextMenuProps = {
   y: number;
   isPinned: boolean;
   onClose: () => void;
-  onCloseAll: () => void;
+  onCloseOthers: () => void;
   onTogglePin: () => void;
   onDismiss: () => void;
 };
@@ -14,7 +14,7 @@ const itemStyle: React.CSSProperties = {
 };
 
 /** Cursor-positioned right-click menu shared by the sidebar and editor tab bars. */
-export function TabContextMenu({ x, y, isPinned, onClose, onCloseAll, onTogglePin, onDismiss }: TabContextMenuProps) {
+export function TabContextMenu({ x, y, isPinned, onClose, onCloseOthers, onTogglePin, onDismiss }: TabContextMenuProps) {
   const run = (fn: () => void) => () => { fn(); onDismiss(); };
   return (
     <>
@@ -33,7 +33,7 @@ export function TabContextMenu({ x, y, isPinned, onClose, onCloseAll, onTogglePi
         }}
       >
         <button role="menuitem" style={itemStyle} onClick={run(onClose)}>Close</button>
-        <button role="menuitem" style={itemStyle} onClick={run(onCloseAll)}>Close all</button>
+        <button role="menuitem" style={itemStyle} onClick={run(onCloseOthers)}>Close all but this</button>
         <button role="menuitem" style={itemStyle} onClick={run(onTogglePin)}>{isPinned ? "Unpin" : "Pin"}</button>
       </div>
     </>

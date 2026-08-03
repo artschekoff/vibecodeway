@@ -14,7 +14,7 @@ function renderWithFiles(tabs: OpenTab[], activeKey: string) {
     closeEditorFile,
     setActiveEditorFile,
     pinEditorFile: vi.fn(),
-    closeAllEditorFiles: vi.fn(),
+    closeOtherEditorFiles: vi.fn(),
   };
   render(
     <EditorFilesContext.Provider value={value}>
@@ -45,7 +45,7 @@ describe("EditorFileTabBar", () => {
   it("renders nothing when there are no open files", () => {
     const { container } = render(
       <EditorFilesContext.Provider
-        value={{ getFiles: () => ({ tabs: [], activeKey: "" }), openEditorFile: vi.fn(), closeEditorFile: vi.fn(), setActiveEditorFile: vi.fn(), pinEditorFile: vi.fn(), closeAllEditorFiles: vi.fn() }}
+        value={{ getFiles: () => ({ tabs: [], activeKey: "" }), openEditorFile: vi.fn(), closeEditorFile: vi.fn(), setActiveEditorFile: vi.fn(), pinEditorFile: vi.fn(), closeOtherEditorFiles: vi.fn() }}
       >
         <EditorFileTabBar contextId="c1" />
       </EditorFilesContext.Provider>

@@ -100,7 +100,7 @@ describe("ChangedFilesPanel", () => {
     render(<ChangedFilesPanel contextId="c1" onOpenFile={onOpenFile} />);
     await waitFor(() => expect(screen.getByText("work.ts")).toBeInTheDocument());
     fireEvent.click(screen.getByText("work.ts"));
-    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "work.ts", "modified");
+    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "work.ts", "modified", "head");
   });
 
   it("stages an unstaged file", async () => {
@@ -150,7 +150,7 @@ describe("ChangedFilesPanel", () => {
     expect(screen.queryByLabelText("stage feature.ts")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("discard feature.ts")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("feature.ts"));
-    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "feature.ts", "added");
+    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "feature.ts", "added", "branch");
   });
 
   it("shows a GitHub-refresh icon in the repo header and calls onRefresh", async () => {

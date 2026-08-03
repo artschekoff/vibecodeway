@@ -145,7 +145,7 @@ function TabItem({ tab, isActive, orgColor, badge, onOpenMenu }: { tab: Tab; isA
 }
 
 export default function TabBar() {
-  const { tabs, activeTabId, reorderTabs, forceCloseTab, closeAllTabs, pinTab, unpinTab } = useTabContext();
+  const { tabs, activeTabId, reorderTabs, forceCloseTab, closeOtherTabs, pinTab, unpinTab } = useTabContext();
   const badges = useContextBadges(activeTabId);
   const [menu, setMenu] = useState<{ x: number; y: number; tab: Tab } | null>(null);
   const orgColorMap = useOrgColorMap(tabs);
@@ -190,7 +190,7 @@ export default function TabBar() {
           y={menu.y}
           isPinned={!!menu.tab.pinned}
           onClose={() => forceCloseTab(menu.tab.id)}
-          onCloseAll={() => closeAllTabs()}
+          onCloseOthers={() => closeOtherTabs(menu.tab.id)}
           onTogglePin={() => (menu.tab.pinned ? unpinTab(menu.tab.id) : pinTab(menu.tab.id))}
           onDismiss={() => setMenu(null)}
         />

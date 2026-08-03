@@ -12,16 +12,16 @@ vi.mock("@monaco-editor/react", () => ({
 }));
 
 const {
-  ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
+  ReadRepoFile, ReadRepoFileBase, ReadRepoFileHead, SaveRepoFile, GetEditorSettings, SetEditorSettings,
   FileBlame, FileHistory, FileDiffAtCommit, DiscardFile, ConfirmAction,
 } = vi.hoisted(() => ({
-  ReadRepoFile: vi.fn(), ReadRepoFileBase: vi.fn(), SaveRepoFile: vi.fn(),
+  ReadRepoFile: vi.fn(), ReadRepoFileBase: vi.fn(), ReadRepoFileHead: vi.fn(), SaveRepoFile: vi.fn(),
   GetEditorSettings: vi.fn(), SetEditorSettings: vi.fn(),
   FileBlame: vi.fn(), FileHistory: vi.fn(), FileDiffAtCommit: vi.fn(), DiscardFile: vi.fn(),
   ConfirmAction: vi.fn(),
 }));
 vi.mock("../../../wailsjs/go/main/App", () => ({
-  ReadRepoFile, ReadRepoFileBase, SaveRepoFile, GetEditorSettings, SetEditorSettings,
+  ReadRepoFile, ReadRepoFileBase, ReadRepoFileHead, SaveRepoFile, GetEditorSettings, SetEditorSettings,
   FileBlame, FileHistory, FileDiffAtCommit, DiscardFile, ConfirmAction,
 }));
 
@@ -31,6 +31,7 @@ import { EditorSettingsProvider } from "../../contexts/EditorSettingsContext";
 beforeEach(() => {
   vi.clearAllMocks();
   ReadRepoFileBase.mockResolvedValue("old\n");
+  ReadRepoFileHead.mockResolvedValue("head\n");
   ReadRepoFile.mockResolvedValue("new\n");
   SaveRepoFile.mockResolvedValue(undefined);
   GetEditorSettings.mockResolvedValue("");
@@ -47,6 +48,7 @@ describe("DiffEditorTab", () => {
 
     await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
     expect(ReadRepoFileBase).toHaveBeenCalledWith("/r/api", "src/a.ts");
+    expect(ReadRepoFileHead).not.toHaveBeenCalled();
     expect(ReadRepoFile).toHaveBeenCalledWith("/r/api", "src/a.ts");
 
     // Simulate Monaco mounting with an editor whose modified model has edits.
@@ -55,6 +57,13 @@ describe("DiffEditorTab", () => {
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() => expect(SaveRepoFile).toHaveBeenCalledWith("/r/api", "src/a.ts", "edited\n"));
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("baseMode='head' diffs against HEAD (uncommitted only), not the merge-base", async () => {
+    render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="src/a.ts" baseMode="head" onSaved={vi.fn()} /></EditorSettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
+    expect(ReadRepoFileHead).toHaveBeenCalledWith("/r/api", "src/a.ts");
+    expect(ReadRepoFileBase).not.toHaveBeenCalled();
   });
 
   it("opens the file history modal and loads the file's commits", async () => {
