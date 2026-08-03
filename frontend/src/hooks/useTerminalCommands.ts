@@ -9,5 +9,12 @@ export function useTerminalCommands(): { commands: store.TerminalCommand[]; relo
     void ListTerminalCommands().then((rows) => setCommands(rows ?? [])).catch(() => setCommands([]));
   }, []);
   useEffect(() => { reload(); }, [reload]);
+  // Editor tabs stay mounted (display:none), so a snippet edited in Settings
+  // afterward would otherwise be stale here. Settings fires this event on change.
+  useEffect(() => {
+    const onChanged = () => reload();
+    window.addEventListener("terminal-commands-changed", onChanged);
+    return () => window.removeEventListener("terminal-commands-changed", onChanged);
+  }, [reload]);
   return { commands, reload };
 }

@@ -12,23 +12,44 @@ beforeEach(() => {
 });
 
 describe("FileTreePanel", () => {
-  it("renders the tree (compacted folders) and opens a file with empty status", async () => {
+  it("collapses folders by default; expand-all reveals files and a click opens one", async () => {
     const onOpenFile = vi.fn();
     render(<FileTreePanel repoPath="/r/api" repoName="acme/api" onOpenFile={onOpenFile} />);
-    // src/app compacts into one folder node; both files + README show.
+    // Folder row shows, but its nested files are hidden while collapsed.
     await waitFor(() => expect(screen.getByText("src/app/")).toBeInTheDocument());
+    expect(screen.queryByText("main.ts")).not.toBeInTheDocument();
+    // README is at the root (not inside a folder) so it's always visible.
     expect(screen.getByText("README.md")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("expand all"));
     expect(screen.getByText("main.ts")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("main.ts"));
     expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "src/app/main.ts", "");
   });
 
-  it("collapses a folder to hide its files", async () => {
+  it("collapse-all hides files again", async () => {
     render(<FileTreePanel repoPath="/r/api" repoName="acme/api" onOpenFile={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText("main.ts")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("src/app/"));
+    await waitFor(() => expect(screen.getByText("src/app/")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("expand all"));
+    expect(screen.getByText("main.ts")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("collapse all"));
     expect(screen.queryByText("main.ts")).not.toBeInTheDocument();
-    expect(screen.getByText("README.md")).toBeInTheDocument(); // sibling unaffected
+  });
+
+  it("opens a terminal at the repo path", async () => {
+    const onOpenTerminal = vi.fn();
+    render(<FileTreePanel repoPath="/r/api" repoName="acme/api" onOpenFile={vi.fn()} onOpenTerminal={onOpenTerminal} />);
+    await waitFor(() => expect(screen.getByText("src/app/")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("open terminal in acme/api"));
+    expect(onOpenTerminal).toHaveBeenCalledWith("/r/api");
+  });
+
+  it("an active filter forces folders open so matches show", async () => {
+    render(<FileTreePanel repoPath="/r/api" repoName="acme/api" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("src/app/")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("filter repo files"), { target: { value: "util" } });
+    expect(screen.getByText("util.ts")).toBeInTheDocument();
+    expect(screen.queryByText("main.ts")).not.toBeInTheDocument();
   });
 });

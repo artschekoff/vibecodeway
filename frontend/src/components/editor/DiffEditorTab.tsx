@@ -7,6 +7,7 @@ import { useEditorSettings, toMonacoOptions } from "../../contexts/EditorSetting
 import { EditorSettingsMenu } from "./EditorSettingsMenu";
 import { FileHistoryModal } from "./FileHistoryModal";
 import { computeHunkRevert, type LineChange } from "../../lib/hunkRevert";
+import { languageFor } from "../../lib/languageFor";
 
 type ContentWidget = {
   getId: () => string;
@@ -35,16 +36,6 @@ const iconBtn = (active: boolean): React.CSSProperties => ({
   display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer",
   padding: 2, color: active ? "var(--accent, #2563eb)" : "var(--text-muted)",
 });
-
-export function languageFor(path: string): string {
-  const ext = path.split(".").pop() ?? "";
-  const map: Record<string, string> = {
-    ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
-    go: "go", sql: "sql", json: "json", css: "css", html: "html", md: "markdown",
-    py: "python", sh: "shell", yml: "yaml", yaml: "yaml",
-  };
-  return map[ext] ?? "plaintext";
-}
 
 export function DiffEditorTab({
   repoPath, path, onSaved, refreshSignal, onAskAi,

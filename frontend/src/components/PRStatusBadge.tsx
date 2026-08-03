@@ -6,6 +6,8 @@ export function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus, isDra
     ? (reviewStatus === "changes_requested" ? "Changes Requested"
       : reviewStatus === "approved" ? "Approved"
       : reviewStatus === "review_required" ? "Review Required"
+      // Author addressed the feedback and re-requested — needs another look.
+      : reviewStatus === "re_review_required" ? "Re-review"
       : reviewStatus || null)
     : null;
 
@@ -17,7 +19,7 @@ export function PRStatusBadge({ status, reviewStatus, mergeable, ciStatus, isDra
       {isDraft && <span className="pr-status-badge pr-status-badge--draft">Draft</span>}
       <span className={`pr-status-badge pr-status-badge--${status}`}>{status}</span>
       {reviewLabel && (
-        <span className={`pr-status-badge pr-review-badge${reviewStatus === "changes_requested" ? " pr-status--changes-requested" : reviewStatus === "approved" ? " pr-status--approved" : ""}`}>
+        <span className={`pr-status-badge pr-review-badge${reviewStatus === "changes_requested" ? " pr-status--changes-requested" : reviewStatus === "approved" ? " pr-status--approved" : reviewStatus === "re_review_required" ? " pr-status--re-review" : ""}`}>
           {reviewLabel}
         </span>
       )}

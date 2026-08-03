@@ -14,17 +14,31 @@ All operations use `context-consolidator-cli` (Bash). JSON on stdout; errors on
 stderr. Prefer `/context-consolidator-prime` first if the CLI schema is not
 already loaded.
 
+`context-list` / `context-get` read the **local** consolidator DB. Do **not** call
+`jira-cli`, `acli`, `jira-refresh`, or `reload-all` unless the user explicitly
+asks to refresh from Jira/Slack.
+
+Follow **Safe JSON handling** in `/context-consolidator-prime` (prefer `jq`;
+never `cli | python3 <<'PY'`).
+
 ## Workflow
 
-### Step 1: List available contexts
+### Step 1: Resolve which context to load
+
+**If the user already named a context key** (e.g. `/context-consolidator-load-context JH-4922`):
+skip the list UI and go straight to Step 3 with that key.
+
+**Otherwise**, list contexts:
 
 ```bash
-context-consolidator-cli context-list
+context-consolidator-cli context-list | jq '[.[] | {key, status, id}]'
 ```
 
 **Output:** JSON array of context objects (`id`, `key`, `status`, issue counts, …).
 
 ### Step 2: Present contexts and ask which to load
+
+(Only when Step 1 listed contexts — skipped if the user already named a key.)
 
 Display as a numbered list:
 - **Key**
@@ -37,11 +51,22 @@ Ask which context to load. If only one exists, still confirm before loading.
 ### Step 3: Fetch the full context
 
 ```bash
-context-consolidator-cli context-get --context-key <selected_key>
+context-consolidator-cli context-get --context-key <selected_key> > /tmp/cc-ctx.json
+jq '{
+  key: .context.key,
+  status: .context.status,
+  issues: [.issues[]? | {jiraKey, summary, status, priority, assignee, issueType, parentKey, description, commentCount: (.comments|length? // 0)}]
+}' /tmp/cc-ctx.json
 ```
 
 **Input:** `--context-key STRING` or `--context-id UUID` (one required)  
 **Output:** JSON context detail (Jira config, Slack config, issues, counts, …).
+
+To include comment bodies when needed:
+
+```bash
+jq '{issues: [.issues[]? | {jiraKey, summary, status, description, comments: [.comments[]? | {author, created, body}]}]}' /tmp/cc-ctx.json
+```
 
 ### Step 4: Present the context data
 

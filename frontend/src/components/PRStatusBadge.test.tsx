@@ -12,6 +12,13 @@ describe("PRStatusBadge", () => {
     expect(screen.getByText("CI failed")).toBeInTheDocument();
   });
 
+  it("shows a 'Re-review' badge when the author re-requested after changes", () => {
+    render(<PRStatusBadge status="open" reviewStatus="re_review_required" />);
+    expect(screen.getByText("Re-review")).toBeInTheDocument();
+    // Not the same as a plain changes-requested item.
+    expect(screen.queryByText("Changes Requested")).not.toBeInTheDocument();
+  });
+
   it("hides review/CI badges for a merged PR", () => {
     render(<PRStatusBadge status="merged" reviewStatus="approved" ciStatus="FAILURE" />);
     expect(screen.getByText("merged")).toBeInTheDocument();

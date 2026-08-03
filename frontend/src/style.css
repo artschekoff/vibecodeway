@@ -4298,6 +4298,14 @@ select {
   color: #3fb950;
 }
 
+/* Author addressed feedback and re-requested review — actionable, stands apart
+   from the orange "changes requested" so it reads as "your turn again". */
+.pr-status--re-review {
+  background: rgba(88, 130, 246, 0.18);
+  color: #7aa2f7;
+  font-weight: 600;
+}
+
 .pr-status--merged {
   background: rgba(130, 80, 223, 0.18);
   color: #a371f7;

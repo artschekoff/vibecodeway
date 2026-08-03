@@ -15,7 +15,17 @@ const { TerminalWrite, ListTerminalCommands } = vi.hoisted(() => ({
 }));
 vi.mock("../../../wailsjs/go/main/App", () => ({ TerminalWrite, ListTerminalCommands }));
 
-import { TerminalPanel } from "./TerminalPanel";
+import { TerminalPanel, tabLabel } from "./TerminalPanel";
+
+describe("tabLabel", () => {
+  it("prepends the repo name for a worktree path", () => {
+    expect(tabLabel("/Users/a/jiro/juna-api/.worktrees/feat_JH-4302")).toBe("juna-api / feat_JH-4302");
+    expect(tabLabel("/x/juna-functions/.worktrees/feat_JH-4836")).toBe("juna-functions / feat_JH-4836");
+  });
+  it("shows the name once for a plain checkout (repo === folder)", () => {
+    expect(tabLabel("/Users/a/jiro/juna-api")).toBe("juna-api");
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -3,7 +3,7 @@ import { DiffEditor } from "@monaco-editor/react";
 import { FileHistory, FileDiffAtCommit } from "../../../wailsjs/go/main/App";
 import type { main } from "../../../wailsjs/go/models";
 import { useEditorSettings, toMonacoOptions } from "../../contexts/EditorSettingsContext";
-import { languageFor } from "./DiffEditorTab";
+import { languageFor } from "../../lib/languageFor";
 
 const overlay: React.CSSProperties = {
   position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)",

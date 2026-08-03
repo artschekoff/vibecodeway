@@ -6,8 +6,11 @@ vi.mock("../components/editor/DiffEditorTab", () => ({
   DiffEditorTab: ({ path }: { path: string }) => <div data-testid="diff">{path}</div>,
 }));
 vi.mock("../components/editor/ChangedFilesPanel", () => ({
-  ChangedFilesPanel: ({ onOpenFile }: { onOpenFile: (rp: string, rn: string, p: string, s: string) => void }) => (
-    <button onClick={() => onOpenFile("/r/api", "acme/api", "src/a.ts", "modified")}>open-a</button>
+  ChangedFilesPanel: ({ onOpenFile, onRefresh }: { onOpenFile: (rp: string, rn: string, p: string, s: string) => void; onRefresh?: () => void }) => (
+    <>
+      <button onClick={() => onOpenFile("/r/api", "acme/api", "src/a.ts", "modified")}>open-a</button>
+      {onRefresh && <button aria-label="refresh from github" onClick={onRefresh}>refresh</button>}
+    </>
   ),
 }));
 vi.mock("../components/editor/EditorPRInfo", () => ({
@@ -118,7 +121,8 @@ describe("EditorWorkspace", () => {
     await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
     GetContextChanges.mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: /refresh from github/i }));
+    // The refresh icon lives in the changed-files repo header, which loads async.
+    fireEvent.click(await screen.findByRole("button", { name: /refresh from github/i }));
 
     await waitFor(() => expect(RefreshContext).toHaveBeenCalledWith("c1"));
     await waitFor(() => expect(GetContextChanges).toHaveBeenCalled());

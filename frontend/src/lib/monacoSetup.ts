@@ -1,5 +1,6 @@
 import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
+import { setLanguageRegistry } from "./languageFor";
 
 let done = false;
 
@@ -75,4 +76,8 @@ export function setupMonaco(): void {
   };
 
   loader.config({ monaco });
+
+  // Feed Monaco's full language registry (extensions + filenames) to languageFor
+  // so any bundled grammar (.mjs, Dockerfile, …) highlights without maintenance.
+  setLanguageRegistry(monaco.languages.getLanguages());
 }

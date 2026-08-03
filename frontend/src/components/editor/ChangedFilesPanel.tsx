@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, Terminal } from "lucide-react";
+import { Copy, Terminal, ChevronsDownUp, ChevronsUpDown, RefreshCw } from "lucide-react";
 import { GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
 import { main } from "../../../wailsjs/go/models";
 
@@ -8,6 +8,9 @@ type Props = {
   onOpenFile: (repoPath: string, repoName: string, path: string, status: string) => void;
   // Open a new in-app terminal at the repo's local path.
   onOpenTerminal?: (repoPath: string) => void;
+  // Re-sync the context from GitHub (icon shown in the repo header).
+  onRefresh?: () => void;
+  refreshing?: boolean;
   // When set, show only the repo whose repoPath matches (follows the editor's
   // repo selector). Unset => show all repos.
   activeRepoPath?: string;
@@ -25,6 +28,7 @@ const rowStyle: React.CSSProperties = {
 const nameBtnStyle: React.CSSProperties = {
   flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer",
   color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: 11, fontFamily: "inherit", // buttons don't inherit font — keep names at row size
 };
 const actionBtnStyle: React.CSSProperties = {
   background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 2px",
@@ -36,33 +40,38 @@ const headerBtnStyle: React.CSSProperties = {
 };
 const chevronStyle: React.CSSProperties = { width: 10, display: "inline-block", fontSize: 9 };
 
-const COLLAPSE_KEY = "context-consolidator:changedfiles:collapsed";
+// Sections are collapsed by default; this stores which ones the user opened.
+const EXPAND_KEY = "context-consolidator:changedfiles:expanded";
 
-function loadCollapsed(): Set<string> {
+function loadExpanded(): Set<string> {
   try {
-    const raw = localStorage.getItem(COLLAPSE_KEY);
+    const raw = localStorage.getItem(EXPAND_KEY);
     return new Set(raw ? (JSON.parse(raw) as string[]) : []);
   } catch {
     return new Set();
   }
 }
 
-export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activeRepoPath, refreshSignal }: Props) {
+const toggleAllBtnStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", background: "none", border: "1px solid var(--border)",
+  borderRadius: 4, cursor: "pointer", color: "var(--text-muted)", padding: "3px 5px", flexShrink: 0,
+};
+
+export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRefresh, refreshing, activeRepoPath, refreshSignal }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
+  const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
   const [filter, setFilter] = useState("");
   const mountedRef = useRef(true);
 
+  const persistExpanded = (next: Set<string>) => {
+    try { localStorage.setItem(EXPAND_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+  };
   const toggleSection = (key: string) => {
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      try {
-        localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
-      } catch {
-        /* ignore persistence failures */
-      }
+      persistExpanded(next);
       return next;
     });
   };
@@ -101,6 +110,14 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activ
   };
 
   const statusLetter = (s: string) => (s ? s.charAt(0).toUpperCase() : "");
+  // Git status letter → colour: added/untracked green, deleted red, else (M/R/C) orange.
+  const statusColor = (s: string) => {
+    switch (statusLetter(s)) {
+      case "A": case "U": case "?": return "#3fb950"; // green
+      case "D": return "#f85149"; // red
+      default: return "#d29922"; // orange (modified/renamed/etc.)
+    }
+  };
 
   const shown = activeRepoPath ? repos.filter((r) => r.repoPath === activeRepoPath) : repos;
 
@@ -110,16 +127,40 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activ
 
   const q = filter.trim().toLowerCase();
   const matchFile = (p: string) => !q || p.toLowerCase().includes(q);
+  // A section is open when explicitly expanded, or while a filter is active
+  // (so matches are visible even though sections default to collapsed).
+  const sectionOpen = (key: string) => q !== "" || expanded.has(key);
+
+  // Keys of every section that currently has (matching) content — for expand-all.
+  const allSectionKeys: string[] = [];
+  for (const repo of shown) {
+    const files = (repo.files ?? []).filter((f) => matchFile(f.path));
+    if (files.some((f) => f.commitStatus)) allSectionKeys.push(`${repo.repoName}:branch`);
+    if (files.some((f) => f.indexStatus)) allSectionKeys.push(`${repo.repoName}:staged`);
+    if (files.some((f) => f.workStatus)) allSectionKeys.push(`${repo.repoName}:local`);
+  }
+  const toggleAll = () => {
+    const next = expanded.size ? new Set<string>() : new Set(allSectionKeys);
+    setExpanded(next);
+    persistExpanded(next);
+  };
 
   return (
     <div style={{ overflowY: "auto", padding: "8px 10px" }}>
-      <input
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="Filter files…"
-        aria-label="filter changed files"
-        style={{ width: "100%", boxSizing: "border-box", fontSize: 11, marginBottom: 8, padding: "3px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)" }}
-      />
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter files…"
+          aria-label="filter changed files"
+          style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 11, padding: "3px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)" }}
+        />
+        <button onClick={toggleAll} style={toggleAllBtnStyle}
+          aria-label={expanded.size ? "collapse all" : "expand all"}
+          title={expanded.size ? "Collapse all" : "Expand all"}>
+          {expanded.size ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
+        </button>
+      </div>
       {shown.map((repo) => {
         const files = (repo.files ?? []).filter((f) => matchFile(f.path));
         // Branch (PR) changes vs the base branch — the full committed set, shown
@@ -129,7 +170,9 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activ
         // the PR that's also edited locally appears in both).
         const staged = files.filter((f) => f.indexStatus);
         const unstaged = files.filter((f) => f.workStatus);
-        if (files.length === 0) return null; // filtered out entirely
+        // Keep the repo header (and its refresh/copy/terminal actions) visible even
+        // with no changes — otherwise the refresh button would vanish exactly when
+        // you'd want to re-check for changes.
         const bKey = `${repo.repoName}:branch`;
         const sKey = `${repo.repoName}:staged`;
         const lKey = `${repo.repoName}:local`;
@@ -139,16 +182,21 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activ
               <span style={{ flex: 1, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={repo.repoPath}>{repo.repoName}</span>
               <button aria-label={`copy path for ${repo.repoName}`} title="Copy repo path" style={actionBtnStyle} onClick={() => void navigator.clipboard?.writeText(repo.repoPath)}><Copy size={12} /></button>
               <button aria-label={`open terminal in ${repo.repoName}`} title="Open terminal here" style={actionBtnStyle} onClick={() => onOpenTerminal?.(repo.repoPath)}><Terminal size={12} /></button>
+              {onRefresh && (
+                <button aria-label="refresh from github" title="Refresh from GitHub" style={actionBtnStyle} disabled={refreshing} onClick={onRefresh}>
+                  <RefreshCw size={12} className={refreshing ? "spinning" : undefined} />
+                </button>
+              )}
             </div>
 
             {branch.length > 0 && (
               <div style={{ marginBottom: 6 }}>
                 <button style={headerBtnStyle} onClick={() => toggleSection(bKey)}>
-                  <span style={chevronStyle}>{collapsed.has(bKey) ? "▸" : "▾"}</span>Branch Changes
+                  <span style={chevronStyle}>{sectionOpen(bKey) ? "▾" : "▸"}</span>Branch Changes
                 </button>
-                {!collapsed.has(bKey) && branch.map((f) => (
+                {sectionOpen(bKey) && branch.map((f) => (
                   <div key={`b:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.commitStatus)}</span>
+                    <span style={{ width: 14, color: statusColor(f.commitStatus) }}>{statusLetter(f.commitStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus)}>{f.path}</button>
                   </div>
                 ))}
@@ -158,11 +206,11 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activ
             {staged.length > 0 && (
               <div style={{ marginBottom: 6 }}>
                 <button style={headerBtnStyle} onClick={() => toggleSection(sKey)}>
-                  <span style={chevronStyle}>{collapsed.has(sKey) ? "▸" : "▾"}</span>Staged Changes
+                  <span style={chevronStyle}>{sectionOpen(sKey) ? "▾" : "▸"}</span>Staged Changes
                 </button>
-                {!collapsed.has(sKey) && staged.map((f) => (
+                {sectionOpen(sKey) && staged.map((f) => (
                   <div key={`s:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.indexStatus)}</span>
+                    <span style={{ width: 14, color: statusColor(f.indexStatus) }}>{statusLetter(f.indexStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.indexStatus)}>{f.path}</button>
                     <button aria-label={`unstage ${f.path}`} title="Unstage" style={actionBtnStyle} onClick={() => void act(UnstageFile, repo.repoPath, f.path)}>−</button>
                   </div>
@@ -173,16 +221,22 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activ
             {unstaged.length > 0 && (
               <div>
                 <button style={headerBtnStyle} onClick={() => toggleSection(lKey)}>
-                  <span style={chevronStyle}>{collapsed.has(lKey) ? "▸" : "▾"}</span>Local Changes
+                  <span style={chevronStyle}>{sectionOpen(lKey) ? "▾" : "▸"}</span>Local Changes
                 </button>
-                {!collapsed.has(lKey) && unstaged.map((f) => (
+                {sectionOpen(lKey) && unstaged.map((f) => (
                   <div key={`w:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: "var(--text-muted)" }}>{statusLetter(f.workStatus)}</span>
+                    <span style={{ width: 14, color: statusColor(f.workStatus) }}>{statusLetter(f.workStatus)}</span>
                     <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus)}>{f.path}</button>
                     <button aria-label={`discard ${f.path}`} title="Discard" style={actionBtnStyle} onClick={() => void onDiscard(repo.repoPath, f.path)}>↺</button>
                     <button aria-label={`stage ${f.path}`} title="Stage" style={actionBtnStyle} onClick={() => void act(StageFile, repo.repoPath, f.path)}>+</button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {files.length === 0 && (
+              <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "2px 4px" }}>
+                {q ? "No matching files" : "No changes"}
               </div>
             )}
           </div>

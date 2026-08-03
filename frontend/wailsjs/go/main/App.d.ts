@@ -44,8 +44,6 @@ export function AutoLinkRepos(arg1:string):Promise<void>;
 
 export function CancelRefresh():Promise<void>;
 
-export function ConfirmAction(arg1:string,arg2:string):Promise<boolean>;
-
 export function CheckAccessibility():Promise<boolean>;
 
 export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
@@ -63,6 +61,8 @@ export function CommitAssignmentVersionFromCustomPrompt(arg1:string,arg2:number,
 export function CommitPendingUploads(arg1:string,arg2:Array<string>):Promise<Array<store.ContextUploadedFile>>;
 
 export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string):Promise<store.PersonAssignment>;
+
+export function ConfirmAction(arg1:string,arg2:string):Promise<boolean>;
 
 export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 

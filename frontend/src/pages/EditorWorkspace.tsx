@@ -156,6 +156,12 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
             </div>
           </div>
         )}
+        {/* Repo selector sits above the Files/Git tabs — it scopes both. */}
+        {repoPaths.length > 1 && (
+          <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
+            {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
+          </select>
+        )}
         {/* Files (full repo tree) vs Git (changes + PRs), like VSCode's activity bar. */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
           {(["files", "git"] as const).map((t) => (
@@ -169,15 +175,11 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
             </button>
           ))}
         </div>
-        {repoPaths.length > 1 && (
-          <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
-            {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
-          </select>
-        )}
 
         {sidebarTab === "files" ? (
           cwd ? (
-            <FileTreePanel repoPath={cwd} repoName={activeRepo?.name ?? ""} onOpenFile={openFile} />
+            <FileTreePanel repoPath={cwd} repoName={activeRepo?.name ?? ""} onOpenFile={openFile}
+              onOpenTerminal={(repoPath) => setPendingTerminalOpen((prev) => ({ cwd: repoPath, id: (prev?.id ?? 0) + 1 }))} />
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 12 }}>No repo on disk.</div>
           )
@@ -201,20 +203,9 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
               <div style={{ fontSize: 11, color: "var(--danger, #e5534b)", padding: "4px 12px" }}>{prRefreshError}</div>
             )}
             <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined} refreshSignal={refreshSignal} />
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px 0" }}>
-              <button
-                onClick={() => void handleRefresh()}
-                disabled={refreshing}
-                title="Refresh from GitHub"
-                aria-label="Refresh from GitHub"
-                style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: refreshing ? "default" : "pointer", color: "var(--text-muted)", fontSize: 11, padding: 2 }}
-              >
-                <RefreshCw size={12} className={refreshing ? "spinning" : undefined} />
-                Refresh
-              </button>
-            </div>
             <ChangedFilesPanel contextId={contextId} onOpenFile={openFile}
               onOpenTerminal={(repoPath) => setPendingTerminalOpen((prev) => ({ cwd: repoPath, id: (prev?.id ?? 0) + 1 }))}
+              onRefresh={() => void handleRefresh()} refreshing={refreshing}
               activeRepoPath={cwd} refreshSignal={refreshSignal} />
           </>
         )}

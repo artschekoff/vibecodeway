@@ -13,6 +13,17 @@ const nextKey = () => `t${++seq}`;
 
 const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
+// Tab title: repo name first, then the folder name (usually the branch/worktree).
+// A worktree lives at `<repo>/.worktrees/<branch>`, so the repo is the segment
+// before ".worktrees". For a plain checkout the two coincide — show it once.
+export function tabLabel(cwd: string): string {
+  const parts = cwd.split("/").filter(Boolean);
+  const name = parts[parts.length - 1] ?? cwd;
+  const wt = parts.indexOf(".worktrees");
+  const repo = wt > 0 ? parts[wt - 1] : name;
+  return repo === name ? name : `${repo} / ${name}`;
+}
+
 /**
  * Holds one or more terminals for the editor. Every terminal stays mounted (the
  * inactive ones are display:none) so its PTY session and scrollback survive tab
@@ -170,7 +181,7 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
               color: t.key === activeKey ? "var(--text)" : "var(--text-muted)",
             }}
           >
-            <span>{basename(t.cwd)}</span>
+            <span>{tabLabel(t.cwd)}</span>
             <button
               onClick={(e) => { e.stopPropagation(); closeTerminal(t.key); }}
               aria-label={`close terminal ${basename(t.cwd)}`}

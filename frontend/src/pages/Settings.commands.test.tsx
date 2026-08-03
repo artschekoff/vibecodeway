@@ -87,6 +87,20 @@ describe("Settings terminal commands", () => {
     await waitFor(() => expect(H.AddTerminalCommand).toHaveBeenCalledWith("", "", false));
   });
 
+  it("saves every command with one global Save all button", async () => {
+    H.ListTerminalCommands.mockResolvedValue([
+      { id: "c1", title: "Inject", command: "/load", sendEnter: false, createdAt: "", updatedAt: "" },
+      { id: "c2", title: "Run", command: "npm test", sendEnter: true, createdAt: "", updatedAt: "" },
+    ]);
+    renderSettings();
+    await waitFor(() => expect(screen.getByDisplayValue("Inject")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /save all/i }));
+    await waitFor(() => {
+      expect(H.UpdateTerminalCommand).toHaveBeenCalledWith("c1", "Inject", "/load", false);
+      expect(H.UpdateTerminalCommand).toHaveBeenCalledWith("c2", "Run", "npm test", true);
+    });
+  });
+
   it("deletes a command", async () => {
     renderSettings();
     await waitFor(() => expect(screen.getByDisplayValue("Inject")).toBeInTheDocument());

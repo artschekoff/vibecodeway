@@ -795,19 +795,20 @@ func latestReviewStateFromJSON(raw []byte, login string) string {
 }
 
 // applyReReviewStatus rewrites ReviewStatus to reviewStatusReReviewRequired for any PR
-// whose latest review by `login` was DISMISSED — a prior approval that went stale.
-// Only PRs currently marked "review_required" are eligible, matching the original
-// behavior where reviews were fetched solely for those PRs.
+// in the review-requested list where `login` already left a decisive review — changes
+// requested, an approval, or an approval that later went stale (DISMISSED). Re-appearing
+// in the review-requested list after such a review means the author addressed the
+// feedback and re-requested review, so it needs another look rather than still reading
+// as the same "changes requested"/"review required" as before. A comment-only prior
+// review is not decisive, so those stay a first review.
 func applyReReviewStatus(prs []vcs.PRData, reviewsByNumber map[int][]byte, login string) {
 	for i := range prs {
-		if prs[i].ReviewStatus != "review_required" {
-			continue // only a freshly-requested PR can be a dismissed re-request
-		}
 		raw, ok := reviewsByNumber[prs[i].Number]
 		if !ok {
 			continue
 		}
-		if latestReviewStateFromJSON(raw, login) == "DISMISSED" {
+		switch latestReviewStateFromJSON(raw, login) {
+		case "CHANGES_REQUESTED", "APPROVED", "DISMISSED":
 			prs[i].ReviewStatus = reviewStatusReReviewRequired
 		}
 	}

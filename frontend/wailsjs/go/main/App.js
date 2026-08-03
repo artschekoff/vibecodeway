@@ -70,10 +70,6 @@ export function CancelRefresh() {
   return window['go']['main']['App']['CancelRefresh']();
 }
 
-export function ConfirmAction(arg1, arg2) {
-  return window['go']['main']['App']['ConfirmAction'](arg1, arg2);
-}
-
 export function CheckAccessibility() {
   return window['go']['main']['App']['CheckAccessibility']();
 }
@@ -108,6 +104,10 @@ export function CommitPendingUploads(arg1, arg2) {
 
 export function CommitStepOutput(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CommitStepOutput'](arg1, arg2, arg3, arg4);
+}
+
+export function ConfirmAction(arg1, arg2) {
+  return window['go']['main']['App']['ConfirmAction'](arg1, arg2);
 }
 
 export function CreateContext(arg1, arg2) {

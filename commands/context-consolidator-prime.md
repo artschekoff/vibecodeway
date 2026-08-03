@@ -53,6 +53,10 @@ context-consolidator-cli auth-status
 **Output:** `{"status":"authenticated|unauthenticated|error"}`  
 If not `authenticated`, stop and ask the user to run `acli jira auth login`.
 
+Only run this when the task will hit Jira/Slack (`jira-refresh`, `jira-search`,
+`jira-add`, `reload-all`, Slack commands). **Do not** run auth checks for
+local reads (`context-list`, `context-get`, `text-list`, …).
+
 ## Step 3 — Route the user's request
 
 | Task signal | Action |
@@ -75,3 +79,32 @@ If not `authenticated`, stop and ask the user to run `acli jira auth login`.
 - Every command prints JSON to stdout on success; errors go to stderr with a non-zero exit.
 - Prefer `--context-key` when the user names a context; use `--context-id` (UUID) when you already have it from `context-list`.
 - If no row matches, ask the user to clarify what they want to do with context-consolidator.
+
+## Step 5 — Safe JSON handling (required)
+
+CLI output is JSON. Follow these rules whenever you inspect or summarize it.
+
+### Preferred: `jq`
+
+```bash
+context-consolidator-cli context-list | jq '[.[] | {key, status, id}]'
+context-consolidator-cli context-get --context-key KEY | jq '{key: .context.key, issues: [.issues[]? | {jiraKey, summary, status, assignee}]}'
+```
+
+### Allowed: Python via temp file
+
+```bash
+context-consolidator-cli context-get --context-key KEY > /tmp/cc-ctx.json
+python3 -c 'import json; d=json.load(open("/tmp/cc-ctx.json")); print(d["context"]["key"])'
+```
+
+### Forbidden (causes real agent failures)
+
+| Anti-pattern | Why it breaks |
+|---|---|
+| `cli … \| python3 <<'PY' … PY` | Pipe + heredoc fight over stdin; Python may **execute JSON as code** → `NameError: true is not defined` |
+| `python3 -c` with nested `\"` inside f-strings | Shell escaping corrupts the script → `SyntaxError` |
+| Feeding CLI JSON straight into `python3` with no `-c` / script file | JSON is executed as Python |
+| Calling `jira-cli` / `acli` to re-fetch data that `context-get` already has | Wrong tool; local consolidator DB is the source for load flows |
+
+When summarizing large payloads, project with `jq` first — do not dump raw JSON into the chat.

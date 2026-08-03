@@ -14,17 +14,28 @@ All operations use `context-consolidator-cli` (Bash). JSON on stdout; errors on
 stderr. Prefer `/context-consolidator-prime` first if the CLI schema is not
 already loaded.
 
+Local reads only — do not call `jira-cli` / `jira-refresh` unless the user asks
+to refresh. Follow **Safe JSON handling** in `/context-consolidator-prime`
+(prefer `jq`; never `cli | python3 <<'PY'`).
+
 ## Workflow
 
-### Step 1: List available contexts
+### Step 1: Resolve which context
+
+**If the user already named a context key**, skip to Step 3 (resolve UUID via
+`context-list` if you only have the key).
+
+**Otherwise**, list contexts:
 
 ```bash
-context-consolidator-cli context-list
+context-consolidator-cli context-list | jq '[.[] | {key, status, id}]'
 ```
 
 **Output:** JSON array of context objects (`id`, `key`, `status`, issue counts, …).
 
 ### Step 2: Present contexts and ask which to load
+
+(Only when Step 1 listed contexts.)
 
 Display as a numbered list:
 - **Key**
@@ -38,7 +49,8 @@ Ask which context. If only one exists, proceed with it.
 Use the context UUID from step 1:
 
 ```bash
-context-consolidator-cli text-list --context-id <uuid>
+context-consolidator-cli text-list --context-id <uuid> > /tmp/cc-text.json
+jq '[.[] | {id, name, isActive, updatedAt, content}]' /tmp/cc-text.json
 ```
 
 **Input:** `--context-id UUID` (required)  

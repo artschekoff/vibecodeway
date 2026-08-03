@@ -82,9 +82,16 @@ export default function SettingsPage() {
     try { setCommands((await ListTerminalCommands()) ?? []); } catch { /* keep last known */ }
   }, []);
   useEffect(() => { void loadCommands(); }, [loadCommands]);
-  const addCommand = async () => { await AddTerminalCommand("", "", false); await loadCommands(); };
-  const saveCommand = async (c: store.TerminalCommand) => { await UpdateTerminalCommand(c.id, c.title, c.command, c.sendEnter); await loadCommands(); };
-  const deleteCommand = async (id: string) => { await DeleteTerminalCommand(id); await loadCommands(); };
+  // Notify mounted editor terminals to reload their snippet list (see useTerminalCommands).
+  const notifyCommandsChanged = () => window.dispatchEvent(new CustomEvent("terminal-commands-changed"));
+  const addCommand = async () => { await AddTerminalCommand("", "", false); await loadCommands(); notifyCommandsChanged(); };
+  // Single global save: persist every row's edits at once.
+  const saveAllCommands = async () => {
+    await Promise.all(commands.map((c) => UpdateTerminalCommand(c.id, c.title, c.command, c.sendEnter)));
+    await loadCommands();
+    notifyCommandsChanged();
+  };
+  const deleteCommand = async (id: string) => { await DeleteTerminalCommand(id); await loadCommands(); notifyCommandsChanged(); };
   const setCommandField = (id: string, field: "title" | "command" | "sendEnter", value: string | boolean) =>
     setCommands((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } as store.TerminalCommand : c)));
 
@@ -517,11 +524,13 @@ export default function SettingsPage() {
                   <input type="checkbox" checked={c.sendEnter} onChange={(e) => setCommandField(c.id, "sendEnter", e.target.checked)} />
                   Send enter
                 </label>
-                <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => void saveCommand(c)}>Save</button>
                 <button className="btn-danger" style={{ fontSize: 11 }} aria-label="delete command" onClick={() => void deleteCommand(c.id)}>Delete</button>
               </div>
             ))}
-            <button className="btn-secondary" style={{ fontSize: 11, alignSelf: "flex-start" }} onClick={() => void addCommand()}>+ Add command</button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => void addCommand()}>+ Add command</button>
+              <button className="btn-primary" style={{ fontSize: 11 }} onClick={() => void saveAllCommands()}>Save all</button>
+            </div>
           </div>
         </section>
 

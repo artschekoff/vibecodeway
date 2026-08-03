@@ -12,9 +12,19 @@ vi.mock("../../../wailsjs/go/main/App", () => ({ GetContextChanges, StageFile, U
 
 import { ChangedFilesPanel } from "./ChangedFilesPanel";
 
+const EXPAND_KEY = "context-consolidator:changedfiles:expanded";
+// Sections are collapsed by default; most tests want them open, so seed every
+// section key as expanded. Tests exercising the default/collapse behavior clear it.
+const seedExpanded = () =>
+  localStorage.setItem(EXPAND_KEY, JSON.stringify([
+    "acme/api:branch", "acme/api:staged", "acme/api:local",
+    "acme/rdbms:branch", "acme/rdbms:staged", "acme/rdbms:local",
+  ]));
+
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  seedExpanded();
   StageFile.mockResolvedValue(undefined);
   UnstageFile.mockResolvedValue(undefined);
   DiscardFile.mockResolvedValue(undefined);
@@ -143,6 +153,14 @@ describe("ChangedFilesPanel", () => {
     expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "feature.ts", "added");
   });
 
+  it("shows a GitHub-refresh icon in the repo header and calls onRefresh", async () => {
+    const onRefresh = vi.fn();
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} onRefresh={onRefresh} />);
+    await waitFor(() => expect(screen.getByText("acme/api")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("refresh from github"));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
   it("copies the repo path and opens a terminal from the repo header", async () => {
     const onOpenTerminal = vi.fn();
     const writeText = vi.fn();
@@ -153,6 +171,21 @@ describe("ChangedFilesPanel", () => {
     expect(writeText).toHaveBeenCalledWith("/r/api");
     fireEvent.click(screen.getByLabelText("open terminal in acme/api"));
     expect(onOpenTerminal).toHaveBeenCalledWith("/r/api");
+  });
+
+  it("collapses sections by default; expand-all / collapse-all toggles them", async () => {
+    localStorage.clear(); // no seed → default collapsed
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    // Section headers render, but their files stay hidden while collapsed.
+    await waitFor(() => expect(screen.getByText("Local Changes")).toBeInTheDocument());
+    expect(screen.queryByText("work.ts")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("expand all"));
+    expect(screen.getByText("work.ts")).toBeInTheDocument();
+    expect(screen.getByText("staged.ts")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("collapse all"));
+    expect(screen.queryByText("work.ts")).not.toBeInTheDocument();
   });
 
   it("filters files by name", async () => {
