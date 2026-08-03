@@ -1295,11 +1295,17 @@ func (a *App) GetMyBoard(personName string) (*appstore.MyBoardData, error) {
 		return nil, fmt.Errorf("board jira assignments: %w", err)
 	}
 
+	recent, err := a.db.ListBoardRecentEvents(a.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("board recent events: %w", err)
+	}
+
 	return &appstore.MyBoardData{
 		Blockers:             blockers,
 		MyAssignments:        assignments,
 		MyOpenPRs:            prs,
 		MyAssignedJiraIssues: jiraIssues,
+		RecentActivity:       recent,
 	}, nil
 }
 

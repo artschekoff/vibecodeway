@@ -1186,6 +1186,32 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
+	export class BoardRecentEvent {
+	    eventId: string;
+	    contextId: string;
+	    contextKey: string;
+	    type: string;
+	    sourceType: string;
+	    author: string;
+	    summary: string;
+	    createdAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new BoardRecentEvent(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.eventId = source["eventId"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
+	        this.type = source["type"];
+	        this.sourceType = source["sourceType"];
+	        this.author = source["author"];
+	        this.summary = source["summary"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
 	export class BoardJiraAssignment {
 	    key: string;
 	    summary: string;
@@ -1947,17 +1973,19 @@ export namespace store {
 	    myAssignments: BoardAssignment[];
 	    myOpenPRs: BoardPR[];
 	    myAssignedJiraIssues: BoardJiraAssignment[];
-	
+	    recentActivity: BoardRecentEvent[];
+
 	    static createFrom(source: any = {}) {
 	        return new MyBoardData(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.blockers = this.convertValues(source["blockers"], BoardBlocker);
 	        this.myAssignments = this.convertValues(source["myAssignments"], BoardAssignment);
 	        this.myOpenPRs = this.convertValues(source["myOpenPRs"], BoardPR);
 	        this.myAssignedJiraIssues = this.convertValues(source["myAssignedJiraIssues"], BoardJiraAssignment);
+	        this.recentActivity = this.convertValues(source["recentActivity"], BoardRecentEvent);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
