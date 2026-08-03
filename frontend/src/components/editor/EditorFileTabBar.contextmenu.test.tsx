@@ -6,21 +6,21 @@ import { EditorFileTabBar } from "./EditorFileTabBar";
 const mk = (path: string, pinned = false): OpenTab => ({ repoPath: "/r", repoName: "acme/r", path, status: "modified", pinned });
 
 function renderBar(tabs: OpenTab[]) {
-  const closeEditorFile = vi.fn(), closeAllEditorFiles = vi.fn(), pinEditorFile = vi.fn();
+  const closeEditorFile = vi.fn(), closeOtherEditorFiles = vi.fn(), pinEditorFile = vi.fn();
   const value = {
     getFiles: () => ({ tabs, activeKey: tabKey(tabs[0]) }),
     openEditorFile: vi.fn(),
     closeEditorFile,
     setActiveEditorFile: vi.fn(),
     pinEditorFile,
-    closeAllEditorFiles,
+    closeOtherEditorFiles,
   };
   render(
     <EditorFilesContext.Provider value={value}>
       <EditorFileTabBar contextId="c1" />
     </EditorFilesContext.Provider>
   );
-  return { closeEditorFile, closeAllEditorFiles, pinEditorFile };
+  return { closeEditorFile, closeOtherEditorFiles, pinEditorFile };
 }
 
 describe("EditorFileTabBar right-click menu", () => {
@@ -31,11 +31,11 @@ describe("EditorFileTabBar right-click menu", () => {
     expect(closeEditorFile).toHaveBeenCalledWith("c1", tabKey(mk("a.ts")));
   });
 
-  it("Close all closes all files", () => {
-    const { closeAllEditorFiles } = renderBar([mk("a.ts"), mk("b.ts")]);
+  it("Close all but this keeps only the right-clicked file", () => {
+    const { closeOtherEditorFiles } = renderBar([mk("a.ts"), mk("b.ts")]);
     fireEvent.contextMenu(screen.getByText("a.ts"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Close all" }));
-    expect(closeAllEditorFiles).toHaveBeenCalledWith("c1");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Close all but this" }));
+    expect(closeOtherEditorFiles).toHaveBeenCalledWith("c1", tabKey(mk("a.ts")));
   });
 
   it("Pin pins an unpinned file", () => {

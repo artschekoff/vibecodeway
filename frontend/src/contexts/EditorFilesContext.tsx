@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
-export type OpenTab = { repoPath: string; repoName: string; path: string; status: string; pinned?: boolean };
+// baseMode picks the diff's "original" side: "branch" = vs the merge-base with
+// the default branch (full branch/PR diff), "head" = vs HEAD (only uncommitted
+// edits). Omitted defaults to "branch" for back-compat. See DiffEditorTab.
+export type OpenTab = { repoPath: string; repoName: string; path: string; status: string; baseMode?: "branch" | "head"; pinned?: boolean };
 export const tabKey = (t: OpenTab) => `${t.repoPath}::${t.path}`;
 
 export type EditorFilesState = { tabs: OpenTab[]; activeKey: string };
@@ -24,11 +27,11 @@ export function pinFileReducer(state: EditorFilesState, key: string, pinned: boo
   return { ...state, tabs: state.tabs.map((t) => (tabKey(t) === key ? { ...t, pinned } : t)) };
 }
 
-export function closeAllFilesReducer(state: EditorFilesState): EditorFilesState {
-  const tabs = state.tabs.filter((t) => t.pinned);
-  const activeKept = tabs.some((t) => tabKey(t) === state.activeKey);
-  const activeKey = activeKept ? state.activeKey : tabs.length ? tabKey(tabs[tabs.length - 1]) : "";
-  return { tabs, activeKey };
+// "Close all but this": keep only the tab whose key is keepKey (the right-clicked
+// tab), dropping everything else — pinned included — so a single tab remains.
+export function closeOthersFilesReducer(state: EditorFilesState, keepKey: string): EditorFilesState {
+  const tabs = state.tabs.filter((t) => tabKey(t) === keepKey);
+  return { tabs, activeKey: tabs.length ? keepKey : "" };
 }
 
 type EditorFilesContextValue = {
@@ -37,7 +40,7 @@ type EditorFilesContextValue = {
   closeEditorFile: (contextId: string, key: string) => void;
   setActiveEditorFile: (contextId: string, key: string) => void;
   pinEditorFile: (contextId: string, key: string, pinned: boolean) => void;
-  closeAllEditorFiles: (contextId: string) => void;
+  closeOtherEditorFiles: (contextId: string, keepKey: string) => void;
 };
 
 export const EditorFilesContext = createContext<EditorFilesContextValue | null>(null);
@@ -63,12 +66,12 @@ export function EditorFilesProvider({ children }: { children: ReactNode }) {
     setByContext((prev) => ({ ...prev, [contextId]: pinFileReducer(prev[contextId] ?? EMPTY, key, pinned) }));
   }, []);
 
-  const closeAllEditorFiles = useCallback((contextId: string) => {
-    setByContext((prev) => ({ ...prev, [contextId]: closeAllFilesReducer(prev[contextId] ?? EMPTY) }));
+  const closeOtherEditorFiles = useCallback((contextId: string, keepKey: string) => {
+    setByContext((prev) => ({ ...prev, [contextId]: closeOthersFilesReducer(prev[contextId] ?? EMPTY, keepKey) }));
   }, []);
 
   return (
-    <EditorFilesContext.Provider value={{ getFiles, openEditorFile, closeEditorFile, setActiveEditorFile, pinEditorFile, closeAllEditorFiles }}>
+    <EditorFilesContext.Provider value={{ getFiles, openEditorFile, closeEditorFile, setActiveEditorFile, pinEditorFile, closeOtherEditorFiles }}>
       {children}
     </EditorFilesContext.Provider>
   );

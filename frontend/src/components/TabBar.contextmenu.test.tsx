@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  forceCloseTab: vi.fn(), closeAllTabs: vi.fn(), pinTab: vi.fn(), unpinTab: vi.fn(),
+  forceCloseTab: vi.fn(), closeOtherTabs: vi.fn(), pinTab: vi.fn(), unpinTab: vi.fn(),
   setActiveTab: vi.fn(), closeTab: vi.fn(), reorderTabs: vi.fn(),
 }));
 vi.mock("../contexts/TabContext", () => ({
@@ -30,10 +30,10 @@ describe("TabBar right-click menu", () => {
     expect(mocks.forceCloseTab).toHaveBeenCalledWith("t1");
   });
 
-  it("Close all calls closeAllTabs", () => {
+  it("Close all but this calls closeOtherTabs with the clicked tab id", () => {
     openMenu();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Close all" }));
-    expect(mocks.closeAllTabs).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Close all but this" }));
+    expect(mocks.closeOtherTabs).toHaveBeenCalledWith("t1");
   });
 
   it("Pin calls pinTab for an unpinned tab", () => {

@@ -5,7 +5,7 @@ import { main } from "../../../wailsjs/go/models";
 
 type Props = {
   contextId: string;
-  onOpenFile: (repoPath: string, repoName: string, path: string, status: string) => void;
+  onOpenFile: (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head") => void;
   // Open a new in-app terminal at the repo's local path.
   onOpenTerminal?: (repoPath: string) => void;
   // Re-sync the context from GitHub (icon shown in the repo header).
@@ -197,7 +197,7 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
                 {sectionOpen(bKey) && branch.map((f) => (
                   <div key={`b:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: statusColor(f.commitStatus) }}>{statusLetter(f.commitStatus)}</span>
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus)}>{f.path}</button>
+                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus, "branch")}>{f.path}</button>
                   </div>
                 ))}
               </div>
@@ -211,7 +211,7 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
                 {sectionOpen(sKey) && staged.map((f) => (
                   <div key={`s:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: statusColor(f.indexStatus) }}>{statusLetter(f.indexStatus)}</span>
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.indexStatus)}>{f.path}</button>
+                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.indexStatus, "head")}>{f.path}</button>
                     <button aria-label={`unstage ${f.path}`} title="Unstage" style={actionBtnStyle} onClick={() => void act(UnstageFile, repo.repoPath, f.path)}>−</button>
                   </div>
                 ))}
@@ -226,7 +226,7 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
                 {sectionOpen(lKey) && unstaged.map((f) => (
                   <div key={`w:${f.path}`} style={rowStyle}>
                     <span style={{ width: 14, color: statusColor(f.workStatus) }}>{statusLetter(f.workStatus)}</span>
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus)}>{f.path}</button>
+                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus, "head")}>{f.path}</button>
                     <button aria-label={`discard ${f.path}`} title="Discard" style={actionBtnStyle} onClick={() => void onDiscard(repo.repoPath, f.path)}>↺</button>
                     <button aria-label={`stage ${f.path}`} title="Stage" style={actionBtnStyle} onClick={() => void act(StageFile, repo.repoPath, f.path)}>+</button>
                   </div>

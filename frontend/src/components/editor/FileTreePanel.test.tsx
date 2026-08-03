@@ -25,7 +25,7 @@ describe("FileTreePanel", () => {
     expect(screen.getByText("main.ts")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("main.ts"));
-    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "src/app/main.ts", "");
+    expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "src/app/main.ts", "", "head");
   });
 
   it("collapse-all hides files again", async () => {
