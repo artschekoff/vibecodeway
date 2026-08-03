@@ -179,3 +179,26 @@ func TestListBoardPRsByAuthor_withData(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, none)
 }
+
+func TestListBoardRecentEventsFiltersAndOrders(t *testing.T) {
+	db := openTestStore(t)
+	ctx := context.Background()
+
+	// Seed org + context
+	org, err := db.CreateOrganization(ctx, "acme")
+	require.NoError(t, err)
+	c, err := db.CreateContext(ctx, "JH-1", org.ID)
+	require.NoError(t, err)
+
+	// activity event (should appear) + AI semantic event (should NOT appear)
+	_, err = db.AddEvent(ctx, Event{ContextID: c.ID, Type: EventTypeCommentAdded, Summary: "New comment"})
+	require.NoError(t, err)
+	_, err = db.AddEvent(ctx, Event{ContextID: c.ID, Type: EventTypeRequirementStated, Summary: "req"})
+	require.NoError(t, err)
+
+	evs, err := db.ListBoardRecentEvents(ctx)
+	require.NoError(t, err)
+	require.Len(t, evs, 1)
+	assert.Equal(t, EventTypeCommentAdded, evs[0].Type)
+	assert.Equal(t, "New comment", evs[0].Summary)
+}
