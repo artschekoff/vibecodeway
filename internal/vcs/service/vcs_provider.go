@@ -413,19 +413,10 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		activeNumbers := make([]int, 0, len(merged))
 		for _, pr := range merged {
 			activeNumbers = append(activeNumbers, pr.Number)
-			reviewersJSON := "[]"
-			if len(pr.Reviewers) > 0 {
-				out := make([]vcsstore.ReviewerDecision, 0, len(pr.Reviewers))
-				for _, d := range pr.Reviewers {
-					out = append(out, vcsstore.ReviewerDecision{Login: d.Login, State: d.State, SubmittedAt: d.SubmittedAt})
-				}
-				if b, err := json.Marshal(out); err == nil {
-					reviewersJSON = string(b)
-				}
-			}
+			reviewersJSON := marshalReviewers(pr.Reviewers)
 			insertedRR, err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
-				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, reviewersJSON,
+				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, reviewersJSON, pr.Mergeable,
 			)
 			if err != nil {
 				p.logger.Warn("vcs: upsert review request failed",
@@ -482,8 +473,39 @@ func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCS
 				p.logger.Warn("vcs: set review status failed",
 					zap.Int("pr", rr.PRNumber), zap.Error(err))
 			}
+			continue
+		}
+		// Still open but dropped from the review-requested list — the user just
+		// reviewed it (typically an approval, which itself removes the PR from that
+		// search). Refresh the reviewers snapshot so their own decision shows, and
+		// the mergeable status so a merge conflict that appears afterwards surfaces.
+		// The frozen review-requested snapshot predates both. reviewed_at is kept.
+		if err := p.store.ReviewRequests.UpdateReviewers(ctx, repo.ID, rr.PRNumber, marshalReviewers(pr.Reviewers)); err != nil {
+			p.logger.Warn("vcs: update reviewers failed",
+				zap.Int("pr", rr.PRNumber), zap.Error(err))
+		}
+		if err := p.store.ReviewRequests.UpdateMergeable(ctx, repo.ID, rr.PRNumber, pr.Mergeable); err != nil {
+			p.logger.Warn("vcs: update mergeable failed",
+				zap.Int("pr", rr.PRNumber), zap.Error(err))
 		}
 	}
+}
+
+// marshalReviewers serializes reviewer decisions to the JSON stored on a review
+// request row, returning "[]" for an empty/failed marshal.
+func marshalReviewers(ds []vcs.ReviewerDecision) string {
+	if len(ds) == 0 {
+		return "[]"
+	}
+	out := make([]vcsstore.ReviewerDecision, 0, len(ds))
+	for _, d := range ds {
+		out = append(out, vcsstore.ReviewerDecision{Login: d.Login, State: d.State, SubmittedAt: d.SubmittedAt})
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
 }
 
 // VCSAuth stores the GitHub auth result. Delegates to the auth store.

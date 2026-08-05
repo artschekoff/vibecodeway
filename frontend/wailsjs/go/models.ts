@@ -2535,6 +2535,7 @@ export namespace vcsstore {
 	    headBranch: string;
 	    requestedAt: string;
 	    fetchedAt: string;
+	    mergeable: string;
 	    reviewedAt?: string;
 	    dismissedAt?: string;
 	    viewedAt?: string;
@@ -2556,6 +2557,7 @@ export namespace vcsstore {
 	        this.headBranch = source["headBranch"];
 	        this.requestedAt = source["requestedAt"];
 	        this.fetchedAt = source["fetchedAt"];
+	        this.mergeable = source["mergeable"];
 	        this.reviewedAt = source["reviewedAt"];
 	        this.dismissedAt = source["dismissedAt"];
 	        this.viewedAt = source["viewedAt"];

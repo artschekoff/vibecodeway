@@ -347,7 +347,7 @@ func (r *Runner) GetPRByNumber(ctx context.Context, owner, repo string, prNumber
 	out, err := r.run(ctx, []string{
 		"pr", "view", strconv.Itoa(prNumber),
 		"--repo", owner + "/" + repo,
-		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt,reviews",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gh pr view %d: %w", prNumber, err)
@@ -375,6 +375,13 @@ type ghPR struct {
 	} `json:"statusCheckRollup"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+	// Reviews is populated only by `gh pr view --json ...,reviews` (single-PR
+	// fetch); list queries don't request it, so it stays empty there.
+	Reviews []struct {
+		Author      struct{ Login string } `json:"author"`
+		State       string                 `json:"state"`
+		SubmittedAt string                 `json:"submittedAt"`
+	} `json:"reviews"`
 }
 
 // parseGHPRList unmarshals the JSON output of `gh pr list --json ...` into []vcs.PRData.
@@ -418,6 +425,10 @@ func parseGHPRSingle(data []byte) (vcs.PRData, error) {
 	for i, c := range p.StatusCheckRollup {
 		states[i] = c.State
 	}
+	entries := make([]reviewEntry, len(p.Reviews))
+	for i, rv := range p.Reviews {
+		entries[i] = reviewEntry{Login: rv.Author.Login, State: rv.State, SubmittedAt: rv.SubmittedAt}
+	}
 	return vcs.PRData{
 		Number:       p.Number,
 		Title:        p.Title,
@@ -431,6 +442,7 @@ func parseGHPRSingle(data []byte) (vcs.PRData, error) {
 		CIStatus:     aggregateCIStatus(states),
 		CreatedAt:    p.CreatedAt,
 		UpdatedAt:    p.UpdatedAt,
+		Reviewers:    collapseReviewerDecisions(entries, p.Author.Login),
 	}, nil
 }
 
@@ -814,27 +826,44 @@ func applyReReviewStatus(prs []vcs.PRData, reviewsByNumber map[int][]byte, login
 	}
 }
 
-// latestReviewerDecisions collapses a PR's chronological review list into each
-// reviewer's latest EFFECTIVE decision. APPROVED/CHANGES_REQUESTED override an
-// earlier COMMENTED; a reviewer with only COMMENTED shows as "commented". The PR
-// author's self-reviews are excluded.
+// reviewEntry is one submitted review, normalized across the two GitHub shapes
+// we read: the REST reviews API (user.login/submitted_at) and `gh pr view`
+// (author.login/submittedAt). State is the uppercase GitHub enum.
+type reviewEntry struct {
+	Login       string
+	State       string
+	SubmittedAt string
+}
+
+// latestReviewerDecisions collapses a PR's chronological review list (REST
+// reviews API payload) into each reviewer's latest EFFECTIVE decision.
 func latestReviewerDecisions(raw []byte, prAuthor string) []vcs.ReviewerDecision {
-	type ghReview struct {
+	var reviews []struct {
 		User        struct{ Login string } `json:"user"`
 		State       string                 `json:"state"`
 		SubmittedAt string                 `json:"submitted_at"`
 	}
-	var reviews []ghReview
 	if err := json.Unmarshal(raw, &reviews); err != nil {
 		return nil
 	}
-	// Reviews come oldest-first; keep the last decisive state per login, else COMMENTED.
+	entries := make([]reviewEntry, len(reviews))
+	for i, rv := range reviews {
+		entries[i] = reviewEntry{Login: rv.User.Login, State: rv.State, SubmittedAt: rv.SubmittedAt}
+	}
+	return collapseReviewerDecisions(entries, prAuthor)
+}
+
+// collapseReviewerDecisions reduces oldest-first review entries to each reviewer's
+// latest EFFECTIVE decision. APPROVED/CHANGES_REQUESTED override an earlier
+// COMMENTED; DISMISSED clears a prior decision; a reviewer with only COMMENTED
+// shows as "commented". The PR author's self-reviews are excluded.
+func collapseReviewerDecisions(entries []reviewEntry, prAuthor string) []vcs.ReviewerDecision {
 	decisive := map[string]vcs.ReviewerDecision{}
 	commented := map[string]vcs.ReviewerDecision{}
 	order := []string{}
 	seen := map[string]bool{}
-	for _, rv := range reviews {
-		login := rv.User.Login
+	for _, rv := range entries {
+		login := rv.Login
 		if login == "" || login == prAuthor {
 			continue
 		}

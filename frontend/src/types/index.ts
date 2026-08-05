@@ -522,6 +522,7 @@ export interface ReviewRequest {
   headBranch?: string;
   requestedAt: string;
   fetchedAt: string;
+  mergeable?: string;
   reviewedAt?: string;
   dismissedAt?: string;
   viewedAt?: string;

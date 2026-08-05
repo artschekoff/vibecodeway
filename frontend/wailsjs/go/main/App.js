@@ -630,6 +630,10 @@ export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
   return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
 }
 
+export function ReconcileMyOpenPRs() {
+  return window['go']['main']['App']['ReconcileMyOpenPRs']();
+}
+
 export function RefinePersonAssignment(arg1, arg2, arg3) {
   return window['go']['main']['App']['RefinePersonAssignment'](arg1, arg2, arg3);
 }

@@ -125,10 +125,12 @@ export function DiffEditorTab({
       const dom = document.createElement("div");
       dom.className = "hunk-actions";
       const accept = document.createElement("button");
-      accept.textContent = "Keep";
+      accept.className = "hunk-accept";
+      accept.textContent = "✓ Keep";
       accept.title = "Accept this change (keep it)";
       const reject = document.createElement("button");
-      reject.textContent = "Revert";
+      reject.className = "hunk-reject";
+      reject.textContent = "✕ Revert";
       reject.title = "Reject this change (restore the base version)";
       dom.appendChild(accept);
       dom.appendChild(reject);

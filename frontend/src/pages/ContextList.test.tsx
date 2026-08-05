@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 const {
   ListContextsByOrg,
@@ -9,6 +9,7 @@ const {
   GetSupportedPlatforms,
   ListOrganizations,
   ListWorkflowStatuses,
+  SetContextWorkflowStatus,
 } = vi.hoisted(() => ({
   ListContextsByOrg: vi.fn(),
   AuthStatus: vi.fn(),
@@ -17,6 +18,7 @@ const {
   GetSupportedPlatforms: vi.fn(),
   ListOrganizations: vi.fn(),
   ListWorkflowStatuses: vi.fn(),
+  SetContextWorkflowStatus: vi.fn(),
 }));
 
 vi.mock("../../wailsjs/go/main/App", () => ({
@@ -31,6 +33,7 @@ vi.mock("../../wailsjs/go/main/App", () => ({
   ValidateSlackPassphrase: vi.fn(),
   SetContextOrg: vi.fn(),
   SetContextsOrder: vi.fn(),
+  SetContextWorkflowStatus,
 }));
 
 vi.mock("../../wailsjs/runtime/runtime", () => ({
@@ -113,5 +116,29 @@ describe("ContextList importance column", () => {
     expect(importanceIdx).toBeGreaterThan(-1);
     const cells = row2 ? Array.from(row2.querySelectorAll("td")) : [];
     expect(cells[importanceIdx].textContent).toBe("—");
+  });
+});
+
+describe("ContextList status change", () => {
+  it("changes a context's workflow status when a new option is picked", async () => {
+    ListWorkflowStatuses.mockResolvedValue([
+      { slug: "not_started", label: "Not started" },
+      { slug: "in_progress", label: "In Progress" },
+    ]);
+    ListContextsByOrg.mockResolvedValue([
+      {
+        id: "c1", key: "PROJ-1", status: "active", orgId: "",
+        createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+        snapshotStatus: "not_started", snapshotIsStale: false,
+      },
+    ]);
+
+    renderList();
+
+    const select = (await screen.findByLabelText("Change status")) as HTMLSelectElement;
+    expect(select.value).toBe("not_started");
+    fireEvent.change(select, { target: { value: "in_progress" } });
+
+    expect(SetContextWorkflowStatus).toHaveBeenCalledWith("c1", "in_progress", "");
   });
 });

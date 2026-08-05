@@ -21,6 +21,21 @@ func jiraAssignmentsOrderBy(orderBy string) string {
 	}
 }
 
+// GetJiraKeyByID returns the jira_key for a jira_issues row id, or "" if the row
+// is gone. Used to label timeline events with the issue key so two different issues
+// that undergo the same transition don't render as identical summaries.
+func (s *Store) GetJiraKeyByID(ctx context.Context, id string) (string, error) {
+	var key string
+	err := s.db.QueryRowContext(ctx, `SELECT jira_key FROM jira_issues WHERE id = ?`, id).Scan(&key)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get jira key by id: %w", err)
+	}
+	return key, nil
+}
+
 // UpsertBoardJiraAssignments replaces the persisted assignment set with issues,
 // preserving the seen flag for keys that already existed. Keys absent from
 // issues are deleted; brand-new keys default to seen = 0.

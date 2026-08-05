@@ -11,6 +11,7 @@ const H = vi.hoisted(() => ({
   GetPendingCodeReviews: vi.fn(),
   DismissReviewRequest: vi.fn(),
   RefreshMyAssignedJiraIssues: vi.fn(),
+  ReconcileMyOpenPRs: vi.fn(),
   ListMyAssignedJiraIssues: vi.fn(),
   ListOrganizations: vi.fn(),
   GetJiraInstanceURL: vi.fn(),

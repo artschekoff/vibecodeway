@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
 import { reviewStatusMeta } from "./reviewStatus";
-import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2, ChevronDown, Search } from "lucide-react";
+import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -37,6 +37,7 @@ import {
   DeleteContextText,
   DeleteUploadedFile,
   ToggleContextStatus,
+  SetContextWorkflowStatus,
   UpsertSlackDMConfig,
   DeleteSlackDMConfig,
   ListSlackDMConfigs,
@@ -158,6 +159,11 @@ function ReviewCard({
           <span className={`pr-status-badge${status.className}`}>
             {status.needsReReview && <RotateCcw size={11} className="pr-status-icon" />}
             {status.label}
+          </span>
+        )}
+        {!status.terminal && review.mergeable === "CONFLICTING" && (
+          <span className="pr-status-badge pr-status-badge--conflict" title="This PR has merge conflicts">
+            Conflicts
           </span>
         )}
       </div>
@@ -328,17 +334,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [repoWorkspaces, setRepoWorkspaces] = useState<Record<string, VCSWorkspace[]>>({});
   const [localBranches, setLocalBranches] = useState<Record<string, LocalBranch[]>>({});
   const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
-  const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set()); // repos start collapsed
-  const [expandedReviewRepos, setExpandedReviewRepos] = useState<Set<string>>(new Set()); // review groups start collapsed
   const [repoQuery, setRepoQuery] = useState("");
-  const toggleInSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
-    setter((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  const toggleRepoExpanded = toggleInSet(setExpandedRepos);
-  const toggleReviewRepoExpanded = toggleInSet(setExpandedReviewRepos);
   const [editLabel, setEditLabel] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editOnCheckoutCommand, setEditOnCheckoutCommand] = useState("");
@@ -752,6 +748,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       const updated = await ToggleContextStatus(c.id);
       setContexts((prev) => prev.map((ctx) => ctx.id === updated.id ? { ...ctx, status: updated.status } : ctx));
     } catch { /* best-effort */ }
+  };
+
+  // Manual workflow-status override from the list. Comment stays empty here — the
+  // full changer (comment + relations) lives in the context detail view.
+  const handleStatusChange = async (c: Context, slug: string) => {
+    if (slug === effectiveStatus(c)) return;
+    try {
+      await SetContextWorkflowStatus(c.id, slug, "");
+      setContexts((prev) => prev.map((ctx) => ctx.id === c.id ? { ...ctx, snapshotStatus: slug } : ctx));
+    } catch (e) { setError(String(e)); }
   };
 
   // ── Reviews handlers ──
@@ -1187,13 +1193,25 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                 <td>
                                   <span className={`context-key${!isActive ? " context-key--archived" : ""}`}>{c.key}</span>
                                 </td>
-                                <td>
-                                  <WorkflowStatusBadge
-                                    status={effectiveStatus(c)}
-                                    isAI={false}
-                                    statuses={workflowStatuses}
-                                    title={c.snapshotStatusComment || undefined}
-                                  />
+                                <td onClick={(e) => e.stopPropagation()}>
+                                  <div className="status-cell" title="Change status">
+                                    <WorkflowStatusBadge
+                                      status={effectiveStatus(c)}
+                                      isAI={false}
+                                      statuses={workflowStatuses}
+                                      title={c.snapshotStatusComment || undefined}
+                                    />
+                                    <select
+                                      className="status-cell-select"
+                                      aria-label="Change status"
+                                      value={effectiveStatus(c)}
+                                      onChange={(e) => void handleStatusChange(c, e.target.value)}
+                                    >
+                                      {workflowStatuses.map((s) => (
+                                        <option key={s.slug} value={s.slug}>{s.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
                                 </td>
                                 <td>
                                   <div className="ctx-src-icons">
@@ -1338,26 +1356,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const waiting = reviews.filter((r) => !!r.reviewedAt && !isTerminal(r) && match(r));
                 const done = reviews.filter((r) => !!r.reviewedAt && isTerminal(r) && match(r));
                 if (pending.length === 0 && waiting.length === 0 && done.length === 0) return null;
-                const isExpanded = q !== "" ? true : expandedReviewRepos.has(repo.id); // force-open matches on search
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
-                    <div
-                      className="review-repo-header"
-                      role="button"
-                      tabIndex={q === "" ? 0 : -1}
-                      aria-expanded={isExpanded}
-                      onClick={() => q === "" && toggleReviewRepoExpanded(repo.id)}
-                      onKeyDown={(e) => {
-                        if (q === "" && (e.key === "Enter" || e.key === " ")) {
-                          e.preventDefault();
-                          toggleReviewRepoExpanded(repo.id);
-                        }
-                      }}
-                      style={{ cursor: q === "" ? "pointer" : "default" }}
-                    >
-                      <span className="repo-collapse-toggle" title={isExpanded ? "Collapse" : "Expand"}>
-                        <ChevronDown size={14} className={`expand-icon${isExpanded ? " expanded" : ""}`} />
-                      </span>
+                    <div className="review-repo-header">
                       <span className="platform-badge">{repo.platform}</span>
                       <span className="review-repo-name">{repo.owner}/{repo.name}</span>
                       {url && (
@@ -1367,7 +1368,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                       )}
                       {pending.length > 0 && <span className="detail-section-count">{pending.length}</span>}
                     </div>
-                    {isExpanded && (<>
+                    <div className="review-repo-body">
                     {pending.length === 0 ? (
                       <div className="detail-section-empty">No pending reviews in this repo.</div>
                     ) : (
@@ -1432,7 +1433,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         </div>
                       </>
                     )}
-                    </>)}
+                    </div>
                   </section>
                 );
               })
@@ -1553,18 +1554,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   const pathHasMatch = (pid: string) =>
                     visibleWorkspaces(pid).length > 0 || visibleBranches(pid).length > 0;
                   if (q !== "" && !paths.some((p) => pathHasMatch(p.id))) return null; // hide repos with no matching row
-                  const isExpanded = q !== "" ? true : expandedRepos.has(repo.id); // force-open matches on search
                   return (
                     <div key={repo.id} className="repo-card">
                       <div className="repo-card-header">
-                        <button
-                          className="repo-collapse-toggle"
-                          title={isExpanded ? "Collapse" : "Expand"}
-                          onClick={() => toggleRepoExpanded(repo.id)}
-                          disabled={q !== ""}
-                        >
-                          <ChevronDown size={14} className={`expand-icon${isExpanded ? " expanded" : ""}`} />
-                        </button>
                         <span className="platform-badge">{repo.platform}</span>
                         <span className="repo-card-name">{displayName}</span>
                         {repo.label && <span className="repo-card-label">{repo.label}</span>}
@@ -1602,7 +1594,6 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                         </div>
                       </div>
 
-                      {isExpanded && (<>
                       {(repoPaths[repo.id] ?? []).length > 0 && (
                         <div className="repo-paths-list">
                           {(repoPaths[repo.id] ?? []).map((p) => {
@@ -1809,7 +1800,6 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                           </div>
                         </div>
                       )}
-                      </>)}
                     </div>
                   );
                 })}

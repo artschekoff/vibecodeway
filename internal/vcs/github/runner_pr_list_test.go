@@ -137,6 +137,36 @@ func TestParseGHPRSingle_HappyPath(t *testing.T) {
 	assert.Equal(t, "SUCCESS", got.CIStatus)
 }
 
+func TestParseGHPRSingle_ParsesReviewers(t *testing.T) {
+	// `gh pr view --json ...,reviews` uses author.login/submittedAt (not the REST
+	// user.login/submitted_at shape). The author's self-review is excluded and the
+	// latest decision per reviewer wins.
+	input := []byte(`{
+		"number": 278,
+		"title": "Feat",
+		"author": {"login": "nazar"},
+		"state": "OPEN",
+		"reviewDecision": "APPROVED",
+		"url": "u",
+		"headRefName": "b",
+		"mergeable": "MERGEABLE",
+		"statusCheckRollup": [],
+		"createdAt": "2026-01-01T00:00:00Z",
+		"updatedAt": "2026-01-02T00:00:00Z",
+		"reviews": [
+			{"author": {"login": "me"}, "state": "COMMENTED", "submittedAt": "2026-01-01T08:00:00Z"},
+			{"author": {"login": "me"}, "state": "APPROVED", "submittedAt": "2026-01-02T09:00:00Z"},
+			{"author": {"login": "nazar"}, "state": "COMMENTED", "submittedAt": "2026-01-02T09:30:00Z"}
+		]
+	}`)
+
+	got, err := parseGHPRSingle(input)
+	require.NoError(t, err)
+	require.Len(t, got.Reviewers, 1, "author self-review excluded; one reviewer remains")
+	assert.Equal(t, "me", got.Reviewers[0].Login)
+	assert.Equal(t, "approved", got.Reviewers[0].State, "APPROVED overrides the earlier COMMENTED")
+}
+
 func TestParseGHPRSingle_MalformedJSON(t *testing.T) {
 	_, err := parseGHPRSingle([]byte(`not json`))
 	assert.Error(t, err)

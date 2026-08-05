@@ -151,6 +151,55 @@ func (r *PRRepo) GetPRByRepoAndNumber(ctx context.Context, repoID string, prNumb
 	return &pr, nil
 }
 
+// OpenPRRef identifies a stored open PR together with the remote it lives on, so
+// callers can re-check its lifecycle state against the platform.
+type OpenPRRef struct {
+	RepoID   string
+	Platform string
+	Owner    string
+	Name     string
+	PRNumber int
+}
+
+// ListOpenPRsWithRepo returns every PR currently stored as state='open', joined to
+// its repo's platform/owner/name. Used to reconcile PRs that merged/closed remotely
+// but still linger as "open" locally (e.g. the My Board "My Open PRs" list).
+func (r *PRRepo) ListOpenPRsWithRepo(ctx context.Context) ([]OpenPRRef, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.repo_id, rp.platform, rp.owner, rp.name, p.pr_number
+		FROM vcs_pull_requests p
+		JOIN vcs_repos rp ON rp.id = p.repo_id
+		WHERE p.state = 'open'
+		ORDER BY rp.owner, rp.name, p.pr_number
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list open prs with repo: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []OpenPRRef
+	for rows.Next() {
+		var o OpenPRRef
+		if err := rows.Scan(&o.RepoID, &o.Platform, &o.Owner, &o.Name, &o.PRNumber); err != nil {
+			return nil, fmt.Errorf("scan open pr: %w", err)
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// SetPRState updates just the lifecycle state of a PR (identified by repo + number)
+// and bumps fetched_at. Used by reconciliation when a fuller upsert isn't warranted.
+func (r *PRRepo) SetPRState(ctx context.Context, repoID string, prNumber int, state string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_pull_requests SET state = ?, fetched_at = ? WHERE repo_id = ? AND pr_number = ?`,
+		state, time.Now().UTC().Format(time.RFC3339), repoID, prNumber)
+	if err != nil {
+		return fmt.Errorf("set pr state: %w", err)
+	}
+	return nil
+}
+
 // MarkPRViewed sets viewed_at = datetime('now') for the given PR if not already viewed.
 func (r *PRRepo) MarkPRViewed(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx,

@@ -324,6 +324,8 @@ export function ReadRepoFiles(arg1:string,arg2:Array<string>):Promise<Record<str
 
 export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
 
+export function ReconcileMyOpenPRs():Promise<void>;
+
 export function RefinePersonAssignment(arg1:string,arg2:string,arg3:string):Promise<store.PersonAssignment>;
 
 export function RefreshAllContexts():Promise<Array<service.ReloadAllResult>>;

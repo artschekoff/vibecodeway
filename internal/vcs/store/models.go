@@ -107,6 +107,9 @@ type ReviewRequest struct {
 	HeadBranch   string `json:"headBranch"`
 	RequestedAt  string `json:"requestedAt"`
 	FetchedAt    string `json:"fetchedAt"`
+	// Mergeable is the GitHub mergeability status ("MERGEABLE", "CONFLICTING",
+	// "UNKNOWN"), refreshed every sync. Empty when never fetched.
+	Mergeable string `json:"mergeable"`
 	// ReviewedAt is set when the item disappears from GitHub's review-requested list
 	// (user submitted a review). NULL = still actively pending.
 	ReviewedAt *string `json:"reviewedAt,omitempty"`

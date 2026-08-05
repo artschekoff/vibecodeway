@@ -468,7 +468,14 @@ func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID,
 	}
 	if inserted {
 		a.dispatchContextHooks(contextID, "jira_update")
-		a.emitDomainEvent(contextID, eventType, appstore.EventSourceJira, entityID, "", notifyReason(entityType, eventType, oldValue, newValue))
+		// Prefix with the issue key so two different issues with the same transition
+		// (e.g. a parent and its dev sub-task both → Ready for QA) don't render as
+		// identical timeline summaries. entityID is the jira_issues row id.
+		reason := notifyReason(entityType, eventType, oldValue, newValue)
+		if key, keyErr := a.db.GetJiraKeyByID(ctx, entityID); keyErr == nil && key != "" {
+			reason = key + " — " + reason
+		}
+		a.emitDomainEvent(contextID, eventType, appstore.EventSourceJira, entityID, "", reason)
 	}
 	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
 		a.logger.Warn("jira notify: flag needs_attention failed",

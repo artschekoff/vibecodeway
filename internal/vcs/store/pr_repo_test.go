@@ -121,3 +121,47 @@ func TestUpsertCommentReportsIsNew(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, isNew, "second upsert of an existing (prID, externalID) should report isNew=false")
 }
+
+// Reconciling stale board PRs: an open PR whose remote state is now "merged" must be
+// updatable so the board (which reads state='open') stops showing it.
+func TestListOpenPRsWithRepoAndSetPRState(t *testing.T) {
+	s, vcsStore := openTestDB(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
+	require.NoError(t, err)
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme", "api")
+	require.NoError(t, err)
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feat/x", "")
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, n := range []int{1, 2} {
+		_, err = vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, n,
+			"PR", "alice", "open", "", "url", "feat/x", "mergeable", "success", false, now, now)
+		require.NoError(t, err)
+	}
+
+	open, err := vcsStore.PullRequests.ListOpenPRsWithRepo(ctx)
+	require.NoError(t, err)
+	require.Len(t, open, 2)
+	assert.Equal(t, repo.ID, open[0].RepoID)
+	assert.Equal(t, "github", open[0].Platform)
+	assert.Equal(t, "acme", open[0].Owner)
+	assert.Equal(t, "api", open[0].Name)
+
+	// PR #1 merged on the remote → reconcile it.
+	require.NoError(t, vcsStore.PullRequests.SetPRState(ctx, repo.ID, 1, "merged"))
+
+	got, err := vcsStore.PullRequests.GetPRByRepoAndNumber(ctx, repo.ID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "merged", got.State)
+
+	// Only the still-open PR #2 remains in the open list.
+	open, err = vcsStore.PullRequests.ListOpenPRsWithRepo(ctx)
+	require.NoError(t, err)
+	require.Len(t, open, 1)
+	assert.Equal(t, 2, open[0].PRNumber)
+}

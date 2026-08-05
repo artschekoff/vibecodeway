@@ -213,6 +213,59 @@ func (a *App) RefreshContextPRs(contextID string) ([]vcsstore.PullRequest, error
 	return a.GetVCSPRsForContext(contextID)
 }
 
+// ReconcileMyOpenPRs re-checks every PR stored as state='open' against its remote
+// and updates any that have since merged or closed. The board's "My Open PRs" reads
+// state='open', and per-context sync only runs when a context is opened/refreshed —
+// so a PR merged in a quiet context lingers as "open" until this reconciles it.
+// One remote list call per distinct repo; best-effort (a failing repo is logged, skipped).
+func (a *App) ReconcileMyOpenPRs() error {
+	open, err := a.vcsStore.PullRequests.ListOpenPRsWithRepo(a.ctx)
+	if err != nil {
+		return fmt.Errorf("list open prs: %w", err)
+	}
+	if len(open) == 0 {
+		return nil
+	}
+
+	// Group open PR numbers by repo so each remote is queried once.
+	type repoInfo struct {
+		platform, owner, name string
+		numbers               map[int]bool
+	}
+	repos := map[string]*repoInfo{}
+	for _, o := range open {
+		ri := repos[o.RepoID]
+		if ri == nil {
+			ri = &repoInfo{platform: o.Platform, owner: o.Owner, name: o.Name, numbers: map[int]bool{}}
+			repos[o.RepoID] = ri
+		}
+		ri.numbers[o.PRNumber] = true
+	}
+
+	for repoID, ri := range repos {
+		runner, err := a.vcsSvc.RunnerFor(vcs.Platform(ri.platform))
+		if err != nil {
+			a.logger.Sugar().Warnf("reconcile prs: runner for %s: %v", ri.platform, err)
+			continue
+		}
+		// branch="" → all PRs (any state) for the repo. A merged PR is still returned
+		// by its number even after its head branch is deleted.
+		prs, err := runner.ListPRsForBranch(a.ctx, ri.owner, ri.name, "")
+		if err != nil {
+			a.logger.Sugar().Warnf("reconcile prs: list %s/%s: %v", ri.owner, ri.name, err)
+			continue
+		}
+		for _, pr := range prs {
+			if ri.numbers[pr.Number] && pr.State != "open" {
+				if err := a.vcsStore.PullRequests.SetPRState(a.ctx, repoID, pr.Number, pr.State); err != nil {
+					a.logger.Sugar().Warnf("reconcile prs: set state %s#%d: %v", ri.name, pr.Number, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (a *App) GetVCSPRsForContext(contextID string) ([]vcsstore.PullRequest, error) {
 	prs, err := a.vcsStore.PullRequests.ListPRsForContext(a.ctx, contextID)
 	if err != nil {

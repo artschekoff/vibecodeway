@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare } from "lucide-react";
-import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL } from "../../wailsjs/go/main/App";
+import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, ReconcileMyOpenPRs, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { useTabContext } from "../contexts/TabContext";
 import type { store, vcsstore } from "../../wailsjs/go/models";
@@ -148,14 +148,23 @@ export default function MyBoardPage() {
     setReviews((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const refreshJira = async () => {
+  // Board refresh: re-fetch assigned Jira issues AND reconcile PR states (a merged
+  // PR otherwise lingers on "My Open PRs" as state='open'), then re-read the board so
+  // myOpenPRs reflects the reconciled states.
+  const refreshBoard = async () => {
     setRefreshingJira(true);
     setJiraError("");
     try {
       // acli's workitem search only returns priority (not created), so sort is priority-only.
-      setJiraIssues((await RefreshMyAssignedJiraIssues("priority")) ?? []);
+      const [issues] = await Promise.all([
+        RefreshMyAssignedJiraIssues("priority"),
+        ReconcileMyOpenPRs(),
+      ]);
+      setJiraIssues(issues ?? []);
+      const board = (await GetMyBoard(personName)) as store.MyBoardData;
+      setData(board);
     } catch (e) {
-      setJiraError(e instanceof Error ? e.message : "Failed to fetch assigned issues");
+      setJiraError(e instanceof Error ? e.message : "Failed to refresh");
     } finally {
       setRefreshingJira(false);
     }
@@ -257,7 +266,7 @@ export default function MyBoardPage() {
         <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "8px 0" }}>
           <span className="board-section-title">My Jira To-Do</span>
           <button className="btn-secondary" style={{ fontSize: 11 }} aria-label="refresh assigned jira"
-            onClick={() => void refreshJira()} disabled={refreshingJira}>
+            onClick={() => void refreshBoard()} disabled={refreshingJira}>
             {refreshingJira ? "Refreshing…" : "Refresh"}
           </button>
           <select aria-label="sort assigned jira" style={{ fontSize: 11 }} value={jiraSort}

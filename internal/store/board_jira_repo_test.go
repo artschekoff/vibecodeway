@@ -61,6 +61,29 @@ func TestBoardJiraAssignments_UpsertPreservesSeenAndReplaces(t *testing.T) {
 	assert.False(t, byKey["JH-3"].Seen)  // brand new
 }
 
+func TestGetJiraKeyByID(t *testing.T) {
+	s := newBJAStore(t)
+	ctx := t.Context()
+
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ctx", org.ID)
+	require.NoError(t, err)
+	_, err = s.DB().ExecContext(ctx,
+		`INSERT INTO jira_issues (id, context_id, jira_key, summary, status, jira_updated, created_at)
+		 VALUES ('ji-1', ?, 'JH-4926', 's', 'Ready for QA', '', datetime('now'))`, c.ID)
+	require.NoError(t, err)
+
+	key, err := s.GetJiraKeyByID(ctx, "ji-1")
+	require.NoError(t, err)
+	assert.Equal(t, "JH-4926", key)
+
+	// Unknown id → empty string, no error (label just falls back to the generic reason).
+	key, err = s.GetJiraKeyByID(ctx, "does-not-exist")
+	require.NoError(t, err)
+	assert.Equal(t, "", key)
+}
+
 func TestBoardJiraAssignments_Sorting(t *testing.T) {
 	s := newBJAStore(t)
 	ctx := t.Context()

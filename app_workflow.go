@@ -534,13 +534,28 @@ func (a *App) firstAttachedRepoPath(contextID string) (string, error) {
 // commands, opens the configured agent/terminal at the first worktree, and
 // returns the instruction (the frontend copies it to the clipboard).
 func (a *App) SolveWithAI(contextID, userPrompt string) (string, error) {
-	firstWorktreePath, err := a.ensureContextWorkspaces(contextID)
+	worktrees, err := a.contextWorktrees(contextID)
 	if err != nil {
 		return "", err
 	}
-	if firstWorktreePath == "" {
+	if len(worktrees) == 0 {
 		return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
 	}
+	firstWorktreePath := worktrees[0].WorktreePath
+
+	// Restrict the agent's file access to the context's worktrees: install a
+	// PreToolUse guard hook into the primary worktree. Best-effort — a failure
+	// here still leaves the prompt's scope instructions in place.
+	roots := make([]string, 0, len(worktrees))
+	for _, w := range worktrees {
+		if w.WorktreePath != "" {
+			roots = append(roots, w.WorktreePath)
+		}
+	}
+	if guardErr := a.installScopeGuard(contextID, firstWorktreePath, roots); guardErr != nil {
+		a.logger.Sugar().Warnf("SolveWithAI: install scope guard failed: %v", guardErr)
+	}
+
 	// Built after the worktrees exist so attachedRepoLines surfaces their paths.
 	instruction, err := a.analysisSvc.BuildAgentTask(a.ctx, contextID, userPrompt)
 	if err != nil {

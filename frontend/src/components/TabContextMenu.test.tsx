@@ -38,4 +38,22 @@ describe("TabContextMenu", () => {
     fireEvent.click(screen.getByTestId("tab-context-menu-backdrop"));
     expect(onDismiss).toHaveBeenCalled();
   });
+
+  it("clamps position so the menu stays inside the viewport", () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 140, height: 84, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => {},
+    } as DOMRect);
+    Object.defineProperty(window, "innerWidth", { value: 200, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: 100, configurable: true });
+
+    const noop = vi.fn();
+    render(<TabContextMenu x={190} y={95} isPinned={false} onClose={noop} onCloseOthers={noop} onTogglePin={noop} onDismiss={noop} />);
+
+    const menu = screen.getByRole("menu");
+    // left = min(190, 200-140-8) = 52 ; top = min(95, 100-84-8) = 8
+    expect(menu.style.left).toBe("52px");
+    expect(menu.style.top).toBe("8px");
+
+    vi.restoreAllMocks();
+  });
 });

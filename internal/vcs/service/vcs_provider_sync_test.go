@@ -21,6 +21,7 @@ type mockRunner struct {
 	reviewRequestsErr   error
 	changesRequested    []vcs.PRData
 	changesRequestedErr error
+	prByNumber          map[int]*vcs.PRData // served by GetPRByNumber (reconcile path)
 }
 
 func (m *mockRunner) Platform() vcs.Platform { return m.platform }
@@ -53,7 +54,10 @@ func (m *mockRunner) SetToken(_ string)                             {}
 func (m *mockRunner) GetRepoDescription(_ context.Context, _, _ string) (string, error) {
 	return "", nil
 }
-func (m *mockRunner) GetPRByNumber(_ context.Context, _, _ string, _ int) (*vcs.PRData, error) {
+func (m *mockRunner) GetPRByNumber(_ context.Context, _, _ string, prNumber int) (*vcs.PRData, error) {
+	if m.prByNumber != nil {
+		return m.prByNumber[prNumber], nil
+	}
 	return nil, nil
 }
 
@@ -96,6 +100,7 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			dismissed_at  TEXT,
 			viewed_at     TEXT,
 			reviewers     TEXT NOT NULL DEFAULT '',
+			mergeable     TEXT NOT NULL DEFAULT '',
 			UNIQUE (repo_id, pr_number)
 		);
 	`)
@@ -253,6 +258,61 @@ func TestSyncReviewRequests_PersistsReviewerDecisions(t *testing.T) {
 	require.Len(t, reviews[0].Reviewers, 1, "reviewer decision must round-trip through the DB")
 	assert.Equal(t, "alice", reviews[0].Reviewers[0].Login)
 	assert.Equal(t, "approved", reviews[0].Reviewers[0].State)
+}
+
+// When the user approves a PR, it drops out of review-requested:@me BEFORE the
+// review-requested fetch could capture the approval, so the stored reviewers
+// snapshot is frozen without the user's own decision. The reconcile pass must
+// refresh reviewers for such dropped-but-open PRs.
+func TestSyncReviewRequests_RefreshesReviewersForApprovedDroppedPR(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		// First sync: PR #278 is review-requested; snapshot has only roshchyn's
+		// approval — the user ("me") has not approved yet.
+		reviewRequests: []vcs.PRData{
+			{
+				Number: 278, Title: "Feat", Author: "nazar", URL: "u278",
+				ReviewStatus: "review_required", CreatedAt: "2026-01-01T00:00:00Z",
+				Reviewers: []vcs.ReviewerDecision{
+					{Login: "roshchyn", State: "approved", SubmittedAt: "2026-01-01T10:00:00Z"},
+				},
+			},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "org", "repo")
+	require.NoError(t, err)
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	// Second sync: the user approved, so #278 disappears from both lists but is
+	// still open, and GetPRByNumber now reports both approvals.
+	runner.reviewRequests = nil
+	runner.changesRequested = nil
+	runner.prByNumber = map[int]*vcs.PRData{
+		278: {
+			Number: 278, Title: "Feat", Author: "nazar", State: "open", URL: "u278",
+			Mergeable: "CONFLICTING", // a conflict appeared after the user reviewed
+			Reviewers: []vcs.ReviewerDecision{
+				{Login: "roshchyn", State: "approved", SubmittedAt: "2026-01-01T10:00:00Z"},
+				{Login: "me", State: "approved", SubmittedAt: "2026-01-02T09:00:00Z"},
+			},
+		},
+	}
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	reviews, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, reviews, 1)
+	assert.NotNil(t, reviews[0].ReviewedAt, "approved PR is waiting for author")
+	assert.Equal(t, "CONFLICTING", reviews[0].Mergeable, "conflict on a waiting PR must be captured by the reconcile pass")
+	logins := map[string]string{}
+	for _, d := range reviews[0].Reviewers {
+		logins[d.Login] = d.State
+	}
+	assert.Equal(t, "approved", logins["me"], "the user's own approval must be captured after it drops from review-requested")
+	assert.Equal(t, "approved", logins["roshchyn"])
 }
 
 func TestSyncReviewRequests_NoPlatformRunner_ReturnsError(t *testing.T) {

@@ -44,7 +44,10 @@ button {
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 500;
-  transition: background 0.15s, opacity 0.15s;
+  /* ponytail: no opacity transition — animating it promotes the button to its own
+     compositing layer, and Wails' webview leaves the old label painted under the new
+     one when the text swaps mid-animation (loading/loaded ghost overlap). */
+  transition: background 0.15s;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -4668,6 +4671,14 @@ select {
   background: var(--surface2, rgba(255,255,255,0.02));
 }
 
+/* Each repo's PR lists live in their own fixed-height scroll window (like My
+   Board's .board-section-items), so a long list scrolls in place instead of
+   pushing the next repo down. */
+.review-repo-body {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
 .review-repo-name {
   font-size: 13px;
   font-weight: 600;
@@ -5172,6 +5183,18 @@ select {
 
 .workflow-badge--ai { border: 1px dashed currentColor; opacity: 0.85; }
 
+/* Click-to-change status: the badge shows the value; an invisible native <select>
+   covers it so a click opens the OS status picker (no popover/outside-click plumbing). */
+.status-cell { position: relative; display: inline-flex; cursor: pointer; }
+.status-cell-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .workflow-badge-ai-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
@@ -5668,6 +5691,10 @@ select {
   gap: 4px;
   padding: 6px 14px 10px;
   border-top: 1px solid var(--border);
+  /* Per-repo scroll window (matches My Board's .board-section-items) so a repo
+     with many workspaces/branches scrolls in place. */
+  max-height: 340px;
+  overflow-y: auto;
 }
 .repo-path-row {
   display: flex;
@@ -6078,8 +6105,15 @@ select {
 
 .workflow-status-add-fields {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Keep the Label/Slug inputs usably wide and give the AI-hint textarea its own
+   full-width row — on one shared row the textarea's intrinsic width starves the
+   flex:1 inputs down to a sliver. */
+.workflow-status-add-fields .workflow-status-input { min-width: 140px; }
+.workflow-status-add-fields .form-control { flex: 1 0 100%; }
 
 .workflow-status-add-actions {
   display: flex;
@@ -6605,13 +6639,17 @@ select {
 }
 
 /* Inline per-hunk Keep/Revert content widgets in the diff editor (modified side). */
-.hunk-actions { display: inline-flex; gap: 4px; transform: translateY(-2px); z-index: 5; }
+.hunk-actions { display: inline-flex; flex-direction: row; flex-wrap: nowrap; gap: 4px; transform: translateY(-2px); z-index: 5; }
 .hunk-actions button {
   font-size: 10px; line-height: 1; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+  white-space: nowrap;
   border: 1px solid var(--border); background: var(--surface2); color: var(--text);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
-.hunk-actions button:hover { border-color: var(--accent); }
+.hunk-actions button.hunk-accept { color: #4ade80; border-color: rgba(74, 222, 128, 0.45); }
+.hunk-actions button.hunk-reject { color: #f87171; border-color: rgba(248, 113, 113, 0.45); }
+.hunk-actions button.hunk-accept:hover { border-color: #4ade80; background: rgba(74, 222, 128, 0.12); }
+.hunk-actions button.hunk-reject:hover { border-color: #f87171; background: rgba(248, 113, 113, 0.12); }
 
 /* Sidebar context-plate badges: new-item count + needs-attention icon color. */
 .tab-item__icon--attention { color: var(--warning, #f0a500); }
