@@ -414,13 +414,20 @@ const DefaultEmbeddingModel = "text-embedding-3-small"
 // modifier_keys is a comma-separated list of: "cmd", "shift", "ctrl", "alt".
 // key_code is a lowercase key name: "c", "enter", "space", "f1"–"f12", etc.
 type Keybinding struct {
-	ID           string `json:"id"`
-	Command      string `json:"command"`
-	Label        string `json:"label"`
-	Description  string `json:"description"`
-	ModifierKeys string `json:"modifierKeys"` // e.g. "cmd,shift"
-	KeyCode      string `json:"keyCode"`      // e.g. "c"
-	UpdatedAt    string `json:"updatedAt"`
+	ID                  string `json:"id"`
+	Command             string `json:"command"`
+	Label               string `json:"label"`
+	Description         string `json:"description"`
+	ModifierKeys        string `json:"modifierKeys"` // e.g. "cmd,shift"
+	KeyCode             string `json:"keyCode"`      // e.g. "c"
+	Sequence            string `json:"sequence"`
+	Object              string `json:"object"`
+	Action              string `json:"action"`
+	Scope               string `json:"scope"`
+	DefaultModifierKeys string `json:"defaultModifierKeys"`
+	DefaultKeyCode      string `json:"defaultKeyCode"`
+	DefaultSequence     string `json:"defaultSequence"`
+	UpdatedAt           string `json:"updatedAt"`
 }
 
 // TerminalCommand is a user-configured command shown in the editor terminal's

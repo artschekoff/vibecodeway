@@ -282,7 +282,7 @@ export default function SettingsPage() {
                   binding={kb}
                   onSave={async (command, modifierKeys, keyCode) => {
                     try {
-                      await UpdateKeybinding(command, modifierKeys, keyCode);
+                      await UpdateKeybinding(command, modifierKeys, keyCode, kb.sequence);
                       setKeybindings((prev) =>
                         prev.map((b) =>
                           b.command === command ? { ...b, modifierKeys, keyCode } : b

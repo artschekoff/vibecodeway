@@ -698,6 +698,10 @@ export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
 }
 
+export function ResetKeybinding(arg1) {
+  return window['go']['main']['App']['ResetKeybinding'](arg1);
+}
+
 export function ReviewPRWithAI(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ReviewPRWithAI'](arg1, arg2, arg3, arg4);
 }
@@ -886,8 +890,8 @@ export function UpdateContext(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateContext'](arg1, arg2, arg3);
 }
 
-export function UpdateKeybinding(arg1, arg2, arg3) {
-  return window['go']['main']['App']['UpdateKeybinding'](arg1, arg2, arg3);
+export function UpdateKeybinding(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateKeybinding'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateOrganization(arg1, arg2) {

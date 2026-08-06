@@ -125,11 +125,11 @@ func (a *App) GetKeybindings() ([]appstore.Keybinding, error) {
 	return a.db.GetKeybindings(context.Background())
 }
 
-// UpdateKeybinding saves a new modifier+key combo for a command and,
+// UpdateKeybinding saves a new modifier+key+sequence combo for a command and,
 // for the "quick_attach" command, re-registers the global hotkey immediately.
 // modifierKeys is a comma-separated string (e.g. "cmd,shift"), keyCode is e.g. "c".
-func (a *App) UpdateKeybinding(command, modifierKeys, keyCode string) error {
-	if err := a.db.UpdateKeybinding(context.Background(), command, modifierKeys, keyCode); err != nil {
+func (a *App) UpdateKeybinding(command, modifierKeys, keyCode, sequence string) error {
+	if err := a.db.UpdateKeybinding(context.Background(), command, modifierKeys, keyCode, sequence); err != nil {
 		return err
 	}
 	if command == "quick_attach" {
@@ -138,6 +138,11 @@ func (a *App) UpdateKeybinding(command, modifierKeys, keyCode string) error {
 		}
 	}
 	return nil
+}
+
+// ResetKeybinding restores a shortcut to its default chord.
+func (a *App) ResetKeybinding(command string) error {
+	return a.db.ResetKeybinding(context.Background(), command)
 }
 
 // backgroundRefreshLoop runs two independent tickers — one for contexts and one

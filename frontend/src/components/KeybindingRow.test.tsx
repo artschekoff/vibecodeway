@@ -12,6 +12,13 @@ function makeBinding(overrides: Partial<Keybinding> = {}): Keybinding {
     description: "Select text and open context picker globally.",
     modifierKeys: "cmd,shift",
     keyCode: "c",
+    sequence: "",
+    object: "quick",
+    action: "attach",
+    scope: "global",
+    defaultModifierKeys: "cmd,shift",
+    defaultKeyCode: "c",
+    defaultSequence: "",
     updatedAt: "",
     ...overrides,
   };
