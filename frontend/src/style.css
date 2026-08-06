@@ -6660,3 +6660,46 @@ select {
   text-align: center;
   pointer-events: none;
 }
+
+/* WhichKey leader HUD: small bottom-center overlay shown while a leader
+   sequence window is open (e.g. after pressing mod+t). */
+.which-key-hud {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--surface2, #201e4a);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 8px;
+  color: var(--text, #fff);
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  z-index: 1000;
+}
+.which-key-hud__object {
+  font-weight: 700;
+  color: var(--accent, #e4408c);
+}
+.which-key-hud__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted, #8a88be);
+}
+.which-key-hud__item kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface, #171639);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  font-size: 11px;
+  color: var(--text, #fff);
+}
+.which-key-hud__default {
+  color: var(--text-muted, #8a88be);
+  font-style: italic;
+}
