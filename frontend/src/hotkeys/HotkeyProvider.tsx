@@ -11,6 +11,7 @@ import { eventToToken, formatChord, serializeChord, type Platform } from "./chor
 import { buildKeymap, type Binding } from "./keymap";
 import { COMMANDS } from "./registry";
 import { SCOPE_PRIORITY, type Scope } from "./scopes";
+export type { Scope };
 import type { Keybinding } from "../types";
 import { WhichKeyHud } from "./WhichKeyHud";
 
@@ -75,39 +76,64 @@ function fireHotkeyEvent(id: string) {
   window.dispatchEvent(new CustomEvent(`hotkey:${id}`));
 }
 
+const byScopePriority = (a: Binding, b: Binding) =>
+  SCOPE_PRIORITY.indexOf(a.command.scope) - SCOPE_PRIORITY.indexOf(b.command.scope);
+
 function orderByScopePriority(bindings: Binding[]): Binding[] {
-  return [...bindings].sort(
-    (a, b) => SCOPE_PRIORITY.indexOf(a.command.scope) - SCOPE_PRIORITY.indexOf(b.command.scope)
-  );
+  return [...bindings].sort(byScopePriority);
 }
 
 /**
- * A single chord can be the lead of bindings from unrelated `command.object`
- * groups (coincidental collision, e.g. mod+f = bare "search.global" AND the
- * lead of sequenced "files.focusSearch"). Narrow to the one object group
- * that's actually live: prefer the group(s) with a currently-registered
- * handler, breaking ties by SCOPE_PRIORITY; fall back to the full raw
- * bucket if nothing is registered yet.
+ * A single physical chord can be the lead of bindings from unrelated
+ * `command.object` groups (coincidental collision, e.g. mod+f is both the
+ * bare "search.global" command and the lead of the sequenced
+ * "files.focusSearch" leader). Resolve the raw lead bucket into the pieces
+ * the dispatcher needs, considering only bindings that can ACTUALLY fire
+ * right now (`canFire` = has a registered handler in a currently-active
+ * scope). A binding that's merely registered but whose scope is inactive
+ * (e.g. the files panel is mounted but not focused) does NOT count — that's
+ * what lets ⌘F fire search.global immediately when files is inactive, yet
+ * open a files leader when files is focused:
+ *
+ *   - `group`: the single object group that owns the sequenced children of
+ *     THIS press — the live group with the most-specific active scope
+ *     (SCOPE_PRIORITY). This is what a follow-key selects from.
+ *   - `defaultBinding`: what the leader falls through to on timeout or on a
+ *     non-matching follow-key. Searched across the WHOLE live bucket, not
+ *     just `group`, so a bare binding on the same chord under a DIFFERENT
+ *     object (⌘F -> search.global while files.focusSearch owns the leader)
+ *     is retained as the fall-through instead of being discarded. Preference:
+ *     a defaultAction/bare binding inside `group` first, else any other live
+ *     bare binding on the lead (by SCOPE_PRIORITY).
+ *
+ * If nothing on the raw lead can fire, returns null so the caller does
+ * nothing (no spurious leader / no swallowed native key).
  */
-function pickActiveObjectGroup(bucket: Binding[], registry: Map<string, Set<unknown>>): Binding[] {
+function resolveLead(
+  rawBucket: Binding[],
+  canFire: (b: Binding) => boolean
+): { group: Binding[]; defaultBinding?: Binding } | null {
+  const live = rawBucket.filter(canFire);
+  if (live.length === 0) return null;
+
+  // Group the live bindings by object; pick the owning group by
+  // SCOPE_PRIORITY (most-specific active scope wins).
   const byObject = new Map<string, Binding[]>();
-  for (const b of bucket) {
-    const group = byObject.get(b.command.object);
-    if (group) group.push(b);
+  for (const b of live) {
+    const g = byObject.get(b.command.object);
+    if (g) g.push(b);
     else byObject.set(b.command.object, [b]);
   }
-  if (byObject.size <= 1) return bucket;
+  const groups = [...byObject.values()].sort((a, b) => byScopePriority(a[0], b[0]));
+  const group = groups[0];
 
-  const registeredGroups = [...byObject.values()].filter((group) =>
-    group.some((b) => (registry.get(b.command.id)?.size ?? 0) > 0)
-  );
-  if (registeredGroups.length === 0) return bucket;
-  if (registeredGroups.length === 1) return registeredGroups[0];
+  // Default/fall-through binding: prefer a bare/defaultAction binding in the
+  // owning group, else any other live bare binding on the same lead.
+  const groupDefault = group.find((b) => b.command.defaultAction || !b.sequence);
+  const crossDefault = orderByScopePriority(live.filter((b) => !b.sequence))[0];
+  const defaultBinding = groupDefault ?? crossDefault;
 
-  registeredGroups.sort(
-    (a, b) => SCOPE_PRIORITY.indexOf(a[0].command.scope) - SCOPE_PRIORITY.indexOf(b[0].command.scope)
-  );
-  return registeredGroups[0];
+  return { group, defaultBinding };
 }
 
 export function HotkeyProvider({
@@ -117,7 +143,7 @@ export function HotkeyProvider({
 }: {
   platform: Platform;
   keybindings?: Keybinding[];
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const keymap = useMemo(() => buildKeymap(COMMANDS, keybindings ?? []), [keybindings]);
 
@@ -128,7 +154,7 @@ export function HotkeyProvider({
   const activeScopesRef = useRef<Set<Scope>>(new Set());
 
   const leaderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const leaderBindingsRef = useRef<Binding[] | null>(null);
+  const leaderPendingRef = useRef<{ children: Binding[]; defaultBinding?: Binding } | null>(null);
   const [leader, setLeader] = useState<LeaderState | null>(null);
 
   const isScopeActive = useCallback((scope: Scope) => scope === "global" || activeScopesRef.current.has(scope), []);
@@ -138,33 +164,40 @@ export function HotkeyProvider({
       clearTimeout(leaderTimerRef.current);
       leaderTimerRef.current = null;
     }
-    leaderBindingsRef.current = null;
+    leaderPendingRef.current = null;
     setLeader(null);
   }, []);
 
-  const fire = useCallback(
-    (binding: Binding): boolean => {
-      const handlers = registryRef.current.get(binding.command.id);
-      if (!handlers || handlers.size === 0) return false;
-
-      let chosen: HandlerEntry | undefined;
+  // The single enabled handler for `commandId` whose registered scope is
+  // the most-specific currently-active one (per SCOPE_PRIORITY), or
+  // undefined if none can fire.
+  const pickHandler = useCallback(
+    (commandId: string): HandlerEntry | undefined => {
+      const handlers = registryRef.current.get(commandId);
+      if (!handlers || handlers.size === 0) return undefined;
       for (const scope of SCOPE_PRIORITY) {
         if (!isScopeActive(scope)) continue;
         for (const h of handlers) {
-          if (h.enabled && h.scope === scope) {
-            chosen = h;
-            break;
-          }
+          if (h.enabled && h.scope === scope) return h;
         }
-        if (chosen) break;
       }
-      if (!chosen) return false;
+      return undefined;
+    },
+    [isScopeActive]
+  );
 
+  // A binding "can fire" iff it has a live handler in an active scope.
+  const canFire = useCallback((b: Binding) => pickHandler(b.command.id) !== undefined, [pickHandler]);
+
+  const fire = useCallback(
+    (binding: Binding): boolean => {
+      const chosen = pickHandler(binding.command.id);
+      if (!chosen) return false;
       chosen.fn();
       fireHotkeyEvent(binding.command.id);
       return true;
     },
-    [isScopeActive]
+    [pickHandler]
   );
 
   useEffect(() => {
@@ -176,76 +209,68 @@ export function HotkeyProvider({
       if (typing && !token.mod && !token.ctrl) return;
 
       // Step 2: leader window pending — this key selects the sequence child.
-      if (leaderBindingsRef.current) {
-        const pending = leaderBindingsRef.current;
-        const child = pending.find((b) => b.sequence === token.key);
+      if (leaderPendingRef.current) {
+        const pending = leaderPendingRef.current;
+        const child = pending.children.find((b) => b.sequence === token.key);
         clearLeader();
         if (child) {
           e.preventDefault();
           fire(child);
           return;
         }
-        const defaultBinding = pending.find((b) => b.command.defaultAction);
-        if (defaultBinding) {
-          fire(defaultBinding);
-        }
+        // Non-matching follow-key: fall through to the leader's resolved
+        // default (e.g. ⌘F then a non-"f" key -> search.global). We do NOT
+        // preventDefault here so the follow-key keeps its own native meaning
+        // if the default fires or if nothing fires.
+        if (pending.defaultBinding) fire(pending.defaultBinding);
         return;
       }
 
       // Step 3: look up this chord as a potential lead. A single physical
       // chord can be shared by bindings from entirely unrelated objects
-      // (e.g. mod+f is both the bare "search.global" command and the lead
-      // of the sequenced "files.focusSearch" leader) — these are different
-      // features that just happen to collide on the same chord, and only
-      // one is ever relevant at a time. Narrow the raw bucket down to the
-      // single `command.object` group that's actually in play before
-      // deciding whether this press starts a leader window or fires
-      // immediately:
-      //   - Prefer the object group that has at least one handler
-      //     currently registered (via useHotkey) — that's the group whose
-      //     feature is actually mounted/active right now.
-      //   - If more than one object group has a registered handler, break
-      //     the tie using SCOPE_PRIORITY (most-specific active scope
-      //     wins).
-      //   - If no group has a registered handler, keep the whole raw
-      //     bucket so any bare/default fire attempt below still no-ops
-      //     safely.
+      // (e.g. mod+f is both the bare "search.global" command and the lead of
+      // the sequenced "files.focusSearch" leader). `resolveLead` picks the
+      // object group that owns the sequenced children of this press AND the
+      // bare/default binding the leader falls through to on timeout / a
+      // non-matching follow-key — which may be a bare binding from a
+      // DIFFERENT object on the same chord (search.global), so global search
+      // stays reachable while the files panel is focused. Returns null when
+      // nothing on the lead is registered (no spurious leader, native key
+      // preserved).
       const rawBucket = keymap.lead.get(serializeChord(token));
       if (!rawBucket || rawBucket.length === 0) return;
-      const bucket = pickActiveObjectGroup(rawBucket, registryRef.current);
+      const resolved = resolveLead(rawBucket, canFire);
+      if (!resolved) return;
 
-      const sequenced = bucket.filter((b) => b.sequence);
-      const bareOrDefault = bucket.find((b) => !b.sequence || b.command.defaultAction);
+      const { group, defaultBinding } = resolved;
+      const sequenced = group.filter((b) => b.sequence);
 
       if (sequenced.length > 0) {
-        leaderBindingsRef.current = bucket;
+        leaderPendingRef.current = { children: sequenced, defaultBinding };
         setLeader({
-          object: bucket[0].command.object,
+          object: group[0].command.object,
           children: sequenced,
-          defaultBinding: bareOrDefault,
+          defaultBinding,
         });
         leaderTimerRef.current = setTimeout(() => {
-          const pending = leaderBindingsRef.current;
+          const pending = leaderPendingRef.current;
           clearLeader();
-          if (pending) {
-            const defaultBinding = pending.find((b) => b.command.defaultAction);
-            if (defaultBinding) fire(defaultBinding);
-          }
+          if (pending?.defaultBinding) fire(pending.defaultBinding);
         }, LEADER_TIMEOUT_MS);
 
-        // Only swallow the lead keypress if it also has a bare/default
-        // command bound directly to it. A lead with ONLY sequenced children
-        // must let the native key through (e.g. native ⌘C copy).
-        if (bareOrDefault) e.preventDefault();
+        // Only swallow the lead keypress if there IS a default/fall-through
+        // command bound to this lead. A pure-sequence lead with no bare
+        // default anywhere (e.g. ⌘C -> context.copyName "n", no default)
+        // must let the native key through (native copy).
+        if (defaultBinding) e.preventDefault();
         return;
       }
 
-      // No sequenced siblings in the chosen group — try to fire a bare
-      // binding now. Multiple unrelated bare commands can still share a
-      // chord across scopes (e.g. mod+shift+] is both "sidebar.next" and
-      // "terminal.next"); try each in SCOPE_PRIORITY order until one has
-      // an active registered handler.
-      for (const binding of orderByScopePriority(bucket)) {
+      // No sequenced children — try to fire a bare binding now. Multiple
+      // unrelated bare commands can still share a chord across scopes (e.g.
+      // mod+shift+] is both "sidebar.next" and "terminal.next"); try each in
+      // SCOPE_PRIORITY order until one has an active registered handler.
+      for (const binding of orderByScopePriority(group)) {
         if (fire(binding)) {
           e.preventDefault();
           return;
@@ -258,7 +283,7 @@ export function HotkeyProvider({
       window.removeEventListener("keydown", handler, true);
       if (leaderTimerRef.current) clearTimeout(leaderTimerRef.current);
     };
-  }, [platform, keymap, fire, clearLeader, isScopeActive]);
+  }, [platform, keymap, fire, canFire, clearLeader]);
 
   const dispatchList = useMemo(
     () =>
