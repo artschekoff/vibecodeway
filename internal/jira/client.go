@@ -14,6 +14,13 @@ import (
 // instanceSiteRE extracts the bare hostname from the "Site:" line of acli jira auth status output.
 var instanceSiteRE = regexp.MustCompile(`(?i)Site:\s*(\S+)`)
 
+// OrgScopeFieldID is the Jira custom field this instance uses for the per-ticket
+// scope/service (values like "juna-api", "juna-frontend", "rdbms") — treated as
+// the ticket's "organization" for the board split.
+// ponytail: hardcoded field id (instance-specific); move to a setting if the app
+// ever targets multiple Jira instances.
+const OrgScopeFieldID = "customfield_10160"
+
 // Client wraps the acli Runner and provides typed Jira query methods.
 type Client struct {
 	runner *acli.Runner
@@ -53,7 +60,7 @@ func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error)
 		// "created" is NOT permitted here (unlike the REST API), so requesting it
 		// makes the whole search fail. priority is allowed. See parseSearchResults:
 		// Created stays "" for search results (acli can't return it here).
-		"--fields", "key,summary,status,assignee,issuetype,priority",
+		"--fields", "key,summary,status,assignee,issuetype,priority," + OrgScopeFieldID,
 		"--json",
 	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "search"}, nil, flags)
@@ -128,6 +135,7 @@ func parseSearchResults(raw string) ([]SearchResult, error) {
 			IssueType: item.field("issuetype"),
 			Priority:  item.field("priority"),
 			Created:   item.field("created"),
+			Org:       item.field(OrgScopeFieldID),
 		})
 	}
 	return results, nil

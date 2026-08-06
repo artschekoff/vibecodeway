@@ -1195,6 +1195,7 @@ export namespace store {
 	    created: string;
 	    seen: boolean;
 	    fetchedAt: string;
+	    org: string;
 	    contextId?: string;
 	    contextKey?: string;
 	
@@ -1212,6 +1213,7 @@ export namespace store {
 	        this.created = source["created"];
 	        this.seen = source["seen"];
 	        this.fetchedAt = source["fetchedAt"];
+	        this.org = source["org"];
 	        this.contextId = source["contextId"];
 	        this.contextKey = source["contextKey"];
 	    }

@@ -41,6 +41,7 @@ func (a *App) RefreshMyAssignedJiraIssues(orderBy string) ([]appstore.BoardJiraA
 			IssueType: r.IssueType,
 			Priority:  r.Priority,
 			Created:   r.Created,
+			Org:       r.Org,
 		})
 	}
 	if err := a.db.UpsertBoardJiraAssignments(a.ctx, issues); err != nil {

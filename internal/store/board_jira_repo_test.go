@@ -57,8 +57,8 @@ func TestBoardJiraAssignments_UpsertPreservesSeenAndReplaces(t *testing.T) {
 	require.Contains(t, byKey, "JH-1")
 	require.Contains(t, byKey, "JH-3")
 	assert.Equal(t, "one-updated", byKey["JH-1"].Summary)
-	assert.True(t, byKey["JH-1"].Seen)   // preserved across upsert
-	assert.False(t, byKey["JH-3"].Seen)  // brand new
+	assert.True(t, byKey["JH-1"].Seen)  // preserved across upsert
+	assert.False(t, byKey["JH-3"].Seen) // brand new
 }
 
 func TestGetJiraKeyByID(t *testing.T) {
@@ -82,6 +82,34 @@ func TestGetJiraKeyByID(t *testing.T) {
 	key, err = s.GetJiraKeyByID(ctx, "does-not-exist")
 	require.NoError(t, err)
 	assert.Equal(t, "", key)
+}
+
+func TestBoardJiraAssignments_OrgRoundTrips(t *testing.T) {
+	s := newBJAStore(t)
+	ctx := t.Context()
+
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{
+		{Key: "JH-1", Summary: "one", Status: "Open", Priority: "High", Created: "2026-07-20T10:00:00Z", Org: "juna-api"},
+		{Key: "JH-2", Summary: "two", Status: "Open", Priority: "Low", Created: "2026-07-21T10:00:00Z", Org: ""},
+	}))
+
+	list, err := s.ListBoardJiraAssignments(ctx, "priority")
+	require.NoError(t, err)
+	byKey := map[string]BoardJiraAssignment{}
+	for _, it := range list {
+		byKey[it.Key] = it
+	}
+	assert.Equal(t, "juna-api", byKey["JH-1"].Org)
+	assert.Equal(t, "", byKey["JH-2"].Org)
+
+	// Re-upsert updates the org (issue moved scope).
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{
+		{Key: "JH-1", Summary: "one", Status: "Open", Priority: "High", Created: "2026-07-20T10:00:00Z", Org: "rdbms"},
+	}))
+	list, err = s.ListBoardJiraAssignments(ctx, "priority")
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "rdbms", list[0].Org)
 }
 
 func TestBoardJiraAssignments_Sorting(t *testing.T) {

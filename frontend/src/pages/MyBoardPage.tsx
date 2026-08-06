@@ -35,10 +35,13 @@ export default function MyBoardPage() {
   const [jiraSort, setJiraSort] = useState<JiraSort>("priority");
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [orgFilter, setOrgFilter] = useState("");
   const { openContextTab } = useTabContext();
 
   // Distinct filter options present in the current issues.
   const statusOptions = useMemo(() => [...new Set(jiraIssues.map((i) => i.status).filter(Boolean))].sort(), [jiraIssues]);
+  // Distinct Jira scope/"org" values (from customfield), used to split the board.
+  const orgOptions = useMemo(() => [...new Set(jiraIssues.map((i) => i.org).filter(Boolean))].sort(), [jiraIssues]);
   const priorityOptions = useMemo(() => {
     const present = new Set(jiraIssues.map((i) => i.priority).filter(Boolean));
     return ["Highest", "High", "Medium", "Low", "Lowest"].filter((p) => present.has(p));
@@ -60,8 +63,11 @@ export default function MyBoardPage() {
   }, [jiraIssues, jiraSort]);
 
   const visibleJira = useMemo(
-    () => sortedJira.filter((i) => (!statusFilter || i.status === statusFilter) && (!priorityFilter || i.priority === priorityFilter)),
-    [sortedJira, statusFilter, priorityFilter],
+    () => sortedJira.filter((i) =>
+      (!statusFilter || i.status === statusFilter) &&
+      (!priorityFilter || i.priority === priorityFilter) &&
+      (!orgFilter || i.org === orgFilter)),
+    [sortedJira, statusFilter, priorityFilter, orgFilter],
   );
 
   const load = useCallback(async (name: string) => {
@@ -289,6 +295,13 @@ export default function MyBoardPage() {
               {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           )}
+          {orgOptions.length > 0 && (
+            <select aria-label="filter by organization" style={{ fontSize: 11 }} value={orgFilter}
+              onChange={(e) => setOrgFilter(e.target.value)} title="Filter by organization (Jira scope)">
+              <option value="">All orgs</option>
+              {orgOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          )}
           {orgs.length > 1 && (
             <select aria-label="organization for new contexts" style={{ fontSize: 11, marginLeft: "auto" }}
               value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)}
@@ -311,6 +324,7 @@ export default function MyBoardPage() {
                 <span style={{ fontWeight: 600, flexShrink: 0 }}>{it.key}</span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={it.summary}>{it.summary}</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {it.org && <span className="board-chip" title="Organization (Jira scope)">{it.org}</span>}
                   {it.status && <span className="board-chip" title="Status">{it.status}</span>}
                   {it.priority && <span className="board-chip" title="Priority">{it.priority}</span>}
                   {!it.seen && <span className="board-badge-new" style={{ fontSize: 10, color: "var(--accent)" }}>new</span>}

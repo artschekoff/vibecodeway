@@ -16,6 +16,9 @@ type SearchResult struct {
 	IssueType string `json:"issuetype"`
 	Priority  string `json:"priority"`
 	Created   string `json:"created"`
+	// Org is the ticket's scope/service (this instance's "organization"), read from
+	// the OrgScopeFieldID custom field. Empty when the field is unset on the issue.
+	Org string `json:"org"`
 }
 
 // IssueDetail represents a full issue returned by jira workitem view.

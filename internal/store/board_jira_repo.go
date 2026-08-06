@@ -67,16 +67,17 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 
 	for _, it := range issues {
 		_, err := tx.ExecContext(ctx, `
-			INSERT INTO board_jira_assignments (jira_key, summary, status, issue_type, priority, created, seen, fetched_at)
-			VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+			INSERT INTO board_jira_assignments (jira_key, summary, status, issue_type, priority, created, org, seen, fetched_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
 			ON CONFLICT(jira_key) DO UPDATE SET
 				summary = excluded.summary,
 				status = excluded.status,
 				issue_type = excluded.issue_type,
 				priority = excluded.priority,
 				created = excluded.created,
+				org = excluded.org,
 				fetched_at = excluded.fetched_at`,
-			it.Key, it.Summary, it.Status, it.IssueType, it.Priority, it.Created, now)
+			it.Key, it.Summary, it.Status, it.IssueType, it.Priority, it.Created, it.Org, now)
 		if err != nil {
 			return fmt.Errorf("upsert board jira %s: %w", it.Key, err)
 		}
@@ -91,7 +92,7 @@ func (s *Store) ListBoardJiraAssignments(ctx context.Context, orderBy string) ([
 	// contexts (UNIQUE is per (context_id, jira_key)); pick one deterministically
 	// via MIN(context_id) so each assignment yields exactly one row.
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT b.jira_key, b.summary, b.status, b.issue_type, b.priority, b.created, b.seen, b.fetched_at,
+		SELECT b.jira_key, b.summary, b.status, b.issue_type, b.priority, b.created, b.org, b.seen, b.fetched_at,
 		       ji.context_id, c.key
 		FROM board_jira_assignments b
 		LEFT JOIN (SELECT jira_key, MIN(context_id) AS context_id FROM jira_issues GROUP BY jira_key) ji
@@ -108,7 +109,7 @@ func (s *Store) ListBoardJiraAssignments(ctx context.Context, orderBy string) ([
 		var it BoardJiraAssignment
 		var seen int
 		var ctxID, ctxKey sql.NullString
-		if err := rows.Scan(&it.Key, &it.Summary, &it.Status, &it.IssueType, &it.Priority, &it.Created, &seen, &it.FetchedAt, &ctxID, &ctxKey); err != nil {
+		if err := rows.Scan(&it.Key, &it.Summary, &it.Status, &it.IssueType, &it.Priority, &it.Created, &it.Org, &seen, &it.FetchedAt, &ctxID, &ctxKey); err != nil {
 			return nil, fmt.Errorf("scan board jira: %w", err)
 		}
 		it.Seen = seen != 0

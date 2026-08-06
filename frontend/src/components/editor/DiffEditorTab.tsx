@@ -122,16 +122,31 @@ export function DiffEditorTab({
     clearHunkWidgets();
     changes.forEach((change, i) => {
       const line = change.modifiedStartLineNumber || 1;
+      // One segmented pill split into two halves (Keep | Revert). Styled inline so
+      // the row layout can't be defeated by a stale CSS bundle or a Monaco content-
+      // widget stylesheet — the earlier .hunk-actions flex rule wasn't taking effect.
       const dom = document.createElement("div");
       dom.className = "hunk-actions";
+      dom.style.cssText =
+        "display:inline-flex;flex-direction:row;align-items:stretch;border:1px solid var(--border);" +
+        "border-radius:5px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.3);" +
+        "transform:translateY(-2px);font-size:10px;line-height:1;z-index:5;";
+      const half =
+        "border:0;background:var(--surface2);padding:3px 9px;cursor:pointer;font-size:10px;" +
+        "line-height:1;white-space:nowrap;font-weight:600;font-family:inherit;";
       const accept = document.createElement("button");
-      accept.className = "hunk-accept";
       accept.textContent = "✓ Keep";
       accept.title = "Accept this change (keep it)";
+      accept.style.cssText = half + "color:#4ade80;";
       const reject = document.createElement("button");
-      reject.className = "hunk-reject";
       reject.textContent = "✕ Revert";
       reject.title = "Reject this change (restore the base version)";
+      reject.style.cssText = half + "color:#f87171;border-left:1px solid var(--border);";
+      // Inline hover (a :hover rule can't reach an inline-styled node reliably here).
+      accept.onmouseenter = () => { accept.style.background = "rgba(74,222,128,0.14)"; };
+      accept.onmouseleave = () => { accept.style.background = "var(--surface2)"; };
+      reject.onmouseenter = () => { reject.style.background = "rgba(248,113,113,0.14)"; };
+      reject.onmouseleave = () => { reject.style.background = "var(--surface2)"; };
       dom.appendChild(accept);
       dom.appendChild(reject);
       const widget: ContentWidget = {

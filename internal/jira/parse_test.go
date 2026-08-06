@@ -23,3 +23,17 @@ func TestParseSearchResultsPriorityCreated(t *testing.T) {
 	assert.Equal(t, "2026-07-20T10:00:00.000+0000", got[0].Created)
 	assert.Equal(t, "ABC-1", got[0].Key)
 }
+
+func TestParseSearchResultsOrgScope(t *testing.T) {
+	// The org scope field arrives as a Jira option object; parseString pulls its "value".
+	raw := `[{"key":"JH-1","fields":{"summary":"s","` + OrgScopeFieldID + `":{"value":"juna-api","id":"10063"}}}]`
+	got, err := parseSearchResults(raw)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "juna-api", got[0].Org)
+
+	// Unset scope field -> empty org, no error.
+	got, err = parseSearchResults(`[{"key":"JH-2","fields":{"summary":"s"}}]`)
+	require.NoError(t, err)
+	assert.Equal(t, "", got[0].Org)
+}
