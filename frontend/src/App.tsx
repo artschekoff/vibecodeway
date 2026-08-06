@@ -6,14 +6,17 @@ import { EditorFilesProvider } from "./contexts/EditorFilesContext";
 import { EditorFileTabBar } from "./components/editor/EditorFileTabBar";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
-import { ListAllContexts, ListOrganizations } from "../wailsjs/go/main/App";
+import { ListAllContexts, ListOrganizations, GetKeybindings } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
 import { AccessibilityBanner } from "./components/AccessibilityBanner";
 import { BgRefreshToast } from "./components/BgRefreshToast";
-import { EventsOn, EventsOff, SendNotification, InitializeNotifications } from "../wailsjs/runtime/runtime";
+import { EventsOn, EventsOff, SendNotification, InitializeNotifications, Environment } from "../wailsjs/runtime/runtime";
 import { hookNotificationOptions, type HookNotifyPayload } from "./lib/hookNotify";
+import { HotkeyProvider } from "./hotkeys/HotkeyProvider";
+import type { Platform } from "./hotkeys/chord";
+import type { Keybinding } from "./types";
 import "./style.css";
 
 const isWailsContext = () =>
@@ -148,14 +151,27 @@ function AppShell() {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 function App() {
+  const [platform, setPlatform] = useState<Platform>("other");
+  const [bindings, setBindings] = useState<Keybinding[]>([]);
+
+  useEffect(() => {
+    Environment().then((i) => setPlatform(i.platform === "darwin" ? "darwin" : "other")).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    GetKeybindings().then((b) => setBindings(b ?? [])).catch(() => {});
+  }, []);
+
   return (
-    <PassphraseProvider>
-      <TabProvider>
-        <EditorFilesProvider>
-          <AppShell />
-        </EditorFilesProvider>
-      </TabProvider>
-    </PassphraseProvider>
+    <HotkeyProvider platform={platform} keybindings={bindings}>
+      <PassphraseProvider>
+        <TabProvider>
+          <EditorFilesProvider>
+            <AppShell />
+          </EditorFilesProvider>
+        </TabProvider>
+      </PassphraseProvider>
+    </HotkeyProvider>
   );
 }
 
