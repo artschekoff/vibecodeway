@@ -56,3 +56,43 @@ func TestSearchContextsTool(t *testing.T) {
 		t.Fatalf("expected >=1 hit for seeded context %s, got %v", ctxID, m)
 	}
 }
+
+func TestEditContextTool(t *testing.T) {
+	store := newTestStore(t)
+	reg := NewRegistry(Deps{Store: store})
+	orgID := seedOrg(t, store)
+	id := seedContext(t, store, "sprint-42", orgID)
+
+	out, err := reg.Call(context.Background(), "edit_context",
+		map[string]any{"contextId": id, "status": "archived"}, Ctx{})
+	if err != nil {
+		t.Fatalf("edit_context: %v", err)
+	}
+	m := out.(map[string]any)
+	if m["status"] != "archived" || m["key"] != "sprint-42" {
+		t.Fatalf("edit_context should archive and keep key, got %v", m)
+	}
+	if tool, _ := reg.Get("edit_context"); !tool.Write {
+		t.Fatal("edit_context must be a write tool")
+	}
+}
+
+func TestAddEventTool(t *testing.T) {
+	store := newTestStore(t)
+	reg := NewRegistry(Deps{Store: store})
+	orgID := seedOrg(t, store)
+	id := seedContext(t, store, "sprint-42", orgID)
+
+	out, err := reg.Call(context.Background(), "add_event", map[string]any{
+		"contextId": id, "type": "user_note", "summary": "checked the staging deploy",
+	}, Ctx{})
+	if err != nil {
+		t.Fatalf("add_event: %v", err)
+	}
+	if out.(map[string]any)["id"] == "" {
+		t.Fatalf("add_event should return the new event id, got %v", out)
+	}
+	if tool, _ := reg.Get("add_event"); !tool.Write {
+		t.Fatal("add_event must be a write tool")
+	}
+}

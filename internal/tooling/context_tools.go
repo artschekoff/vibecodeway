@@ -3,6 +3,9 @@ package tooling
 import (
 	"context"
 	"fmt"
+	"time"
+
+	appstore "github.com/artschekoff/context-consolidator/internal/store"
 )
 
 // maxContextHits caps how many contexts search_contexts returns to keep tool
@@ -257,6 +260,88 @@ func registerContextTools(r *Registry, d Deps) {
 				out = append(out, relationBrief{TargetContextID: rel.TargetID, TargetKey: rel.TargetKey, RelationType: rel.RelationType})
 			}
 			return map[string]any{"count": len(out), "related": out}, nil
+		},
+	})
+
+	r.Register(Tool{
+		Name:        "edit_context",
+		Description: "Edit a context's scalar attributes. Provide only the fields to change; omitted fields are left as-is. status is 'active' or 'archived'.",
+		Write:       true,
+		Params: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"contextId": strProp("the context id"),
+				"key":       strProp("new key (optional)"),
+				"status":    strProp("active | archived (optional)"),
+			},
+			"required": []string{"contextId"},
+		},
+		Handler: func(ctx context.Context, args map[string]any, _ Ctx) (any, error) {
+			id := strArg(args, "contextId")
+			if id == "" {
+				return nil, fmt.Errorf("contextId is required")
+			}
+			cur, err := d.Store.GetContext(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			key, status := strArg(args, "key"), strArg(args, "status")
+			if key == "" {
+				key = cur.Key
+			}
+			if status == "" {
+				status = cur.Status
+			}
+			if status != "active" && status != "archived" {
+				return nil, fmt.Errorf("status must be 'active' or 'archived'")
+			}
+			updated, err := d.Store.UpdateContext(ctx, id, key, status)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"id": updated.ID, "key": updated.Key, "status": updated.Status}, nil
+		},
+	})
+
+	r.Register(Tool{
+		Name:        "add_event",
+		Description: "Append a timeline event to a context (e.g. a decision, status update, or note). type is one of the event categories; summary is a short human sentence.",
+		Write:       true,
+		Params: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"contextId":    strProp("the context id"),
+				"type":         strProp("event type, e.g. user_note | decision_made | status_update | blocker_identified"),
+				"summary":      strProp("1-2 sentence summary of what happened"),
+				"sourceType":   strProp("jira | slack | github | chat | user (default user)"),
+				"author":       strProp("who/what produced the event (optional)"),
+				"rawReference": strProp("original text or URL (optional)"),
+			},
+			"required": []string{"contextId", "type", "summary"},
+		},
+		Handler: func(ctx context.Context, args map[string]any, _ Ctx) (any, error) {
+			ev := appstore.Event{
+				ContextID:    strArg(args, "contextId"),
+				Type:         strArg(args, "type"),
+				Summary:      strArg(args, "summary"),
+				SourceType:   strArg(args, "sourceType"),
+				Author:       strArg(args, "author"),
+				RawReference: strArg(args, "rawReference"),
+			}
+			if ev.ContextID == "" || ev.Type == "" || ev.Summary == "" {
+				return nil, fmt.Errorf("contextId, type and summary are required")
+			}
+			if ev.SourceType == "" {
+				ev.SourceType = appstore.EventSourceUser
+			}
+			if ev.Timestamp == "" {
+				ev.Timestamp = time.Now().UTC().Format(time.RFC3339)
+			}
+			saved, err := d.Store.AddEvent(ctx, ev)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"id": saved.ID, "type": saved.Type, "summary": saved.Summary, "timestamp": saved.Timestamp}, nil
 		},
 	})
 }

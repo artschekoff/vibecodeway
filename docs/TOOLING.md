@@ -79,3 +79,38 @@ List contexts related to the given context (dependencies / links), with the rela
 context-consolidator-cli agent-tool call --name list_related_contexts --args '{}'
 ```
 
+## edit_context
+
+Edit a context's scalar attributes. Provide only the fields to change; omitted fields are left as-is. status is 'active' or 'archived'.
+
+**Write:** yes
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `contextId` | string | yes | the context id |
+| `key` | string | no | new key (optional) |
+| `status` | string | no | active | archived (optional) |
+
+```sh
+context-consolidator-cli agent-tool call --name edit_context --args '{}'
+```
+
+## add_event
+
+Append a timeline event to a context (e.g. a decision, status update, or note). type is one of the event categories; summary is a short human sentence.
+
+**Write:** yes
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `author` | string | no | who/what produced the event (optional) |
+| `contextId` | string | yes | the context id |
+| `rawReference` | string | no | original text or URL (optional) |
+| `sourceType` | string | no | jira | slack | github | chat | user (default user) |
+| `summary` | string | yes | 1-2 sentence summary of what happened |
+| `type` | string | yes | event type, e.g. user_note | decision_made | status_update | blocker_identified |
+
+```sh
+context-consolidator-cli agent-tool call --name add_event --args '{}'
+```
+
