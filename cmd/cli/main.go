@@ -31,6 +31,7 @@ func newRootCmd() *cobra.Command {
 	root.CompletionOptions.HiddenDefaultCmd = true
 
 	root.AddCommand(newDescribeCmd())
+	root.AddCommand(newAgentToolCmd())
 
 	// Text / file write
 	root.AddCommand(newAddTextCmd())

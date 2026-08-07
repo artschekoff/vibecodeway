@@ -17,6 +17,7 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/context-consolidator/internal/tooling"
 	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
 	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
@@ -83,6 +84,12 @@ func openServiceEnv() (*serviceEnv, error) {
 		openAI: openAI,
 		logger: logger,
 	}, nil
+}
+
+// toolRegistry builds the shared tool registry from this CLI's service env, so
+// the CLI mirrors exactly what the Ask AI agent can call.
+func (e *serviceEnv) toolRegistry() *tooling.Registry {
+	return tooling.NewRegistry(tooling.Deps{Store: e.store, Svc: e.svc, Logger: e.logger})
 }
 
 // resolveContextID returns the context UUID from --context-id or --context-key flags.
