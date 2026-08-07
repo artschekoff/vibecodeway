@@ -5,7 +5,7 @@ BUNDLE_NAME := ContextConsolidator
 
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: setup dev build build-desktop build-cli install-cli install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
+.PHONY: setup dev build build-desktop build-cli tooling-doc install-cli install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
 
 setup:
 	cd frontend && npm install
@@ -20,6 +20,10 @@ build-desktop:
 
 build-cli:
 	go build -o bin/context-consolidator-cli ./cmd/cli
+
+tooling-doc: build-cli
+	./bin/context-consolidator-cli agent-tool doc > docs/TOOLING.md
+	@echo "wrote docs/TOOLING.md"
 
 install-cli: build-cli
 	sudo install -m 755 $(CURDIR)/bin/$(APP_NAME)-cli $(INSTALL_DIR)/$(APP_NAME)-cli
