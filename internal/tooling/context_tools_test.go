@@ -77,6 +77,45 @@ func TestEditContextTool(t *testing.T) {
 	}
 }
 
+func TestListContextsTool(t *testing.T) {
+	store := newTestStore(t)
+	reg := NewRegistry(Deps{Store: store})
+	orgID := seedOrg(t, store)
+	seedContext(t, store, "ctx-a", orgID)
+	seedContext(t, store, "ctx-b", orgID)
+
+	out, err := reg.Call(context.Background(), "list_contexts", map[string]any{}, Ctx{OrgID: orgID})
+	if err != nil {
+		t.Fatalf("list_contexts: %v", err)
+	}
+	if out.(map[string]any)["count"].(int) != 2 {
+		t.Fatalf("expected 2 contexts, got %v", out)
+	}
+}
+
+func TestFindContextsByJiraStatusTool(t *testing.T) {
+	store := newTestStore(t)
+	reg := NewRegistry(Deps{Store: store})
+	orgID := seedOrg(t, store)
+	id := seedContext(t, store, "ctx-closed", orgID)
+	_, err := store.DB().ExecContext(context.Background(),
+		`INSERT INTO jira_issues (id, context_id, jira_key, summary, status, jira_updated, created_at)
+		 VALUES ('ji-1', ?, 'JH-1', 's', 'Closed', '', datetime('now'))`, id)
+	if err != nil {
+		t.Fatalf("seed issue: %v", err)
+	}
+
+	out, err := reg.Call(context.Background(), "find_contexts_by_jira_status",
+		map[string]any{"jiraStatus": "closed"}, Ctx{})
+	if err != nil {
+		t.Fatalf("find_contexts_by_jira_status: %v", err)
+	}
+	m := out.(map[string]any)
+	if m["count"].(int) != 1 {
+		t.Fatalf("expected 1 closed context, got %v", m)
+	}
+}
+
 func TestAddEventTool(t *testing.T) {
 	store := newTestStore(t)
 	reg := NewRegistry(Deps{Store: store})

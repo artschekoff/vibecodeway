@@ -114,6 +114,35 @@ Append a timeline event to a context (e.g. a decision, status update, or note). 
 context-consolidator-cli agent-tool call --name add_event --args '{}'
 ```
 
+## list_contexts
+
+List ALL contexts (not a keyword search) with their id, key and status. Use this to enumerate everything before filtering or bulk operations. By default only active contexts are returned; set includeArchived to include archived ones.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `includeArchived` | boolean | no | include archived contexts (default false) |
+| `status` | string | no | optional filter: active | archived |
+
+```sh
+context-consolidator-cli agent-tool call --name list_contexts --args '{}'
+```
+
+## find_contexts_by_jira_status
+
+Find every context that has at least one Jira issue in the given status (e.g. 'Closed', 'Done', 'In Progress'). Match is case-insensitive. Returns the matching contexts' id, key and status.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `jiraStatus` | string | yes | the Jira issue status to match, e.g. 'Closed' |
+
+```sh
+context-consolidator-cli agent-tool call --name find_contexts_by_jira_status --args '{}'
+```
+
 ## list_review_requests
 
 List open pull requests in a repo that are awaiting review from a user. Defaults to the authenticated user (@me); pass a login to see another user's requested reviews.

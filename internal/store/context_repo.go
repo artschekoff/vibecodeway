@@ -19,6 +19,27 @@ const (
 	contextStatusArchived = "archived"
 )
 
+// ListContextIDsByJiraStatus returns the distinct ids of contexts that have at
+// least one Jira issue whose status matches the given status (case-insensitive).
+// The join and filter run in SQLite so callers avoid scanning every context.
+func (s *Store) ListContextIDsByJiraStatus(ctx context.Context, status string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DISTINCT context_id FROM jira_issues WHERE LOWER(status) = LOWER(?)`, status)
+	if err != nil {
+		return nil, fmt.Errorf("list contexts by jira status: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // ListContexts returns contexts ordered by updated_at desc.
 // When includeArchived is false only active contexts are returned.
 // LastItemAt is the newest created_at across issues, comments, and slack threads.

@@ -23,6 +23,11 @@ func strArg(args map[string]any, k string) string {
 	return ""
 }
 
+func boolArg(args map[string]any, k string) bool {
+	b, _ := args[k].(bool)
+	return b
+}
+
 func truncate(s string) string {
 	if len(s) <= maxBodyChars {
 		return s
@@ -342,6 +347,72 @@ func registerContextTools(r *Registry, d Deps) {
 				return nil, err
 			}
 			return map[string]any{"id": saved.ID, "type": saved.Type, "summary": saved.Summary, "timestamp": saved.Timestamp}, nil
+		},
+	})
+
+	r.Register(Tool{
+		Name:        "list_contexts",
+		Description: "List ALL contexts (not a keyword search) with their id, key and status. Use this to enumerate everything before filtering or bulk operations. By default only active contexts are returned; set includeArchived to include archived ones.",
+		Params: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"includeArchived": map[string]any{"type": "boolean", "description": "include archived contexts (default false)"},
+				"status":          strProp("optional filter: active | archived"),
+			},
+		},
+		Handler: func(ctx context.Context, args map[string]any, tctx Ctx) (any, error) {
+			includeArchived := boolArg(args, "includeArchived")
+			statusFilter := strArg(args, "status")
+			if statusFilter == "archived" {
+				includeArchived = true
+			}
+			list, err := d.Store.ListContexts(ctx, includeArchived)
+			if err != nil {
+				return nil, err
+			}
+			hits := make([]contextHit, 0, len(list))
+			for _, c := range list {
+				if tctx.OrgID != "" && c.OrgID != tctx.OrgID {
+					continue
+				}
+				if statusFilter != "" && c.Status != statusFilter {
+					continue
+				}
+				hits = append(hits, contextHit{ContextID: c.ID, Key: c.Key, Status: c.Status})
+			}
+			return map[string]any{"count": len(hits), "contexts": hits}, nil
+		},
+	})
+
+	r.Register(Tool{
+		Name:        "find_contexts_by_jira_status",
+		Description: "Find every context that has at least one Jira issue in the given status (e.g. 'Closed', 'Done', 'In Progress'). Match is case-insensitive. Returns the matching contexts' id, key and status.",
+		Params: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"jiraStatus": strProp("the Jira issue status to match, e.g. 'Closed'")},
+			"required":   []string{"jiraStatus"},
+		},
+		Handler: func(ctx context.Context, args map[string]any, tctx Ctx) (any, error) {
+			status := strArg(args, "jiraStatus")
+			if status == "" {
+				return nil, fmt.Errorf("jiraStatus is required")
+			}
+			ids, err := d.Store.ListContextIDsByJiraStatus(ctx, status)
+			if err != nil {
+				return nil, err
+			}
+			hits := make([]contextHit, 0, len(ids))
+			for _, id := range ids {
+				c, err := d.Store.GetContext(ctx, id)
+				if err != nil {
+					continue
+				}
+				if tctx.OrgID != "" && c.OrgID != tctx.OrgID {
+					continue
+				}
+				hits = append(hits, contextHit{ContextID: c.ID, Key: c.Key, Status: c.Status})
+			}
+			return map[string]any{"count": len(hits), "contexts": hits}, nil
 		},
 	})
 }
