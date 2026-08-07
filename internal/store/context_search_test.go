@@ -67,6 +67,37 @@ func TestSearchContextIDs_JiraKeyAndRepo(t *testing.T) {
 	}
 }
 
+func TestSearchContexts_ReturnsOrgAndSummary(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "jiro")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "ENG-7", org.ID)
+	require.NoError(t, err)
+
+	jiraRepo := jirastore.NewRepo(s.DB())
+	_, err = jiraRepo.UpsertIssue(ctx, c.ID, "ENG-7", "Fix login bug", "todo", "", "bug", "", "", "", "")
+	require.NoError(t, err)
+
+	hits, err := s.SearchContexts(ctx, "ENG-7")
+	require.NoError(t, err)
+	require.NotEmpty(t, hits)
+
+	var hit *ContextSearchHit
+	for i := range hits {
+		if hits[i].ID == c.ID {
+			hit = &hits[i]
+			break
+		}
+	}
+	require.NotNil(t, hit, "seeded context should be found")
+	assert.Equal(t, "ENG-7", hit.Key)
+	assert.Equal(t, org.ID, hit.OrgID)
+	assert.Equal(t, "jiro", hit.OrgName)
+	assert.Equal(t, "Fix login bug", hit.Summary)
+}
+
 func TestSearchContextItems_ContentAndBuckets(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

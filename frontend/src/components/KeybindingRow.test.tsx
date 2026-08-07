@@ -78,7 +78,26 @@ describe("KeybindingRow", () => {
     await user.click(screen.getByRole("button", { name: /change/i }));
     await user.keyboard("{Meta>}{Shift>}x{/Shift}{/Meta}");
     await user.click(screen.getByRole("button", { name: /save/i }));
-    expect(onSave).toHaveBeenCalledWith("quick_attach", "cmd,shift", "x");
+    expect(onSave).toHaveBeenCalledWith("quick_attach", "cmd,shift", "x", "");
+  });
+
+  it("captures a base combo then a follow key as a sequence", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<KeybindingRow binding={makeBinding()} onSave={onSave} />);
+    await user.click(screen.getByRole("button", { name: /change/i }));
+    await user.keyboard("{Meta>}t{/Meta}");
+    await user.keyboard("h");
+    await user.click(screen.getByRole("button", { name: /save/i }));
+    expect(onSave).toHaveBeenCalledWith("quick_attach", "cmd", "t", "h");
+  });
+
+  it("Reset button calls onReset with the command", async () => {
+    const user = userEvent.setup();
+    const onReset = vi.fn();
+    render(<KeybindingRow binding={makeBinding()} onSave={vi.fn()} onReset={onReset} />);
+    await user.click(screen.getByRole("button", { name: /reset/i }));
+    expect(onReset).toHaveBeenCalledWith("quick_attach");
   });
 
   it("shows Cancel button alongside Save", async () => {

@@ -6,10 +6,10 @@ const ev = (o: Partial<KeyboardEvent>): KeyboardEvent =>
 
 describe("matchTerminalHotkey", () => {
   const cases: [string, Partial<KeyboardEvent>, TerminalHotkey | null][] = [
-    ["Cmd+T → new", { metaKey: true, key: "t", code: "KeyT" }, { kind: "new" }],
     ["Cmd+W → close", { metaKey: true, key: "w", code: "KeyW" }, { kind: "close" }],
-    ["Cmd+Shift+] → next (code, key is })", { metaKey: true, shiftKey: true, key: "}", code: "BracketRight" }, { kind: "next" }],
-    ["Cmd+Shift+[ → prev", { metaKey: true, shiftKey: true, key: "{", code: "BracketLeft" }, { kind: "prev" }],
+    // ⌘T (new) and ⌘⇧] / ⌘⇧[ (next/prev) now belong to the hotkey layer, not here.
+    ["Cmd+T → nothing (layer owns it)", { metaKey: true, key: "t", code: "KeyT" }, null],
+    ["Cmd+Shift+] → nothing (layer owns it)", { metaKey: true, shiftKey: true, key: "}", code: "BracketRight" }, null],
     ["Ctrl+Tab → next", { ctrlKey: true, key: "Tab", code: "Tab" }, { kind: "next" }],
     ["Ctrl+Shift+Tab → prev", { ctrlKey: true, shiftKey: true, key: "Tab", code: "Tab" }, { kind: "prev" }],
     ["Ctrl+1 → jump 0", { ctrlKey: true, key: "1", code: "Digit1" }, { kind: "jump", index: 0 }],

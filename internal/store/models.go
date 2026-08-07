@@ -181,6 +181,16 @@ type ContextUploadedFile struct {
 	IsActive      bool   `json:"isActive"`
 }
 
+// ContextSearchHit is a single cross-org search result for the global search
+// palette. Summary is the primary Jira issue's summary (empty when none).
+type ContextSearchHit struct {
+	ID      string `json:"id"`
+	Key     string `json:"key"`
+	OrgID   string `json:"orgId"`
+	OrgName string `json:"orgName"`
+	Summary string `json:"summary"`
+}
+
 // ContextRelation is a typed directional link from one context to another.
 // TargetKey, TargetOrgID, and TargetOrgName are denormalized from the target context row for display.
 type ContextRelation struct {

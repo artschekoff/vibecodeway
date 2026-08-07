@@ -420,6 +420,57 @@ func (s *Store) SearchContextIDs(ctx context.Context, query string) ([]string, e
 	return s.searchContextIDsLike(ctx, query)
 }
 
+// SearchContexts returns ranked cross-org search hits (id, key, org, primary
+// summary) for the global search palette. Ranking mirrors SearchContextIDs.
+func (s *Store) SearchContexts(ctx context.Context, query string) ([]ContextSearchHit, error) {
+	ids, err := s.SearchContextIDs(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT c.id, c.key, COALESCE(c.org_id, ''), COALESCE(o.name, ''), COALESCE(ji.summary, '')
+		FROM contexts c
+		LEFT JOIN organizations o ON o.id = c.org_id
+		LEFT JOIN jira_issues ji ON ji.context_id = c.id AND ji.jira_key = c.key
+		WHERE c.id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("search contexts detail: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	byID := make(map[string]ContextSearchHit, len(ids))
+	for rows.Next() {
+		var h ContextSearchHit
+		if err := rows.Scan(&h.ID, &h.Key, &h.OrgID, &h.OrgName, &h.Summary); err != nil {
+			return nil, err
+		}
+		byID[h.ID] = h
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Preserve the BM25 ranking order from SearchContextIDs.
+	hits := make([]ContextSearchHit, 0, len(ids))
+	for _, id := range ids {
+		if h, ok := byID[id]; ok {
+			hits = append(hits, h)
+		}
+	}
+	return hits, nil
+}
+
 // searchContextIDsLike is a substring fallback used when FTS5 returns nothing.
 // Searches context key, jira key/summary, and repo owner+name.
 func (s *Store) searchContextIDsLike(ctx context.Context, query string) ([]string, error) {

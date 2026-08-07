@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Copy, Check } from "lucide-react";
 import { GetContextChanges, RefreshContext, RefreshContextPRs } from "../../wailsjs/go/main/App";
 import { TerminalPanel } from "../components/editor/TerminalPanel";
@@ -10,6 +10,9 @@ import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { nextPaneSize, readStoredPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
 import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
+import { EditorFocusProvider, useEditorFocus } from "../contexts/EditorFocusContext";
+import { useHotkey } from "../hotkeys/HotkeyProvider";
+import { useRovingTab } from "../hotkeys/useRovingTab";
 import { editorModeForKey, editorModeLabel } from "../lib/contextMode";
 
 const SIDEBAR_KEY = "context-consolidator:editor:sidebarWidth";
@@ -22,7 +25,23 @@ const TERMINAL_MIN = 90;
 const TERMINAL_MAX = 900;
 const TERMINAL_DEFAULT = 260;
 
-export function EditorWorkspace({ contextId, contextKey, initialCwd }: { contextId: string; contextKey?: string; initialCwd?: string }) {
+export function EditorWorkspace(props: { contextId: string; contextKey?: string; initialCwd?: string }) {
+  return (
+    <EditorSettingsProvider>
+      <EditorFocusProvider>
+        <EditorWorkspaceInner {...props} />
+      </EditorFocusProvider>
+    </EditorSettingsProvider>
+  );
+}
+
+function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId: string; contextKey?: string; initialCwd?: string }) {
+  const { active: activeZone, register: registerZone } = useEditorFocus();
+  // ponytail: roving Tab only on the sidebar (buttons + tree). The editor and
+  // terminal zones host Monaco/xterm, which own Tab natively — hijacking it there
+  // would break indent and terminal completion.
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  useRovingTab(sidebarRef, { order: "ttb-rtl" });
   const [repoPaths, setRepoPaths] = useState<{ id: string; name: string; path: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
   const [refreshSignal, setRefreshSignal] = useState(0);
@@ -43,6 +62,12 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
   );
   useEffect(() => { localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth)); }, [sidebarWidth]);
   useEffect(() => { localStorage.setItem(TERMINAL_KEY, String(terminalHeight)); }, [terminalHeight]);
+
+  // Sidebar FILES/GIT switch (⌘⇧] / ⌘⇧[). Scope "editor" so the same chord
+  // routes to terminal.next/prev instead when the terminal zone is focused.
+  const toggleSidebar = () => setSidebarTab((t) => (t === "files" ? "git" : "files"));
+  useHotkey("sidebar.next", toggleSidebar, { scope: "editor" });
+  useHotkey("sidebar.prev", toggleSidebar, { scope: "editor" });
 
   useEffect(() => {
     let active = true;
@@ -102,10 +127,11 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
   const activeRepoId = activeRepo?.id;
 
   return (
-    <EditorSettingsProvider>
     <div style={{ display: "flex", height: "100%", flex: 1, minWidth: 0, width: "100%" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div ref={(el) => registerZone("editor", el)} tabIndex={-1}
+          className={activeZone === "editor" ? "zone--active" : undefined}
+          style={{ flex: 1, minHeight: 0 }}>
           {active ? (
             <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} baseMode={active.baseMode} refreshSignal={refreshSignal}
               onSaved={() => { /* panel auto-polls */ }}
@@ -119,7 +145,9 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
           ariaLabel="resize terminal"
           onResize={(dy) => setTerminalHeight((h) => nextPaneSize(h, -dy, TERMINAL_MIN, TERMINAL_MAX))}
         />
-        <div style={{ height: terminalHeight, borderTop: "1px solid var(--border)" }}>
+        <div ref={(el) => registerZone("terminal", el)} tabIndex={-1}
+          className={activeZone === "terminal" ? "zone--active" : undefined}
+          style={{ height: terminalHeight, borderTop: "1px solid var(--border)" }}>
           {cwd ? <TerminalPanel spawnCwd={cwd} contextName={contextKey} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
         </div>
       </div>
@@ -128,7 +156,9 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
         ariaLabel="resize sidebar"
         onResize={(dx) => setSidebarWidth((w) => nextPaneSize(w, -dx, SIDEBAR_MIN, SIDEBAR_MAX))}
       />
-      <aside style={{ width: sidebarWidth, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <aside ref={(el) => { sidebarRef.current = el; registerZone("sidebar", el); }} tabIndex={-1}
+        className={activeZone === "sidebar" ? "zone--active" : undefined}
+        style={{ width: sidebarWidth, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         {contextKey && (
           <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
@@ -211,6 +241,5 @@ export function EditorWorkspace({ contextId, contextKey, initialCwd }: { context
         )}
       </aside>
     </div>
-    </EditorSettingsProvider>
   );
 }

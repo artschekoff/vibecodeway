@@ -6703,3 +6703,212 @@ select {
   color: var(--text-muted, #8a88be);
   font-style: italic;
 }
+
+/* ── Hotkey help modal (⌘H) ──────────────────────────────────────────────── */
+
+.hotkey-help-modal {
+  height: 70vh;
+}
+
+.hotkey-help-filter {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.hotkey-help-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hotkey-help-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.hotkey-help-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.hotkey-help-row--highlighted {
+  background: var(--surface2);
+}
+
+.hotkey-help-chord {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.hotkey-help-path {
+  color: var(--text);
+}
+
+.hotkey-help-label {
+  display: none;
+}
+
+.hotkey-help-description {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.hotkey-help-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 20px 0;
+  text-align: center;
+}
+
+/* Global search palette (Cmd+F) */
+.global-search-modal {
+  width: min(640px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.global-search-input {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.global-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.global-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.global-search-row--highlighted {
+  background: var(--surface2);
+}
+
+.global-search-org {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+
+.global-search-key {
+  flex: none;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.global-search-summary {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-search-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 20px 0;
+  text-align: center;
+}
+
+/* Editor open picker (Cmd+E) */
+.editor-open-picker {
+  width: min(560px, 92vw);
+}
+
+.editor-open-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.editor-open-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.editor-open-row--highlighted {
+  background: var(--surface2);
+}
+
+.editor-open-repo {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.editor-open-branch {
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+}
+
+.editor-open-path {
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-open-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 10px 0 16px;
+}
+
+.chord-hint {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+/* Active editor zone (Ctrl+arrow focus) gets a bright inset border. */
+.zone--active {
+  outline: 2px solid var(--accent, #7aa2f7);
+  outline-offset: -2px;
+}
+
+/* Keyboard-selected file-tree row. */
+.file-row--active {
+  outline: 1px solid var(--accent, #7aa2f7);
+  background: color-mix(in srgb, var(--accent, #7aa2f7) 14%, transparent);
+}

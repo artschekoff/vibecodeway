@@ -16,6 +16,11 @@ const { TerminalWrite, ListTerminalCommands } = vi.hoisted(() => ({
 vi.mock("../../../wailsjs/go/main/App", () => ({ TerminalWrite, ListTerminalCommands }));
 
 import { TerminalPanel, tabLabel } from "./TerminalPanel";
+import { HotkeyProvider } from "../../hotkeys/HotkeyProvider";
+
+const Wrap = ({ children }: { children: React.ReactNode }) => (
+  <HotkeyProvider platform="darwin">{children}</HotkeyProvider>
+);
 
 describe("tabLabel", () => {
   it("prepends the repo name for a worktree path", () => {
@@ -38,7 +43,7 @@ beforeEach(() => {
 
 describe("TerminalPanel command selector", () => {
   it("substitutes <context-name> and types the command without Enter", async () => {
-    render(<TerminalPanel spawnCwd="/r/api" contextName="tell-us-more-fin" />);
+    render(<TerminalPanel spawnCwd="/r/api" contextName="tell-us-more-fin" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getByTestId("term")).toBeInTheDocument());
     const select = await screen.findByLabelText("Insert terminal command");
     fireEvent.change(select, { target: { value: "c1" } });
@@ -48,7 +53,7 @@ describe("TerminalPanel command selector", () => {
   });
 
   it("appends Enter (\\r) when the command has sendEnter", async () => {
-    render(<TerminalPanel spawnCwd="/r/api" contextName="ctx" />);
+    render(<TerminalPanel spawnCwd="/r/api" contextName="ctx" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getByTestId("term")).toBeInTheDocument());
     const select = await screen.findByLabelText("Insert terminal command");
     fireEvent.change(select, { target: { value: "c2" } });

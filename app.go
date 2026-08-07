@@ -305,6 +305,12 @@ func (a *App) SearchContextIDs(query string) ([]string, error) {
 	return a.db.SearchContextIDs(a.ctx, query)
 }
 
+// SearchContexts returns ranked cross-org search hits (id, key, org, primary
+// summary) for the global search palette.
+func (a *App) SearchContexts(query string) ([]appstore.ContextSearchHit, error) {
+	return a.db.SearchContexts(a.ctx, query)
+}
+
 // SearchContextItems returns the elements inside a single context whose indexed
 // text matches the query, grouped by element type. Powers the in-context filter.
 func (a *App) SearchContextItems(contextID, query string) (*appstore.ContextItemMatches, error) {

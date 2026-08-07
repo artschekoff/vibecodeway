@@ -15,6 +15,10 @@ import { BgRefreshToast } from "./components/BgRefreshToast";
 import { EventsOn, EventsOff, SendNotification, InitializeNotifications, Environment } from "../wailsjs/runtime/runtime";
 import { hookNotificationOptions, type HookNotifyPayload } from "./lib/hookNotify";
 import { HotkeyProvider } from "./hotkeys/HotkeyProvider";
+import { HotkeyHelpModal } from "./components/HotkeyHelpModal";
+import { GlobalSearchModal } from "./components/GlobalSearchModal";
+import { GlobalHotkeys } from "./components/GlobalHotkeys";
+import { EditorOpenPicker } from "./components/EditorOpenPicker";
 import type { Platform } from "./hotkeys/chord";
 import type { Keybinding } from "./types";
 import "./style.css";
@@ -169,8 +173,12 @@ function App() {
           <EditorFilesProvider>
             <AppShell />
           </EditorFilesProvider>
+          <GlobalHotkeys />
+          <GlobalSearchModal />
+          <EditorOpenPicker />
         </TabProvider>
       </PassphraseProvider>
+      <HotkeyHelpModal />
     </HotkeyProvider>
   );
 }

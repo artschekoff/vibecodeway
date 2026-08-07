@@ -374,6 +374,8 @@ export function SaveRepoFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
+export function SearchContexts(arg1:string):Promise<Array<store.ContextSearchHit>>;
+
 export function SearchContextItems(arg1:string,arg2:string):Promise<store.ContextItemMatches>;
 
 export function SearchJQL(arg1:string):Promise<Array<jira.SearchResult>>;

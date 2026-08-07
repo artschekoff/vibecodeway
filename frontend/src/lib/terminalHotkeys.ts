@@ -1,19 +1,15 @@
-// Terminal hotkeys mirroring cmux's "surface" (tab) keymap, scoped to the
-// terminal panel. Split-pane / workspace bindings don't apply — our terminals
-// are flat tabs. Reference: https://cmux.com/docs/keyboard-shortcuts
+// Residual terminal-panel keymap for the bindings the hotkey LAYER does not own.
+// ⌘T (new / here / insert), ⌘⇧] / ⌘⇧[ (next / prev) now go through the rebindable
+// hotkey layer (registry `terminal.*` + useHotkey). This keeps the cmux keys that
+// have no layer command yet, matched here on the panel's capture listener:
 //
-//   ⌘T                 new terminal
 //   ⌘W                 close active terminal
-//   ⌘⇧] / ⌃Tab         next terminal
-//   ⌘⇧[ / ⌃⇧Tab        previous terminal
+//   ⌃Tab               next terminal
+//   ⌃⇧Tab              previous terminal
 //   ⌃1–8               jump to terminal 1–8
 //   ⌃9                 jump to last terminal
-//
-// Bracket keys are matched by e.code (BracketRight/Left) because Shift turns
-// "]"/"[" into "}"/"{" in e.key.
 
 export type TerminalHotkey =
-  | { kind: "new" }
   | { kind: "close" }
   | { kind: "next" }
   | { kind: "prev" }
@@ -26,13 +22,10 @@ export function matchTerminalHotkey(e: KeyLike): TerminalHotkey | null {
   const meta = e.metaKey && !e.ctrlKey && !e.altKey;
   const ctrl = e.ctrlKey && !e.metaKey && !e.altKey;
 
-  if (meta && !e.shiftKey && e.key.toLowerCase() === "t") return { kind: "new" };
   if (meta && !e.shiftKey && e.key.toLowerCase() === "w") return { kind: "close" };
 
-  if ((meta && e.shiftKey && e.code === "BracketRight") || (ctrl && !e.shiftKey && e.code === "Tab"))
-    return { kind: "next" };
-  if ((meta && e.shiftKey && e.code === "BracketLeft") || (ctrl && e.shiftKey && e.code === "Tab"))
-    return { kind: "prev" };
+  if (ctrl && !e.shiftKey && e.code === "Tab") return { kind: "next" };
+  if (ctrl && e.shiftKey && e.code === "Tab") return { kind: "prev" };
 
   if (ctrl && !e.shiftKey && /^[1-9]$/.test(e.key)) {
     const d = parseInt(e.key, 10);

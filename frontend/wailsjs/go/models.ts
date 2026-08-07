@@ -1450,6 +1450,26 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
+	export class ContextSearchHit {
+	    id: string;
+	    key: string;
+	    orgId: string;
+	    orgName: string;
+	    summary: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ContextSearchHit(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.key = source["key"];
+	        this.orgId = source["orgId"];
+	        this.orgName = source["orgName"];
+	        this.summary = source["summary"];
+	    }
+	}
 	export class StatusLogEntry {
 	    id: string;
 	    contextId: string;

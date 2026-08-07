@@ -205,10 +205,10 @@ export function HotkeyProvider({
       const token = eventToToken(e, platform);
       if (!token) return;
 
-      const typing = isTypingTarget(e.target);
-      if (typing && !token.mod && !token.ctrl) return;
-
       // Step 2: leader window pending — this key selects the sequence child.
+      // Resolved BEFORE the typing-target guard: a pending leader means the user
+      // already committed to a chord (e.g. ⌘T then H in a focused terminal), so
+      // the plain follow-key must resolve it even though the target is "typing".
       if (leaderPendingRef.current) {
         const pending = leaderPendingRef.current;
         const child = pending.children.find((b) => b.sequence === token.key);
@@ -225,6 +225,9 @@ export function HotkeyProvider({
         if (pending.defaultBinding) fire(pending.defaultBinding);
         return;
       }
+
+      const typing = isTypingTarget(e.target);
+      if (typing && !token.mod && !token.ctrl) return;
 
       // Step 3: look up this chord as a potential lead. A single physical
       // chord can be shared by bindings from entirely unrelated objects
@@ -371,10 +374,13 @@ export function useHotkeyScope(scope: Scope, active: boolean): void {
 
 /** Live display chord for a command id (reflects rebinds). */
 export function useChordHint(commandId: string): string {
-  const { keymapById, platform } = useHotkeyContext();
-  const binding = keymapById.get(commandId);
+  // Display-only: degrade to "" outside a provider so action buttons carrying a
+  // <ChordHint> can render in trees (and tests) that don't mount HotkeyProvider.
+  const ctx = useContext(HotkeyContext);
+  if (!ctx) return "";
+  const binding = ctx.keymapById.get(commandId);
   if (!binding) return "";
-  return formatChord(binding.chord, platform) + (binding.sequence ? ` ${binding.sequence.toUpperCase()}` : "");
+  return formatChord(binding.chord, ctx.platform) + (binding.sequence ? ` ${binding.sequence.toUpperCase()}` : "");
 }
 
 /** Full command list with resolved display chords, for the help modal. */

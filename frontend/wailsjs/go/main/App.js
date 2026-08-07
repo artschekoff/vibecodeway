@@ -730,6 +730,10 @@ export function SearchContextIDs(arg1) {
   return window['go']['main']['App']['SearchContextIDs'](arg1);
 }
 
+export function SearchContexts(arg1) {
+  return window['go']['main']['App']['SearchContexts'](arg1);
+}
+
 export function SearchContextItems(arg1, arg2) {
   return window['go']['main']['App']['SearchContextItems'](arg1, arg2);
 }
