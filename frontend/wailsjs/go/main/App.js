@@ -698,6 +698,10 @@ export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
 }
 
+export function ResolveToolConfirmation(arg1, arg2) {
+  return window['go']['main']['App']['ResolveToolConfirmation'](arg1, arg2);
+}
+
 export function ReviewPRWithAI(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ReviewPRWithAI'](arg1, arg2, arg3, arg4);
 }

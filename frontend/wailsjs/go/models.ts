@@ -52,6 +52,7 @@ export namespace agent {
 	export class ToolInfo {
 	    name: string;
 	    description: string;
+	    write: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolInfo(source);
@@ -61,6 +62,7 @@ export namespace agent {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.write = source["write"];
 	    }
 	}
 
@@ -76,6 +78,7 @@ export namespace jira {
 	    issuetype: string;
 	    priority: string;
 	    created: string;
+	    org: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchResult(source);
@@ -90,6 +93,7 @@ export namespace jira {
 	        this.issuetype = source["issuetype"];
 	        this.priority = source["priority"];
 	        this.created = source["created"];
+	        this.org = source["org"];
 	    }
 	}
 

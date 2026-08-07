@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Send, Loader2, Wrench } from "lucide-react";
-import { AskAI, ListOrganizations, ListAgentTools } from "../../wailsjs/go/main/App";
+import { AskAI, ListOrganizations, ListAgentTools, ResolveToolConfirmation } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { agent } from "../../wailsjs/go/models";
 import type { Organization } from "../types";
 
-type ProgressEvent = { phase: string; tool?: string; args?: string; result?: string };
+type ProgressEvent = { phase: string; tool?: string; args?: string; result?: string; callId?: string };
+type PendingConfirm = { tool: string; args: string; callId: string };
 
 export default function AskAIPage() {
   const [question, setQuestion] = useState("");
@@ -15,7 +16,8 @@ export default function AskAIPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgID, setOrgID] = useState("");
   const [progress, setProgress] = useState<ProgressEvent[]>([]);
-  const [tools, setTools] = useState<{ name: string; description: string }[]>([]);
+  const [tools, setTools] = useState<{ name: string; description: string; write?: boolean }[]>([]);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
 
   useEffect(() => {
     ListOrganizations().then((list) => setOrgs(list ?? [])).catch(() => {});
@@ -27,6 +29,12 @@ export default function AskAIPage() {
 
   useEffect(() => {
     const off = EventsOn("ask:progress", (ev: ProgressEvent) => {
+      if (ev.phase === "confirm" && ev.callId) {
+        setPendingConfirm({ tool: ev.tool ?? "", args: ev.args ?? "", callId: ev.callId });
+        return;
+      }
+      // A tool event for the same call clears the pending prompt (approved or declined).
+      if (ev.phase === "tool") setPendingConfirm(null);
       setProgress((p) => [...p, ev]);
     });
     return () => {
@@ -42,6 +50,7 @@ export default function AskAIPage() {
     setError("");
     setAnswer(null);
     setProgress([]);
+    setPendingConfirm(null);
     try {
       const res = await AskAI(q, orgID);
       setAnswer(res);
@@ -107,11 +116,46 @@ export default function AskAIPage() {
             {tools.map((t) => (
               <div key={t.name} style={{ fontSize: 12 }}>
                 <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--text)" }}>{t.name}</span>
+                {t.write && (
+                  <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, padding: "1px 5px", borderRadius: 4, border: "1px solid var(--warning, #d9a441)", color: "var(--warning, #d9a441)" }}>
+                    WRITE
+                  </span>
+                )}
                 <div style={{ color: "var(--text-muted)" }}>{t.description}</div>
               </div>
             ))}
           </div>
         </details>
+      )}
+
+      {pendingConfirm && (
+        <div
+          style={{
+            marginTop: 12, padding: 12, border: "1px solid var(--warning, #d9a441)",
+            borderRadius: 8, background: "var(--bg-subtle, rgba(217,164,65,0.08))",
+          }}
+        >
+          <div style={{ fontSize: 13, marginBottom: 6 }}>
+            The assistant wants to run <strong style={{ fontFamily: "monospace" }}>{pendingConfirm.tool}</strong>, which changes data:
+          </div>
+          <pre style={{ fontSize: 12, background: "var(--bg, rgba(0,0,0,0.04))", padding: 8, borderRadius: 6, overflowX: "auto", margin: "0 0 8px" }}>
+            {pendingConfirm.args || "{}"}
+          </pre>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => { ResolveToolConfirmation(pendingConfirm.callId, true); setPendingConfirm(null); }}
+              style={{ fontSize: 13, padding: "5px 12px", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }}
+            >
+              Approve
+            </button>
+            <button
+              onClick={() => { ResolveToolConfirmation(pendingConfirm.callId, false); setPendingConfirm(null); }}
+              style={{ fontSize: 13, padding: "5px 12px", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {loading && progress.length > 0 && (

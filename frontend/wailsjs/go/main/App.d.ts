@@ -358,6 +358,8 @@ export function RemoveVCSBranch(arg1:string):Promise<void>;
 
 export function ResetAIPrompt(arg1:string):Promise<void>;
 
+export function ResolveToolConfirmation(arg1:string,arg2:boolean):Promise<void>;
+
 export function ReviewPRWithAI(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.ReviewPRResult>;
 
 export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:string):Promise<string>;

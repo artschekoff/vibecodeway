@@ -328,6 +328,12 @@ func (a *App) ListAgentTools() []agent.ToolInfo {
 	return a.agent.ToolCatalogue()
 }
 
+// ResolveToolConfirmation delivers the user's decision for a write tool the Ask
+// AI agent proposed. callID is the CallID from the "confirm" progress event.
+func (a *App) ResolveToolConfirmation(callID string, approved bool) {
+	a.agent.ResolveConfirmation(callID, approved)
+}
+
 // ToggleContextStatus flips a context between "active" and "archived".
 func (a *App) ToggleContextStatus(id string) (*appstore.Context, error) {
 	return a.cliRunner.ToggleContextStatus(a.ctx, id)

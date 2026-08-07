@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/artschekoff/context-consolidator/internal/openai"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
@@ -33,11 +34,53 @@ type Agent struct {
 	reg    *tooling.Registry
 	store  *appstore.Store // retained only for loadPrompt
 	logger *zap.Logger
+
+	mu      sync.Mutex
+	pending map[string]chan bool // write confirmations keyed by tool-call ID
 }
 
 // New builds an Agent from the shared LLM client, tool registry, and store.
 func New(ai *openai.Client, reg *tooling.Registry, store *appstore.Store, logger *zap.Logger) *Agent {
-	return &Agent{ai: ai, reg: reg, store: store, logger: logger}
+	return &Agent{ai: ai, reg: reg, store: store, logger: logger, pending: map[string]chan bool{}}
+}
+
+// registerConfirm creates and stores a pending-confirmation channel for a write
+// tool call. Registering BEFORE the confirm event is emitted means the frontend
+// can never resolve a call we aren't yet listening for.
+func (a *Agent) registerConfirm(callID string) chan bool {
+	ch := make(chan bool, 1)
+	a.mu.Lock()
+	if a.pending == nil {
+		a.pending = map[string]chan bool{}
+	}
+	a.pending[callID] = ch
+	a.mu.Unlock()
+	return ch
+}
+
+// ResolveConfirmation delivers the user's approve/cancel decision for a pending
+// write tool call. No-op if the call is unknown or already resolved.
+func (a *Agent) ResolveConfirmation(callID string, approved bool) {
+	a.mu.Lock()
+	ch := a.pending[callID]
+	delete(a.pending, callID)
+	a.mu.Unlock()
+	if ch != nil {
+		ch <- approved
+	}
+}
+
+// awaitConfirm blocks until the pending write is resolved or ctx ends.
+func (a *Agent) awaitConfirm(ctx context.Context, callID string, ch chan bool) bool {
+	select {
+	case ok := <-ch:
+		return ok
+	case <-ctx.Done():
+		a.mu.Lock()
+		delete(a.pending, callID)
+		a.mu.Unlock()
+		return false
+	}
 }
 
 // Step records a single tool invocation for observability / UI display.
@@ -54,12 +97,14 @@ type Answer struct {
 }
 
 // ProgressEvent is streamed during Ask so the UI can show the agent's work live.
-// Phase is "thinking" (about to call the model) or "tool" (a tool just ran).
+// Phase is "thinking" (about to call the model), "tool" (a tool just ran), or
+// "confirm" (a write tool is proposed and awaiting the user's decision).
 type ProgressEvent struct {
 	Phase  string `json:"phase"`
 	Tool   string `json:"tool,omitempty"`
 	Args   string `json:"args,omitempty"`
 	Result string `json:"result,omitempty"`
+	CallID string `json:"callId,omitempty"` // set on "confirm" so the UI can resolve it
 }
 
 // Ask runs the agent loop for a natural-language question and returns the answer
@@ -100,7 +145,19 @@ func (a *Agent) Ask(ctx context.Context, question, orgID string, onProgress func
 		}
 
 		for _, tc := range resp.ToolCalls {
-			result := a.dispatchTool(ctx, tc.Name, tc.Arguments, orgID)
+			var result string
+			if tool, ok := a.reg.Get(tc.Name); ok && tool.Write {
+				// Register the waiter before emitting so the UI can't resolve early.
+				ch := a.registerConfirm(tc.ID)
+				emit(ProgressEvent{Phase: "confirm", Tool: tc.Name, Args: tc.Arguments, CallID: tc.ID})
+				if a.awaitConfirm(ctx, tc.ID, ch) {
+					result = a.dispatchTool(ctx, tc.Name, tc.Arguments, orgID)
+				} else {
+					result = `{"status":"declined_by_user"}`
+				}
+			} else {
+				result = a.dispatchTool(ctx, tc.Name, tc.Arguments, orgID)
+			}
 			answer.Steps = append(answer.Steps, Step{Tool: tc.Name, Args: tc.Arguments, Result: result})
 			emit(ProgressEvent{Phase: "tool", Tool: tc.Name, Args: tc.Arguments, Result: result})
 			messages = append(messages, openai.Message{
