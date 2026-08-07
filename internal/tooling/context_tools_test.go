@@ -116,6 +116,32 @@ func TestFindContextsByJiraStatusTool(t *testing.T) {
 	}
 }
 
+func TestArchiveContextsTool(t *testing.T) {
+	store := newTestStore(t)
+	reg := NewRegistry(Deps{Store: store})
+	orgID := seedOrg(t, store)
+	a := seedContext(t, store, "ctx-a", orgID)
+	b := seedContext(t, store, "ctx-b", orgID)
+
+	out, err := reg.Call(context.Background(), "archive_contexts",
+		map[string]any{"contextIds": []any{a, b}}, Ctx{})
+	if err != nil {
+		t.Fatalf("archive_contexts: %v", err)
+	}
+	m := out.(map[string]any)
+	if m["archived"].(int) != 2 {
+		t.Fatalf("expected 2 archived, got %v", m)
+	}
+	if tool, _ := reg.Get("archive_contexts"); !tool.Write {
+		t.Fatal("archive_contexts must be a write tool")
+	}
+	// Empty array errors.
+	if _, err := reg.Call(context.Background(), "archive_contexts",
+		map[string]any{"contextIds": []any{}}, Ctx{}); err == nil {
+		t.Fatal("empty contextIds must error")
+	}
+}
+
 func TestAddEventTool(t *testing.T) {
 	store := newTestStore(t)
 	reg := NewRegistry(Deps{Store: store})

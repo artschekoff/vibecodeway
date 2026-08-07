@@ -143,6 +143,20 @@ Find every context that has at least one Jira issue in the given status (e.g. 'C
 context-consolidator-cli agent-tool call --name find_contexts_by_jira_status --args '{}'
 ```
 
+## archive_contexts
+
+Archive (deactivate) multiple contexts at once by id. Skips any that are already archived. Returns how many were changed. Use find_contexts_by_jira_status or list_contexts first to gather the ids.
+
+**Write:** yes
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `contextIds` | array | yes | the context ids to archive |
+
+```sh
+context-consolidator-cli agent-tool call --name archive_contexts --args '{}'
+```
+
 ## list_review_requests
 
 List open pull requests in a repo that are awaiting review from a user. Defaults to the authenticated user (@me); pass a login to see another user's requested reviews.

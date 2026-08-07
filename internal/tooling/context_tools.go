@@ -28,6 +28,21 @@ func boolArg(args map[string]any, k string) bool {
 	return b
 }
 
+// strSliceArg reads a JSON array of strings (arrives as []any after unmarshal).
+func strSliceArg(args map[string]any, k string) []string {
+	raw, ok := args[k].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		if s, ok := v.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func truncate(s string) string {
 	if len(s) <= maxBodyChars {
 		return s
@@ -413,6 +428,34 @@ func registerContextTools(r *Registry, d Deps) {
 				hits = append(hits, contextHit{ContextID: c.ID, Key: c.Key, Status: c.Status})
 			}
 			return map[string]any{"count": len(hits), "contexts": hits}, nil
+		},
+	})
+
+	r.Register(Tool{
+		Name:        "archive_contexts",
+		Description: "Archive (deactivate) multiple contexts at once by id. Skips any that are already archived. Returns how many were changed. Use find_contexts_by_jira_status or list_contexts first to gather the ids.",
+		Write:       true,
+		Params: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"contextIds": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "the context ids to archive",
+				},
+			},
+			"required": []string{"contextIds"},
+		},
+		Handler: func(ctx context.Context, args map[string]any, _ Ctx) (any, error) {
+			ids := strSliceArg(args, "contextIds")
+			if len(ids) == 0 {
+				return nil, fmt.Errorf("contextIds must be a non-empty array of ids")
+			}
+			n, err := d.Store.ArchiveContexts(ctx, ids)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"archived": n, "requested": len(ids)}, nil
 		},
 	})
 }

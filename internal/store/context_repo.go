@@ -19,6 +19,42 @@ const (
 	contextStatusArchived = "archived"
 )
 
+// ArchiveContexts sets status='archived' for each of the given context ids in a
+// single transaction. Already-archived contexts are skipped. Returns the number
+// of contexts actually changed.
+func (s *Store) ArchiveContexts(ctx context.Context, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin archive tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	stmt, err := tx.PrepareContext(ctx,
+		`UPDATE contexts SET status = ?, updated_at = ? WHERE id = ? AND status <> ?`)
+	if err != nil {
+		return 0, fmt.Errorf("prepare archive: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	total := 0
+	for _, id := range ids {
+		res, err := stmt.ExecContext(ctx, contextStatusArchived, now, id, contextStatusArchived)
+		if err != nil {
+			return 0, fmt.Errorf("archive %s: %w", id, err)
+		}
+		n, _ := res.RowsAffected()
+		total += int(n)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit archive: %w", err)
+	}
+	return total, nil
+}
+
 // ListContextIDsByJiraStatus returns the distinct ids of contexts that have at
 // least one Jira issue whose status matches the given status (case-insensitive).
 // The join and filter run in SQLite so callers avoid scanning every context.
