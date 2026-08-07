@@ -533,6 +533,47 @@ func (r *Runner) ListChangesRequestedForUser(ctx context.Context, owner, repo, l
 	return parseGHPRList(out, "changes requested PRs")
 }
 
+// prReviewArgs builds the `gh pr review` argv for a review action. action is one
+// of "--approve", "--request-changes", "--comment". body is appended only when set.
+func prReviewArgs(owner, repo string, number int, action, body string) []string {
+	args := []string{"pr", "review", strconv.Itoa(number), "--repo", owner + "/" + repo, action}
+	if body != "" {
+		args = append(args, "--body", body)
+	}
+	return args
+}
+
+// ApprovePR submits an approving review on a PR, with an optional message.
+func (r *Runner) ApprovePR(ctx context.Context, owner, repo string, number int, body string) error {
+	if _, err := r.run(ctx, prReviewArgs(owner, repo, number, "--approve", body)); err != nil {
+		return fmt.Errorf("gh pr review --approve: %w", err)
+	}
+	return nil
+}
+
+// RequestChangesPR submits a changes-requested review on a PR. GitHub requires a
+// message for this action, so body must be non-empty.
+func (r *Runner) RequestChangesPR(ctx context.Context, owner, repo string, number int, body string) error {
+	if strings.TrimSpace(body) == "" {
+		return fmt.Errorf("a message is required to request changes")
+	}
+	if _, err := r.run(ctx, prReviewArgs(owner, repo, number, "--request-changes", body)); err != nil {
+		return fmt.Errorf("gh pr review --request-changes: %w", err)
+	}
+	return nil
+}
+
+// CommentPR submits a review comment (no approval state) on a PR. body required.
+func (r *Runner) CommentPR(ctx context.Context, owner, repo string, number int, body string) error {
+	if strings.TrimSpace(body) == "" {
+		return fmt.Errorf("a message is required to comment")
+	}
+	if _, err := r.run(ctx, prReviewArgs(owner, repo, number, "--comment", body)); err != nil {
+		return fmt.Errorf("gh pr review --comment: %w", err)
+	}
+	return nil
+}
+
 // annotateReReviews flags PRs whose authenticated-user review was dismissed (needs re-approval),
 // and returns the raw reviews payload fetched per PR so callers can reuse it (e.g. to derive
 // each reviewer's latest decision) without a second fetch of the same endpoint.

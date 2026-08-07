@@ -1,6 +1,23 @@
 package github
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestPRReviewArgs(t *testing.T) {
+	got := strings.Join(prReviewArgs("acme", "app", 7, "--approve", "LGTM"), " ")
+	if got != "pr review 7 --repo acme/app --approve --body LGTM" {
+		t.Fatalf("with body: got %q", got)
+	}
+	got = strings.Join(prReviewArgs("acme", "app", 7, "--approve", ""), " ")
+	if got != "pr review 7 --repo acme/app --approve" {
+		t.Fatalf("no body: got %q", got)
+	}
+	if strings.Contains(got, "--body") {
+		t.Fatal("empty body must not add --body flag")
+	}
+}
 
 func TestReviewRequestSearch(t *testing.T) {
 	if got := reviewRequestedSearch("@me"); got != "review-requested:@me draft:false" {

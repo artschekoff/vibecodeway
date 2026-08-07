@@ -17,6 +17,10 @@ type PRActions interface {
 	ListChangesRequestedForUser(ctx context.Context, owner, repo, login string) ([]vcs.PRData, error)
 	GetPRByNumber(ctx context.Context, owner, repo string, number int) (*vcs.PRData, error)
 	GetPRComments(ctx context.Context, owner, repo string, number int) ([]vcs.CommentData, error)
+
+	ApprovePR(ctx context.Context, owner, repo string, number int, body string) error
+	RequestChangesPR(ctx context.Context, owner, repo string, number int, body string) error
+	CommentPR(ctx context.Context, owner, repo string, number int, body string) error
 }
 
 // Deps are the dependencies every tool handler may close over.

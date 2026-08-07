@@ -181,4 +181,91 @@ func registerPRTools(r *Registry, d Deps) {
 			return map[string]any{"count": len(out), "comments": out}, nil
 		},
 	})
+
+	// prNum resolves the required repo + number for a write action.
+	prNum := func(args map[string]any) (owner, name string, num int, err error) {
+		owner, name, err = splitRepo(strArg(args, "repo"))
+		if err != nil {
+			return "", "", 0, err
+		}
+		num = intArg(args, "number")
+		if num <= 0 {
+			return "", "", 0, fmt.Errorf("number is required")
+		}
+		return owner, name, num, nil
+	}
+	writeParams := func(bodyDesc string, bodyRequired bool) map[string]any {
+		req := []string{"repo", "number"}
+		if bodyRequired {
+			req = append(req, "body")
+		}
+		return map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"repo":   strProp("repository as 'owner/name'"),
+				"number": numProp("the pull request number"),
+				"body":   strProp(bodyDesc),
+			},
+			"required": req,
+		}
+	}
+
+	r.Register(Tool{
+		Name:        "approve_pr",
+		Description: "Approve a pull request, optionally with a message. Submits an approving review as the authenticated user.",
+		Write:       true,
+		Params:      writeParams("approval message (optional)", false),
+		Handler: func(ctx context.Context, args map[string]any, _ Ctx) (any, error) {
+			owner, name, num, err := prNum(args)
+			if err != nil {
+				return nil, err
+			}
+			if err := d.VCS.ApprovePR(ctx, owner, name, num, strArg(args, "body")); err != nil {
+				return nil, err
+			}
+			return map[string]any{"status": "approved", "number": num}, nil
+		},
+	})
+
+	r.Register(Tool{
+		Name:        "request_changes_pr",
+		Description: "Request changes on a pull request with a required message explaining what needs to change. Submits a changes-requested review.",
+		Write:       true,
+		Params:      writeParams("what needs to change (required)", true),
+		Handler: func(ctx context.Context, args map[string]any, _ Ctx) (any, error) {
+			owner, name, num, err := prNum(args)
+			if err != nil {
+				return nil, err
+			}
+			body := strArg(args, "body")
+			if strings.TrimSpace(body) == "" {
+				return nil, fmt.Errorf("body is required to request changes")
+			}
+			if err := d.VCS.RequestChangesPR(ctx, owner, name, num, body); err != nil {
+				return nil, err
+			}
+			return map[string]any{"status": "changes_requested", "number": num}, nil
+		},
+	})
+
+	r.Register(Tool{
+		Name:        "comment_pr",
+		Description: "Leave a comment on a pull request (a review with no approval state). Requires a message.",
+		Write:       true,
+		Params:      writeParams("the comment text (required)", true),
+		Handler: func(ctx context.Context, args map[string]any, _ Ctx) (any, error) {
+			owner, name, num, err := prNum(args)
+			if err != nil {
+				return nil, err
+			}
+			body := strArg(args, "body")
+			if strings.TrimSpace(body) == "" {
+				return nil, fmt.Errorf("body is required to comment")
+			}
+			if err := d.VCS.CommentPR(ctx, owner, name, num, body); err != nil {
+				return nil, err
+			}
+			return map[string]any{"status": "commented", "number": num}, nil
+		},
+	})
 }

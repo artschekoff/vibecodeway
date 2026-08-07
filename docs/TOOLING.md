@@ -174,3 +174,51 @@ List the comments on a pull request (conversation, review bodies, and inline rev
 context-consolidator-cli agent-tool call --name get_pr_comments --args '{}'
 ```
 
+## approve_pr
+
+Approve a pull request, optionally with a message. Submits an approving review as the authenticated user.
+
+**Write:** yes
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `body` | string | no | approval message (optional) |
+| `number` | number | yes | the pull request number |
+| `repo` | string | yes | repository as 'owner/name' |
+
+```sh
+context-consolidator-cli agent-tool call --name approve_pr --args '{}'
+```
+
+## request_changes_pr
+
+Request changes on a pull request with a required message explaining what needs to change. Submits a changes-requested review.
+
+**Write:** yes
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `body` | string | yes | what needs to change (required) |
+| `number` | number | yes | the pull request number |
+| `repo` | string | yes | repository as 'owner/name' |
+
+```sh
+context-consolidator-cli agent-tool call --name request_changes_pr --args '{}'
+```
+
+## comment_pr
+
+Leave a comment on a pull request (a review with no approval state). Requires a message.
+
+**Write:** yes
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `body` | string | yes | the comment text (required) |
+| `number` | number | yes | the pull request number |
+| `repo` | string | yes | repository as 'owner/name' |
+
+```sh
+context-consolidator-cli agent-tool call --name comment_pr --args '{}'
+```
+

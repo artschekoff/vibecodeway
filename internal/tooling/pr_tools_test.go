@@ -14,7 +14,11 @@ type fakePR struct {
 	pr         *vcs.PRData
 	comments   []vcs.CommentData
 
-	lastLogin string
+	lastLogin  string
+	approved   int    // PR number approved
+	changesFor int    // PR number changes-requested
+	commented  int    // PR number commented
+	lastBody   string // body of the last write action
 }
 
 func (f *fakePR) ListReviewRequestsForUser(_ context.Context, _, _, login string) ([]vcs.PRData, error) {
@@ -30,6 +34,18 @@ func (f *fakePR) GetPRByNumber(_ context.Context, _, _ string, _ int) (*vcs.PRDa
 }
 func (f *fakePR) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs.CommentData, error) {
 	return f.comments, nil
+}
+func (f *fakePR) ApprovePR(_ context.Context, _, _ string, number int, body string) error {
+	f.approved, f.lastBody = number, body
+	return nil
+}
+func (f *fakePR) RequestChangesPR(_ context.Context, _, _ string, number int, body string) error {
+	f.changesFor, f.lastBody = number, body
+	return nil
+}
+func (f *fakePR) CommentPR(_ context.Context, _, _ string, number int, body string) error {
+	f.commented, f.lastBody = number, body
+	return nil
 }
 
 func TestListReviewRequestsTool(t *testing.T) {
@@ -67,6 +83,39 @@ func TestGetPRTool(t *testing.T) {
 	m := out.(map[string]any)
 	if m["number"].(int) != 42 || m["mergeable"] != "CONFLICTING" {
 		t.Fatalf("get_pr wrong payload: %v", m)
+	}
+}
+
+func TestApprovePRTool(t *testing.T) {
+	fake := &fakePR{}
+	reg := NewRegistry(Deps{VCS: fake})
+
+	out, err := reg.Call(context.Background(), "approve_pr",
+		map[string]any{"repo": "acme/app", "number": float64(9), "body": "ship it"}, Ctx{})
+	if err != nil {
+		t.Fatalf("approve_pr: %v", err)
+	}
+	if out.(map[string]any)["status"] != "approved" {
+		t.Fatalf("unexpected payload: %v", out)
+	}
+	if fake.approved != 9 || fake.lastBody != "ship it" {
+		t.Fatalf("approve not passed through: num=%d body=%q", fake.approved, fake.lastBody)
+	}
+	if tool, _ := reg.Get("approve_pr"); !tool.Write {
+		t.Fatal("approve_pr must be a write tool")
+	}
+}
+
+func TestRequestChangesRequiresBody(t *testing.T) {
+	reg := NewRegistry(Deps{VCS: &fakePR{}})
+	if _, err := reg.Call(context.Background(), "request_changes_pr",
+		map[string]any{"repo": "acme/app", "number": float64(9)}, Ctx{}); err == nil {
+		t.Fatal("request_changes_pr must require a body")
+	}
+	for _, name := range []string{"request_changes_pr", "comment_pr"} {
+		if tool, _ := reg.Get(name); !tool.Write {
+			t.Fatalf("%s must be a write tool", name)
+		}
 	}
 }
 
