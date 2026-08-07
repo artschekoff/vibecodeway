@@ -7,6 +7,7 @@ import (
 
 	"github.com/artschekoff/context-consolidator/internal/openai"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/context-consolidator/internal/tooling"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -35,7 +36,8 @@ func TestAsk_EmitsProgress(t *testing.T) {
 		// Turn 2: final answer, no tool calls.
 		{Content: "done"},
 	}}
-	a := &Agent{ai: fake, store: s, logger: zap.NewNop()} // svc nil — search_contexts doesn't use it
+	reg := tooling.NewRegistry(tooling.Deps{Store: s, Logger: zap.NewNop()}) // svc nil — search_contexts doesn't use it
+	a := &Agent{ai: fake, reg: reg, store: s, logger: zap.NewNop()}
 
 	var events []ProgressEvent
 	ans, err := a.Ask(context.Background(), "q", "", func(ev ProgressEvent) {

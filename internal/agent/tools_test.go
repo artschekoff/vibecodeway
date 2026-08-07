@@ -3,12 +3,15 @@ package agent
 import (
 	"testing"
 
+	"github.com/artschekoff/context-consolidator/internal/tooling"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestToolCatalogue(t *testing.T) {
-	a := &Agent{} // ToolCatalogue must not need AI/db — it only reads static defs
+	// ToolCatalogue reads names/descriptions from the registry; nil deps are fine
+	// because handlers aren't invoked here.
+	a := &Agent{reg: tooling.NewRegistry(tooling.Deps{})}
 	cat := a.ToolCatalogue()
 	require.NotNil(t, cat)
 	names := map[string]bool{}

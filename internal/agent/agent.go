@@ -11,20 +11,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
 	"github.com/artschekoff/context-consolidator/internal/openai"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/context-consolidator/internal/tooling"
 	"go.uber.org/zap"
 )
 
 // maxIterations caps the tool-use loop so a misbehaving model cannot spin forever.
 const maxIterations = 12
-
-// maxBodyChars truncates long text bodies returned to the model to protect the
-// context window. Tunable; kept here rather than inline at every call site.
-const maxBodyChars = 8000
 
 // chatClient is the subset of *openai.Client the agent needs, extracted so the
 // LLM turn can be faked in tests. *openai.Client satisfies it.
@@ -35,14 +30,14 @@ type chatClient interface {
 // Agent answers questions over the local context store using LLM tool calling.
 type Agent struct {
 	ai     chatClient
-	store  *appstore.Store
-	svc    *jiraservice.ContextService
+	reg    *tooling.Registry
+	store  *appstore.Store // retained only for loadPrompt
 	logger *zap.Logger
 }
 
-// New builds an Agent from the shared LLM client, store, and context service.
-func New(ai *openai.Client, store *appstore.Store, svc *jiraservice.ContextService, logger *zap.Logger) *Agent {
-	return &Agent{ai: ai, store: store, svc: svc, logger: logger}
+// New builds an Agent from the shared LLM client, tool registry, and store.
+func New(ai *openai.Client, reg *tooling.Registry, store *appstore.Store, logger *zap.Logger) *Agent {
+	return &Agent{ai: ai, reg: reg, store: store, logger: logger}
 }
 
 // Step records a single tool invocation for observability / UI display.
@@ -148,8 +143,24 @@ Typical flow:
 Cite the concrete items you relied on (e.g. Jira keys, text names). Be concise and factual.
 If you cannot find something, say so plainly.`
 
-// dispatchTool executes a single tool by name, always returning a string payload
-// (JSON on success, a plain error string on failure) so the model can react.
+// toolDefs is the tool catalogue advertised to the model, built from the shared
+// registry so the agent, CLI, and docs stay in sync.
+func (a *Agent) toolDefs() []openai.ToolDef {
+	tools := a.reg.List()
+	defs := make([]openai.ToolDef, 0, len(tools))
+	for _, t := range tools {
+		defs = append(defs, openai.ToolDef{
+			Name:        t.Name,
+			Description: t.Description,
+			Parameters:  t.Params,
+		})
+	}
+	return defs
+}
+
+// dispatchTool executes a single tool by name through the registry, always
+// returning a string payload (JSON on success, a plain error string on failure)
+// so the model can react.
 func (a *Agent) dispatchTool(ctx context.Context, name, argsJSON, orgID string) string {
 	var args map[string]any
 	if argsJSON != "" {
@@ -157,31 +168,7 @@ func (a *Agent) dispatchTool(ctx context.Context, name, argsJSON, orgID string) 
 			return fmt.Sprintf("error: invalid tool arguments: %v", err)
 		}
 	}
-	str := func(k string) string {
-		if v, ok := args[k].(string); ok {
-			return strings.TrimSpace(v)
-		}
-		return ""
-	}
-
-	var (
-		payload any
-		err     error
-	)
-	switch name {
-	case "search_contexts":
-		payload, err = a.toolSearchContexts(ctx, str("query"), orgID)
-	case "get_context":
-		payload, err = a.toolGetContext(ctx, str("contextId"))
-	case "search_within_context":
-		payload, err = a.toolSearchWithinContext(ctx, str("contextId"), str("query"))
-	case "get_item":
-		payload, err = a.toolGetItem(ctx, str("contextId"), str("itemType"), str("itemId"))
-	case "list_related_contexts":
-		payload, err = a.toolListRelated(ctx, str("contextId"))
-	default:
-		return fmt.Sprintf("error: unknown tool %q", name)
-	}
+	payload, err := a.reg.Call(ctx, name, args, tooling.Ctx{OrgID: orgID})
 	if err != nil {
 		a.logger.Warn("agent.tool_error", zap.String("tool", name), zap.Error(err))
 		return "error: " + err.Error()
@@ -191,11 +178,4 @@ func (a *Agent) dispatchTool(ctx context.Context, name, argsJSON, orgID string) 
 		return "error: failed to encode result"
 	}
 	return string(b)
-}
-
-func truncate(s string) string {
-	if len(s) <= maxBodyChars {
-		return s
-	}
-	return s[:maxBodyChars] + "…[truncated]"
 }

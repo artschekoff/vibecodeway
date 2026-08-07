@@ -27,6 +27,7 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/slack"
 	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
 	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/context-consolidator/internal/tooling"
 	githubrunner "github.com/artschekoff/context-consolidator/internal/vcs/github"
 	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
@@ -191,7 +192,8 @@ func (a *App) startup(ctx context.Context) {
 	a.openAI = openAI
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
 	a.analysisSvc.SetVCSStore(a.vcsStore)
-	a.agent = agent.New(openAI, s, a.svc, logger)
+	reg := tooling.NewRegistry(tooling.Deps{Store: s, Svc: a.svc, Logger: logger})
+	a.agent = agent.New(openAI, reg, s, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)
 	{
