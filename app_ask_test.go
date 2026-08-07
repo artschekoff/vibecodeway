@@ -4,12 +4,16 @@ import (
 	"testing"
 
 	"github.com/artschekoff/context-consolidator/internal/agent"
+	"github.com/artschekoff/context-consolidator/internal/tooling"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestListAgentTools(t *testing.T) {
-	a := &App{agent: agent.New(nil, nil, nil, nil)} // mirror the real agent.New signature; nil deps OK for static catalogue
+	// The catalogue is read from the registry; nil deps are fine because
+	// ToolCatalogue only reads tool names/descriptions, never invokes handlers.
+	reg := tooling.NewRegistry(tooling.Deps{})
+	a := &App{agent: agent.New(nil, reg, nil, nil)}
 	tools := a.ListAgentTools()
 	require.NotEmpty(t, tools)
 	names := map[string]bool{}
