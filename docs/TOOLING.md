@@ -114,3 +114,63 @@ Append a timeline event to a context (e.g. a decision, status update, or note). 
 context-consolidator-cli agent-tool call --name add_event --args '{}'
 ```
 
+## list_review_requests
+
+List open pull requests in a repo that are awaiting review from a user. Defaults to the authenticated user (@me); pass a login to see another user's requested reviews.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `repo` | string | yes | repository as 'owner/name' |
+| `user` | string | no | GitHub login to check (optional, default @me) |
+
+```sh
+context-consolidator-cli agent-tool call --name list_review_requests --args '{}'
+```
+
+## list_changes_requested
+
+List open pull requests in a repo where a user left a 'changes requested' review. Defaults to the authenticated user (@me).
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `repo` | string | yes | repository as 'owner/name' |
+| `user` | string | no | GitHub login to check (optional, default @me) |
+
+```sh
+context-consolidator-cli agent-tool call --name list_changes_requested --args '{}'
+```
+
+## get_pr
+
+Get one pull request's metadata (title, author, state, review status, CI status, mergeability, reviewers) by number.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `number` | number | yes | the pull request number |
+| `repo` | string | yes | repository as 'owner/name' |
+
+```sh
+context-consolidator-cli agent-tool call --name get_pr --args '{}'
+```
+
+## get_pr_comments
+
+List the comments on a pull request (conversation, review bodies, and inline review comments) with author and body.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `number` | number | yes | the pull request number |
+| `repo` | string | yes | repository as 'owner/name' |
+
+```sh
+context-consolidator-cli agent-tool call --name get_pr_comments --args '{}'
+```
+

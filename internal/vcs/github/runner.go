@@ -446,14 +446,29 @@ func parseGHPRSingle(data []byte) (vcs.PRData, error) {
 	}, nil
 }
 
+// prListJSONFields is the shared --json field set for `gh pr list` calls.
+const prListJSONFields = "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt"
+
+// reviewRequestedSearch builds the `gh pr list --search` query for PRs awaiting a
+// given login's review. login may be "@me" or a concrete GitHub username.
+func reviewRequestedSearch(login string) string {
+	return "review-requested:" + login + " draft:false"
+}
+
+// changesRequestedSearch builds the `gh pr list --search` query for open PRs where
+// a given login left a "changes requested" review.
+func changesRequestedSearch(login string) string {
+	return "reviewed-by:" + login + " review:changes_requested draft:false"
+}
+
 // ListReviewRequests fetches PRs where the authenticated user's review is requested.
 func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]vcs.PRData, error) {
 	out, err := r.run(ctx, []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
-		"--search", "review-requested:@me draft:false",
+		"--search", reviewRequestedSearch("@me"),
 		"--state", "open",
-		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--json", prListJSONFields,
 		"--limit", "100",
 	})
 	if err != nil {
@@ -474,6 +489,48 @@ func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]
 	}
 
 	return prs, nil
+}
+
+// ListReviewRequestsForUser fetches open PRs awaiting review from an arbitrary
+// login. login defaults to "@me". Unlike ListReviewRequests it does not annotate
+// re-review status (that is only meaningful for the authenticated user).
+// ponytail: no per-PR reviews fetch here; add annotate if the agent needs re-review flags.
+func (r *Runner) ListReviewRequestsForUser(ctx context.Context, owner, repo, login string) ([]vcs.PRData, error) {
+	if login == "" {
+		login = "@me"
+	}
+	out, err := r.run(ctx, []string{
+		"pr", "list",
+		"--repo", owner + "/" + repo,
+		"--search", reviewRequestedSearch(login),
+		"--state", "open",
+		"--json", prListJSONFields,
+		"--limit", "100",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gh pr list review-requested: %w", err)
+	}
+	return parseGHPRList(out, "review requests")
+}
+
+// ListChangesRequestedForUser fetches open PRs where the given login left a
+// "changes requested" review. login defaults to "@me".
+func (r *Runner) ListChangesRequestedForUser(ctx context.Context, owner, repo, login string) ([]vcs.PRData, error) {
+	if login == "" {
+		login = "@me"
+	}
+	out, err := r.run(ctx, []string{
+		"pr", "list",
+		"--repo", owner + "/" + repo,
+		"--search", changesRequestedSearch(login),
+		"--state", "open",
+		"--json", prListJSONFields,
+		"--limit", "100",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gh pr list changes-requested: %w", err)
+	}
+	return parseGHPRList(out, "changes requested PRs")
 }
 
 // annotateReReviews flags PRs whose authenticated-user review was dismissed (needs re-approval),
@@ -506,9 +563,9 @@ func (r *Runner) ListChangesRequestedByUser(ctx context.Context, owner, repo str
 	out, err := r.run(ctx, []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
-		"--search", "reviewed-by:@me review:changes_requested draft:false",
+		"--search", changesRequestedSearch("@me"),
 		"--state", "open",
-		"--json", "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--json", prListJSONFields,
 		"--limit", "100",
 	})
 	if err != nil {

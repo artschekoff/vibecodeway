@@ -192,7 +192,7 @@ func (a *App) startup(ctx context.Context) {
 	a.openAI = openAI
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
 	a.analysisSvc.SetVCSStore(a.vcsStore)
-	reg := tooling.NewRegistry(tooling.Deps{Store: s, Svc: a.svc, Logger: logger})
+	reg := tooling.NewRegistry(tooling.Deps{Store: s, Svc: a.svc, VCS: ghRunner, Logger: logger})
 	a.agent = agent.New(openAI, reg, s, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)

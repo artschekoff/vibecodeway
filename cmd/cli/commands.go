@@ -34,6 +34,7 @@ type serviceEnv struct {
 	store  *appstore.Store
 	svc    *jiraservice.ContextService
 	openAI *openaiclient.Client
+	runner *githubrunner.Runner
 	logger *zap.Logger
 }
 
@@ -82,6 +83,7 @@ func openServiceEnv() (*serviceEnv, error) {
 		store:  s,
 		svc:    svc,
 		openAI: openAI,
+		runner: ghRunner,
 		logger: logger,
 	}, nil
 }
@@ -89,7 +91,7 @@ func openServiceEnv() (*serviceEnv, error) {
 // toolRegistry builds the shared tool registry from this CLI's service env, so
 // the CLI mirrors exactly what the Ask AI agent can call.
 func (e *serviceEnv) toolRegistry() *tooling.Registry {
-	return tooling.NewRegistry(tooling.Deps{Store: e.store, Svc: e.svc, Logger: e.logger})
+	return tooling.NewRegistry(tooling.Deps{Store: e.store, Svc: e.svc, VCS: e.runner, Logger: e.logger})
 }
 
 // resolveContextID returns the context UUID from --context-id or --context-key flags.
