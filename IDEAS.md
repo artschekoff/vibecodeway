@@ -8,7 +8,7 @@ build, and why it drives adoption. Ordered by leverage, not effort.
 
 ## Strategic thesis
 
-Context Consolidator is a broad suite (aggregation + AI + editor + terminal +
+VibeCodeWay is a broad suite (aggregation + AI + editor + terminal +
 review). Breadth is a liability for adoption — pros adopt a tool that nails **one
 painful job in the first five minutes**, then discover the rest.
 
@@ -33,7 +33,7 @@ the same object, two lenses.
 ### A1. Agent grounding as the front door  ⭐ (highest leverage)
 - **Pain:** every AI-agent session starts blind; devs manually paste ticket +
   thread + PR comments + file context.
-- **Build:** `context-consolidator prime <ticket|PR|branch>` → one command emits (or
+- **Build:** `vibecodeway prime <ticket|PR|branch>` → one command emits (or
   auto-pipes into the active terminal agent) a ready bundle: ticket + comments +
   linked Slack decisions + PR review state + changed files. Make the CLI the hero;
   GUI optional. Extend the existing `Ask AI → terminal` flow to a full "prime the

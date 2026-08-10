@@ -1,8 +1,8 @@
-# context-consolidator
+# vibecodeway
 
 A desktop app and CLI for managing Jira/Slack search contexts locally.
 
-Save named JQL queries as "contexts", fetch matching issues and their comments into a local SQLite database, and feed the data to coding agents via `context-consolidator-cli`.
+Save named JQL queries as "contexts", fetch matching issues and their comments into a local SQLite database, and feed the data to coding agents via `vibecodeway-cli`.
 
 ## Prerequisites
 
@@ -41,10 +41,10 @@ The desktop app and CLI require a valid `acli` session. If not authenticated, th
 
 | Binary | Purpose |
 |--------|---------|
-| `context-consolidator` | Wails desktop app (GUI) |
-| `context-consolidator-cli` | CLI for agents and terminal use |
+| `vibecodeway` | Wails desktop app (GUI) |
+| `vibecodeway-cli` | CLI for agents and terminal use |
 
-Both share the same SQLite database at `~/.context-consolidator/context_consolidator.db`.
+Both share the same SQLite database at `~/.vibecodeway/vibecodeway.db`.
 
 ## Getting Started
 
@@ -68,19 +68,19 @@ make install-cli
 Every command prints JSON to stdout. Load the machine-readable schema first:
 
 ```bash
-context-consolidator-cli describe
+vibecodeway-cli describe
 ```
 
 Each entry includes `description`, `input`, `output`, `flags`, and `example`. Prefer `describe` over scraping `--help`.
 
 ### Typical agent workflow
 
-1. `context-consolidator-cli context-list` → see available contexts
-2. `context-consolidator-cli context-get --context-key my-context` → load full context
-3. `context-consolidator-cli jira-search --context-key my-context` → see what's new in Jira
-4. `context-consolidator-cli jira-add --context-id ... --jira-keys JH-1,JH-5` → add chosen issues
+1. `vibecodeway-cli context-list` → see available contexts
+2. `vibecodeway-cli context-get --context-key my-context` → load full context
+3. `vibecodeway-cli jira-search --context-key my-context` → see what's new in Jira
+4. `vibecodeway-cli jira-add --context-id ... --jira-keys JH-1,JH-5` → add chosen issues
 
-Slash command `/context-consolidator-prime` loads the schema and routes to the right CLI call.
+Slash command `/vibecodeway-prime` loads the schema and routes to the right CLI call.
 
 ### Slack passphrase
 

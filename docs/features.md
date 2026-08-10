@@ -1,4 +1,4 @@
-# Context Consolidator — Current Features
+# VibeCodeWay — Current Features
 
 Desktop app (Wails: Go backend + React frontend). Aggregates developer context from multiple sources into named workspaces.
 
@@ -59,11 +59,11 @@ Desktop app (Wails: Go backend + React frontend). Aggregates developer context f
 - **Terminal integration**: `openTerminalAt()` opens configured terminal app at worktree path
 - Local branch listing per repo
 
-## CLI (`context-consolidator-cli`)
+## CLI (`vibecodeway-cli`)
 
 - JSON in/out CLI for coding agents and terminal use (`describe` emits the full schema)
 - Context CRUD, text/file entries, Jira search/add/sync/refresh, Slack channels/threads/DMs
-- Slash command `/context-consolidator-prime` loads available tools via `describe`
+- Slash command `/vibecodeway-prime` loads available tools via `describe`
 
 ## Settings & Configuration
 

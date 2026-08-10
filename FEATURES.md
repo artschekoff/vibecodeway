@@ -1,4 +1,4 @@
-# Context Consolidator
+# VibeCodeWay
 
 ### Mission control for AI-assisted development.
 
@@ -10,7 +10,7 @@ One local, private desktop app that pulls your **Jira, Slack, GitHub/GitLab, cod
 
 A developer's real task lives in a dozen places at once: the Jira ticket, the Slack thread where the decision was actually made, the PR and its review comments, the branch, the failing CI check, and the code itself. Every context switch costs focus — and every AI coding agent you use starts *blind*, with none of it.
 
-**Context Consolidator makes "everything about this task" a first-class object** — assemble it once, keep it in sync, act on it in an integrated editor, and hand it to your AI agent in one command.
+**VibeCodeWay makes "everything about this task" a first-class object** — assemble it once, keep it in sync, act on it in an integrated editor, and hand it to your AI agent in one command.
 
 ---
 
@@ -56,9 +56,9 @@ A full editor built in — not a link that dumps you into another tool.
 - **Bring your own model** — OpenAI, Anthropic (Claude), or any OpenAI-compatible local endpoint.
 
 ### 🤖 Agent-native by design
-- A first-class **CLI** (`context-consolidator-cli`) with JSON in/out — every capability an AI coding agent needs to read and update contexts.
+- A first-class **CLI** (`vibecodeway-cli`) with JSON in/out — every capability an AI coding agent needs to read and update contexts.
 - `describe` emits the **full machine-readable schema**, so agents self-configure.
-- Ships **slash commands** (`/context-consolidator-prime`, load-context, load-task-assignment) so Claude Code / Cursor pick up the whole task context in one step.
+- Ships **slash commands** (`/vibecodeway-prime`, load-context, load-task-assignment) so Claude Code / Cursor pick up the whole task context in one step.
 
 ### ⚡ Capture from anywhere
 - **Global hotkey quick-attach** — select text in *any* app, hit the hotkey, pick a target context, and it's captured — with a system notification to confirm.
@@ -82,4 +82,4 @@ Native desktop app (Wails: Go backend + React/TypeScript frontend), local SQLite
 
 ## Where it's headed
 
-Context Consolidator is evolving from "aggregator" into **the context layer for AI-assisted engineering** — the place your agents get grounded before they touch code, and where you triage what actually needs *you*. Next on the track: deeper codebase-aware analysis, ticket-to-plan breakdown, a daily "what should I work on now" focus view, and team-level context sharing.
+VibeCodeWay is evolving from "aggregator" into **the context layer for AI-assisted engineering** — the place your agents get grounded before they touch code, and where you triage what actually needs *you*. Next on the track: deeper codebase-aware analysis, ticket-to-plan breakdown, a daily "what should I work on now" focus view, and team-level context sharing.
