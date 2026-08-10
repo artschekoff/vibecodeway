@@ -6,8 +6,8 @@
  *   pr:     "owner/repo#218" -> "https://github.com/owner/repo/pull/218"
  *   review: "owner/repo#218" -> same as pr
  */
-export function todoRefUrl(refType: string, refKey: string, jiraBaseUrl: string): string {
-  const key = refKey.trim();
+export function todoRefUrl(refType?: string, refKey?: string, jiraBaseUrl?: string): string {
+  const key = (refKey ?? "").trim();
   if (!key) return "";
   if (refType === "jira") {
     return jiraBaseUrl ? `${jiraBaseUrl.replace(/\/$/, "")}/browse/${key}` : "";

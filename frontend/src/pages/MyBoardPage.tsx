@@ -286,7 +286,7 @@ export default function MyBoardPage() {
         ) : (
           <div className="board-section-items">
             {todos.map((t, i) => {
-              const refUrl = todoRefUrl(t.refType ?? "", t.refKey ?? "", jiraBaseUrl);
+              const refUrl = todoRefUrl(t.refType, t.refKey, jiraBaseUrl);
               return (
               <div key={t.id} className="board-card todo-card">
                 <div className="todo-card-main">

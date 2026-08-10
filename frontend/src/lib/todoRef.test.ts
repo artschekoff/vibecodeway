@@ -47,4 +47,16 @@ describe("todoRefUrl", () => {
   it("returns empty for an unknown refType", () => {
     expect(todoRefUrl("", "JH-1", "https://acme.atlassian.net")).toBe("");
   });
+
+  it("returns empty (does not throw) when all args are undefined", () => {
+    expect(todoRefUrl(undefined, undefined, "")).toBe("");
+  });
+
+  it("returns empty (does not throw) for a pr ref with an undefined refKey", () => {
+    expect(todoRefUrl("pr", undefined, "")).toBe("");
+  });
+
+  it("returns empty for a jira ref with an undefined base URL", () => {
+    expect(todoRefUrl("jira", "JH-1", undefined)).toBe("");
+  });
 });
