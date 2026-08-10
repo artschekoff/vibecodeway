@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+// todoActionPlaceholders are the substitution tokens available to every TODO
+// NEXT action prompt (see internal/analysis/todo_actions.go).
+var todoActionPlaceholders = []PromptPlaceholder{
+	{Name: "title", Description: "The todo's title"},
+	{Name: "refKey", Description: "Reference key, e.g. owner/repo#218 (renders as (none) when empty)"},
+	{Name: "rationale", Description: "One-sentence why-now from the todo"},
+}
+
 // knownPlaceholders defines the available {{placeholder}} variables for each prompt.
 var knownPlaceholders = map[string][]PromptPlaceholder{
 	"event_extraction": {
@@ -85,6 +93,10 @@ var knownPlaceholders = map[string][]PromptPlaceholder{
 		{Name: "tickets", Description: "Titles-only ticket lines (key + summary) linked to this context"},
 		{Name: "repos", Description: "On-disk local paths (and branches) of repos attached to this context"},
 	},
+	"todo_action_rerequest_pr": todoActionPlaceholders,
+	"todo_action_make_pr":      todoActionPlaceholders,
+	"todo_action_ask_question": todoActionPlaceholders,
+	"todo_action_check_status": todoActionPlaceholders,
 }
 
 // ListAIPrompts returns all prompt templates with their placeholder definitions.
