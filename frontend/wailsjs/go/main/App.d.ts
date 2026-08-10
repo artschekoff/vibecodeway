@@ -376,6 +376,8 @@ export function ResetAIPrompt(arg1:string):Promise<void>;
 
 export function ResolveToolConfirmation(arg1:string,arg2:boolean):Promise<void>;
 
+export function ResetKeybinding(arg1:string):Promise<void>;
+
 export function ReviewPRWithAI(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.ReviewPRResult>;
 
 export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:string):Promise<string>;
@@ -389,6 +391,8 @@ export function SavePersonAssignment(arg1:string,arg2:string):Promise<void>;
 export function SaveRepoFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
+
+export function SearchContexts(arg1:string):Promise<Array<store.ContextSearchHit>>;
 
 export function SearchContextItems(arg1:string,arg2:string):Promise<store.ContextItemMatches>;
 
@@ -472,7 +476,7 @@ export function UpdateAIPrompt(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateContext(arg1:string,arg2:string,arg3:string):Promise<store.Context>;
 
-export function UpdateKeybinding(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function UpdateKeybinding(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
 

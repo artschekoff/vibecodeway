@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, GetKeybindings, UpdateKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
 import type { store } from "../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
@@ -8,6 +8,22 @@ import { useTabContext } from "../contexts/TabContext";
 import WorkflowStatusManager from "../components/WorkflowStatusManager";
 import KeybindingRow from "../components/KeybindingRow";
 import GlobalEventHooks from "../components/GlobalEventHooks";
+
+// Group bindings by their `object` field, preserving first-seen order.
+function groupKeybindings(kbs: Keybinding[]): [string, Keybinding[]][] {
+  const map = new Map<string, Keybinding[]>();
+  for (const kb of kbs) {
+    const list = map.get(kb.object);
+    if (list) list.push(kb);
+    else map.set(kb.object, [kb]);
+  }
+  return [...map.entries()];
+}
+
+function humanizeObject(object: string): string {
+  if (object.toLowerCase() === "pr") return "PR";
+  return object.charAt(0).toUpperCase() + object.slice(1);
+}
 
 const OPENAI_MODELS = [
   // GPT-5 series
@@ -280,23 +296,39 @@ export default function SettingsPage() {
               </tr>
             </thead>
             <tbody>
-              {keybindings.map((kb) => (
-                <KeybindingRow
-                  key={kb.id}
-                  binding={kb}
-                  onSave={async (command, modifierKeys, keyCode) => {
-                    try {
-                      await UpdateKeybinding(command, modifierKeys, keyCode);
-                      setKeybindings((prev) =>
-                        prev.map((b) =>
-                          b.command === command ? { ...b, modifierKeys, keyCode } : b
-                        )
-                      );
-                    } catch (e) {
-                      console.error("Failed to update keybinding", e);
-                    }
-                  }}
-                />
+              {groupKeybindings(keybindings).map(([group, rows]) => (
+                <Fragment key={group}>
+                  <tr className="keybindings-group-row">
+                    <td colSpan={2} className="keybindings-group">{humanizeObject(group)}</td>
+                  </tr>
+                  {rows.map((kb) => (
+                    <KeybindingRow
+                      key={kb.id}
+                      binding={kb}
+                      onSave={async (command, modifierKeys, keyCode, sequence) => {
+                        try {
+                          await UpdateKeybinding(command, modifierKeys, keyCode, sequence);
+                          setKeybindings((prev) =>
+                            prev.map((b) =>
+                              b.command === command ? { ...b, modifierKeys, keyCode, sequence } : b
+                            )
+                          );
+                        } catch (e) {
+                          console.error("Failed to update keybinding", e);
+                        }
+                      }}
+                      onReset={async (command) => {
+                        try {
+                          await ResetKeybinding(command);
+                          const kbs = await GetKeybindings();
+                          setKeybindings(kbs as unknown as Keybinding[]);
+                        } catch (e) {
+                          console.error("Failed to reset keybinding", e);
+                        }
+                      }}
+                    />
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>

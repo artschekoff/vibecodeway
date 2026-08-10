@@ -85,6 +85,7 @@ import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runti
 import { useCheckout } from "../lib/useCheckout";
 import { applyStatusChange } from "../lib/statusChange";
 import StatusToggle from "../components/StatusToggle";
+import { ChordHint } from "../components/ChordHint";
 import type { service } from "../../wailsjs/go/models";
 import type { store } from "../../wailsjs/go/models";
 import type { main } from "../../wailsjs/go/models";
@@ -1722,7 +1723,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             disabled={editorOpener.loading}
             title="Open the context's workspace in the editor"
           >
-            <Code size={16} /> Open Editor
+            <Code size={16} /> Open Editor<ChordHint id="editor.open" />
           </button>
           <button
             className="btn-primary"

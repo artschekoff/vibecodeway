@@ -351,6 +351,13 @@ export interface Keybinding {
   description: string;
   modifierKeys: string;  // comma-separated: "cmd,shift"
   keyCode: string;       // "c", "enter", "space", etc.
+  sequence: string;
+  object: string;
+  action: string;
+  scope: string;
+  defaultModifierKeys: string;
+  defaultKeyCode: string;
+  defaultSequence: string;
   updatedAt: string;
 }
 

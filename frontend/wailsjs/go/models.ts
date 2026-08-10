@@ -1488,6 +1488,26 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
+	export class ContextSearchHit {
+	    id: string;
+	    key: string;
+	    orgId: string;
+	    orgName: string;
+	    summary: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ContextSearchHit(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.key = source["key"];
+	        this.orgId = source["orgId"];
+	        this.orgName = source["orgName"];
+	        this.summary = source["summary"];
+	    }
+	}
 	export class StatusLogEntry {
 	    id: string;
 	    contextId: string;
@@ -1955,6 +1975,13 @@ export namespace store {
 	    description: string;
 	    modifierKeys: string;
 	    keyCode: string;
+	    sequence: string;
+	    object: string;
+	    action: string;
+	    scope: string;
+	    defaultModifierKeys: string;
+	    defaultKeyCode: string;
+	    defaultSequence: string;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1969,6 +1996,13 @@ export namespace store {
 	        this.description = source["description"];
 	        this.modifierKeys = source["modifierKeys"];
 	        this.keyCode = source["keyCode"];
+	        this.sequence = source["sequence"];
+	        this.object = source["object"];
+	        this.action = source["action"];
+	        this.scope = source["scope"];
+	        this.defaultModifierKeys = source["defaultModifierKeys"];
+	        this.defaultKeyCode = source["defaultKeyCode"];
+	        this.defaultSequence = source["defaultSequence"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}

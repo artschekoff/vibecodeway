@@ -734,6 +734,10 @@ export function ResolveToolConfirmation(arg1, arg2) {
   return window['go']['main']['App']['ResolveToolConfirmation'](arg1, arg2);
 }
 
+export function ResetKeybinding(arg1) {
+  return window['go']['main']['App']['ResetKeybinding'](arg1);
+}
+
 export function ReviewPRWithAI(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ReviewPRWithAI'](arg1, arg2, arg3, arg4);
 }
@@ -760,6 +764,10 @@ export function SaveRepoFile(arg1, arg2, arg3) {
 
 export function SearchContextIDs(arg1) {
   return window['go']['main']['App']['SearchContextIDs'](arg1);
+}
+
+export function SearchContexts(arg1) {
+  return window['go']['main']['App']['SearchContexts'](arg1);
 }
 
 export function SearchContextItems(arg1, arg2) {
@@ -926,8 +934,8 @@ export function UpdateContext(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateContext'](arg1, arg2, arg3);
 }
 
-export function UpdateKeybinding(arg1, arg2, arg3) {
-  return window['go']['main']['App']['UpdateKeybinding'](arg1, arg2, arg3);
+export function UpdateKeybinding(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateKeybinding'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateOrganization(arg1, arg2) {

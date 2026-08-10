@@ -35,6 +35,8 @@ interface TabContextValue {
   updateTabTitle: (tabId: string, title: string) => void;
   navigateBack: (tabId: string) => void;
   reorderTabs: (activeId: string, overId: string) => void;
+  focusNextTab: () => void;
+  focusPrevTab: () => void;
 }
 
 const TabContext = createContext<TabContextValue | null>(null);
@@ -83,6 +85,8 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
   const previousActiveTabIdRef = useRef<string | null>(null);
   const previousActiveTabIdTrackerRef = useRef<string | null>(null);
+  const tabsRef = useRef<Tab[]>(tabs);
+  tabsRef.current = tabs;
 
   useEffect(() => {
     previousActiveTabIdRef.current = previousActiveTabIdTrackerRef.current;
@@ -280,6 +284,20 @@ export function TabProvider({ children }: { children: ReactNode }) {
     setActiveTabId(tabId);
   }, []);
 
+  const cycleTab = useCallback((dir: 1 | -1) => {
+    const list = tabsRef.current;
+    const n = list.length;
+    if (n === 0) return;
+    setActiveTabId((cur) => {
+      const i = list.findIndex((t) => t.id === cur);
+      const idx = i === -1 ? 0 : (i + dir + n) % n;
+      return list[idx].id;
+    });
+  }, []);
+
+  const focusNextTab = useCallback(() => cycleTab(1), [cycleTab]);
+  const focusPrevTab = useCallback(() => cycleTab(-1), [cycleTab]);
+
   const updateTabTitle = useCallback((tabId: string, title: string) => {
     setTabs((prev) =>
       prev.map((t) => (t.id === tabId ? { ...t, title } : t))
@@ -366,6 +384,8 @@ export function TabProvider({ children }: { children: ReactNode }) {
         updateTabTitle,
         navigateBack,
         reorderTabs,
+        focusNextTab,
+        focusPrevTab,
       }}
     >
       {children}

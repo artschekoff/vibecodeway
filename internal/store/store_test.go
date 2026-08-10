@@ -229,7 +229,9 @@ func TestKeybindingsSeedDefaults(t *testing.T) {
 
 	bindings, err := s.GetKeybindings(ctx)
 	require.NoError(t, err)
-	assert.Len(t, bindings, 2)
+	// quick_attach + send_chat (052_keybindings.sql) plus the full hotkey
+	// registry seeded in 097_hotkeys_registry.sql.
+	assert.GreaterOrEqual(t, len(bindings), 2)
 
 	commands := make([]string, len(bindings))
 	for i, b := range bindings {

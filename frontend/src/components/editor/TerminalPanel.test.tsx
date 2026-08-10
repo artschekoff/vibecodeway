@@ -10,16 +10,21 @@ vi.mock("../../../wailsjs/go/main/App", () => ({
 }));
 
 import { TerminalPanel } from "./TerminalPanel";
+import { HotkeyProvider } from "../../hotkeys/HotkeyProvider";
+
+const Wrap = ({ children }: { children: React.ReactNode }) => (
+  <HotkeyProvider platform="darwin">{children}</HotkeyProvider>
+);
 
 describe("TerminalPanel", () => {
   it("auto-creates one terminal at spawnCwd", async () => {
-    render(<TerminalPanel spawnCwd="/r/api" />);
+    render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
     expect(screen.getByTestId("term")).toHaveTextContent("/r/api");
   });
 
   it("+ opens a new terminal in the active terminal's folder and keeps both mounted", async () => {
-    render(<TerminalPanel spawnCwd="/r/api" />);
+    render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
 
     fireEvent.click(screen.getByRole("button", { name: "new terminal" }));
@@ -30,7 +35,7 @@ describe("TerminalPanel", () => {
   });
 
   it("existing terminals keep their folder when spawnCwd changes; new + uses active cwd", async () => {
-    const { rerender } = render(<TerminalPanel spawnCwd="/r/api" />);
+    const { rerender } = render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
 
     // Repo selector changes the spawn folder for future terminals only.
@@ -44,7 +49,7 @@ describe("TerminalPanel", () => {
   });
 
   it("× removes a terminal", async () => {
-    render(<TerminalPanel spawnCwd="/r/api" />);
+    render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
     fireEvent.click(screen.getByRole("button", { name: "new terminal" }));
     expect(screen.getAllByTestId("term")).toHaveLength(2);

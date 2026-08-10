@@ -5,6 +5,7 @@ import { TerminalWrite } from "../../../wailsjs/go/main/App";
 import { useTerminalCommands } from "../../hooks/useTerminalCommands";
 import { applyPlaceholders } from "../../lib/terminalPlaceholders";
 import { matchTerminalHotkey } from "../../lib/terminalHotkeys";
+import { useHotkey, useHotkeyScope } from "../../hotkeys/HotkeyProvider";
 
 // Stable local ids, independent of cwd, so two terminals in the same folder are
 // distinct and neither remounts when the list changes.
@@ -37,6 +38,8 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   const sessionByKey = useRef<Map<string, string>>(new Map());
   const wrapperByKey = useRef<Map<string, HTMLDivElement>>(new Map());
   const rootRef = useRef<HTMLDivElement>(null);
+  const insertSelectRef = useRef<HTMLSelectElement>(null);
+  const [focused, setFocused] = useState(false);
   const lastInsertId = useRef(0);
   const { commands } = useTerminalCommands();
 
@@ -137,6 +140,16 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
     switchTo(terminals[(idx + dir + n) % n].key);
   };
 
+  // Rebindable terminal commands via the hotkey layer — active only while the
+  // terminal zone holds DOM focus. ⌘T (new / H here / I insert), ⌘⇧] / ⌘⇧[
+  // (next / prev). The residual capture listener below still owns ⌘W and ⌃1-9.
+  useHotkeyScope("terminal", focused);
+  useHotkey("terminal.new", () => addTerminal(), { scope: "terminal" });
+  useHotkey("terminal.here", () => openTerminalAt(spawnCwd), { scope: "terminal" });
+  useHotkey("terminal.insert", () => insertSelectRef.current?.focus(), { scope: "terminal" });
+  useHotkey("terminal.next", () => cycleTerminal(1), { scope: "terminal" });
+  useHotkey("terminal.prev", () => cycleTerminal(-1), { scope: "terminal" });
+
   // cmux "surface" keymap for the terminal tabs. Capture phase on the panel root
   // runs before xterm's textarea listener; stopPropagation keeps the keys out of
   // the shell and preventDefault blocks webview defaults (e.g. ⌘W closing a tab).
@@ -150,7 +163,6 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
       e.preventDefault();
       e.stopPropagation();
       switch (hk.kind) {
-        case "new": addTerminal(); break;
         case "close": if (activeKey) closeTerminal(activeKey); break;
         case "next": cycleTerminal(1); break;
         case "prev": cycleTerminal(-1); break;
@@ -167,7 +179,10 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   }, [terminals, activeKey, spawnCwd]);
 
   return (
-    <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div ref={rootRef}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false); }}
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 4px", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
         {terminals.map((t) => (
           <div
@@ -200,6 +215,7 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
           <Plus size={13} />
         </button>
         <select
+          ref={insertSelectRef}
           aria-label="Insert terminal command"
           value=""
           onChange={(e) => {

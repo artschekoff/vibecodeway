@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
-import { Pencil } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Pencil, RotateCcw } from "lucide-react";
 import type { Keybinding } from "../types";
 
 interface Props {
   binding: Keybinding;
-  onSave: (command: string, modifierKeys: string, keyCode: string) => void;
+  onSave: (command: string, modifierKeys: string, keyCode: string, sequence: string) => void;
+  onReset?: (command: string) => void;
 }
 
 const MOD_SYMBOLS: Record<string, string> = {
@@ -20,6 +21,7 @@ const KEY_SYMBOLS: Record<string, string> = {
 };
 
 function formatModifiers(modifierKeys: string): string[] {
+  if (!modifierKeys) return [];
   return modifierKeys.split(",").map((m) => MOD_SYMBOLS[m.trim()] ?? m.toUpperCase());
 }
 
@@ -30,9 +32,10 @@ function formatKey(keyCode: string): string {
 interface PendingCombo {
   modifierKeys: string; // comma-separated
   keyCode: string;
+  sequence: string; // optional trailing single key (leader chord), "" when none
 }
 
-function captureCombo(e: KeyboardEvent): PendingCombo | null {
+function captureCombo(e: KeyboardEvent): Omit<PendingCombo, "sequence"> | null {
   const mods: string[] = [];
   if (e.metaKey) mods.push("cmd");
   if (e.ctrlKey) mods.push("ctrl");
@@ -46,9 +49,13 @@ function captureCombo(e: KeyboardEvent): PendingCombo | null {
   return { modifierKeys: mods.join(","), keyCode: key };
 }
 
-export default function KeybindingRow({ binding, onSave }: Props) {
+export default function KeybindingRow({ binding, onSave, onReset }: Props) {
   const [listening, setListening] = useState(false);
   const [pending, setPending] = useState<PendingCombo | null>(null);
+  // Handler closure is bound when `listening` flips; mirror pending in a ref so
+  // the trailing-key branch can see the base combo without re-binding.
+  const pendingRef = useRef<PendingCombo | null>(pending);
+  pendingRef.current = pending;
 
   useEffect(() => {
     if (!listening) return;
@@ -60,9 +67,20 @@ export default function KeybindingRow({ binding, onSave }: Props) {
         setPending(null);
         return;
       }
-      const combo = captureCombo(e);
-      if (combo) {
-        setPending(combo);
+      const key = e.key.toLowerCase();
+      if (["meta", "control", "shift", "alt"].includes(key)) return;
+
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        // A modified combo (re)sets the base chord; keep listening for an
+        // optional trailing plain key that becomes the leader `sequence`.
+        const combo = captureCombo(e);
+        if (combo) setPending({ ...combo, sequence: "" });
+        return;
+      }
+
+      // Plain key after a base combo → leader sequence, then finalize.
+      if (pendingRef.current) {
+        setPending({ ...pendingRef.current, sequence: key });
         setListening(false);
       }
     };
@@ -78,8 +96,9 @@ export default function KeybindingRow({ binding, onSave }: Props) {
 
   function handleSave() {
     if (!pending) return;
-    onSave(binding.command, pending.modifierKeys, pending.keyCode);
+    onSave(binding.command, pending.modifierKeys, pending.keyCode, pending.sequence);
     setPending(null);
+    setListening(false);
   }
 
   function handleCancel() {
@@ -89,6 +108,7 @@ export default function KeybindingRow({ binding, onSave }: Props) {
 
   const displayMods = formatModifiers(pending ? pending.modifierKeys : binding.modifierKeys);
   const displayKey = formatKey(pending ? pending.keyCode : binding.keyCode);
+  const displaySeq = pending ? pending.sequence : binding.sequence;
 
   return (
     <tr className="keybinding-row">
@@ -99,7 +119,7 @@ export default function KeybindingRow({ binding, onSave }: Props) {
         )}
       </td>
       <td className="keybinding-row__cell">
-        {listening ? (
+        {listening && !pending ? (
           <span className="keybinding-row__listening">Press a key combination…</span>
         ) : (
           <div className="keybinding-row__combo">
@@ -108,6 +128,7 @@ export default function KeybindingRow({ binding, onSave }: Props) {
                 <kbd key={sym} className="hotkey-kbd">{sym}</kbd>
               ))}
               <kbd className="hotkey-kbd">{displayKey}</kbd>
+              {displaySeq && <kbd className="hotkey-kbd">{formatKey(displaySeq)}</kbd>}
             </div>
             {pending ? (
               <>
@@ -115,9 +136,16 @@ export default function KeybindingRow({ binding, onSave }: Props) {
                 <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 10px" }} onClick={handleCancel}>Cancel</button>
               </>
             ) : (
-              <button className="btn-icon keybinding-row__change-btn" title="Change shortcut" onClick={handleChange}>
-                <Pencil size={13} />
-              </button>
+              <>
+                <button className="btn-icon keybinding-row__change-btn" title="Change shortcut" onClick={handleChange}>
+                  <Pencil size={13} />
+                </button>
+                {onReset && (
+                  <button className="btn-icon keybinding-row__change-btn" title="Reset to default" onClick={() => onReset(binding.command)}>
+                    <RotateCcw size={13} />
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}

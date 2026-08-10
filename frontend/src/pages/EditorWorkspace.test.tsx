@@ -32,6 +32,7 @@ vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext,
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";
+import { HotkeyProvider } from "../hotkeys/HotkeyProvider";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -44,9 +45,9 @@ beforeEach(() => {
 describe("EditorWorkspace", () => {
   it("starts terminal at first repo and opens a diff tab on file click", async () => {
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
 
@@ -56,9 +57,9 @@ describe("EditorWorkspace", () => {
 
   it("shows the context key and Context Editing mode in the header", async () => {
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" contextKey="JH-3940" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByText("JH-3940")).toBeInTheDocument());
     expect(screen.getByText("Context Editing")).toBeInTheDocument();
@@ -68,9 +69,9 @@ describe("EditorWorkspace", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" contextKey="JH-3940" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByText("JH-3940")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "copy context name" }));
@@ -79,9 +80,9 @@ describe("EditorWorkspace", () => {
 
   it("shows PR Review mode for a PR-review context key", async () => {
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" contextKey="juna-health/juna-api#4521" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByText("juna-health/juna-api#4521")).toBeInTheDocument());
     expect(screen.getByText("PR Review")).toBeInTheDocument();
@@ -89,9 +90,9 @@ describe("EditorWorkspace", () => {
 
   it("renders the PR info block for the context", async () => {
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" contextKey="juna-health/juna-api#349" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1"));
   });
@@ -102,9 +103,9 @@ describe("EditorWorkspace", () => {
     // wraps to content width — collapsing the diff pane and letting the sidebar
     // take over the width (regression from the keep-tabs-mounted change).
     const { container } = render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByTestId("terminal")).toBeInTheDocument());
     const style = (container.firstChild as HTMLElement).getAttribute("style") ?? "";
@@ -114,9 +115,9 @@ describe("EditorWorkspace", () => {
 
   it("refresh button re-asks GitHub then re-fetches the context", async () => {
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
     GetContextChanges.mockClear();
@@ -134,9 +135,9 @@ describe("EditorWorkspace", () => {
       { repoId: "id-rdbms", repoName: "acme/rdbms", repoPath: "/r/rdbms", files: [] },
     ]);
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" initialCwd="/r/rdbms" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     // Terminal mock renders its cwd as text.
     await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/rdbms"));
@@ -152,9 +153,9 @@ describe("EditorWorkspace", () => {
       { repoId: "id-api", repoName: "acme/api", repoPath: "/r/api", files: [] },
     ]);
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     // Wait until the repo has loaded (terminal is rooted at its path) so we assert
     // the resolved state, not the transient empty-cwd first render.
@@ -168,9 +169,9 @@ describe("EditorWorkspace", () => {
       { repoId: "id-rdbms", repoName: "acme/rdbms", repoPath: "/r/rdbms", files: [] },
     ]);
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     // Defaults to the first repo's id.
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1:id-api"));
@@ -185,9 +186,9 @@ describe("EditorWorkspace", () => {
   it("shows an always-visible refresh-PRs button that re-syncs PRs on click", async () => {
     RefreshContextPRs.mockResolvedValue([]);
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     // Button is present even though EditorPRInfo (mocked) shows no PRs.
     const btn = await screen.findByRole("button", { name: /refresh prs/i });
@@ -198,9 +199,9 @@ describe("EditorWorkspace", () => {
   it("surfaces a PR-refresh error inline instead of failing silently", async () => {
     RefreshContextPRs.mockRejectedValue(new Error("gh auth failed"));
     render(
-      <EditorFilesProvider>
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
         <EditorWorkspace contextId="c1" />
-      </EditorFilesProvider>
+      </EditorFilesProvider></HotkeyProvider>
     );
     fireEvent.click(await screen.findByRole("button", { name: /refresh prs/i }));
     await waitFor(() => expect(screen.getByText("gh auth failed")).toBeInTheDocument());
