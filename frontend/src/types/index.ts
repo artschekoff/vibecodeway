@@ -528,6 +528,8 @@ export interface ReviewRequest {
   dismissedAt?: string;
   viewedAt?: string;
   reviewers?: ReviewerDecision[];
+  kind?: "requested" | "authored";
+  ciStatus?: string; // "", PENDING, SUCCESS, FAILURE
 }
 
 // --- Context Relations ---

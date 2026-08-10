@@ -166,6 +166,14 @@ function ReviewCard({
             Conflicts
           </span>
         )}
+        {review.ciStatus === "FAILURE" && (
+          <span className="pr-status-badge pr-status--changes-requested" title="CI checks failed">
+            CI failed
+          </span>
+        )}
+        {review.ciStatus === "PENDING" && (
+          <span className="pr-status-badge" title="CI checks running">CI running</span>
+        )}
       </div>
       {review.reviewers && review.reviewers.length > 0 && (
         <div className="review-reviewers" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
@@ -1351,11 +1359,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const url = repoUrl(repo);
                 const q = reviewFilter.trim().toLowerCase();
                 const match = (r: ReviewRequest) => !q || r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q);
-                const pending = reviews.filter((r) => !r.reviewedAt && match(r));
+                const requested = reviews.filter((r) => (r.kind ?? "requested") === "requested");
+                const authored = reviews.filter((r) => r.kind === "authored" && match(r));
+                const pending = requested.filter((r) => !r.reviewedAt && match(r));
                 const isTerminal = (r: ReviewRequest) => reviewStatusMeta(r.reviewStatus).terminal;
-                const waiting = reviews.filter((r) => !!r.reviewedAt && !isTerminal(r) && match(r));
-                const done = reviews.filter((r) => !!r.reviewedAt && isTerminal(r) && match(r));
-                if (pending.length === 0 && waiting.length === 0 && done.length === 0) return null;
+                const waiting = requested.filter((r) => !!r.reviewedAt && !isTerminal(r) && match(r));
+                const done = requested.filter((r) => !!r.reviewedAt && isTerminal(r) && match(r));
+                if (pending.length === 0 && waiting.length === 0 && done.length === 0 && authored.length === 0) return null;
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
                     <div className="review-repo-header">
@@ -1426,6 +1436,26 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
                               onReview={() => void handleReviewWithAI(review)}
                               reviewing={reviewingId === review.id}
+                              isUnviewed={!review.viewedAt}
+                              onMarkViewed={() => handleMarkReviewViewed(review.id)}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {authored.length > 0 && (
+                      <>
+                        <div className="review-waiting-header">
+                          My PRs
+                          <span className="detail-section-count" style={{ marginLeft: 6 }}>{authored.length}</span>
+                        </div>
+                        <div className="pr-list">
+                          {authored.map((review) => (
+                            <ReviewCard
+                              key={review.id}
+                              review={review}
+                              checkoutLoading={reviewCheckoutLoading}
+                              onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
                               isUnviewed={!review.viewedAt}
                               onMarkViewed={() => handleMarkReviewViewed(review.id)}
                             />
