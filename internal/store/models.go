@@ -540,3 +540,19 @@ type UpsertMessageArgs struct {
 	CreatedAt      string // RFC3339
 	UpdatedAt      string // RFC3339
 }
+
+// AITodoItem is one row of the board-wide "TODO NEXT (BY AI)" list.
+type AITodoItem struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"` // implement | make_pr | ask_question | check_status | rerequest_pr
+	Title     string `json:"title"`
+	Rationale string `json:"rationale"`
+	RefType   string `json:"refType"`  // jira | pr | review | ""
+	RefKey    string `json:"refKey"`   // e.g. JH-4922 or juna-health/juna-api#218
+	Priority  string `json:"priority"` // critical | high | medium | low
+	Position  int    `json:"position"`
+	Status    string `json:"status"` // pending | done | dismissed
+	Source    string `json:"source"` // ai | user
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
