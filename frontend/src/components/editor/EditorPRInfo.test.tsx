@@ -1,11 +1,12 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { GetVCSPRsForContext, BrowserOpenURL } = vi.hoisted(() => ({
+const { GetVCSPRsForContext, BrowserOpenURL, UpdatePRBranch } = vi.hoisted(() => ({
   GetVCSPRsForContext: vi.fn(),
   BrowserOpenURL: vi.fn(),
+  UpdatePRBranch: vi.fn(),
 }));
-vi.mock("../../../wailsjs/go/main/App", () => ({ GetVCSPRsForContext }));
+vi.mock("../../../wailsjs/go/main/App", () => ({ GetVCSPRsForContext, UpdatePRBranch }));
 vi.mock("../../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL }));
 
 import { EditorPRInfo } from "./EditorPRInfo";
@@ -60,5 +61,27 @@ describe("EditorPRInfo", () => {
     const { container } = render(<EditorPRInfo contextId="ctx1" />);
     await waitFor(() => expect(GetVCSPRsForContext).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows Update branch when PR is behind base", async () => {
+    GetVCSPRsForContext.mockResolvedValue([{ ...pr, state: "open", mergeStateStatus: "BEHIND" }]);
+    render(<EditorPRInfo contextId="ctx1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /update branch/i })).toBeInTheDocument());
+  });
+
+  it("hides Update branch when not behind", async () => {
+    GetVCSPRsForContext.mockResolvedValue([{ ...pr, state: "open", mergeStateStatus: "CLEAN" }]);
+    render(<EditorPRInfo contextId="ctx1" />);
+    await waitFor(() => expect(GetVCSPRsForContext).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /update branch/i })).not.toBeInTheDocument();
+  });
+
+  it("calls UpdatePRBranch on click", async () => {
+    GetVCSPRsForContext.mockResolvedValue([{ ...pr, state: "open", mergeStateStatus: "BEHIND" }]);
+    UpdatePRBranch.mockResolvedValue(undefined);
+    render(<EditorPRInfo contextId="ctx1" />);
+    const btn = await screen.findByRole("button", { name: /update branch/i });
+    fireEvent.click(btn);
+    await waitFor(() => expect(UpdatePRBranch).toHaveBeenCalledWith(pr.repoId, pr.prNumber));
   });
 });

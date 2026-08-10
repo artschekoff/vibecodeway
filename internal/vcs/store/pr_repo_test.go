@@ -20,6 +20,30 @@ func openTestDB(t *testing.T) (*appstore.Store, *vcsstore.Store) {
 	return s, vcsstore.NewStore(s.DB())
 }
 
+func TestUpsertPR_RoundTripsMergeStateStatus(t *testing.T) {
+	s, vcsStore := openTestDB(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "test-ctx", org.ID)
+	require.NoError(t, err)
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme", "web")
+	require.NoError(t, err)
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feat/x", "")
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err = vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 7,
+		"t", "a", "open", "review_required", "http://u", "feat/x",
+		"MERGEABLE", "BEHIND", "SUCCESS", false, now, now)
+	require.NoError(t, err)
+
+	got, err := vcsStore.PullRequests.GetPRByRepoAndNumber(ctx, repo.ID, 7)
+	require.NoError(t, err)
+	assert.Equal(t, "BEHIND", got.MergeStateStatus)
+}
+
 func TestListCommentsForPRs(t *testing.T) {
 	s, vcsStore := openTestDB(t)
 	ctx := context.Background()
@@ -43,13 +67,13 @@ func TestListCommentsForPRs(t *testing.T) {
 	// Create two PRs
 	pr1Result, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 1,
 		"PR 1", "alice", "open", "approved", "https://example.com/pr/1",
-		"feature-1", "mergeable", "success", false, now, now)
+		"feature-1", "mergeable", "", "success", false, now, now)
 	require.NoError(t, err)
 	pr1ID := pr1Result.ID
 
 	pr2Result, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 2,
 		"PR 2", "bob", "open", "pending", "https://example.com/pr/2",
-		"feature-2", "mergeable", "success", false, now, now)
+		"feature-2", "mergeable", "", "success", false, now, now)
 	require.NoError(t, err)
 	pr2ID := pr2Result.ID
 
@@ -103,7 +127,7 @@ func TestUpsertCommentReportsIsNew(t *testing.T) {
 
 	prResult, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 1,
 		"PR 1", "alice", "open", "approved", "https://example.com/pr/1",
-		"feature-1", "mergeable", "success", false, now, now)
+		"feature-1", "mergeable", "", "success", false, now, now)
 	require.NoError(t, err)
 	prID := prResult.ID
 
@@ -140,7 +164,7 @@ func TestListOpenPRsWithRepoAndSetPRState(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, n := range []int{1, 2} {
 		_, err = vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, n,
-			"PR", "alice", "open", "", "url", "feat/x", "mergeable", "success", false, now, now)
+			"PR", "alice", "open", "", "url", "feat/x", "mergeable", "", "success", false, now, now)
 		require.NoError(t, err)
 	}
 

@@ -67,6 +67,7 @@ import {
   MarkWorkspaceShouldDelete,
   ListLocalBranches,
   DeleteLocalBranch,
+  RemoveGoneLocalBranches,
   CheckoutLocalBranch,
   SwitchMainWorkingTree,
   FetchPruneRepoPath,
@@ -911,6 +912,22 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     }
   };
 
+  const [clearingGoneId, setClearingGoneId] = useState<string | null>(null);
+  const handleClearGoneBranches = async (pathId: string) => {
+    const gone = (localBranches[pathId] ?? []).filter((b) => b.isGone).length;
+    if (gone === 0) return;
+    if (!window.confirm(`Delete ${gone} local branch${gone === 1 ? "" : "es"} whose upstream is gone?`)) return;
+    setClearingGoneId(pathId);
+    try {
+      await RemoveGoneLocalBranches(pathId);
+      await reloadLocalBranches(pathId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClearingGoneId(null);
+    }
+  };
+
   const [checkingOutKey, setCheckingOutKey] = useState<string | null>(null);
   const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null);
 
@@ -1647,6 +1664,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                                 >
                                   <X size={11} />
                                 </button>
+                                {(localBranches[p.id] ?? []).some((b) => b.isGone) && (
+                                  <button
+                                    className="repo-path-open"
+                                    style={{ color: "var(--danger)" }}
+                                    disabled={clearingGoneId === p.id}
+                                    onClick={() => void handleClearGoneBranches(p.id)}
+                                    title="Delete all local branches whose upstream is gone"
+                                  >
+                                    {clearingGoneId === p.id
+                                      ? "Clearing…"
+                                      : `Clear all gones (${(localBranches[p.id] ?? []).filter((b) => b.isGone).length})`}
+                                  </button>
+                                )}
                               </div>
                               {visibleWorkspaces(p.id).length > 0 && (
                                 <div className="repo-section-label">Workspaces</div>

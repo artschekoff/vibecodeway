@@ -8,6 +8,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseGHPRList_ParsesMergeStateStatus(t *testing.T) {
+	data := []byte(`[{"number":7,"title":"t","author":{"login":"a"},"state":"OPEN",
+	"isDraft":false,"reviewDecision":"","url":"u","headRefName":"feat/x",
+	"mergeable":"MERGEABLE","mergeStateStatus":"BEHIND","statusCheckRollup":[],
+	"createdAt":"2026-08-07T00:00:00Z","updatedAt":"2026-08-07T00:00:00Z"}]`)
+	prs, err := parseGHPRList(data, "test")
+	require.NoError(t, err)
+	require.Len(t, prs, 1)
+	assert.Equal(t, "BEHIND", prs[0].MergeStateStatus)
+}
+
 func TestParseGHPRList_HappyPath(t *testing.T) {
 	input := []byte(`[
 		{
