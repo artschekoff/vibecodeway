@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand, ListAIPrompts, UpdateAIPrompt, ResetAIPrompt } from "../../wailsjs/go/main/App";
 import type { store } from "../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
@@ -111,6 +111,19 @@ export default function SettingsPage() {
   const deleteCommand = async (id: string) => { await DeleteTerminalCommand(id); await loadCommands(); notifyCommandsChanged(); };
   const setCommandField = (id: string, field: "title" | "command" | "sendEnter", value: string | boolean) =>
     setCommands((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } as store.TerminalCommand : c)));
+
+  const [prompts, setPrompts] = useState<store.AIPrompt[]>([]);
+  const loadPrompts = useCallback(async () => {
+    try { setPrompts((await ListAIPrompts()) ?? []); } catch { /* keep last known */ }
+  }, []);
+  useEffect(() => { void loadPrompts(); }, [loadPrompts]);
+  const setPromptBody = (id: string, body: string) =>
+    setPrompts((prev) => prev.map((p) => (p.id === id ? ({ ...p, body } as store.AIPrompt) : p)));
+  const saveAllPrompts = async () => {
+    await Promise.all(prompts.map((p) => UpdateAIPrompt(p.id, p.body)));
+    await loadPrompts();
+  };
+  const resetPrompt = async (id: string) => { await ResetAIPrompt(id); await loadPrompts(); };
 
   useEffect(() => {
     let cancelled = false;
@@ -587,6 +600,39 @@ export default function SettingsPage() {
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => void addCommand()}>+ Add command</button>
               <button className="btn-primary" style={{ fontSize: 11 }} onClick={() => void saveAllCommands()}>Save all</button>
+            </div>
+          </div>
+        </section>
+
+        <section className="detail-section">
+          <div className="detail-section-header">
+            <span className="detail-section-title">Prompts</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 14px" }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              AI prompts used across the app, including TODO NEXT action drafts. Placeholders like <code>{"{{title}}"}</code> are substituted at run time.
+            </div>
+            {prompts.map((p) => (
+              <div key={p.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>{p.label}</span>
+                  <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => void resetPrompt(p.id)}>Reset</button>
+                </div>
+                {p.placeholders?.length > 0 && (
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    {p.placeholders.map((ph) => `{{${ph.name}}}`).join("  ")}
+                  </div>
+                )}
+                <textarea
+                  value={p.body}
+                  onChange={(e) => setPromptBody(p.id, e.target.value)}
+                  rows={6}
+                  style={{ width: "100%", fontSize: 12, fontFamily: "inherit", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px", resize: "vertical" }}
+                />
+              </div>
+            ))}
+            <div>
+              <button className="btn-primary" style={{ fontSize: 11 }} onClick={() => void saveAllPrompts()}>Save prompts</button>
             </div>
           </div>
         </section>
