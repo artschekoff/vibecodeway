@@ -41,7 +41,7 @@ const headerBtnStyle: React.CSSProperties = {
 const chevronStyle: React.CSSProperties = { width: 10, display: "inline-block", fontSize: 9 };
 
 // Sections are collapsed by default; this stores which ones the user opened.
-const EXPAND_KEY = "context-consolidator:changedfiles:expanded";
+const EXPAND_KEY = "vibecodeway:changedfiles:expanded";
 
 function loadExpanded(): Set<string> {
   try {

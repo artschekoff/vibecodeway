@@ -12,12 +12,12 @@ import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesCon
 import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
 import { editorModeForKey, editorModeLabel } from "../lib/contextMode";
 
-const SIDEBAR_KEY = "context-consolidator:editor:sidebarWidth";
+const SIDEBAR_KEY = "vibecodeway:editor:sidebarWidth";
 const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 640;
 const SIDEBAR_DEFAULT = 300;
 
-const TERMINAL_KEY = "context-consolidator:editor:terminalHeight";
+const TERMINAL_KEY = "vibecodeway:editor:terminalHeight";
 const TERMINAL_MIN = 90;
 const TERMINAL_MAX = 900;
 const TERMINAL_DEFAULT = 260;

@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 DIST_DIR := dist
-APP_NAME := context-consolidator
-BUNDLE_NAME := ContextConsolidator
+APP_NAME := vibecodeway
+BUNDLE_NAME := VibeCodeWay
 
 INSTALL_DIR := /usr/local/bin
 
@@ -19,10 +19,10 @@ build-desktop:
 	wails build
 
 build-cli:
-	go build -o bin/context-consolidator-cli ./cmd/cli
+	go build -o bin/vibecodeway-cli ./cmd/cli
 
 tooling-doc: build-cli
-	./bin/context-consolidator-cli agent-tool doc > docs/TOOLING.md
+	./bin/vibecodeway-cli agent-tool doc > docs/TOOLING.md
 	@echo "wrote docs/TOOLING.md"
 
 install-cli: build-cli
@@ -51,14 +51,14 @@ vet:
 validate: fmt vet lint test
 
 db-truncate:
-	@sqlite3 ~/.context-consolidator/context_consolidator.db \
+	@sqlite3 ~/.vibecodeway/vibecodeway.db \
 		"DELETE FROM slack_threads; DELETE FROM slack_channels; DELETE FROM slack_provider; DELETE FROM jira_comments; DELETE FROM jira_issues; DELETE FROM jira_provider; DELETE FROM contexts;"
 	@echo "All tables truncated."
 
 db-reinit:
-	@rm -f ~/.context-consolidator/context_consolidator.db \
-		~/.context-consolidator/context_consolidator.db-shm \
-		~/.context-consolidator/context_consolidator.db-wal
+	@rm -f ~/.vibecodeway/vibecodeway.db \
+		~/.vibecodeway/vibecodeway.db-shm \
+		~/.vibecodeway/vibecodeway.db-wal
 	@echo "Database removed. Migrations will run automatically on next start."
 
 clean:

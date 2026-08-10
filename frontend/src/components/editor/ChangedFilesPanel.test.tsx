@@ -12,7 +12,7 @@ vi.mock("../../../wailsjs/go/main/App", () => ({ GetContextChanges, StageFile, U
 
 import { ChangedFilesPanel } from "./ChangedFilesPanel";
 
-const EXPAND_KEY = "context-consolidator:changedfiles:expanded";
+const EXPAND_KEY = "vibecodeway:changedfiles:expanded";
 // Sections are collapsed by default; most tests want them open, so seed every
 // section key as expanded. Tests exercising the default/collapse behavior clear it.
 const seedExpanded = () =>

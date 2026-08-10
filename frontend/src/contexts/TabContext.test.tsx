@@ -3,7 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 import { TabProvider, useTabContext } from "./TabContext";
 import type { ReactNode } from "react";
 
-const STORAGE_KEY = "context-consolidator:tabs-v1";
+const STORAGE_KEY = "vibecodeway:tabs-v1";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <TabProvider>{children}</TabProvider>;

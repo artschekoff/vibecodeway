@@ -10,7 +10,7 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import type { Tab } from "../types";
 
-const TAB_STORAGE_KEY = "context-consolidator:tabs-v1";
+const TAB_STORAGE_KEY = "vibecodeway:tabs-v1";
 
 interface TabContextValue {
   tabs: Tab[];
