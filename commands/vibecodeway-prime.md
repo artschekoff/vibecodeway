@@ -1,27 +1,27 @@
 ---
-name: context-consolidator-prime
+name: vibecodeway-prime
 description: >-
-  Entry point for context-consolidator — load the full CLI schema via
-  context-consolidator-cli describe, then route to the right slash command or
-  CLI call. Use at the start of any context-consolidator task.
+  Entry point for vibecodeway — load the full CLI schema via
+  vibecodeway-cli describe, then route to the right slash command or
+  CLI call. Use at the start of any vibecodeway task.
 ---
 
-# Prime — Context Consolidator CLI Router
+# Prime — VibeCodeWay CLI Router
 
 Load the authoritative CLI schema first, then route the user's request. All
-operations go through `context-consolidator-cli` (Bash).
+operations go through `vibecodeway-cli` (Bash).
 
 ## Step 1 — Load the schema
 
 ```bash
-context-consolidator-cli describe
+vibecodeway-cli describe
 ```
 
 **Output:** JSON
 
 ```json
 {
-  "binary": "context-consolidator-cli",
+  "binary": "vibecodeway-cli",
   "version": "string",
   "commands": [
     {
@@ -40,14 +40,14 @@ context-consolidator-cli describe
 Every command documents **description**, **input**, **output**, and **flags**.
 Keep this as the source of truth — prefer it over `--help`.
 
-If the binary is missing (`command not found: context-consolidator-cli`), tell
-the user to run `make install-cli` from the context-consolidator repo root and
+If the binary is missing (`command not found: vibecodeway-cli`), tell
+the user to run `make install-cli` from the vibecodeway repo root and
 stop.
 
 ## Step 2 — Quick auth check (when a task needs Jira/Slack)
 
 ```bash
-context-consolidator-cli auth-status
+vibecodeway-cli auth-status
 ```
 
 **Output:** `{"status":"authenticated|unauthenticated|error"}`  
@@ -61,24 +61,24 @@ local reads (`context-list`, `context-get`, `text-list`, …).
 
 | Task signal | Action |
 |---|---|
-| "Load / show / get a saved context" | `/context-consolidator-load-context` |
-| "Load task assignment / tech assignment / text notes" | `/context-consolidator-load-task-assignment` |
-| "List contexts", "show contexts" | `context-consolidator-cli context-list` |
+| "Load / show / get a saved context" | `/vibecodeway-load-context` |
+| "Load task assignment / tech assignment / text notes" | `/vibecodeway-load-task-assignment` |
+| "List contexts", "show contexts" | `vibecodeway-cli context-list` |
 | "Create / update / delete / archive a context" | drive CLI from schema (`context-create`, `context-update`, `context-delete`, `context-toggle-status`) |
 | "Add / list / delete text entries" | `add-text`, `text-list`, `text-delete`, `text-toggle` |
 | "Upload / list / delete files" | `add-file`, `file-list`, `file-delete`, `file-toggle` |
 | "Search / add / sync / refresh Jira issues" | `jira-search`, `jira-add`, `jira-sync-comments`, `jira-refresh`, `jira-search-jql` |
 | "Slack channels / threads / DMs" | `slack-*` commands from schema |
-| "Show me the schema / all commands / what can this do" | `context-consolidator-cli describe` |
+| "Show me the schema / all commands / what can this do" | `vibecodeway-cli describe` |
 
 ## Step 4 — Rules
 
-- Always use `context-consolidator-cli` for context-consolidator work.
+- Always use `vibecodeway-cli` for vibecodeway work.
 - For load-context flows, delegate to the slash commands above; do not duplicate their steps here.
 - For everything else, drive the CLI using the schema from Step 1: read `input`, `flags`, and `output` to build the call and parse the result.
 - Every command prints JSON to stdout on success; errors go to stderr with a non-zero exit.
 - Prefer `--context-key` when the user names a context; use `--context-id` (UUID) when you already have it from `context-list`.
-- If no row matches, ask the user to clarify what they want to do with context-consolidator.
+- If no row matches, ask the user to clarify what they want to do with vibecodeway.
 
 ## Step 5 — Safe JSON handling (required)
 
@@ -87,14 +87,14 @@ CLI output is JSON. Follow these rules whenever you inspect or summarize it.
 ### Preferred: `jq`
 
 ```bash
-context-consolidator-cli context-list | jq '[.[] | {key, status, id}]'
-context-consolidator-cli context-get --context-key KEY | jq '{key: .context.key, issues: [.issues[]? | {jiraKey, summary, status, assignee}]}'
+vibecodeway-cli context-list | jq '[.[] | {key, status, id}]'
+vibecodeway-cli context-get --context-key KEY | jq '{key: .context.key, issues: [.issues[]? | {jiraKey, summary, status, assignee}]}'
 ```
 
 ### Allowed: Python via temp file
 
 ```bash
-context-consolidator-cli context-get --context-key KEY > /tmp/cc-ctx.json
+vibecodeway-cli context-get --context-key KEY > /tmp/cc-ctx.json
 python3 -c 'import json; d=json.load(open("/tmp/cc-ctx.json")); print(d["context"]["key"])'
 ```
 

@@ -530,7 +530,7 @@ func (a *App) firstAttachedRepoPath(contextID string) (string, error) {
 
 // SolveWithAI ensures a git worktree exists for every repo attached to the
 // context, assembles a context-grounded task instruction that lists those
-// worktree paths and starts with the /writing-plans + /context-consolidator-load-context skill
+// worktree paths and starts with the /writing-plans + /vibecodeway-load-context skill
 // commands, opens the configured agent/terminal at the first worktree, and
 // returns the instruction (the frontend copies it to the clipboard).
 func (a *App) SolveWithAI(contextID, userPrompt string) (string, error) {

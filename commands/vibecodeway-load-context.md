@@ -1,8 +1,8 @@
 ---
-name: context-consolidator-load-context
+name: vibecodeway-load-context
 description: >-
-  Load a saved context from context-consolidator into the conversation via
-  context-consolidator-cli. Lists available contexts, asks which to load, then
+  Load a saved context from vibecodeway into the conversation via
+  vibecodeway-cli. Lists available contexts, asks which to load, then
   fetches and presents the full context data. Use when the user says "load
   context", "get context", "show contexts", or wants to work with a saved
   Jira/Slack context.
@@ -10,28 +10,28 @@ description: >-
 
 # Load Context
 
-All operations use `context-consolidator-cli` (Bash). JSON on stdout; errors on
-stderr. Prefer `/context-consolidator-prime` first if the CLI schema is not
+All operations use `vibecodeway-cli` (Bash). JSON on stdout; errors on
+stderr. Prefer `/vibecodeway-prime` first if the CLI schema is not
 already loaded.
 
 `context-list` / `context-get` read the **local** consolidator DB. Do **not** call
 `jira-cli`, `acli`, `jira-refresh`, or `reload-all` unless the user explicitly
 asks to refresh from Jira/Slack.
 
-Follow **Safe JSON handling** in `/context-consolidator-prime` (prefer `jq`;
+Follow **Safe JSON handling** in `/vibecodeway-prime` (prefer `jq`;
 never `cli | python3 <<'PY'`).
 
 ## Workflow
 
 ### Step 1: Resolve which context to load
 
-**If the user already named a context key** (e.g. `/context-consolidator-load-context JH-4922`):
+**If the user already named a context key** (e.g. `/vibecodeway-load-context JH-4922`):
 skip the list UI and go straight to Step 3 with that key.
 
 **Otherwise**, list contexts:
 
 ```bash
-context-consolidator-cli context-list | jq '[.[] | {key, status, id}]'
+vibecodeway-cli context-list | jq '[.[] | {key, status, id}]'
 ```
 
 **Output:** JSON array of context objects (`id`, `key`, `status`, issue counts, …).
@@ -51,7 +51,7 @@ Ask which context to load. If only one exists, still confirm before loading.
 ### Step 3: Fetch the full context
 
 ```bash
-context-consolidator-cli context-get --context-key <selected_key> > /tmp/cc-ctx.json
+vibecodeway-cli context-get --context-key <selected_key> > /tmp/cc-ctx.json
 jq '{
   key: .context.key,
   status: .context.status,
@@ -76,7 +76,7 @@ Summarize for the user:
 2. **Issue list** — key, summary, status, comment count per issue.
 3. **Next steps** — ask if they want to:
    - Analyze / summarize the context
-   - Search for new issues (`context-consolidator-cli jira-search --context-key <key>`)
+   - Search for new issues (`vibecodeway-cli jira-search --context-key <key>`)
    - Work with a specific issue
 
 Keep the summary concise. Full data is already in context — do not dump every
