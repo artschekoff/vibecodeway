@@ -60,6 +60,7 @@ func (m *mockRunner) SetToken(_ string)                             {}
 func (m *mockRunner) GetRepoDescription(_ context.Context, _, _ string) (string, error) {
 	return "", nil
 }
+func (m *mockRunner) UpdatePRBranch(_ context.Context, _, _ string, _ int) error { return nil }
 func (m *mockRunner) GetPRByNumber(_ context.Context, _, _ string, prNumber int) (*vcs.PRData, error) {
 	if m.prByNumber != nil {
 		return m.prByNumber[prNumber], nil

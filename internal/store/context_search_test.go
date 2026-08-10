@@ -150,7 +150,7 @@ func TestSearchIndexesPRContent(t *testing.T) {
 	require.NoError(t, err, "add branch")
 
 	prResult, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 1,
-		"Zebrafish auth refactor", "alice", "open", "", "", "", "", "", false, "", "")
+		"Zebrafish auth refactor", "alice", "open", "", "", "", "", "", "", false, "", "")
 	require.NoError(t, err, "upsert pr")
 	prID := prResult.ID
 

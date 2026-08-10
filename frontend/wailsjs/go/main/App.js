@@ -178,6 +178,10 @@ export function DeleteLocalBranch(arg1, arg2) {
   return window['go']['main']['App']['DeleteLocalBranch'](arg1, arg2);
 }
 
+export function RemoveGoneLocalBranches(arg1) {
+  return window['go']['main']['App']['RemoveGoneLocalBranches'](arg1);
+}
+
 export function DeleteOrganization(arg1) {
   return window['go']['main']['App']['DeleteOrganization'](arg1);
 }
@@ -564,6 +568,10 @@ export function MarkPRCommentViewed(arg1) {
 
 export function MarkPRViewed(arg1) {
   return window['go']['main']['App']['MarkPRViewed'](arg1);
+}
+
+export function UpdatePRBranch(arg1, arg2) {
+  return window['go']['main']['App']['UpdatePRBranch'](arg1, arg2);
 }
 
 export function MarkReviewRequestViewed(arg1) {

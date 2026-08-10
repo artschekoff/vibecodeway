@@ -294,7 +294,7 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 		"pr", "list",
 		"--repo", owner + "/" + repo,
 		"--state", "all",
-		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt",
+		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt",
 		"--limit", "50",
 	}
 	if branch != "" {
@@ -347,7 +347,7 @@ func (r *Runner) GetPRByNumber(ctx context.Context, owner, repo string, prNumber
 	out, err := r.run(ctx, []string{
 		"pr", "view", strconv.Itoa(prNumber),
 		"--repo", owner + "/" + repo,
-		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt,reviews",
+		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,reviews",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gh pr view %d: %w", prNumber, err)
@@ -357,6 +357,18 @@ func (r *Runner) GetPRByNumber(ctx context.Context, owner, repo string, prNumber
 		return nil, err
 	}
 	return &pd, nil
+}
+
+// UpdatePRBranch runs `gh pr update-branch <n>` which merges the base branch into the
+// PR's head branch. GitHub only allows this when the head is behind base; otherwise gh
+// returns an error (surfaced to the caller).
+func (r *Runner) UpdatePRBranch(ctx context.Context, owner, repo string, prNumber int) error {
+	r.logger.Info("gh pr update-branch", zap.String("repo", owner+"/"+repo), zap.Int("pr", prNumber))
+	_, err := r.run(ctx, []string{"pr", "update-branch", strconv.Itoa(prNumber), "--repo", owner + "/" + repo})
+	if err != nil {
+		return fmt.Errorf("gh pr update-branch %d: %w", prNumber, err)
+	}
+	return nil
 }
 
 // ghPR is the JSON shape returned by `gh pr list --json ...` for PR list queries.
@@ -370,6 +382,7 @@ type ghPR struct {
 	URL               string                 `json:"url"`
 	HeadRefName       string                 `json:"headRefName"`
 	Mergeable         string                 `json:"mergeable"`
+	MergeStateStatus  string                 `json:"mergeStateStatus"`
 	StatusCheckRollup []struct {
 		State string `json:"state"`
 	} `json:"statusCheckRollup"`
@@ -397,18 +410,19 @@ func parseGHPRList(data []byte, errLabel string) ([]vcs.PRData, error) {
 			states[i] = c.State
 		}
 		result = append(result, vcs.PRData{
-			Number:       p.Number,
-			Title:        p.Title,
-			Author:       p.Author.Login,
-			State:        strings.ToLower(p.State),
-			IsDraft:      p.IsDraft,
-			ReviewStatus: mapReviewDecision(p.ReviewDecision),
-			URL:          p.URL,
-			HeadBranch:   p.HeadRefName,
-			Mergeable:    p.Mergeable,
-			CIStatus:     aggregateCIStatus(states),
-			CreatedAt:    p.CreatedAt,
-			UpdatedAt:    p.UpdatedAt,
+			Number:           p.Number,
+			Title:            p.Title,
+			Author:           p.Author.Login,
+			State:            strings.ToLower(p.State),
+			IsDraft:          p.IsDraft,
+			ReviewStatus:     mapReviewDecision(p.ReviewDecision),
+			URL:              p.URL,
+			HeadBranch:       p.HeadRefName,
+			Mergeable:        p.Mergeable,
+			MergeStateStatus: p.MergeStateStatus,
+			CIStatus:         aggregateCIStatus(states),
+			CreatedAt:        p.CreatedAt,
+			UpdatedAt:        p.UpdatedAt,
 		})
 	}
 	return result, nil
@@ -430,24 +444,25 @@ func parseGHPRSingle(data []byte) (vcs.PRData, error) {
 		entries[i] = reviewEntry{Login: rv.Author.Login, State: rv.State, SubmittedAt: rv.SubmittedAt}
 	}
 	return vcs.PRData{
-		Number:       p.Number,
-		Title:        p.Title,
-		Author:       p.Author.Login,
-		State:        strings.ToLower(p.State),
-		IsDraft:      p.IsDraft,
-		ReviewStatus: mapReviewDecision(p.ReviewDecision),
-		URL:          p.URL,
-		HeadBranch:   p.HeadRefName,
-		Mergeable:    p.Mergeable,
-		CIStatus:     aggregateCIStatus(states),
-		CreatedAt:    p.CreatedAt,
-		UpdatedAt:    p.UpdatedAt,
-		Reviewers:    collapseReviewerDecisions(entries, p.Author.Login),
+		Number:           p.Number,
+		Title:            p.Title,
+		Author:           p.Author.Login,
+		State:            strings.ToLower(p.State),
+		IsDraft:          p.IsDraft,
+		ReviewStatus:     mapReviewDecision(p.ReviewDecision),
+		URL:              p.URL,
+		HeadBranch:       p.HeadRefName,
+		Mergeable:        p.Mergeable,
+		MergeStateStatus: p.MergeStateStatus,
+		CIStatus:         aggregateCIStatus(states),
+		CreatedAt:        p.CreatedAt,
+		UpdatedAt:        p.UpdatedAt,
+		Reviewers:        collapseReviewerDecisions(entries, p.Author.Login),
 	}, nil
 }
 
 // prListJSONFields is the shared --json field set for `gh pr list` calls.
-const prListJSONFields = "number,title,author,state,reviewDecision,url,headRefName,mergeable,statusCheckRollup,createdAt,updatedAt"
+const prListJSONFields = "number,title,author,state,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt"
 
 // reviewRequestedSearch builds the `gh pr list --search` query for PRs awaiting a
 // given login's review. login may be "@me" or a concrete GitHub username.

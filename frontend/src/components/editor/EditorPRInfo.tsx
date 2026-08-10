@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, GitBranch, MessageSquare } from "lucide-react";
-import { GetVCSPRsForContext } from "../../../wailsjs/go/main/App";
+import { GetVCSPRsForContext, UpdatePRBranch } from "../../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 import type { PullRequest } from "../../types";
 import { PRStatusBadge } from "../PRStatusBadge";
@@ -13,6 +13,13 @@ import { countUnreadComments } from "../../lib/prComments";
  */
 export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { contextId: string; activeRepoId?: string; refreshSignal?: number }) {
   const [prs, setPrs] = useState<PullRequest[]>([]);
+  const [updating, setUpdating] = useState<Set<string>>(new Set());
+
+  const load = useCallback(() => {
+    return GetVCSPRsForContext(contextId)
+      .then((rows) => setPrs((rows as PullRequest[]) ?? []))
+      .catch(() => setPrs([]));
+  }, [contextId]);
 
   useEffect(() => {
     let active = true;
@@ -21,6 +28,18 @@ export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { conte
       .catch(() => { if (active) setPrs([]); });
     return () => { active = false; };
   }, [contextId, refreshSignal]);
+
+  const onUpdateBranch = async (pr: PullRequest) => {
+    setUpdating((s) => new Set(s).add(pr.id));
+    try {
+      await UpdatePRBranch(pr.repoId, pr.prNumber);
+      await load();
+    } catch {
+      // best-effort: GitHub rejects if not actually behind; leave the button.
+    } finally {
+      setUpdating((s) => { const n = new Set(s); n.delete(pr.id); return n; });
+    }
+  };
 
   // Follow the editor's repo selector: show only the selected repo's PR(s).
   // Unset => show every linked PR (backward compatible with single-repo contexts).
@@ -65,6 +84,15 @@ export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { conte
               )}
             </div>
             <PRStatusBadge status={pr.state} reviewStatus={pr.reviewStatus} mergeable={pr.mergeable} ciStatus={pr.ciStatus} isDraft={pr.isDraft} />
+            {pr.state === "open" && pr.mergeStateStatus === "BEHIND" && (
+              <button
+                onClick={() => void onUpdateBranch(pr)}
+                disabled={updating.has(pr.id)}
+                style={{ alignSelf: "flex-start", fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", cursor: updating.has(pr.id) ? "default" : "pointer" }}
+              >
+                {updating.has(pr.id) ? "Updating…" : "Update branch"}
+              </button>
+            )}
           </div>
         );
       })}

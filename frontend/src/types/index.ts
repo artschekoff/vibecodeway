@@ -467,6 +467,8 @@ export interface PullRequest {
   reviewStatus: "approved" | "changes_requested" | "review_required" | "commented" | string;
   /** GitHub mergeability: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | "" */
   mergeable?: string;
+  /** GitHub merge-state; "BEHIND" means the "Update branch" action is available. */
+  mergeStateStatus?: string;
   /** Aggregated CI status: "PENDING" | "SUCCESS" | "FAILURE" | "" */
   ciStatus?: string;
   url: string;

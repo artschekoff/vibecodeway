@@ -98,6 +98,8 @@ export function DeleteJiraIssue(arg1:string):Promise<void>;
 
 export function DeleteLocalBranch(arg1:string,arg2:string):Promise<void>;
 
+export function RemoveGoneLocalBranches(arg1:string):Promise<number>;
+
 export function DeleteOrganization(arg1:string):Promise<void>;
 
 export function DeletePersonAssignment(arg1:string):Promise<void>;
@@ -291,6 +293,8 @@ export function MarkMyAssignedJiraIssuesSeen():Promise<void>;
 export function MarkPRCommentViewed(arg1:string):Promise<void>;
 
 export function MarkPRViewed(arg1:string):Promise<void>;
+
+export function UpdatePRBranch(arg1:string,arg2:number):Promise<void>;
 
 export function MarkReviewRequestViewed(arg1:string):Promise<void>;
 

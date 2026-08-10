@@ -52,6 +52,19 @@ func parseLocalBranches(data []byte) []LocalBranch {
 	return result
 }
 
+// GoneDeletableBranches returns the names of local branches whose upstream is
+// gone and that are not the current branch (git refuses to delete the checked-out
+// branch). Order is preserved from the input.
+func GoneDeletableBranches(branches []LocalBranch) []string {
+	var out []string
+	for _, b := range branches {
+		if b.IsGone && !b.IsCurrent {
+			out = append(out, b.Name)
+		}
+	}
+	return out
+}
+
 // GitDeleteLocalBranch force-deletes a local branch in the repo at dir.
 // If a worktree is using the branch, it is removed first.
 func GitDeleteLocalBranch(dir, branch string) error {

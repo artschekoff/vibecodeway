@@ -32,6 +32,7 @@ func (f *fakePR) ListChangesRequestedForUser(_ context.Context, _, _, login stri
 func (f *fakePR) GetPRByNumber(_ context.Context, _, _ string, _ int) (*vcs.PRData, error) {
 	return f.pr, nil
 }
+func (f *fakePR) UpdatePRBranch(_ context.Context, _, _ string, _ int) error { return nil }
 func (f *fakePR) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs.CommentData, error) {
 	return f.comments, nil
 }

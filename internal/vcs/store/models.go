@@ -62,6 +62,8 @@ type PullRequest struct {
 	HeadBranch   string `json:"headBranch"`
 	// Mergeable is the GitHub mergeability status: "MERGEABLE", "CONFLICTING", or "UNKNOWN".
 	Mergeable string `json:"mergeable"`
+	// MergeStateStatus is GitHub's merge-state; "BEHIND" means the "Update branch" action is available.
+	MergeStateStatus string `json:"mergeStateStatus"`
 	// CIStatus is the aggregated status-check rollup: "PENDING", "SUCCESS", "FAILURE", or "".
 	CIStatus      string      `json:"ciStatus"`
 	PRCreatedAt   string      `json:"prCreatedAt"`

@@ -156,7 +156,7 @@ func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int)
 	res, err := a.vcsStore.PullRequests.UpsertPR(a.ctx,
 		repo.ID, branch.ID, pr.Number,
 		pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
-		pr.Mergeable, pr.CIStatus, pr.IsDraft, pr.CreatedAt, pr.UpdatedAt,
+		pr.Mergeable, pr.MergeStateStatus, pr.CIStatus, pr.IsDraft, pr.CreatedAt, pr.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("storing PR #%d: %w", prNumber, err)
@@ -830,6 +830,51 @@ func (a *App) DeleteLocalBranch(pathID, branch string) error {
 		return fmt.Errorf("repo path not found: %w", err)
 	}
 	return vcs.GitDeleteLocalBranch(rp.Path, branch)
+}
+
+// RemoveGoneLocalBranches deletes every local branch at pathID whose upstream is
+// gone (skipping the current branch). Best-effort: a per-branch failure is
+// collected, not fatal. Returns the number of branches actually removed.
+func (a *App) RemoveGoneLocalBranches(pathID string) (int, error) {
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, pathID)
+	if err != nil {
+		return 0, fmt.Errorf("repo path not found: %w", err)
+	}
+	branches, err := vcs.GitListLocalBranches(rp.Path)
+	if err != nil {
+		return 0, fmt.Errorf("list local branches: %w", err)
+	}
+	removed := 0
+	var failed []string
+	for _, name := range vcs.GoneDeletableBranches(branches) {
+		if delErr := vcs.GitDeleteLocalBranch(rp.Path, name); delErr != nil {
+			a.logger.Sugar().Warnf("RemoveGoneLocalBranches: delete %s failed: %v", name, delErr)
+			failed = append(failed, name)
+			continue
+		}
+		removed++
+	}
+	if len(failed) > 0 {
+		return removed, fmt.Errorf("removed %d, failed to remove: %s", removed, strings.Join(failed, ", "))
+	}
+	return removed, nil
+}
+
+// UpdatePRBranch merges the base branch into the given PR's head branch on the remote
+// (GitHub's "Update branch"). Resolves the repo from repoID and dispatches to its runner.
+func (a *App) UpdatePRBranch(repoID string, prNumber int) error {
+	repo, err := a.vcsStore.Repos.GetRepo(a.ctx, repoID)
+	if err != nil {
+		return fmt.Errorf("resolving repo %q: %w", repoID, err)
+	}
+	runner, err := a.vcsSvc.RunnerFor(vcs.Platform(repo.Platform))
+	if err != nil {
+		return fmt.Errorf("getting runner for %q: %w", repo.Platform, err)
+	}
+	if err := runner.UpdatePRBranch(a.ctx, repo.Owner, repo.Name, prNumber); err != nil {
+		return fmt.Errorf("updating PR #%d branch: %w", prNumber, err)
+	}
+	return nil
 }
 
 // SwitchMainWorkingTree switches the primary checkout of the repo at pathID to branch.

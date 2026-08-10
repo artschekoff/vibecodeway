@@ -51,6 +51,10 @@ type PRData struct {
 	IsDraft      bool
 	// Mergeable is the GitHub mergeability status: "MERGEABLE", "CONFLICTING", or "UNKNOWN".
 	Mergeable string
+	// MergeStateStatus is GitHub's merge-state: "BEHIND" means the head branch is out of
+	// date with base (the "Update branch" button is available). Other values: "CLEAN",
+	// "BLOCKED", "DIRTY", "DRAFT", "HAS_HOOKS", "UNSTABLE", "UNKNOWN".
+	MergeStateStatus string
 	// CIStatus is the aggregated status-check rollup: "PENDING", "SUCCESS", "FAILURE", or "".
 	CIStatus  string
 	CreatedAt string
@@ -140,6 +144,10 @@ type VCSRunner interface {
 	// Returns the PR metadata including the head branch name.
 	// Used when the user attaches a PR URL directly to a context.
 	GetPRByNumber(ctx context.Context, owner, repo string, prNumber int) (*PRData, error)
+
+	// UpdatePRBranch merges the base branch into the PR's head branch on the platform
+	// (GitHub's "Update branch" action). Only meaningful when the PR is behind its base.
+	UpdatePRBranch(ctx context.Context, owner, repo string, prNumber int) error
 
 	// GetRepoDescription fetches the human-readable description of a repository.
 	// Returns ("", nil) when the repo has no description. Non-fatal errors return "".
