@@ -101,6 +101,8 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			viewed_at     TEXT,
 			reviewers     TEXT NOT NULL DEFAULT '',
 			mergeable     TEXT NOT NULL DEFAULT '',
+			kind          TEXT NOT NULL DEFAULT 'requested',
+			ci_status     TEXT NOT NULL DEFAULT '',
 			UNIQUE (repo_id, pr_number)
 		);
 	`)

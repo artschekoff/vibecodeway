@@ -22,10 +22,13 @@ func NewReviewRequestRepo(db *sql.DB) *ReviewRequestRepo { return &ReviewRequest
 // UpsertReviewRequest creates or updates a review request identified by (repoID, prNumber).
 // When an existing record is updated (PR re-appears in the review list), reviewed_at and
 // dismissed_at are cleared so it shows as a fresh pending review again.
-func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, reviewersJSON, mergeable string) (bool, error) {
+func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, reviewersJSON, mergeable, kind, ciStatus string) (bool, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if reviewersJSON == "" {
 		reviewersJSON = "[]"
+	}
+	if kind == "" {
+		kind = "requested"
 	}
 
 	var existing string
@@ -40,9 +43,10 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 			UPDATE vcs_review_requests
 			SET pr_title = ?, pr_author = ?, pr_url = ?, review_status = ?,
 			    head_branch = ?, requested_at = ?, fetched_at = ?, reviewers = ?, mergeable = ?,
+			    kind = ?, ci_status = ?,
 			    reviewed_at = NULL, dismissed_at = NULL
 			WHERE id = ?
-		`, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable, existing)
+		`, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable, kind, ciStatus, existing)
 		return false, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -53,9 +57,9 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO vcs_review_requests
 			(id, repo_id, pr_number, pr_title, pr_author, pr_url,
-			 review_status, head_branch, requested_at, fetched_at, reviewers, mergeable)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable)
+			 review_status, head_branch, requested_at, fetched_at, reviewers, mergeable, kind, ci_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable, kind, ciStatus)
 	if err != nil {
 		return false, fmt.Errorf("insert review request: %w", err)
 	}
@@ -75,7 +79,7 @@ func (r *ReviewRequestRepo) MarkReviewedForRepo(ctx context.Context, repoID stri
 		_, err := r.db.ExecContext(ctx, `
 			UPDATE vcs_review_requests
 			SET reviewed_at = ?
-			WHERE repo_id = ? AND reviewed_at IS NULL AND dismissed_at IS NULL
+			WHERE repo_id = ? AND kind = 'requested' AND reviewed_at IS NULL AND dismissed_at IS NULL
 		`, now, repoID)
 		return err
 	}
@@ -96,7 +100,7 @@ func (r *ReviewRequestRepo) MarkReviewedForRepo(ctx context.Context, repoID stri
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE vcs_review_requests
 		SET reviewed_at = ?
-		WHERE repo_id = ? AND pr_number NOT IN `+inClause+`
+		WHERE repo_id = ? AND kind = 'requested' AND pr_number NOT IN `+inClause+`
 		  AND reviewed_at IS NULL AND dismissed_at IS NULL
 	`, placeholders...)
 	return err
@@ -166,7 +170,7 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 	q := `
 		SELECT id, repo_id, pr_number, pr_title, pr_author, pr_url,
 		       review_status, head_branch, requested_at, fetched_at, reviewed_at, dismissed_at,
-		       viewed_at, reviewers, mergeable
+		       viewed_at, reviewers, mergeable, kind, ci_status
 		FROM vcs_review_requests
 		WHERE dismissed_at IS NULL`
 	var args []any
@@ -190,6 +194,7 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 			&rr.ID, &rr.RepoID, &rr.PRNumber, &rr.PRTitle, &rr.PRAuthor,
 			&rr.PRURL, &rr.ReviewStatus, &rr.HeadBranch, &rr.RequestedAt, &rr.FetchedAt,
 			&rr.ReviewedAt, &rr.DismissedAt, &rr.ViewedAt, &reviewersJSON, &rr.Mergeable,
+			&rr.Kind, &rr.CIStatus,
 		); err != nil {
 			return nil, fmt.Errorf("scan review request: %w", err)
 		}

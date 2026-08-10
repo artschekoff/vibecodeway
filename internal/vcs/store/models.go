@@ -117,6 +117,11 @@ type ReviewRequest struct {
 	DismissedAt *string            `json:"dismissedAt,omitempty"`
 	ViewedAt    *string            `json:"viewedAt,omitempty"`
 	Reviewers   []ReviewerDecision `json:"reviewers,omitempty"`
+	// Kind labels how this PR entered the list: "requested" (someone asked for my
+	// review) or "authored" (my own open PR shown for status tracking).
+	Kind string `json:"kind"`
+	// CIStatus is the aggregated status-check rollup: "", PENDING, SUCCESS, FAILURE.
+	CIStatus string `json:"ciStatus"`
 }
 
 // ReviewerDecision is one reviewer's latest decision on a PR.
