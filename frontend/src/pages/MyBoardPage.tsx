@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare } from "lucide-react";
-import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, ReconcileMyOpenPRs, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL } from "../../wailsjs/go/main/App";
+import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare, Compass, Sparkles, ArrowUp, ArrowDown, X } from "lucide-react";
+import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, ReconcileMyOpenPRs, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL, ListTodoNext, GenerateTodoNext, AdjustTodoNext, ReorderTodoNext, DeleteTodoNextItem } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { useTabContext } from "../contexts/TabContext";
 import type { store, vcsstore } from "../../wailsjs/go/models";
@@ -36,6 +36,10 @@ export default function MyBoardPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [orgFilter, setOrgFilter] = useState("");
+  const [todos, setTodos] = useState<store.AITodoItem[]>([]);
+  const [todoBusy, setTodoBusy] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustText, setAdjustText] = useState("");
   const { openContextTab } = useTabContext();
 
   // Distinct filter options present in the current issues.
@@ -116,6 +120,7 @@ export default function MyBoardPage() {
       setSelectedOrgId((prev) => prev || list[0]?.id || "");
     }).catch(() => { /* no orgs */ });
     void GetJiraInstanceURL().then((u) => setJiraBaseUrl(u ?? "")).catch(() => { /* no jira */ });
+    void ListTodoNext().then((rows) => setTodos((rows as store.AITodoItem[]) ?? [])).catch(() => { /* none yet */ });
   }, []);
 
   const jiraUrl = (key: string) => (jiraBaseUrl ? `${jiraBaseUrl}/browse/${key}` : "");
@@ -176,6 +181,52 @@ export default function MyBoardPage() {
     }
   };
 
+  const generateTodos = async () => {
+    setTodoBusy(true);
+    try {
+      setTodos((await GenerateTodoNext(personName)) ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTodoBusy(false);
+    }
+  };
+
+  const submitAdjust = async () => {
+    if (!adjustText.trim()) return;
+    setTodoBusy(true);
+    try {
+      setTodos((await AdjustTodoNext(adjustText.trim())) ?? []);
+      setAdjustText("");
+      setAdjustOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTodoBusy(false);
+    }
+  };
+
+  const moveTodo = async (idx: number, dir: -1 | 1) => {
+    const next = [...todos];
+    const j = idx + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[idx], next[j]] = [next[j], next[idx]];
+    setTodos(next);
+    try {
+      setTodos((await ReorderTodoNext(next.map((t) => t.id))) ?? next);
+    } catch {
+      /* keep optimistic order on failure */
+    }
+  };
+
+  const removeTodo = async (id: string) => {
+    try {
+      setTodos((await DeleteTodoNextItem(id)) ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <div className="board-page">
       {/* Header */}
@@ -198,6 +249,60 @@ export default function MyBoardPage() {
       </div>
 
       {error && <div className="board-error">{error}</div>}
+
+      {/* Section: TODO NEXT (BY AI) */}
+      <div className="board-section">
+        <div className="board-section-header">
+          <Compass size={14} />
+          <span className="board-section-title">TODO NEXT (BY AI)</span>
+          {todos.length > 0 && <span className="board-section-count">{todos.length}</span>}
+          <div className="todo-header-actions">
+            <button className="board-name-save" disabled={todoBusy} onClick={() => void generateTodos()}>
+              <Sparkles size={12} /> {todoBusy ? "Working…" : "Generate"}
+            </button>
+            <button className="board-name-save" disabled={todoBusy} onClick={() => setAdjustOpen((v) => !v)}>
+              Adjust
+            </button>
+          </div>
+        </div>
+
+        {adjustOpen && (
+          <div className="todo-adjust">
+            <textarea
+              value={adjustText}
+              onChange={(e) => setAdjustText(e.target.value)}
+              placeholder="e.g. drop the docs task, do the deploy check first, add: ask design about JH-99"
+              rows={2}
+            />
+            <button className="board-name-save" aria-label="Apply adjustment" disabled={todoBusy || !adjustText.trim()} onClick={() => void submitAdjust()}>
+              Apply
+            </button>
+          </div>
+        )}
+
+        {todos.length === 0 ? (
+          <div className="board-section-empty">No AI actions yet — click Generate.</div>
+        ) : (
+          <div className="board-section-items">
+            {todos.map((t, i) => (
+              <div key={t.id} className="board-card todo-card">
+                <div className="todo-card-main">
+                  <span className={`todo-kind kind-${t.kind}`}>{t.kind.replace(/_/g, " ")}</span>
+                  <span className={`todo-prio prio-${t.priority}`}>{t.priority}</span>
+                  <span className="todo-title">{t.title}</span>
+                  {t.refKey && <span className="todo-ref">{t.refKey}</span>}
+                </div>
+                {t.rationale && <div className="board-card-meta">{t.rationale}</div>}
+                <div className="todo-actions">
+                  <button title="Move up" disabled={i === 0} onClick={() => void moveTodo(i, -1)}><ArrowUp size={13} /></button>
+                  <button title="Move down" disabled={i === todos.length - 1} onClick={() => void moveTodo(i, 1)}><ArrowDown size={13} /></button>
+                  <button title="Remove" onClick={() => void removeTodo(t.id)}><X size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Section 0: Recent Activity */}
       <BoardSection

@@ -16,6 +16,11 @@ const H = vi.hoisted(() => ({
   ListOrganizations: vi.fn(),
   GetJiraInstanceURL: vi.fn(),
   CreateContextFromJiraIssue: vi.fn(),
+  ListTodoNext: vi.fn(),
+  GenerateTodoNext: vi.fn(),
+  AdjustTodoNext: vi.fn(),
+  ReorderTodoNext: vi.fn(),
+  DeleteTodoNextItem: vi.fn(),
 }));
 vi.mock("../../wailsjs/go/main/App", () => H);
 vi.mock("../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL: vi.fn() }));
@@ -26,6 +31,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   H.GetVCSAuth.mockResolvedValue(null);
   H.GetPendingCodeReviews.mockResolvedValue([]);
+  H.ListTodoNext.mockResolvedValue([]);
   H.GetMyBoard.mockResolvedValue({
     blockers: [],
     myAssignments: [],

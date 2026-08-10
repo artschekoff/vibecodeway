@@ -6660,3 +6660,80 @@ select {
   text-align: center;
   pointer-events: none;
 }
+
+/* TODO NEXT (BY AI) segment */
+.todo-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.todo-adjust {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  align-items: flex-start;
+}
+.todo-adjust textarea {
+  flex: 1;
+  resize: vertical;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+.todo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.todo-card-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.todo-title {
+  font-weight: 600;
+  flex: 1;
+}
+.todo-ref {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.todo-kind,
+.todo-prio {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.todo-kind {
+  background: var(--bg-subtle, rgba(0, 0, 0, 0.06));
+  color: var(--text-muted);
+}
+.prio-critical { background: rgba(192, 57, 43, 0.15); color: #c0392b; }
+.prio-high     { background: rgba(211, 84, 0, 0.15);  color: #d35400; }
+.prio-medium   { background: rgba(41, 128, 185, 0.15); color: #2980b9; }
+.prio-low      { background: var(--bg-subtle, rgba(0, 0, 0, 0.06)); color: var(--text-muted); }
+.todo-actions {
+  display: flex;
+  gap: 4px;
+}
+.todo-actions button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 4px;
+  color: var(--text-muted);
+  display: inline-flex;
+}
+.todo-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
