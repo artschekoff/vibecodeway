@@ -3,7 +3,7 @@
 Generated from the tool registry — do not edit by hand. Regenerate with `make tooling-doc`.
 
 These are the actions the Ask AI agent can take. The CLI mirrors them:
-`context-consolidator-cli agent-tool list` and `... agent-tool call --name <tool> --args '{...}'`.
+`vibecodeway-cli agent-tool list` and `... agent-tool call --name <tool> --args '{...}'`.
 Tools marked **Write: yes** mutate state and require confirmation (Ask AI) or `--yes` (CLI).
 
 ## search_contexts
@@ -17,7 +17,7 @@ Full-text search across ALL contexts and their content (Jira issues/comments, Sl
 | `query` | string | yes | keywords to search for |
 
 ```sh
-context-consolidator-cli agent-tool call --name search_contexts --args '{}'
+vibecodeway-cli agent-tool call --name search_contexts --args '{}'
 ```
 
 ## get_context
@@ -31,7 +31,7 @@ List the elements inside one context: Jira issues (key/summary/status), Slack th
 | `contextId` | string | yes | the context id |
 
 ```sh
-context-consolidator-cli agent-tool call --name get_context --args '{}'
+vibecodeway-cli agent-tool call --name get_context --args '{}'
 ```
 
 ## search_within_context
@@ -46,7 +46,7 @@ Find the elements inside a single context whose text matches a query. Returns ma
 | `query` | string | yes | keywords to search for |
 
 ```sh
-context-consolidator-cli agent-tool call --name search_within_context --args '{}'
+vibecodeway-cli agent-tool call --name search_within_context --args '{}'
 ```
 
 ## get_item
@@ -62,7 +62,7 @@ Read the full text of one element. itemType is one of: issue, thread, text, file
 | `itemType` | string | yes | issue | thread | text | file |
 
 ```sh
-context-consolidator-cli agent-tool call --name get_item --args '{}'
+vibecodeway-cli agent-tool call --name get_item --args '{}'
 ```
 
 ## list_related_contexts
@@ -76,7 +76,7 @@ List contexts related to the given context (dependencies / links), with the rela
 | `contextId` | string | yes | the context id |
 
 ```sh
-context-consolidator-cli agent-tool call --name list_related_contexts --args '{}'
+vibecodeway-cli agent-tool call --name list_related_contexts --args '{}'
 ```
 
 ## edit_context
@@ -92,7 +92,7 @@ Edit a context's scalar attributes. Provide only the fields to change; omitted f
 | `status` | string | no | active | archived (optional) |
 
 ```sh
-context-consolidator-cli agent-tool call --name edit_context --args '{}'
+vibecodeway-cli agent-tool call --name edit_context --args '{}'
 ```
 
 ## add_event
@@ -111,7 +111,7 @@ Append a timeline event to a context (e.g. a decision, status update, or note). 
 | `type` | string | yes | event type, e.g. user_note | decision_made | status_update | blocker_identified |
 
 ```sh
-context-consolidator-cli agent-tool call --name add_event --args '{}'
+vibecodeway-cli agent-tool call --name add_event --args '{}'
 ```
 
 ## list_contexts
@@ -126,7 +126,7 @@ List ALL contexts (not a keyword search) with their id, key and status. Use this
 | `status` | string | no | optional filter: active | archived |
 
 ```sh
-context-consolidator-cli agent-tool call --name list_contexts --args '{}'
+vibecodeway-cli agent-tool call --name list_contexts --args '{}'
 ```
 
 ## find_contexts_by_jira_status
@@ -140,7 +140,7 @@ Find every context that has at least one Jira issue in the given status (e.g. 'C
 | `jiraStatus` | string | yes | the Jira issue status to match, e.g. 'Closed' |
 
 ```sh
-context-consolidator-cli agent-tool call --name find_contexts_by_jira_status --args '{}'
+vibecodeway-cli agent-tool call --name find_contexts_by_jira_status --args '{}'
 ```
 
 ## archive_contexts
@@ -154,7 +154,7 @@ Archive (deactivate) multiple contexts at once by id. Skips any that are already
 | `contextIds` | array | yes | the context ids to archive |
 
 ```sh
-context-consolidator-cli agent-tool call --name archive_contexts --args '{}'
+vibecodeway-cli agent-tool call --name archive_contexts --args '{}'
 ```
 
 ## list_review_requests
@@ -169,7 +169,7 @@ List open pull requests in a repo that are awaiting review from a user. Defaults
 | `user` | string | no | GitHub login to check (optional, default @me) |
 
 ```sh
-context-consolidator-cli agent-tool call --name list_review_requests --args '{}'
+vibecodeway-cli agent-tool call --name list_review_requests --args '{}'
 ```
 
 ## list_changes_requested
@@ -184,7 +184,7 @@ List open pull requests in a repo where a user left a 'changes requested' review
 | `user` | string | no | GitHub login to check (optional, default @me) |
 
 ```sh
-context-consolidator-cli agent-tool call --name list_changes_requested --args '{}'
+vibecodeway-cli agent-tool call --name list_changes_requested --args '{}'
 ```
 
 ## get_pr
@@ -199,7 +199,7 @@ Get one pull request's metadata (title, author, state, review status, CI status,
 | `repo` | string | yes | repository as 'owner/name' |
 
 ```sh
-context-consolidator-cli agent-tool call --name get_pr --args '{}'
+vibecodeway-cli agent-tool call --name get_pr --args '{}'
 ```
 
 ## get_pr_comments
@@ -214,7 +214,7 @@ List the comments on a pull request (conversation, review bodies, and inline rev
 | `repo` | string | yes | repository as 'owner/name' |
 
 ```sh
-context-consolidator-cli agent-tool call --name get_pr_comments --args '{}'
+vibecodeway-cli agent-tool call --name get_pr_comments --args '{}'
 ```
 
 ## approve_pr
@@ -230,7 +230,7 @@ Approve a pull request, optionally with a message. Submits an approving review a
 | `repo` | string | yes | repository as 'owner/name' |
 
 ```sh
-context-consolidator-cli agent-tool call --name approve_pr --args '{}'
+vibecodeway-cli agent-tool call --name approve_pr --args '{}'
 ```
 
 ## request_changes_pr
@@ -246,7 +246,7 @@ Request changes on a pull request with a required message explaining what needs 
 | `repo` | string | yes | repository as 'owner/name' |
 
 ```sh
-context-consolidator-cli agent-tool call --name request_changes_pr --args '{}'
+vibecodeway-cli agent-tool call --name request_changes_pr --args '{}'
 ```
 
 ## comment_pr
@@ -262,6 +262,6 @@ Leave a comment on a pull request (a review with no approval state). Requires a 
 | `repo` | string | yes | repository as 'owner/name' |
 
 ```sh
-context-consolidator-cli agent-tool call --name comment_pr --args '{}'
+vibecodeway-cli agent-tool call --name comment_pr --args '{}'
 ```
 

@@ -38,7 +38,7 @@ func newJiraSearchCmd() *cobra.Command {
 		"Run the context's saved JQL against Jira and return a diff of new vs existing issues. Call before jira-add to preview imports.",
 		"--context-id UUID | --context-key STRING (one required)",
 		`{"new":[{"key":"string","summary":"string","status":"string"}],"existing":[{"key":"string","summary":"string","status":"string"}]}`,
-		`context-consolidator-cli jira-search --context-key sprint-42`,
+		`vibecodeway-cli jira-search --context-key sprint-42`,
 	)
 }
 
@@ -81,7 +81,7 @@ func newJiraAddCmd() *cobra.Command {
 		"Add one or more Jira issues to a context by key, then sync comments.",
 		"--context-id UUID (required)\n--jira-keys STRING (required; comma-separated, e.g. JH-1,JH-5)",
 		`{"added":"int","newComments":"int"}`,
-		`context-consolidator-cli jira-add --context-id <uuid> --jira-keys JH-1,JH-5,JH-12`,
+		`vibecodeway-cli jira-add --context-id <uuid> --jira-keys JH-1,JH-5,JH-12`,
 	)
 }
 
@@ -114,7 +114,7 @@ func newJiraSyncCommentsCmd() *cobra.Command {
 		"Fetch new comments from Jira for all issues already stored in a context.",
 		"--context-id UUID (required)",
 		`{"newComments":"int"}`,
-		`context-consolidator-cli jira-sync-comments --context-id <uuid>`,
+		`vibecodeway-cli jira-sync-comments --context-id <uuid>`,
 	)
 }
 
@@ -147,7 +147,7 @@ func newJiraSearchJQLCmd() *cobra.Command {
 		"Run an arbitrary JQL query against Jira and return matching issues. Does not modify any context data.",
 		"--jql STRING (required)",
 		`[{"key":"string","summary":"string","status":"string","assignee":"string",...}]`,
-		`context-consolidator-cli jira-search-jql --jql "project = JH AND status = 'In Progress'"`,
+		`vibecodeway-cli jira-search-jql --jql "project = JH AND status = 'In Progress'"`,
 	)
 }
 
@@ -180,7 +180,7 @@ func newJiraRefreshCmd() *cobra.Command {
 		"Re-fetch all Jira issues and Slack data for a context from their upstream sources.",
 		"--context-id UUID (required)",
 		`{"contextId":"uuid","jira":{"updated":"int","new":"int"},"slack":{...},...}`,
-		`context-consolidator-cli jira-refresh --context-id <uuid>`,
+		`vibecodeway-cli jira-refresh --context-id <uuid>`,
 	)
 }
 
@@ -212,7 +212,7 @@ func newJiraDeleteIssueCmd() *cobra.Command {
 		"Remove a Jira issue and its comments from local storage. Does not modify Jira. Use context-get to find the internal UUID for a Jira key.",
 		"--id UUID (required; internal UUID, not JH-1)",
 		`{"deleted":"uuid"}`,
-		`context-consolidator-cli jira-delete-issue --id <uuid>`,
+		`vibecodeway-cli jira-delete-issue --id <uuid>`,
 	)
 }
 
@@ -244,7 +244,7 @@ func newJiraDeleteCommentCmd() *cobra.Command {
 		"Remove a Jira comment from local storage. Does not modify Jira.",
 		"--id UUID (required; internal UUID)",
 		`{"deleted":"uuid"}`,
-		`context-consolidator-cli jira-delete-comment --id <uuid>`,
+		`vibecodeway-cli jira-delete-comment --id <uuid>`,
 	)
 }
 
@@ -277,7 +277,7 @@ func newJiraToggleIssueCmd() *cobra.Command {
 		"Toggle is_active for a Jira issue. Inactive issues are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","key":"string","isActive":"bool",...}`,
-		`context-consolidator-cli jira-toggle-issue --id <uuid>`,
+		`vibecodeway-cli jira-toggle-issue --id <uuid>`,
 	)
 }
 
@@ -310,7 +310,7 @@ func newJiraToggleCommentCmd() *cobra.Command {
 		"Toggle is_active for a Jira comment. Inactive comments are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","isActive":"bool",...}`,
-		`context-consolidator-cli jira-toggle-comment --id <uuid>`,
+		`vibecodeway-cli jira-toggle-comment --id <uuid>`,
 	)
 }
 
@@ -337,7 +337,7 @@ func newReloadAllCmd() *cobra.Command {
 		"Re-fetch data for every active context from Jira and Slack. Runs a refresh for each context sequentially.",
 		"(none)",
 		`[{"contextId":"uuid","jira":{...},"slack":{...},...}]`,
-		`context-consolidator-cli reload-all`,
+		`vibecodeway-cli reload-all`,
 	)
 }
 

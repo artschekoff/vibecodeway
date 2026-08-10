@@ -25,7 +25,7 @@ func runDescribe(t *testing.T) map[string]any {
 
 func TestDescribe_EmitsBinaryAndCommands(t *testing.T) {
 	got := runDescribe(t)
-	if got["binary"] != "context-consolidator-cli" {
+	if got["binary"] != "vibecodeway-cli" {
 		t.Fatalf("binary field wrong: %v", got["binary"])
 	}
 	cmds, ok := got["commands"].([]any)

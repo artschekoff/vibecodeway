@@ -217,7 +217,7 @@ func (a *App) startup(ctx context.Context) {
 		a.logger.Warn("startup: backfill messages failed", zap.Error(err))
 	}
 
-	logger.Info("context-consolidator desktop started")
+	logger.Info("vibecodeway desktop started")
 }
 
 // domReady is called by Wails once the frontend DOM is loaded and event listeners
@@ -1333,7 +1333,7 @@ func logFilePath() string {
 	if err != nil {
 		home = "."
 	}
-	dir := filepath.Join(home, ".context-consolidator")
+	dir := filepath.Join(home, ".vibecodeway")
 	_ = os.MkdirAll(dir, 0o700)
 	return filepath.Join(dir, "app.log")
 }

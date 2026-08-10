@@ -179,7 +179,7 @@ func newAddTextCmd() *cobra.Command {
 		"Add a plain-text entry to a context. Provide either --file-path (reads the file) or --content (inline). For .md files, raw Markdown is stored as-is.",
 		"--context-id UUID | --context-key STRING (one required)\n--file-path PATH | --content STRING (one required)\n--name STRING (optional; defaults to filename when --file-path is used)",
 		`{"id":"uuid","name":"string","content":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}`,
-		`context-consolidator-cli add-text --context-key sprint-42 --file-path notes.md`,
+		`vibecodeway-cli add-text --context-key sprint-42 --file-path notes.md`,
 	)
 }
 
@@ -252,6 +252,6 @@ func newAddFileCmd() *cobra.Command {
 		"Upload a document file to a context. Text is extracted and stored with the original binary. Supports: pdf, docx, rtf, odt, txt, md.",
 		"--context-id UUID | --context-key STRING (one required)\n--file-path PATH (required)",
 		`{"id":"uuid","name":"string","fileType":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}`,
-		`context-consolidator-cli add-file --context-key sprint-42 --file-path /path/to/spec.pdf`,
+		`vibecodeway-cli add-file --context-key sprint-42 --file-path /path/to/spec.pdf`,
 	)
 }

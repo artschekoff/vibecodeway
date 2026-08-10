@@ -122,7 +122,7 @@ func newDescribeCmd() *cobra.Command {
 	return setAgentDocs(cmd,
 		"Prints a JSON document describing every command: name, short help, description, input, output JSON shape, flags, and an example. Consumed by coding agents that need a schema of the CLI without parsing text help.",
 		"(none)",
-		`{"binary":"context-consolidator-cli","version":"string","commands":[{"name":"string","short":"string","description":"string","input":"string","output":"json shape string","example":"string","flags":[{"name":"string","type":"string","default":"string","description":"string"}]}]}`,
-		`context-consolidator-cli describe | jq '.commands[].name'`,
+		`{"binary":"vibecodeway-cli","version":"string","commands":[{"name":"string","short":"string","description":"string","input":"string","output":"json shape string","example":"string","flags":[{"name":"string","type":"string","default":"string","description":"string"}]}]}`,
+		`vibecodeway-cli describe | jq '.commands[].name'`,
 	)
 }

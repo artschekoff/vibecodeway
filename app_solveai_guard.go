@@ -16,7 +16,7 @@ import (
 // allowed). A shell can still be tricked (var expansion, subshells) — this is a
 // guardrail, not a sandbox; the prompt text carries the rest.
 const scopeGuardScript = `#!/usr/bin/env python3
-"""Context Consolidator scope guard (Claude Code PreToolUse hook).
+"""VibeCodeWay scope guard (Claude Code PreToolUse hook).
 Usage: cc_scope_guard.py <allowed-roots-file>
 Blocks a tool call by exiting 2 (stderr is shown to the agent)."""
 import json, os, re, sys
@@ -72,7 +72,7 @@ if __name__ == "__main__":
 // installScopeGuard installs the PreToolUse scope guard into the primary
 // worktree's .claude/settings.local.json (git-ignored, so the repo stays clean),
 // restricting the agent's file access to roots. The guard script and per-context
-// allowed-roots file live under ~/.context-consolidator so nothing is written
+// allowed-roots file live under ~/.vibecodeway so nothing is written
 // into the repo except the settings file. Best-effort: any error is returned to
 // the caller, which logs and continues (the prompt still constrains the agent).
 func (a *App) installScopeGuard(contextID, primaryWorktree string, roots []string) error {
@@ -83,7 +83,7 @@ func (a *App) installScopeGuard(contextID, primaryWorktree string, roots []strin
 	if err != nil {
 		return fmt.Errorf("resolve home: %w", err)
 	}
-	base := filepath.Join(home, ".context-consolidator")
+	base := filepath.Join(home, ".vibecodeway")
 	guardPath := filepath.Join(base, "cc_scope_guard.py")
 	rootsDir := filepath.Join(base, "scope-guards")
 	if err := os.MkdirAll(rootsDir, 0o755); err != nil {

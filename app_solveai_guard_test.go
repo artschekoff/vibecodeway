@@ -51,10 +51,10 @@ func TestInstallScopeGuard_writesSettingsAndRoots(t *testing.T) {
 	roots := []string{worktree, "/tmp/other-worktree"}
 	require.NoError(t, app.installScopeGuard("ctx-123", worktree, roots))
 
-	// Guard script + roots file live under ~/.context-consolidator (repo stays clean).
-	guardPath := filepath.Join(home, ".context-consolidator", "cc_scope_guard.py")
+	// Guard script + roots file live under ~/.vibecodeway (repo stays clean).
+	guardPath := filepath.Join(home, ".vibecodeway", "cc_scope_guard.py")
 	assert.FileExists(t, guardPath)
-	rootsFile := filepath.Join(home, ".context-consolidator", "scope-guards", "ctx-123.roots")
+	rootsFile := filepath.Join(home, ".vibecodeway", "scope-guards", "ctx-123.roots")
 	rb, err := os.ReadFile(rootsFile)
 	require.NoError(t, err)
 	assert.Equal(t, strings.Join(roots, "\n")+"\n", string(rb))

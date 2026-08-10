@@ -1,12 +1,12 @@
-// Command context-consolidator-cli is the CLI entry point for the context-consolidator.
+// Command vibecodeway-cli is the CLI entry point for the vibecodeway.
 // It exposes read/write operations that can be called from the GUI or directly
 // from the terminal (including by coding agents via `describe`).
 //
 // Usage:
 //
-//	context-consolidator-cli describe
-//	context-consolidator-cli add-text --context-key sprint-42 --file-path notes.md
-//	context-consolidator-cli add-file --context-key sprint-42 --file-path spec.pdf
+//	vibecodeway-cli describe
+//	vibecodeway-cli add-text --context-key sprint-42 --file-path notes.md
+//	vibecodeway-cli add-file --context-key sprint-42 --file-path spec.pdf
 package main
 
 import (
@@ -20,9 +20,9 @@ var version = "dev"
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "context-consolidator-cli",
-		Short:         "CLI for context-consolidator (JSON in/out for coding agents)",
-		Long:          "context-consolidator-cli — manage local Jira/Slack/text contexts. Every command emits JSON on stdout. Run `describe` for the full machine-readable schema (description, input, output, flags).",
+		Use:           "vibecodeway-cli",
+		Short:         "CLI for vibecodeway (JSON in/out for coding agents)",
+		Long:          "vibecodeway-cli — manage local Jira/Slack/text contexts. Every command emits JSON on stdout. Run `describe` for the full machine-readable schema (description, input, output, flags).",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -97,7 +97,7 @@ func newRootCmd() *cobra.Command {
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "context-consolidator-cli: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vibecodeway-cli: %v\n", err)
 		os.Exit(1)
 	}
 }

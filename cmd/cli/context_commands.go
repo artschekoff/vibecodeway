@@ -39,7 +39,7 @@ func newContextListCmd() *cobra.Command {
 		"List contexts with UUID, key, status, and item counts. By default only active contexts are returned.",
 		"--include-archived bool (optional; default false)",
 		`[{"id":"uuid","key":"string","status":"active|archived","orgId":"string","issueCount":"int",...}]`,
-		`context-consolidator-cli context-list`,
+		`vibecodeway-cli context-list`,
 	)
 }
 
@@ -77,7 +77,7 @@ func newContextCreateCmd() *cobra.Command {
 		"Create a new context with a unique key tied to an organization.",
 		"--key STRING (required)\n--org-id STRING (required)",
 		`{"id":"uuid","key":"string","orgId":"string","status":"active","createdAt":"RFC3339","updatedAt":"RFC3339"}`,
-		`context-consolidator-cli context-create --key sprint-42 --org-id org-abc123`,
+		`vibecodeway-cli context-create --key sprint-42 --org-id org-abc123`,
 	)
 }
 
@@ -112,7 +112,7 @@ func newContextUpdateCmd() *cobra.Command {
 		"Update the key or status of a context.",
 		"--id UUID (required)\n--key STRING (optional)\n--status active|archived (optional)",
 		`{"id":"uuid","key":"string","status":"active|archived",...}`,
-		`context-consolidator-cli context-update --id <uuid> --key sprint-43`,
+		`vibecodeway-cli context-update --id <uuid> --key sprint-43`,
 	)
 }
 
@@ -144,7 +144,7 @@ func newContextDeleteCmd() *cobra.Command {
 		"Permanently delete a context and all associated data (Jira, Slack, text, files). Cannot be undone.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
-		`context-consolidator-cli context-delete --id <uuid>`,
+		`vibecodeway-cli context-delete --id <uuid>`,
 	)
 }
 
@@ -177,7 +177,7 @@ func newContextToggleStatusCmd() *cobra.Command {
 		"Toggle a context between active and archived status.",
 		"--id UUID (required)",
 		`{"id":"uuid","key":"string","status":"active|archived",...}`,
-		`context-consolidator-cli context-toggle-status --id <uuid>`,
+		`vibecodeway-cli context-toggle-status --id <uuid>`,
 	)
 }
 
@@ -211,7 +211,7 @@ func newContextGetCmd() *cobra.Command {
 		"Get full context detail including Jira config, Slack config, issues, and item counts.",
 		"--context-id UUID | --context-key STRING (one required)",
 		`{"id":"uuid","key":"string","jiraConfig":{...},"slackConfig":{...},"issues":[...],...}`,
-		`context-consolidator-cli context-get --context-key sprint-42`,
+		`vibecodeway-cli context-get --context-key sprint-42`,
 	)
 }
 
@@ -245,7 +245,7 @@ func newSetJiraConfigCmd() *cobra.Command {
 		"Set the JQL search query used by jira-search to discover new issues for a context. Omit --search-query to clear.",
 		"--context-id UUID (required)\n--search-query STRING (optional JQL; omit to clear)",
 		`{"id":"uuid","key":"string","jiraConfig":{"searchQuery":"string"},...}`,
-		`context-consolidator-cli set-jira-config --context-id <uuid> --search-query "project = JH AND sprint = 42"`,
+		`vibecodeway-cli set-jira-config --context-id <uuid> --search-query "project = JH AND sprint = 42"`,
 	)
 }
 
@@ -280,6 +280,6 @@ func newSetSlackConfigCmd() *cobra.Command {
 		"Set the Slack workspace and default search query for a context.",
 		"--context-id UUID (required)\n--workspace STRING (optional)\n--search-query STRING (optional)",
 		`{"id":"uuid","key":"string","slackConfig":{"workspace":"string","searchQuery":"string"},...}`,
-		`context-consolidator-cli set-slack-config --context-id <uuid> --workspace myworkspace --search-query "in:general"`,
+		`vibecodeway-cli set-slack-config --context-id <uuid> --workspace myworkspace --search-query "in:general"`,
 	)
 }

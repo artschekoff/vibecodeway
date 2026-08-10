@@ -13,7 +13,7 @@ func RenderMarkdown(r *Registry) string {
 	b.WriteString("# Agent Tooling\n\n")
 	b.WriteString("Generated from the tool registry — do not edit by hand. Regenerate with `make tooling-doc`.\n\n")
 	b.WriteString("These are the actions the Ask AI agent can take. The CLI mirrors them:\n")
-	b.WriteString("`context-consolidator-cli agent-tool list` and `... agent-tool call --name <tool> --args '{...}'`.\n")
+	b.WriteString("`vibecodeway-cli agent-tool list` and `... agent-tool call --name <tool> --args '{...}'`.\n")
 	b.WriteString("Tools marked **Write: yes** mutate state and require confirmation (Ask AI) or `--yes` (CLI).\n\n")
 
 	for _, t := range r.List() {
@@ -24,7 +24,7 @@ func RenderMarkdown(r *Registry) string {
 			b.WriteString("**Write:** no\n\n")
 		}
 		writeParams(&b, t.Params)
-		fmt.Fprintf(&b, "```sh\ncontext-consolidator-cli agent-tool call --name %s --args '{}'\n```\n\n", t.Name)
+		fmt.Fprintf(&b, "```sh\nvibecodeway-cli agent-tool call --name %s --args '{}'\n```\n\n", t.Name)
 	}
 	return b.String()
 }

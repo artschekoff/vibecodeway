@@ -36,7 +36,7 @@ func newTextListCmd() *cobra.Command {
 		"List plain-text entries stored for a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","name":"string","content":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}]`,
-		`context-consolidator-cli text-list --context-id <uuid>`,
+		`vibecodeway-cli text-list --context-id <uuid>`,
 	)
 }
 
@@ -68,7 +68,7 @@ func newTextDeleteCmd() *cobra.Command {
 		"Permanently delete a plain-text entry from a context.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
-		`context-consolidator-cli text-delete --id <uuid>`,
+		`vibecodeway-cli text-delete --id <uuid>`,
 	)
 }
 
@@ -101,6 +101,6 @@ func newTextToggleCmd() *cobra.Command {
 		"Toggle is_active for a text entry. Inactive entries are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","name":"string","content":"string","isActive":"bool",...}`,
-		`context-consolidator-cli text-toggle --id <uuid>`,
+		`vibecodeway-cli text-toggle --id <uuid>`,
 	)
 }

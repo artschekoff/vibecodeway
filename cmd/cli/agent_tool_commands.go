@@ -42,7 +42,7 @@ func newAgentToolCmd() *cobra.Command {
 		"Parent command for the agent tool registry. `list` prints the tools the Ask AI agent can call; `call` invokes one by name with JSON args; `doc` renders TOOLING.md.",
 		"(none)",
 		`see subcommands`,
-		`context-consolidator-cli agent-tool list`)
+		`vibecodeway-cli agent-tool list`)
 }
 
 func newAgentToolListCmd() *cobra.Command {
@@ -73,7 +73,7 @@ func newAgentToolListCmd() *cobra.Command {
 		"Lists every agent tool: name, description, write flag, and JSON-schema params. This is the machine-readable capability list the Ask AI window also shows.",
 		"(none)",
 		`[{"name":"string","description":"string","write":"bool","params":"json schema"}]`,
-		`context-consolidator-cli agent-tool list | jq '.[].name'`)
+		`vibecodeway-cli agent-tool list | jq '.[].name'`)
 }
 
 func newAgentToolCallCmd() *cobra.Command {
@@ -118,7 +118,7 @@ func newAgentToolCallCmd() *cobra.Command {
 		"Invokes one agent tool by name. --args is a JSON object matching the tool's params (see `agent-tool list`). Write tools require --yes.",
 		"--name STRING (required)\n--args JSON (optional)\n--yes BOOL (required for write tools)",
 		`the tool's JSON payload`,
-		`context-consolidator-cli agent-tool call --name search_contexts --args '{"query":"sprint"}'`)
+		`vibecodeway-cli agent-tool call --name search_contexts --args '{"query":"sprint"}'`)
 }
 
 func newAgentToolDocCmd() *cobra.Command {
@@ -138,5 +138,5 @@ func newAgentToolDocCmd() *cobra.Command {
 	return setAgentDocs(cmd,
 		"Renders the Markdown reference for every agent tool. Piped to docs/TOOLING.md by `make tooling-doc`.",
 		"(none)", "Markdown on stdout",
-		`context-consolidator-cli agent-tool doc > docs/TOOLING.md`)
+		`vibecodeway-cli agent-tool doc > docs/TOOLING.md`)
 }

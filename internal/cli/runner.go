@@ -1,4 +1,4 @@
-// Package cli provides a safe exec wrapper around the context-consolidator-cli binary.
+// Package cli provides a safe exec wrapper around the vibecodeway-cli binary.
 // It mirrors the pattern used by internal/jira/acli and internal/slack.
 package cli
 
@@ -49,7 +49,7 @@ func resolveBinPath(name string, extraDirs []string) string {
 	return name
 }
 
-// Runner executes context-consolidator-cli subcommands via exec.CommandContext.
+// Runner executes vibecodeway-cli subcommands via exec.CommandContext.
 type Runner struct {
 	binPath        string
 	timeout        time.Duration
@@ -79,7 +79,7 @@ func WithPassphraseFunc(fn func() string) Option {
 // NewRunner creates a Runner resolving the binary from PATH and knownExtraDirs.
 func NewRunner(logger *zap.Logger, opts ...Option) *Runner {
 	r := &Runner{
-		binPath: resolveBinPath("context-consolidator-cli", knownExtraDirs),
+		binPath: resolveBinPath("vibecodeway-cli", knownExtraDirs),
 		timeout: defaultTimeout,
 		logger:  logger,
 	}
@@ -123,7 +123,7 @@ func (r *Runner) run(ctx context.Context, args []string) ([]byte, error) {
 			zap.String("stderr", errMsg),
 			zap.Error(err),
 		)
-		return nil, fmt.Errorf("context-consolidator-cli %s: %s", subcmd, errMsg)
+		return nil, fmt.Errorf("vibecodeway-cli %s: %s", subcmd, errMsg)
 	}
 
 	return stdout.Bytes(), nil

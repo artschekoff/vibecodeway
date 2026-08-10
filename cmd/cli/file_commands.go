@@ -36,7 +36,7 @@ func newFileListCmd() *cobra.Command {
 		"List uploaded document files stored for a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","name":"string","fileType":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}]`,
-		`context-consolidator-cli file-list --context-id <uuid>`,
+		`vibecodeway-cli file-list --context-id <uuid>`,
 	)
 }
 
@@ -68,7 +68,7 @@ func newFileDeleteCmd() *cobra.Command {
 		"Permanently delete an uploaded file from a context.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
-		`context-consolidator-cli file-delete --id <uuid>`,
+		`vibecodeway-cli file-delete --id <uuid>`,
 	)
 }
 
@@ -101,6 +101,6 @@ func newFileToggleCmd() *cobra.Command {
 		"Toggle is_active for an uploaded file. Inactive files are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","name":"string","fileType":"string","isActive":"bool",...}`,
-		`context-consolidator-cli file-toggle --id <uuid>`,
+		`vibecodeway-cli file-toggle --id <uuid>`,
 	)
 }

@@ -32,7 +32,7 @@ func newSlackListWorkspacesCmd() *cobra.Command {
 		"List Slack workspaces the app is connected to.",
 		"(none)",
 		`["workspace-name",...]`,
-		`context-consolidator-cli slack-list-workspaces`,
+		`vibecodeway-cli slack-list-workspaces`,
 	)
 }
 
@@ -67,7 +67,7 @@ func newSlackSearchChannelsCmd() *cobra.Command {
 		"Search Slack channels by name pattern in a workspace. Use to find channel IDs before slack-add-channels.",
 		"--workspace STRING (required)\n--pattern STRING (required)",
 		`[{"channelId":"string","channelName":"string"}]`,
-		`context-consolidator-cli slack-search-channels --workspace myworkspace --pattern "*deploy*"`,
+		`vibecodeway-cli slack-search-channels --workspace myworkspace --pattern "*deploy*"`,
 	)
 }
 
@@ -119,7 +119,7 @@ func newSlackAddChannelsCmd() *cobra.Command {
 		"Add one or more Slack channels to a context. --channel-ids and --channel-names must be the same length.",
 		"--context-id UUID (required)\n--workspace STRING (required)\n--channel-ids STRING (required; comma-separated)\n--channel-names STRING (required; comma-separated)\n--start-from YYYY-MM-DD (optional)",
 		`{"added":"int"}`,
-		`context-consolidator-cli slack-add-channels --context-id <uuid> --workspace myworkspace --channel-ids C123,C456 --channel-names general,deploy`,
+		`vibecodeway-cli slack-add-channels --context-id <uuid> --workspace myworkspace --channel-ids C123,C456 --channel-names general,deploy`,
 	)
 }
 
@@ -152,7 +152,7 @@ func newSlackListChannelsCmd() *cobra.Command {
 		"List Slack channels linked to a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","channelId":"string","channelName":"string","workspace":"string","isActive":"bool"}]`,
-		`context-consolidator-cli slack-list-channels --context-id <uuid>`,
+		`vibecodeway-cli slack-list-channels --context-id <uuid>`,
 	)
 }
 
@@ -184,7 +184,7 @@ func newSlackRemoveChannelCmd() *cobra.Command {
 		"Remove a Slack channel from a context. Use slack-list-channels to find the UUID.",
 		"--id UUID (required; channel record UUID)",
 		`{"removed":"uuid"}`,
-		`context-consolidator-cli slack-remove-channel --id <uuid>`,
+		`vibecodeway-cli slack-remove-channel --id <uuid>`,
 	)
 }
 
@@ -217,7 +217,7 @@ func newSlackToggleChannelCmd() *cobra.Command {
 		"Toggle is_active for a Slack channel. Inactive channels are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","channelId":"string","isActive":"bool",...}`,
-		`context-consolidator-cli slack-toggle-channel --id <uuid>`,
+		`vibecodeway-cli slack-toggle-channel --id <uuid>`,
 	)
 }
 
@@ -266,7 +266,7 @@ func newSlackLoadThreadCmd() *cobra.Command {
 		"Fetch a Slack thread by channel ID and thread timestamp, then store it in a context.",
 		"--context-id UUID (required)\n--workspace STRING (required)\n--channel-id STRING (required)\n--thread-ts STRING (required)\n--channel-name STRING (optional)\n--permalink STRING (optional)\n--search-query STRING (optional)",
 		`{"loaded":"thread-ts"}`,
-		`context-consolidator-cli slack-load-thread --context-id <uuid> --workspace myworkspace --channel-id C123ABC --thread-ts 1234567890.123456`,
+		`vibecodeway-cli slack-load-thread --context-id <uuid> --workspace myworkspace --channel-id C123ABC --thread-ts 1234567890.123456`,
 	)
 }
 
@@ -299,7 +299,7 @@ func newSlackListThreadsCmd() *cobra.Command {
 		"List stored Slack threads for a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","channelId":"string","threadTs":"string","isActive":"bool","createdAt":"RFC3339"}]`,
-		`context-consolidator-cli slack-list-threads --context-id <uuid>`,
+		`vibecodeway-cli slack-list-threads --context-id <uuid>`,
 	)
 }
 
@@ -331,7 +331,7 @@ func newSlackDeleteThreadCmd() *cobra.Command {
 		"Remove a Slack thread from local storage.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
-		`context-consolidator-cli slack-delete-thread --id <uuid>`,
+		`vibecodeway-cli slack-delete-thread --id <uuid>`,
 	)
 }
 
@@ -364,7 +364,7 @@ func newSlackToggleThreadCmd() *cobra.Command {
 		"Toggle is_active for a Slack thread. Inactive threads are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","threadTs":"string","isActive":"bool",...}`,
-		`context-consolidator-cli slack-toggle-thread --id <uuid>`,
+		`vibecodeway-cli slack-toggle-thread --id <uuid>`,
 	)
 }
 
@@ -397,7 +397,7 @@ func newSlackListDMConfigsCmd() *cobra.Command {
 		"List Slack DM configs for a context. Each config controls which DMs are fetched from a workspace.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","workspace":"string","startFrom":"string","isActive":"bool"}]`,
-		`context-consolidator-cli slack-list-dm-configs --context-id <uuid>`,
+		`vibecodeway-cli slack-list-dm-configs --context-id <uuid>`,
 	)
 }
 
@@ -433,7 +433,7 @@ func newSlackUpsertDMConfigCmd() *cobra.Command {
 		"Create or update a Slack DM config for a workspace, then load DM content.",
 		"--context-id UUID (required)\n--workspace STRING (required)\n--start-from YYYY-MM-DD (optional)",
 		`{"id":"uuid","workspace":"string","startFrom":"string","isActive":"bool",...}`,
-		`context-consolidator-cli slack-upsert-dm-config --context-id <uuid> --workspace myworkspace`,
+		`vibecodeway-cli slack-upsert-dm-config --context-id <uuid> --workspace myworkspace`,
 	)
 }
 
@@ -465,7 +465,7 @@ func newSlackDeleteDMConfigCmd() *cobra.Command {
 		"Delete a Slack DM config and its associated entries.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
-		`context-consolidator-cli slack-delete-dm-config --id <uuid>`,
+		`vibecodeway-cli slack-delete-dm-config --id <uuid>`,
 	)
 }
 
@@ -498,7 +498,7 @@ func newSlackToggleDMConfigCmd() *cobra.Command {
 		"Toggle is_active for a Slack DM config. Inactive configs are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","workspace":"string","isActive":"bool",...}`,
-		`context-consolidator-cli slack-toggle-dm-config --id <uuid>`,
+		`vibecodeway-cli slack-toggle-dm-config --id <uuid>`,
 	)
 }
 
@@ -532,7 +532,7 @@ func newSlackRemoveDMEntryCmd() *cobra.Command {
 		"Remove a specific DM entry from a DM config.",
 		"--dm-config-id UUID (required)\n--entry-id STRING (required)",
 		`{"removed":"entry-id"}`,
-		`context-consolidator-cli slack-remove-dm-entry --dm-config-id <uuid> --entry-id <entry-uuid>`,
+		`vibecodeway-cli slack-remove-dm-entry --dm-config-id <uuid> --entry-id <entry-uuid>`,
 	)
 }
 
@@ -566,6 +566,6 @@ func newSlackPreviewDMsCmd() *cobra.Command {
 		"Fetch DMs from a Slack workspace without storing them. Useful before slack-upsert-dm-config.",
 		"--workspace STRING (required)\n--start-from YYYY-MM-DD (optional)",
 		`{"content":"string"}`,
-		`context-consolidator-cli slack-preview-dms --workspace myworkspace`,
+		`vibecodeway-cli slack-preview-dms --workspace myworkspace`,
 	)
 }
