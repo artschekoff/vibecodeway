@@ -1044,6 +1044,40 @@ export namespace store {
 		    return a;
 		}
 	}
+	export class AITodoItem {
+	    id: string;
+	    kind: string;
+	    title: string;
+	    rationale: string;
+	    refType: string;
+	    refKey: string;
+	    priority: string;
+	    position: number;
+	    status: string;
+	    source: string;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AITodoItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.title = source["title"];
+	        this.rationale = source["rationale"];
+	        this.refType = source["refType"];
+	        this.refKey = source["refKey"];
+	        this.priority = source["priority"];
+	        this.position = source["position"];
+	        this.status = source["status"];
+	        this.source = source["source"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class ActivityFeedItem {
 	    id: string;
 	    contextId: string;

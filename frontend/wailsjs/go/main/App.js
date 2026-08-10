@@ -266,6 +266,10 @@ export function GenerateSinglePersonAssignment(arg1, arg2, arg3) {
   return window['go']['main']['App']['GenerateSinglePersonAssignment'](arg1, arg2, arg3);
 }
 
+export function GenerateTodoNext(arg1) {
+  return window['go']['main']['App']['GenerateTodoNext'](arg1);
+}
+
 export function GetAISettings() {
   return window['go']['main']['App']['GetAISettings']();
 }
@@ -476,6 +480,10 @@ export function ListSlackWorkspaces() {
 
 export function ListTerminalCommands() {
   return window['go']['main']['App']['ListTerminalCommands']();
+}
+
+export function ListTodoNext() {
+  return window['go']['main']['App']['ListTodoNext']();
 }
 
 export function ListTrackedRepos(arg1) {

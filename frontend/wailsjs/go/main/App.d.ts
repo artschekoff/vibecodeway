@@ -142,6 +142,8 @@ export function GeneratePlan(arg1:string,arg2:string):Promise<store.ContextPlan>
 
 export function GenerateSinglePersonAssignment(arg1:string,arg2:string,arg3:string):Promise<store.PersonAssignment>;
 
+export function GenerateTodoNext(arg1:string):Promise<Array<store.AITodoItem>>;
+
 export function GetAISettings():Promise<main.AISettingsResponse>;
 
 export function GetActivityFeed(arg1:number):Promise<Array<store.ActivityFeedItem>>;
@@ -247,6 +249,8 @@ export function ListSlackThreads(arg1:string):Promise<Array<slackstore.SlackThre
 export function ListSlackWorkspaces():Promise<Array<service.SlackWorkspaceResult>>;
 
 export function ListTerminalCommands():Promise<Array<store.TerminalCommand>>;
+
+export function ListTodoNext():Promise<Array<store.AITodoItem>>;
 
 export function ListTrackedRepos(arg1:string):Promise<Array<vcsstore.VCSRepo>>;
 
