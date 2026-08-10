@@ -223,7 +223,8 @@ type AppSettings struct {
 	TerminalAppPath              string `json:"terminalAppPath"`
 	CodingAgentApp               string `json:"codingAgentApp"`
 	AutoLinkReposOnContextCreate bool   `json:"autoLinkReposOnContextCreate"`
-	EditorSettings               string `json:"editorSettings"` // opaque JSON blob owned by the frontend
+	EditorSettings               string `json:"editorSettings"`       // opaque JSON blob owned by the frontend
+	PRStaleThresholdDays         int    `json:"prStaleThresholdDays"` // PR considered stale after N days awaiting review
 	UpdatedAt                    string `json:"updatedAt"`
 }
 

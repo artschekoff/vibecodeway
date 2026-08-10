@@ -387,6 +387,7 @@ export interface AppSettings {
   terminalAppPath: string;
   codingAgentApp: string;
   autoLinkReposOnContextCreate: boolean;
+  prStaleThresholdDays: number;
   updatedAt: string;
 }
 

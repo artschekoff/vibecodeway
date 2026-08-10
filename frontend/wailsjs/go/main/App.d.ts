@@ -408,6 +408,8 @@ export function SetJiraConfig(arg1:string,arg2:string):Promise<jirastore.JiraPro
 
 export function SetOrganizationsOrder(arg1:Array<string>):Promise<void>;
 
+export function SetPRStaleThresholdDays(arg1:number):Promise<void>;
+
 export function SetSlackConfig(arg1:string,arg2:string,arg3:string):Promise<slackstore.SlackProvider>;
 
 export function SetSlackPassphrase(arg1:string):Promise<void>;

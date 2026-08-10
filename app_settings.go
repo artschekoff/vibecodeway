@@ -53,12 +53,27 @@ func (a *App) SetAppSettings(
 	}
 	if current != nil {
 		settings.AutoLinkReposOnContextCreate = current.AutoLinkReposOnContextCreate
+		settings.PRStaleThresholdDays = current.PRStaleThresholdDays
 	}
 	if err := a.db.SetAppSettings(a.ctx, settings); err != nil {
 		return err
 	}
 	a.restartBackgroundRefresh(settings)
 	return nil
+}
+
+// SetPRStaleThresholdDays sets the number of days after which a PR awaiting
+// review is considered stale (used by TODO NEXT). Preserves all other settings.
+func (a *App) SetPRStaleThresholdDays(days int) error {
+	if days < 1 {
+		days = 1
+	}
+	current, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return err
+	}
+	current.PRStaleThresholdDays = days
+	return a.db.SetAppSettings(a.ctx, *current)
 }
 
 // SetAutoLinkRepos toggles whether matched repos are auto-linked when a new

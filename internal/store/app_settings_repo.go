@@ -20,6 +20,7 @@ func defaultAppSettings() *AppSettings {
 		TerminalAppPath:              "",
 		CodingAgentApp:               "cursor",
 		AutoLinkReposOnContextCreate: true,
+		PRStaleThresholdDays:         7,
 	}
 }
 
@@ -35,17 +36,19 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		codingAgentApp     string
 		autoLink           int
 		editorSettings     string
+		prStaleThreshold   int
 		updatedAt          string
 	)
 	err := s.db.QueryRowContext(ctx,
 		`SELECT context_refetch_enabled, context_refetch_interval_min,
 		        reviews_refetch_enabled, reviews_refetch_interval_min,
 		        terminal_app_path, coding_agent_app,
-		        auto_link_repos_on_context_create, editor_settings, updated_at
+		        auto_link_repos_on_context_create, editor_settings,
+		        pr_stale_threshold_days, updated_at
 		 FROM app_settings WHERE id = ?`,
 		appSettingsSingletonID,
 	).Scan(&contextEnabled, &contextIntervalMin, &reviewsEnabled, &reviewsIntervalMin,
-		&terminalAppPath, &codingAgentApp, &autoLink, &editorSettings, &updatedAt)
+		&terminalAppPath, &codingAgentApp, &autoLink, &editorSettings, &prStaleThreshold, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return defaultAppSettings(), nil
 	}
@@ -61,6 +64,7 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		CodingAgentApp:               codingAgentApp,
 		AutoLinkReposOnContextCreate: autoLink != 0,
 		EditorSettings:               editorSettings,
+		PRStaleThresholdDays:         prStaleThreshold,
 		UpdatedAt:                    updatedAt,
 	}, nil
 }
@@ -87,8 +91,9 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		     (id, context_refetch_enabled, context_refetch_interval_min,
 		      reviews_refetch_enabled, reviews_refetch_interval_min,
 		      terminal_app_path, coding_agent_app,
-		      auto_link_repos_on_context_create, editor_settings, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		      auto_link_repos_on_context_create, editor_settings,
+		      pr_stale_threshold_days, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     context_refetch_enabled           = excluded.context_refetch_enabled,
 		     context_refetch_interval_min      = excluded.context_refetch_interval_min,
@@ -98,6 +103,7 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		     coding_agent_app                  = excluded.coding_agent_app,
 		     auto_link_repos_on_context_create = excluded.auto_link_repos_on_context_create,
 		     editor_settings                   = excluded.editor_settings,
+		     pr_stale_threshold_days           = excluded.pr_stale_threshold_days,
 		     updated_at                        = excluded.updated_at`,
 		appSettingsSingletonID,
 		contextEnabled, settings.ContextRefetchIntervalMin,
@@ -106,6 +112,7 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		settings.CodingAgentApp,
 		autoLink,
 		settings.EditorSettings,
+		settings.PRStaleThresholdDays,
 		now,
 	)
 	if err != nil {

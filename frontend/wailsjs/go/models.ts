@@ -1079,6 +1079,7 @@ export namespace store {
 	    codingAgentApp: string;
 	    autoLinkReposOnContextCreate: boolean;
 	    editorSettings: string;
+	    prStaleThresholdDays: number;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1095,6 +1096,7 @@ export namespace store {
 	        this.codingAgentApp = source["codingAgentApp"];
 	        this.autoLinkReposOnContextCreate = source["autoLinkReposOnContextCreate"];
 	        this.editorSettings = source["editorSettings"];
+	        this.prStaleThresholdDays = source["prStaleThresholdDays"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}

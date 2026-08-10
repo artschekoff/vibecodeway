@@ -798,6 +798,10 @@ export function SetOrganizationsOrder(arg1) {
   return window['go']['main']['App']['SetOrganizationsOrder'](arg1);
 }
 
+export function SetPRStaleThresholdDays(arg1) {
+  return window['go']['main']['App']['SetPRStaleThresholdDays'](arg1);
+}
+
 export function SetSlackConfig(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetSlackConfig'](arg1, arg2, arg3);
 }
