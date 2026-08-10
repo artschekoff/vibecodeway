@@ -34,6 +34,10 @@ export function AddTodoNextItem(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['AddTodoNextItem'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function DraftTodoMessage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DraftTodoMessage'](arg1, arg2, arg3, arg4);
+}
+
 export function AddTrackedRepo(arg1, arg2) {
   return window['go']['main']['App']['AddTrackedRepo'](arg1, arg2);
 }

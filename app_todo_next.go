@@ -87,3 +87,9 @@ func (a *App) AddTodoNextItem(kind, title, refType, refKey, priority string) ([]
 	}
 	return a.db.ListTodoItems(a.ctx)
 }
+
+// DraftTodoMessage drafts a copy-ready message for a todo's recommended action.
+// The draft is returned to the UI for review and manual copy — nothing is sent.
+func (a *App) DraftTodoMessage(kind, title, refKey, rationale string) (string, error) {
+	return a.analysisSvc.DraftTodoMessage(a.ctx, kind, title, refKey, rationale)
+}
