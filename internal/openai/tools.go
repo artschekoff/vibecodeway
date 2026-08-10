@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
 	anthropicSDK "github.com/anthropics/anthropic-sdk-go"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	openai "github.com/sashabaranov/go-openai"
 	"go.uber.org/zap"
 )

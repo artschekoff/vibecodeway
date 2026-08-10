@@ -3,7 +3,7 @@ package github
 import (
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -195,11 +195,11 @@ func TestLatestReviewStateFromJSON_ReapprovedWins(t *testing.T) {
 
 func TestApplyReReviewStatus(t *testing.T) {
 	prs := []vcs.PRData{
-		{Number: 1, ReviewStatus: "review_required"},    // dismissed approval → re-review
-		{Number: 2, ReviewStatus: "review_required"},    // absent from reviews → unchanged
-		{Number: 3, ReviewStatus: "changes_requested"},  // re-requested after I asked for changes → re-review
-		{Number: 4, ReviewStatus: "review_required"},    // re-requested after I approved → re-review
-		{Number: 5, ReviewStatus: "review_required"},    // no decisive review yet → first review
+		{Number: 1, ReviewStatus: "review_required"},   // dismissed approval → re-review
+		{Number: 2, ReviewStatus: "review_required"},   // absent from reviews → unchanged
+		{Number: 3, ReviewStatus: "changes_requested"}, // re-requested after I asked for changes → re-review
+		{Number: 4, ReviewStatus: "review_required"},   // re-requested after I approved → re-review
+		{Number: 5, ReviewStatus: "review_required"},   // no decisive review yet → first review
 	}
 	reviewsByNumber := map[int][]byte{
 		1: []byte(`[{"user":{"login":"me"},"state":"DISMISSED","submitted_at":"2026-01-02T00:00:00Z"}]`),

@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	openai "github.com/sashabaranov/go-openai"
 	"go.uber.org/zap"
 )

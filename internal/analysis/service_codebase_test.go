@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )

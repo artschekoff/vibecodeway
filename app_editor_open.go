@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 )
 
 // EditorRepoChoice is a repo the user can pick to checkout when a context has no

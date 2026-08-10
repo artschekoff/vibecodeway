@@ -298,7 +298,7 @@ func (s *Store) backfillJiraComments(ctx context.Context) error {
 	defer func() { _ = rows.Close() }()
 	type row struct {
 		id, contextID, jiraID, body, author, jiraCreated, createdAt string
-		parentMsgID                                                  *string
+		parentMsgID                                                 *string
 	}
 	var items []row
 	for rows.Next() {

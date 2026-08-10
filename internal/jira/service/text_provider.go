@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/provider"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/provider"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"go.uber.org/zap"
 )
 

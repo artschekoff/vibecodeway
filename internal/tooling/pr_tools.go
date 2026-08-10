@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 )
 
 // splitRepo parses an "owner/name" repo reference.

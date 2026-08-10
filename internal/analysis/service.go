@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	"github.com/artschekoff/context-consolidator/internal/repofiles"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	"github.com/artschekoff/vibecodeway/internal/repofiles"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/viterin/vek/vek32"
 	"go.uber.org/zap"
 )

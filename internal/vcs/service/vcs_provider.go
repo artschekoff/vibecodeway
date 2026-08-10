@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/provider"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	"github.com/artschekoff/context-consolidator/internal/vcs"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/vibecodeway/internal/provider"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"go.uber.org/zap"
 )
 

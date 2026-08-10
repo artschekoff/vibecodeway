@@ -1,6 +1,6 @@
 package main
 
-import "github.com/artschekoff/context-consolidator/internal/pty"
+import "github.com/artschekoff/vibecodeway/internal/pty"
 
 // TerminalStart launches the OS default interactive shell in a PTY rooted at
 // cwd. Output is streamed to the frontend as "term:data:<id>" events; process

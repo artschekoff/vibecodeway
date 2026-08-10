@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/artschekoff/context-consolidator/internal/tooling"
+	"github.com/artschekoff/vibecodeway/internal/tooling"
 	"github.com/spf13/cobra"
 )
 

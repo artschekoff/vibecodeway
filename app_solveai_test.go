@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/analysis"
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	openaiclient "github.com/artschekoff/context-consolidator/internal/openai"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/vibecodeway/internal/analysis"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	openaiclient "github.com/artschekoff/vibecodeway/internal/openai"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )

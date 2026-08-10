@@ -1,6 +1,6 @@
 package main
 
-import appstore "github.com/artschekoff/context-consolidator/internal/store"
+import appstore "github.com/artschekoff/vibecodeway/internal/store"
 
 // ListTerminalCommands returns all user-configured terminal commands.
 func (a *App) ListTerminalCommands() ([]appstore.TerminalCommand, error) {

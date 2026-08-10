@@ -4,7 +4,7 @@ import (
 	"os"
 	"os/exec"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )

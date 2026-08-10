@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // maxContextHits caps how many contexts search_contexts returns to keep tool

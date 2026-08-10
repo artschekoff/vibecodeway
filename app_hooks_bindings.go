@@ -1,7 +1,7 @@
 package main
 
 import (
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // CreateContextEventHook adds a hook for a context.

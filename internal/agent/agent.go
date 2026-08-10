@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	"github.com/artschekoff/context-consolidator/internal/tooling"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/tooling"
 	"go.uber.org/zap"
 )
 

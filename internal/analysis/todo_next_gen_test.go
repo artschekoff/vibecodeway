@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"go.uber.org/zap"
 )
 

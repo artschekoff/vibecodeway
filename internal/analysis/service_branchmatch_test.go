@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )

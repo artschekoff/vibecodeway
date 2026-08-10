@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // CreateContextFromJiraIssue creates a new context (keyed by the Jira issue key)

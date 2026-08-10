@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	vcs "github.com/artschekoff/context-consolidator/internal/vcs"
+	vcs "github.com/artschekoff/vibecodeway/internal/vcs"
 )
 
 func initTestRepo(t *testing.T) string {

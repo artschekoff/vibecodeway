@@ -1,8 +1,8 @@
 package main
 
 import (
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

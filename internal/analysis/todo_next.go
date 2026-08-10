@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 )
 
 // TodoInput is the board-wide snapshot handed to the AI for TODO generation.

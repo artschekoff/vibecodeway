@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"go.uber.org/zap"
 )
 

@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/jira"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	"github.com/artschekoff/context-consolidator/internal/provider"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/jira"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	"github.com/artschekoff/vibecodeway/internal/provider"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"go.uber.org/zap"
 )
 

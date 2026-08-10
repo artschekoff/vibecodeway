@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
 	"github.com/spf13/cobra"
 )
 

@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/tooling"
+	"github.com/artschekoff/vibecodeway/internal/tooling"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

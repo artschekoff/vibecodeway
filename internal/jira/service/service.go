@@ -13,12 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/jira"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	"github.com/artschekoff/context-consolidator/internal/provider"
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/vibecodeway/internal/jira"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	"github.com/artschekoff/vibecodeway/internal/provider"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"go.uber.org/zap"
 )
 
@@ -148,17 +148,17 @@ type RefreshResult struct {
 
 // ReloadAllResult summarises what was fetched for one context during a ReloadAllContexts run.
 type ReloadAllResult struct {
-	ContextID        string `json:"contextId"`
-	ContextKey       string `json:"contextKey"`
-	NewIssues        int    `json:"newIssues"`
-	NewComments      int    `json:"newComments"`
-	ThreadsRefreshed int    `json:"threadsRefreshed"`
-	DMsRefreshed     int    `json:"dmsRefreshed"`
-	PRsRefreshed     int    `json:"prsRefreshed"`
-	NewPRComments    int    `json:"newPRComments"`
-	NewNotifications int    `json:"newNotifications"`
-	NewJiraStatusChanges int `json:"newJiraStatusChanges"`
-	Error            string `json:"error,omitempty"`
+	ContextID            string `json:"contextId"`
+	ContextKey           string `json:"contextKey"`
+	NewIssues            int    `json:"newIssues"`
+	NewComments          int    `json:"newComments"`
+	ThreadsRefreshed     int    `json:"threadsRefreshed"`
+	DMsRefreshed         int    `json:"dmsRefreshed"`
+	PRsRefreshed         int    `json:"prsRefreshed"`
+	NewPRComments        int    `json:"newPRComments"`
+	NewNotifications     int    `json:"newNotifications"`
+	NewJiraStatusChanges int    `json:"newJiraStatusChanges"`
+	Error                string `json:"error,omitempty"`
 }
 
 // RefreshProgressFunc is called before each provider refresh step inside RefreshContext.
@@ -189,10 +189,10 @@ type ContextDetail struct {
 
 // ContextService provides all domain operations for managing contexts.
 type ContextService struct {
-	store         *appstore.Store
-	jiraRepo      *jirastore.Repo
-	slackRepo     *slackstore.Repo
-	vcsStore      *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
+	store     *appstore.Store
+	jiraRepo  *jirastore.Repo
+	slackRepo *slackstore.Repo
+	vcsStore  *vcsstore.Store // optional; nil disables VCS data in GetContextDetail
 	jira      JiraAPI
 	slack     SlackRunner
 	logger    *zap.Logger
@@ -369,7 +369,9 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 			addErr(fmt.Errorf("loading jira provider: %w", err))
 			return
 		}
-		mu.Lock(); jp = v; mu.Unlock()
+		mu.Lock()
+		jp = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.slackRepo.GetSlackProvider(ctx, id)
@@ -377,42 +379,79 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 			addErr(fmt.Errorf("loading slack provider: %w", err))
 			return
 		}
-		mu.Lock(); sp = v; mu.Unlock()
+		mu.Lock()
+		sp = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.jiraRepo.GetIssuesByContext(ctx, id, false)
-		if err != nil { addErr(fmt.Errorf("loading issues: %w", err)); return }
-		mu.Lock(); issues = v; mu.Unlock()
+		if err != nil {
+			addErr(fmt.Errorf("loading issues: %w", err))
+			return
+		}
+		mu.Lock()
+		issues = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.slackRepo.ListSlackThreads(ctx, id, false)
-		if err != nil { addErr(fmt.Errorf("loading slack threads: %w", err)); return }
-		mu.Lock(); threads = v; mu.Unlock()
+		if err != nil {
+			addErr(fmt.Errorf("loading slack threads: %w", err))
+			return
+		}
+		mu.Lock()
+		threads = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.slackRepo.ListSlackChannels(ctx, id, false)
-		if err != nil { addErr(fmt.Errorf("loading slack channels: %w", err)); return }
-		mu.Lock(); channels = v; mu.Unlock()
+		if err != nil {
+			addErr(fmt.Errorf("loading slack channels: %w", err))
+			return
+		}
+		mu.Lock()
+		channels = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.slackRepo.ListSlackDMConfigs(ctx, id, false)
-		if err != nil { addErr(fmt.Errorf("loading slack dm configs: %w", err)); return }
-		mu.Lock(); dmConfigs = v; mu.Unlock()
+		if err != nil {
+			addErr(fmt.Errorf("loading slack dm configs: %w", err))
+			return
+		}
+		mu.Lock()
+		dmConfigs = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.store.ListContextTexts(ctx, id, false)
-		if err != nil { addErr(fmt.Errorf("loading context texts: %w", err)); return }
-		mu.Lock(); ctxTexts = v; mu.Unlock()
+		if err != nil {
+			addErr(fmt.Errorf("loading context texts: %w", err))
+			return
+		}
+		mu.Lock()
+		ctxTexts = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.store.ListUploadedFiles(ctx, id, false)
-		if err != nil { addErr(fmt.Errorf("loading uploaded files: %w", err)); return }
-		mu.Lock(); uploaded = v; mu.Unlock()
+		if err != nil {
+			addErr(fmt.Errorf("loading uploaded files: %w", err))
+			return
+		}
+		mu.Lock()
+		uploaded = v
+		mu.Unlock()
 	})
 	run(func() {
 		v, err := svc.store.ListContextRelations(ctx, id)
-		if err != nil { addErr(fmt.Errorf("loading relations: %w", err)); return }
-		mu.Lock(); relations = v; mu.Unlock()
+		if err != nil {
+			addErr(fmt.Errorf("loading relations: %w", err))
+			return
+		}
+		mu.Lock()
+		relations = v
+		mu.Unlock()
 	})
 	if svc.vcsStore != nil {
 		run(func() {
@@ -421,7 +460,9 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 				svc.logger.Warn("loading vcs branches failed", zap.String("contextID", id), zap.Error(err))
 				return
 			}
-			mu.Lock(); branches = v; mu.Unlock()
+			mu.Lock()
+			branches = v
+			mu.Unlock()
 		})
 		run(func() {
 			v, err := svc.vcsStore.PullRequests.ListPRsForContext(ctx, id)
@@ -429,7 +470,9 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 				svc.logger.Warn("loading vcs prs failed", zap.String("contextID", id), zap.Error(err))
 				return
 			}
-			mu.Lock(); prs = v; mu.Unlock()
+			mu.Lock()
+			prs = v
+			mu.Unlock()
 		})
 	}
 	wg.Wait()
@@ -449,10 +492,17 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 		go func() {
 			defer wg2.Done()
 			issueIDs := make([]string, len(issues))
-			for i, iss := range issues { issueIDs[i] = iss.ID }
+			for i, iss := range issues {
+				issueIDs[i] = iss.ID
+			}
 			v, err := svc.jiraRepo.GetCommentsByIssues(ctx, issueIDs, false)
-			if err != nil { addErr(fmt.Errorf("loading comments: %w", err)); return }
-			mu.Lock(); commentsByIssue = v; mu.Unlock()
+			if err != nil {
+				addErr(fmt.Errorf("loading comments: %w", err))
+				return
+			}
+			mu.Lock()
+			commentsByIssue = v
+			mu.Unlock()
 		}()
 	}
 	if svc.vcsStore != nil && len(prs) > 0 {
@@ -460,13 +510,17 @@ func (svc *ContextService) GetContextDetail(ctx context.Context, id string) (*Co
 		go func() {
 			defer wg2.Done()
 			prIDs := make([]string, len(prs))
-			for i, pr := range prs { prIDs[i] = pr.ID }
+			for i, pr := range prs {
+				prIDs[i] = pr.ID
+			}
 			v, err := svc.vcsStore.PullRequests.ListCommentsForPRs(ctx, prIDs)
 			if err != nil {
 				svc.logger.Warn("loading pr comments failed", zap.Error(err))
 				return
 			}
-			mu.Lock(); commentsByPR = v; mu.Unlock()
+			mu.Lock()
+			commentsByPR = v
+			mu.Unlock()
 		}()
 	}
 	wg2.Wait()
@@ -1440,4 +1494,3 @@ func (svc *ContextService) RefreshAllContexts(ctx context.Context, notify Reload
 	}
 	return results, nil
 }
-

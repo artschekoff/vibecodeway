@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/jira"
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/jira"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"go.uber.org/zap"
 )
 

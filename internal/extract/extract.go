@@ -17,12 +17,12 @@ import (
 
 // AllowedExtensions is the set of file extensions this package can handle.
 var AllowedExtensions = map[string]bool{
-	".pdf":  true,
-	".docx": true,
-	".rtf":  true,
-	".odt":  true,
-	".txt":  true,
-	".md":   true,
+	".pdf":      true,
+	".docx":     true,
+	".rtf":      true,
+	".odt":      true,
+	".txt":      true,
+	".md":       true,
 	".markdown": true,
 	// Images — text extracted via OCR (macOS Vision framework)
 	".png":  true,

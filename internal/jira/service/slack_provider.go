@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/provider"
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/provider"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"go.uber.org/zap"
 )
 

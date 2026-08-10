@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

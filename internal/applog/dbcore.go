@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap/zapcore"
 
-	"github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // DBCore is a zapcore.Core that writes warn-and-above entries to the app_logs table.
@@ -19,12 +19,12 @@ type DBCore struct {
 // NewDBCore wraps repo with a zap core at WarnLevel and above.
 func NewDBCore(ctx context.Context, repo *store.AppLogRepo) *DBCore {
 	enc := zapcore.NewJSONEncoder(zapcore.EncoderConfig{
-		TimeKey:    "ts",
-		LevelKey:   "level",
-		CallerKey:  "caller",
-		MessageKey: "msg",
-		EncodeLevel: zapcore.LowercaseLevelEncoder,
-		EncodeTime:  zapcore.EpochTimeEncoder,
+		TimeKey:      "ts",
+		LevelKey:     "level",
+		CallerKey:    "caller",
+		MessageKey:   "msg",
+		EncodeLevel:  zapcore.LowercaseLevelEncoder,
+		EncodeTime:   zapcore.EpochTimeEncoder,
 		EncodeCaller: zapcore.ShortCallerEncoder,
 	})
 	return &DBCore{repo: repo, enc: enc, ctx: ctx}

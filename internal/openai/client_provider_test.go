@@ -3,7 +3,7 @@ package openai_test
 import (
 	"testing"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/stretchr/testify/assert"
 )
 

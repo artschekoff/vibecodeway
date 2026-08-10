@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )

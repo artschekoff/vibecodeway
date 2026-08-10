@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 )
 
 // --- Analysis ---

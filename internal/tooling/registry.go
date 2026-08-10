@@ -3,9 +3,9 @@ package tooling
 import (
 	"context"
 
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 	"go.uber.org/zap"
 )
 

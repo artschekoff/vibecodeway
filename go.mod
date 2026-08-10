@@ -1,4 +1,4 @@
-module github.com/artschekoff/context-consolidator
+module github.com/artschekoff/vibecodeway
 
 go 1.25.0
 

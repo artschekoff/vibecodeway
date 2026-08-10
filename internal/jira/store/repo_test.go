@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

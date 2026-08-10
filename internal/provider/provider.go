@@ -13,8 +13,8 @@ import (
 //	Refresh: ItemsRefreshed = existing items updated; NewItems = new sub-items (e.g. comments).
 //	Reload:  ItemsRefreshed = newly discovered top-level items; NewItems = new sub-items.
 type Stats struct {
-	ItemsRefreshed   int
-	NewItems         int
+	ItemsRefreshed int
+	NewItems       int
 	// NewNotifications counts system-generated notifications created during this sync
 	// (e.g. PR conflict detected, review status changed).
 	NewNotifications int

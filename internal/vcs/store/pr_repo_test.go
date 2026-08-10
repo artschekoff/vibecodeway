@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

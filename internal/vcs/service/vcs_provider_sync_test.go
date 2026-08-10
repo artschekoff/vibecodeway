@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/vcs"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

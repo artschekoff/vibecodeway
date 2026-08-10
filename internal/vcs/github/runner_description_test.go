@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	gh "github.com/artschekoff/context-consolidator/internal/vcs/github"
+	gh "github.com/artschekoff/vibecodeway/internal/vcs/github"
 )
 
 func TestParseRepoDescription(t *testing.T) {

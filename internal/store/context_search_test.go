@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

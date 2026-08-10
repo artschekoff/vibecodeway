@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 func TestDedupeMatches(t *testing.T) {

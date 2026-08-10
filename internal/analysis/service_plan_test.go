@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/stretchr/testify/require"
 )
 

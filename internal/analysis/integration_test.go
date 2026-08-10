@@ -15,14 +15,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/artschekoff/context-consolidator/internal/analysis"
-	jiraservice "github.com/artschekoff/context-consolidator/internal/jira/service"
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	slackstore "github.com/artschekoff/context-consolidator/internal/slack/store"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
-	vcsservice "github.com/artschekoff/context-consolidator/internal/vcs/service"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/vibecodeway/internal/analysis"
+	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	vcsservice "github.com/artschekoff/vibecodeway/internal/vcs/service"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 )
 
 // projectRoot walks up from this file's location to find the .env file.

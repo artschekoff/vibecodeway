@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // ListAIPrompts returns all editable AI prompt templates with their placeholder definitions.

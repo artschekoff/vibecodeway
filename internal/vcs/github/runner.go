@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 	"go.uber.org/zap"
 )
 

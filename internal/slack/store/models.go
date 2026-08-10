@@ -89,15 +89,15 @@ type SlackChannelInput struct {
 // SlackDMConfig holds configuration for loading personal (direct) messages for a context.
 // One row per (context, workspace): stores the start_from date passed to slack-cli list-dms.
 type SlackDMConfig struct {
-	ID        string  `json:"id"`
-	ContextID string  `json:"contextId"`
-	Workspace string  `json:"workspace"`
-	StartFrom string  `json:"startFrom"` // YYYY-MM-DD
-	Content   string  `json:"content"`
-	CreatedAt string  `json:"createdAt"`
-	UpdatedAt string  `json:"updatedAt"`
-	IsActive       bool    `json:"isActive"`
-	ViewedAt       *string `json:"viewedAt"`
-	AiProcessedAt  *string `json:"aiProcessedAt"`
-	MessageID      *string `json:"messageId,omitempty"`
+	ID            string  `json:"id"`
+	ContextID     string  `json:"contextId"`
+	Workspace     string  `json:"workspace"`
+	StartFrom     string  `json:"startFrom"` // YYYY-MM-DD
+	Content       string  `json:"content"`
+	CreatedAt     string  `json:"createdAt"`
+	UpdatedAt     string  `json:"updatedAt"`
+	IsActive      bool    `json:"isActive"`
+	ViewedAt      *string `json:"viewedAt"`
+	AiProcessedAt *string `json:"aiProcessedAt"`
+	MessageID     *string `json:"messageId,omitempty"`
 }

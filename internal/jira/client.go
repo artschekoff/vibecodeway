@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/artschekoff/context-consolidator/internal/jira/acli"
+	"github.com/artschekoff/vibecodeway/internal/jira/acli"
 	"go.uber.org/zap"
 )
 

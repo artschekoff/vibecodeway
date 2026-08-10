@@ -3,7 +3,7 @@ package vcs_test
 import (
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 	"github.com/stretchr/testify/require"
 )
 

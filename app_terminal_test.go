@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artschekoff/context-consolidator/internal/pty"
+	"github.com/artschekoff/vibecodeway/internal/pty"
 	"github.com/stretchr/testify/require"
 )
 

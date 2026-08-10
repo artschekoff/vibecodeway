@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/artschekoff/context-consolidator/internal/openai"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/openai"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 const todoAdjustSystemPrompt = `You revise a developer's prioritized next-action list based on their instruction.

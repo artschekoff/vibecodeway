@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 )
 
 // safeJoin resolves path relative to repoPath and guarantees the result stays

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/vcs"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 )
 
 // fakePR is a test double for PRActions (extended with write methods in Task 8).

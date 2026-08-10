@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/agent"
-	"github.com/artschekoff/context-consolidator/internal/tooling"
+	"github.com/artschekoff/vibecodeway/internal/agent"
+	"github.com/artschekoff/vibecodeway/internal/tooling"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

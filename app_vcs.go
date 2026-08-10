@@ -11,9 +11,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/artschekoff/context-consolidator/internal/repofiles"
-	"github.com/artschekoff/context-consolidator/internal/vcs"
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	"github.com/artschekoff/vibecodeway/internal/repofiles"
+	"github.com/artschekoff/vibecodeway/internal/vcs"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )

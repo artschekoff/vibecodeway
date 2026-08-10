@@ -3,7 +3,7 @@ package analysis
 import (
 	"testing"
 
-	jirastore "github.com/artschekoff/context-consolidator/internal/jira/store"
+	jirastore "github.com/artschekoff/vibecodeway/internal/jira/store"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	analysis "github.com/artschekoff/context-consolidator/internal/analysis"
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	analysis "github.com/artschekoff/vibecodeway/internal/analysis"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // GenerateTodoNext gathers the current board and asks the AI for the prioritized

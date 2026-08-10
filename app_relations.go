@@ -1,6 +1,6 @@
 package main
 
-import appstore "github.com/artschekoff/context-consolidator/internal/store"
+import appstore "github.com/artschekoff/vibecodeway/internal/store"
 
 // AddContextRelation creates a typed directional link from contextID to targetID.
 func (a *App) AddContextRelation(contextID, targetID, relationType string) (*appstore.ContextRelation, error) {

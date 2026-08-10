@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/stretchr/testify/require"
 )
 

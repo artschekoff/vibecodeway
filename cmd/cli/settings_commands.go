@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/artschekoff/context-consolidator/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/spf13/cobra"
 )
 

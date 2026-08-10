@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // newTestStore opens a fresh migrated SQLite store in a temp dir.

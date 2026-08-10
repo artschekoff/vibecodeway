@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	appstore "github.com/artschekoff/context-consolidator/internal/store"
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 )
 
 // defaultBranchMatchPrompt mirrors migration 081's seed body for

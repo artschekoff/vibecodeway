@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artschekoff/context-consolidator/internal/extract"
+	"github.com/artschekoff/vibecodeway/internal/extract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
