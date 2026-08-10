@@ -461,6 +461,45 @@ func changesRequestedSearch(login string) string {
 	return "reviewed-by:" + login + " review:changes_requested draft:false"
 }
 
+// authoredSearch builds the `gh pr list --search` query for a given login's own PRs.
+func authoredSearch(login string) string {
+	return "author:" + login + " draft:false"
+}
+
+// ListAuthoredPRs fetches the given user's open authored PRs with reviewer
+// decisions, CI rollup, and mergeability — the inputs the Code Reviews tab needs
+// to show "approved by / changes requested / CI failed / conflicts". login "" = @me.
+func (r *Runner) ListAuthoredPRs(ctx context.Context, owner, repo, login string) ([]vcs.PRData, error) {
+	if login == "" {
+		login = "@me"
+	}
+	out, err := r.run(ctx, []string{
+		"pr", "list", "--repo", owner + "/" + repo,
+		"--search", authoredSearch(login),
+		"--state", "open",
+		"--json", prListJSONFields,
+		"--limit", "100",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gh pr list authored: %w", err)
+	}
+	prs, err := parseGHPRList(out, "authored PRs")
+	if err != nil {
+		return nil, err
+	}
+	// Attach each PR's latest per-reviewer decision, reusing the same per-PR reviews
+	// fetch ListReviewRequests uses.
+	// ponytail: one reviews API call per authored PR; fine at tens of PRs. If hot,
+	// request `latestReviews` on the list call and drop the per-PR fetch.
+	reviewsByPR := r.annotateReReviews(ctx, owner, repo, prs)
+	for i := range prs {
+		if raw, ok := reviewsByPR[prs[i].Number]; ok {
+			prs[i].Reviewers = latestReviewerDecisions(raw, prs[i].Author)
+		}
+	}
+	return prs, nil
+}
+
 // ListReviewRequests fetches PRs where the authenticated user's review is requested.
 func (r *Runner) ListReviewRequests(ctx context.Context, owner, repo string) ([]vcs.PRData, error) {
 	out, err := r.run(ctx, []string{

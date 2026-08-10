@@ -21,6 +21,8 @@ type mockRunner struct {
 	reviewRequestsErr   error
 	changesRequested    []vcs.PRData
 	changesRequestedErr error
+	authored            []vcs.PRData
+	authoredErr         error
 	prByNumber          map[int]*vcs.PRData // served by GetPRByNumber (reconcile path)
 }
 
@@ -32,6 +34,10 @@ func (m *mockRunner) ListReviewRequests(_ context.Context, _, _ string) ([]vcs.P
 
 func (m *mockRunner) ListChangesRequestedByUser(_ context.Context, _, _ string) ([]vcs.PRData, error) {
 	return m.changesRequested, m.changesRequestedErr
+}
+
+func (m *mockRunner) ListAuthoredPRs(_ context.Context, _, _, _ string) ([]vcs.PRData, error) {
+	return m.authored, m.authoredErr
 }
 
 func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, _ string) ([]vcs.PRData, error) {
