@@ -53,3 +53,37 @@ func (a *App) AdjustTodoNext(comment string) ([]appstore.AITodoItem, error) {
 	}
 	return a.db.ListTodoItems(a.ctx)
 }
+
+// ReorderTodoNext persists a new display order and returns the updated list.
+func (a *App) ReorderTodoNext(orderedIDs []string) ([]appstore.AITodoItem, error) {
+	if err := a.db.ReorderTodoItems(a.ctx, orderedIDs); err != nil {
+		return nil, err
+	}
+	return a.db.ListTodoItems(a.ctx)
+}
+
+// DeleteTodoNextItem removes one item and returns the updated list.
+func (a *App) DeleteTodoNextItem(id string) ([]appstore.AITodoItem, error) {
+	if err := a.db.DeleteTodoItem(a.ctx, id); err != nil {
+		return nil, err
+	}
+	return a.db.ListTodoItems(a.ctx)
+}
+
+// AddTodoNextItem appends a user-authored item at the end and returns the list.
+func (a *App) AddTodoNextItem(kind, title, refType, refKey, priority string) ([]appstore.AITodoItem, error) {
+	existing, err := a.db.ListTodoItems(a.ctx)
+	if err != nil {
+		return nil, err
+	}
+	if priority == "" {
+		priority = "medium"
+	}
+	if _, err := a.db.AddTodoItem(a.ctx, appstore.AITodoItem{
+		Kind: kind, Title: title, RefType: refType, RefKey: refKey,
+		Priority: priority, Position: len(existing), Status: "pending", Source: "user",
+	}); err != nil {
+		return nil, err
+	}
+	return a.db.ListTodoItems(a.ctx)
+}

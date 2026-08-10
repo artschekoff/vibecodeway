@@ -30,6 +30,10 @@ export function AddTerminalCommand(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddTerminalCommand'](arg1, arg2, arg3);
 }
 
+export function AddTodoNextItem(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['AddTodoNextItem'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function AddTrackedRepo(arg1, arg2) {
   return window['go']['main']['App']['AddTrackedRepo'](arg1, arg2);
 }
@@ -192,6 +196,10 @@ export function DeleteSlackThread(arg1) {
 
 export function DeleteTerminalCommand(arg1) {
   return window['go']['main']['App']['DeleteTerminalCommand'](arg1);
+}
+
+export function DeleteTodoNextItem(arg1) {
+  return window['go']['main']['App']['DeleteTodoNextItem'](arg1);
 }
 
 export function DeleteUploadedFile(arg1) {
@@ -704,6 +712,10 @@ export function RemoveTrackedRepo(arg1) {
 
 export function RemoveVCSBranch(arg1) {
   return window['go']['main']['App']['RemoveVCSBranch'](arg1);
+}
+
+export function ReorderTodoNext(arg1) {
+  return window['go']['main']['App']['ReorderTodoNext'](arg1);
 }
 
 export function ResetAIPrompt(arg1) {

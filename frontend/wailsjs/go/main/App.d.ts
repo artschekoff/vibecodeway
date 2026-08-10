@@ -24,6 +24,8 @@ export function AddSpecificPR(arg1:string,arg2:string,arg3:string,arg4:number):P
 
 export function AddTerminalCommand(arg1:string,arg2:string,arg3:boolean):Promise<store.TerminalCommand>;
 
+export function AddTodoNextItem(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<Array<store.AITodoItem>>;
+
 export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo>;
 
 export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.Event>;
@@ -105,6 +107,8 @@ export function DeleteSlackDMConfig(arg1:string):Promise<void>;
 export function DeleteSlackThread(arg1:string):Promise<void>;
 
 export function DeleteTerminalCommand(arg1:string):Promise<void>;
+
+export function DeleteTodoNextItem(arg1:string):Promise<Array<store.AITodoItem>>;
 
 export function DeleteUploadedFile(arg1:string):Promise<void>;
 
@@ -361,6 +365,8 @@ export function RemoveSlackDMEntry(arg1:string,arg2:string):Promise<void>;
 export function RemoveTrackedRepo(arg1:string):Promise<void>;
 
 export function RemoveVCSBranch(arg1:string):Promise<void>;
+
+export function ReorderTodoNext(arg1:Array<string>):Promise<Array<store.AITodoItem>>;
 
 export function ResetAIPrompt(arg1:string):Promise<void>;
 
