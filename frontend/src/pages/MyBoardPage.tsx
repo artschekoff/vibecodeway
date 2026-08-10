@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare, Compass, Sparkles, ArrowUp, ArrowDown, X } from "lucide-react";
 import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, ReconcileMyOpenPRs, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL, ListTodoNext, GenerateTodoNext, AdjustTodoNext, ReorderTodoNext, DeleteTodoNextItem } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
+import { todoRefUrl } from "../lib/todoRef";
 import { useTabContext } from "../contexts/TabContext";
 import type { store, vcsstore } from "../../wailsjs/go/models";
 
@@ -284,7 +285,9 @@ export default function MyBoardPage() {
           <div className="board-section-empty">No AI actions yet — click Generate.</div>
         ) : (
           <div className="board-section-items">
-            {todos.map((t, i) => (
+            {todos.map((t, i) => {
+              const refUrl = todoRefUrl(t.refType ?? "", t.refKey ?? "", jiraBaseUrl);
+              return (
               <div key={t.id} className="board-card todo-card">
                 <div className="todo-card-main">
                   <span className={`todo-kind kind-${t.kind}`}>{t.kind.replace(/_/g, " ")}</span>
@@ -294,12 +297,16 @@ export default function MyBoardPage() {
                 </div>
                 {t.rationale && <div className="board-card-meta">{t.rationale}</div>}
                 <div className="todo-actions">
+                  {refUrl && (
+                    <button title="Open context" onClick={() => BrowserOpenURL(refUrl)}><ExternalLink size={13} /></button>
+                  )}
                   <button title="Move up" disabled={i === 0} onClick={() => void moveTodo(i, -1)}><ArrowUp size={13} /></button>
                   <button title="Move down" disabled={i === todos.length - 1} onClick={() => void moveTodo(i, 1)}><ArrowDown size={13} /></button>
                   <button title="Remove" onClick={() => void removeTodo(t.id)}><X size={13} /></button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

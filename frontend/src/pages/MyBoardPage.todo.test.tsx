@@ -66,4 +66,24 @@ describe("MyBoardPage — TODO NEXT (BY AI)", () => {
     await waitFor(() => expect(H.AdjustTodoNext).toHaveBeenCalledWith("do the deploy check first"));
     await waitFor(() => expect(screen.getByText(/Check staging deploy/)).toBeInTheDocument());
   });
+
+  it("shows an Open context button that opens the PR URL", async () => {
+    const { BrowserOpenURL } = await import("../../wailsjs/runtime/runtime");
+    H.ListTodoNext.mockResolvedValue([
+      { id: "1", kind: "rerequest_pr", title: "Ping reviewers on #42", priority: "high", position: 0, refType: "pr", refKey: "o/r#42", status: "pending", source: "ai" },
+    ]);
+    render(<MyBoardPage />);
+    const open = await screen.findByRole("button", { name: /Open context/i });
+    fireEvent.click(open);
+    expect(BrowserOpenURL).toHaveBeenCalledWith("https://github.com/o/r/pull/42");
+  });
+
+  it("shows no Open context button when the todo has no resolvable ref", async () => {
+    H.ListTodoNext.mockResolvedValue([
+      { id: "1", kind: "implement", title: "Finish the thing", priority: "high", position: 0, status: "pending", source: "ai" },
+    ]);
+    render(<MyBoardPage />);
+    await screen.findByText(/Finish the thing/);
+    expect(screen.queryByRole("button", { name: /Open context/i })).toBeNull();
+  });
 });
