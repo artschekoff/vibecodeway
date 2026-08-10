@@ -15,6 +15,7 @@ import (
 	"github.com/artschekoff/context-consolidator/internal/vcs"
 	vcsstore "github.com/artschekoff/context-consolidator/internal/vcs/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"go.uber.org/zap"
 )
 
 // --- VCS Auth ---
@@ -352,7 +353,14 @@ func (a *App) GetPendingCodeReviews() ([]vcsstore.ReviewRequest, error) {
 // RefreshPendingReviews fetches review requests for the authenticated user
 // across all tracked repos for all enabled and authenticated platforms.
 func (a *App) RefreshPendingReviews() error {
-	return a.vcsSvc.SyncReviewRequests(a.ctx, vcs.PlatformGitHub)
+	if err := a.vcsSvc.SyncReviewRequests(a.ctx, vcs.PlatformGitHub); err != nil {
+		return err
+	}
+	// Authored PRs are additive; a failure here should not blank the requested list.
+	if err := a.vcsSvc.SyncAuthoredPRs(a.ctx, vcs.PlatformGitHub); err != nil {
+		a.logger.Warn("refresh: sync authored PRs failed", zap.Error(err))
+	}
+	return nil
 }
 
 // DismissReviewRequest hides a "waiting for author" item from the Code Reviews page.

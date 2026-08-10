@@ -125,6 +125,35 @@ func newTestProvider(t *testing.T, runner vcs.VCSRunner) (*VCSProvider, *vcsstor
 	return p, vs
 }
 
+func TestSyncAuthoredPRsUpsertsAuthoredKind(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		authored: []vcs.PRData{{Number: 5, Title: "mine", Author: "me", State: "open",
+			ReviewStatus: "changes_requested", URL: "u", HeadBranch: "b", CreatedAt: "2026-01-01T00:00:00Z",
+			Mergeable: "CONFLICTING", CIStatus: "FAILURE",
+			Reviewers: []vcs.ReviewerDecision{{Login: "bob", State: "changes_requested"}}}},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+
+	if err := p.SyncAuthoredPRs(ctx, vcs.PlatformGitHub); err != nil {
+		t.Fatalf("SyncAuthoredPRs: %v", err)
+	}
+	list, _ := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	if len(list) != 1 || list[0].Kind != "authored" || list[0].CIStatus != "FAILURE" {
+		t.Fatalf("authored row not stored correctly: %+v", list)
+	}
+	if len(list[0].Reviewers) != 1 || list[0].Reviewers[0].Login != "bob" {
+		t.Fatalf("authored reviewers not stored: %+v", list[0])
+	}
+	// Authored rows must never be marked "reviewed" by the requester-only sweep.
+	if list[0].ReviewedAt != nil {
+		t.Fatalf("authored PR must stay pending, got reviewedAt=%v", *list[0].ReviewedAt)
+	}
+}
+
 // --- SyncReviewRequests tests ---
 
 func TestSyncReviewRequests_MergesBothQueries(t *testing.T) {

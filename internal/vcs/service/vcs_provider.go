@@ -444,6 +444,46 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 	return nil
 }
 
+// SyncAuthoredPRs fetches the authenticated user's open authored PRs across all
+// tracked repos and stores them as kind='authored' review-request rows, so the
+// Code Reviews tab can show their review status, reviewers, CI, and conflicts.
+// It does NOT call MarkReviewedForRepo (that is requester-only).
+func (p *VCSProvider) SyncAuthoredPRs(ctx context.Context, platform vcs.Platform) error {
+	runner, ok := p.runners[platform]
+	if !ok {
+		return fmt.Errorf("no runner for platform %q", platform)
+	}
+	repos, err := p.store.Repos.ListRepos(ctx, string(platform))
+	if err != nil {
+		return fmt.Errorf("list repos: %w", err)
+	}
+	for _, repo := range repos {
+		authored, err := runner.ListAuthoredPRs(ctx, repo.Owner, repo.Name, "")
+		if err != nil {
+			p.logger.Warn("vcs: list authored PRs failed",
+				zap.String("repo", repo.FullName()), zap.Error(err))
+			continue
+		}
+		activeNumbers := make([]int, 0, len(authored))
+		for _, pr := range authored {
+			activeNumbers = append(activeNumbers, pr.Number)
+			if _, err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
+				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
+				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, marshalReviewers(pr.Reviewers), pr.Mergeable,
+				"authored", pr.CIStatus,
+			); err != nil {
+				p.logger.Warn("vcs: upsert authored PR failed", zap.Int("pr", pr.Number), zap.Error(err))
+			}
+		}
+		// Relabel authored PRs that dropped from the open list as merged/closed.
+		// ponytail: reconcile scans all stored rows for the repo (both kinds), so it
+		// may re-fetch still-open requested PRs here too — harmless (snapshot refresh),
+		// only an extra `gh pr view` each. Scope by kind if this gets hot.
+		reconcileTerminalStates(ctx, p, runner, repo, activeNumbers)
+	}
+	return nil
+}
+
 // reconcileTerminalStates fetches the real lifecycle state of review requests that
 // dropped off the open review lists and records "merged"/"closed" in review_status.
 // Best-effort: any failure leaves a PR labeled as-is.
