@@ -8,7 +8,7 @@ import (
 )
 
 func TestDefaultAgentTaskPrompt_startsWithSkillHeader(t *testing.T) {
-	assert.True(t, strings.HasPrefix(defaultAgentTaskPrompt, "/superpowers:writing-plans\n/vibecodeway-load-context {{context_key}}\n"),
+	assert.True(t, strings.HasPrefix(defaultAgentTaskPrompt, "/superpowers:writing-plans\n/context-consolidator-load-context {{context_key}}\n"),
 		"prompt must start with the two skill-command lines")
 	assert.Contains(t, defaultAgentTaskPrompt, "{{repos}}")
 	assert.Contains(t, defaultAgentTaskPrompt, "{{user_prompt}}")
