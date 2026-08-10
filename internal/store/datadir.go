@@ -31,26 +31,30 @@ func MigrateLegacyDataDir() error {
 	)
 }
 
-// migrateDataDir renames oldDir→newDir, then renames the db file (and its
-// -wal/-shm siblings) inside the moved dir. No-op if newDir already exists or
-// oldDir is absent.
+// migrateDataDir moves the pre-rename SQLite DB (and its -wal/-shm siblings) from
+// oldDir/oldDB* to newDir/newDB*. It keys off the DB FILE, not the directory,
+// because other startup steps (e.g. logging) may create newDir first. No-op when
+// the new DB already exists (already migrated) or the old DB is absent (fresh install).
 func migrateDataDir(oldDir, newDir, oldDB, newDB string) error {
-	if _, err := os.Stat(newDir); err == nil {
-		return nil // already migrated, or a fresh install already created it
+	newDBPath := filepath.Join(newDir, newDB)
+	if _, err := os.Stat(newDBPath); err == nil {
+		return nil // already migrated
 	}
-	if _, err := os.Stat(oldDir); err != nil {
-		return nil // nothing to migrate
+	oldDBPath := filepath.Join(oldDir, oldDB)
+	if _, err := os.Stat(oldDBPath); err != nil {
+		return nil // nothing to migrate (fresh install)
 	}
-	if err := os.Rename(oldDir, newDir); err != nil {
-		return fmt.Errorf("migrate data dir: %w", err)
+	if err := os.MkdirAll(newDir, 0o700); err != nil {
+		return fmt.Errorf("create data dir: %w", err)
 	}
 	for _, suffix := range []string{"", "-wal", "-shm"} {
-		oldP := filepath.Join(newDir, oldDB+suffix)
-		newP := filepath.Join(newDir, newDB+suffix)
-		if _, err := os.Stat(oldP); err == nil {
-			if err := os.Rename(oldP, newP); err != nil {
-				return fmt.Errorf("migrate db file %s: %w", oldP, err)
-			}
+		src := filepath.Join(oldDir, oldDB+suffix)
+		dst := filepath.Join(newDir, newDB+suffix)
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		if err := os.Rename(src, dst); err != nil {
+			return fmt.Errorf("migrate db file %s: %w", src, err)
 		}
 	}
 	return nil

@@ -25,7 +25,7 @@ const defaultTimeout = 60 * time.Second
 
 // passphraseEnvVar is the env var injected into CLI subprocesses so they can
 // authenticate Slack and OpenAI operations.
-const passphraseEnvVar = "CONTEXT_CONSOLIDATOR_PASSPHRASE"
+const passphraseEnvVar = "VIBECODEWAY_PASSPHRASE"
 
 // knownExtraDirs mirrors the list from internal/jira/acli: paths that macOS
 // GUI and stdio processes often miss because they inherit a minimal PATH.
@@ -71,7 +71,7 @@ func WithTimeout(d time.Duration) Option {
 }
 
 // WithPassphraseFunc provides a function that returns the current passphrase,
-// injected as CONTEXT_CONSOLIDATOR_PASSPHRASE into each CLI subprocess.
+// injected as VIBECODEWAY_PASSPHRASE into each CLI subprocess.
 func WithPassphraseFunc(fn func() string) Option {
 	return func(r *Runner) { r.passphraseFunc = fn }
 }

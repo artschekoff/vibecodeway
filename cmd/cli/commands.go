@@ -27,7 +27,7 @@ import (
 
 // passphraseEnvVar is read by the CLI to configure Slack and OpenAI operations.
 // The GUI sets this env var when spawning CLI subprocesses.
-const passphraseEnvVar = "CONTEXT_CONSOLIDATOR_PASSPHRASE"
+const passphraseEnvVar = "VIBECODEWAY_PASSPHRASE"
 
 // serviceEnv holds all objects needed to call ContextService methods.
 type serviceEnv struct {

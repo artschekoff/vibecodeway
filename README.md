@@ -84,4 +84,4 @@ Slash command `/vibecodeway-prime` loads the schema and routes to the right CLI 
 
 ### Slack passphrase
 
-When Slack integration is used, set `CONTEXT_CONSOLIDATOR_PASSPHRASE` (GUI) / the passphrase the app injects into `slack-cli` via `SLACK_MCP_PASSPHRASE`. If you don't use Slack, you can omit it.
+When Slack integration is used, set `VIBECODEWAY_PASSPHRASE` (GUI) / the passphrase the app injects into `slack-cli` via `SLACK_MCP_PASSPHRASE`. If you don't use Slack, you can omit it.
