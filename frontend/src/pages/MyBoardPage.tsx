@@ -4,11 +4,20 @@ import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, Re
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import { todoRefUrl } from "../lib/todoRef";
 import { useTabContext } from "../contexts/TabContext";
+import { TodoActionModal } from "../components/TodoActionModal";
 import type { store, vcsstore } from "../../wailsjs/go/models";
 
 const PERSON_NAME_KEY = "cc:board-person-name";
 const PRIORITY_RANK: Record<string, number> = { Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1 };
 type JiraSort = "priority" | "status" | "date";
+
+// Per-kind "typical solution" draft actions. Kinds absent here have no draft.
+const TODO_DRAFT_ACTIONS: Record<string, string> = {
+  rerequest_pr: "Draft reviewer nudge",
+  make_pr: "Draft PR description",
+  ask_question: "Draft clarifying question",
+  check_status: "Draft status ping",
+};
 
 // ponytail: minute/hour/day granularity is enough for a feed; no i18n lib.
 function timeAgo(iso: string): string {
@@ -41,6 +50,7 @@ export default function MyBoardPage() {
   const [todoBusy, setTodoBusy] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustText, setAdjustText] = useState("");
+  const [draftFor, setDraftFor] = useState<store.AITodoItem | null>(null);
   const { openContextTab } = useTabContext();
 
   // Distinct filter options present in the current issues.
@@ -300,6 +310,9 @@ export default function MyBoardPage() {
                   {refUrl && (
                     <button title="Open context" onClick={() => BrowserOpenURL(refUrl)}><ExternalLink size={13} /></button>
                   )}
+                  {TODO_DRAFT_ACTIONS[t.kind] && (
+                    <button title={TODO_DRAFT_ACTIONS[t.kind]} onClick={() => setDraftFor(t)}><MessageSquare size={13} /></button>
+                  )}
                   <button title="Move up" disabled={i === 0} onClick={() => void moveTodo(i, -1)}><ArrowUp size={13} /></button>
                   <button title="Move down" disabled={i === todos.length - 1} onClick={() => void moveTodo(i, 1)}><ArrowDown size={13} /></button>
                   <button title="Remove" onClick={() => void removeTodo(t.id)}><X size={13} /></button>
@@ -308,6 +321,16 @@ export default function MyBoardPage() {
               );
             })}
           </div>
+        )}
+        {draftFor && (
+          <TodoActionModal
+            kind={draftFor.kind}
+            title={draftFor.title}
+            refKey={draftFor.refKey}
+            rationale={draftFor.rationale}
+            actionLabel={TODO_DRAFT_ACTIONS[draftFor.kind]}
+            onClose={() => setDraftFor(null)}
+          />
         )}
       </div>
 

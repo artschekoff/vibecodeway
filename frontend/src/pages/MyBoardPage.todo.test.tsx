@@ -20,6 +20,7 @@ const H = vi.hoisted(() => ({
   AdjustTodoNext: vi.fn(),
   ReorderTodoNext: vi.fn(),
   DeleteTodoNextItem: vi.fn(),
+  DraftTodoMessage: vi.fn(),
 }));
 vi.mock("../../wailsjs/go/main/App", () => H);
 vi.mock("../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL: vi.fn() }));
@@ -85,5 +86,15 @@ describe("MyBoardPage — TODO NEXT (BY AI)", () => {
     render(<MyBoardPage />);
     await screen.findByText(/Finish the thing/);
     expect(screen.queryByRole("button", { name: /Open context/i })).toBeNull();
+  });
+
+  it("opens the draft modal and shows the AI-drafted message", async () => {
+    H.DraftTodoMessage.mockResolvedValue("Please review o/r#42.");
+    H.ListTodoNext.mockResolvedValue([
+      { id: "1", kind: "rerequest_pr", title: "Ping reviewers on #42", priority: "high", position: 0, refType: "pr", refKey: "o/r#42", rationale: "stale", status: "pending", source: "ai" },
+    ]);
+    render(<MyBoardPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Draft reviewer nudge/i }));
+    expect(await screen.findByDisplayValue("Please review o/r#42.")).toBeInTheDocument();
   });
 });
