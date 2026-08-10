@@ -140,6 +140,10 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.logger = logger
 
+	if err := appstore.MigrateLegacyDataDir(); err != nil {
+		logger.Warn("data dir migration failed; continuing", zap.Error(err))
+	}
+
 	s, err := appstore.Open(appstore.DefaultDBPath())
 	if err != nil {
 		logger.Fatal("opening database", zap.Error(err))

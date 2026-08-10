@@ -52,7 +52,7 @@ func DefaultDBPath() string {
 	if err != nil {
 		home = "."
 	}
-	return filepath.Join(home, ".context-consolidator", "context_consolidator.db")
+	return filepath.Join(home, dataDirName, dbFileName)
 }
 
 // DB returns the underlying *sql.DB for use by feature-specific repositories.

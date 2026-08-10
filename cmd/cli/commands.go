@@ -46,6 +46,10 @@ func openServiceEnv() (*serviceEnv, error) {
 		return nil, fmt.Errorf("building logger: %w", err)
 	}
 
+	if err := appstore.MigrateLegacyDataDir(); err != nil {
+		logger.Warn("data dir migration failed; continuing", zap.Error(err))
+	}
+
 	s, err := appstore.Open(appstore.DefaultDBPath())
 	if err != nil {
 		logger.Sync() //nolint:errcheck
