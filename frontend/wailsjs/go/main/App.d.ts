@@ -30,6 +30,8 @@ export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.
 
 export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<vcsstore.ContextVCSBranch>;
 
+export function AdjustTodoNext(arg1:string):Promise<Array<store.AITodoItem>>;
+
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
 
 export function ApplyContextUpdateActions(arg1:string,arg2:Array<store.ContextUpdateAction>):Promise<Array<main.ApplyActionResult>>;

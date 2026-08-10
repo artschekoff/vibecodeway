@@ -42,6 +42,10 @@ export function AddVCSBranch(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['AddVCSBranch'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function AdjustTodoNext(arg1) {
+  return window['go']['main']['App']['AdjustTodoNext'](arg1);
+}
+
 export function AnalyzeContext(arg1) {
   return window['go']['main']['App']['AnalyzeContext'](arg1);
 }

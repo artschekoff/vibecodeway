@@ -36,3 +36,20 @@ func (a *App) GenerateTodoNext(personName string) ([]appstore.AITodoItem, error)
 func (a *App) ListTodoNext() ([]appstore.AITodoItem, error) {
 	return a.db.ListTodoItems(a.ctx)
 }
+
+// AdjustTodoNext revises the persisted next-action list per a free-text comment,
+// letting the AI use discovery tools, then persists and returns the new list.
+func (a *App) AdjustTodoNext(comment string) ([]appstore.AITodoItem, error) {
+	current, err := a.db.ListTodoItems(a.ctx)
+	if err != nil {
+		return nil, err
+	}
+	revised, err := a.agent.AdjustTodos(a.ctx, current, comment, "")
+	if err != nil {
+		return nil, err
+	}
+	if err := a.db.ReplaceTodoItems(a.ctx, revised); err != nil {
+		return nil, err
+	}
+	return a.db.ListTodoItems(a.ctx)
+}
