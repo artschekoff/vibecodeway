@@ -67,6 +67,42 @@ describe("HotkeyProvider", () => {
     vi.useRealTimers();
   });
 
+  it("⌘E + k moves editor zone focus when editor scope is active", () => {
+    const open = vi.fn();
+    const focusUp = vi.fn();
+    render(
+      <HotkeyProvider platform="darwin">
+        <ScopeActivator scope="editor" />
+        <Probe id="editor.open" fn={open} />
+        <Probe id="editor.focusUp" fn={focusUp} scope="editor" />
+      </HotkeyProvider>
+    );
+    act(() => {
+      fireEvent.keyDown(window, { key: "e", metaKey: true });
+    });
+    act(() => {
+      fireEvent.keyDown(window, { key: "k" });
+    });
+    expect(focusUp).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledTimes(0);
+  });
+
+  it("⌘E opens the editor immediately when editor scope is NOT active", () => {
+    const open = vi.fn();
+    const focusUp = vi.fn();
+    render(
+      <HotkeyProvider platform="darwin">
+        <Probe id="editor.open" fn={open} />
+        <Probe id="editor.focusUp" fn={focusUp} scope="editor" />
+      </HotkeyProvider>
+    );
+    act(() => {
+      fireEvent.keyDown(window, { key: "e", metaKey: true });
+    });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(focusUp).toHaveBeenCalledTimes(0);
+  });
+
   it("⌘F fires search.global immediately when files scope is NOT active", () => {
     const search = vi.fn();
     const focusSearch = vi.fn();

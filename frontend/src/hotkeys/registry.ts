@@ -26,15 +26,17 @@ export const COMMANDS: Command[] = [
     description: "Switch to the next open context tab", scope: "global", defaultChord: "mod+]" },
   { id: "tabs.prev", object: "tabs", action: "prev", label: "Previous open context",
     description: "Switch to the previous open context tab", scope: "global", defaultChord: "mod+[" },
-  // --- editor zone focus (raw Ctrl+arrows, all platforms) ---
+  // --- editor zone focus (vim-like leader: ⌘E then h/j/k/l) ---
+  // Shares the ⌘E lead with the bare "editor.open" command: ⌘E alone still
+  // opens the editor (fall-through default), ⌘E + h/j/k/l moves zone focus.
   { id: "editor.focusUp", object: "editor", action: "focusUp", label: "Focus zone up",
-    description: "Move focus to the zone above", scope: "editor", defaultChord: "ctrl+arrowup" },
+    description: "Move focus to the zone above", scope: "editor", defaultChord: "mod+e", sequence: "k" },
   { id: "editor.focusDown", object: "editor", action: "focusDown", label: "Focus zone down",
-    description: "Move focus to the zone below", scope: "editor", defaultChord: "ctrl+arrowdown" },
+    description: "Move focus to the zone below", scope: "editor", defaultChord: "mod+e", sequence: "j" },
   { id: "editor.focusLeft", object: "editor", action: "focusLeft", label: "Focus zone left",
-    description: "Move focus to the zone to the left", scope: "editor", defaultChord: "ctrl+arrowleft" },
+    description: "Move focus to the zone to the left", scope: "editor", defaultChord: "mod+e", sequence: "h" },
   { id: "editor.focusRight", object: "editor", action: "focusRight", label: "Focus zone right",
-    description: "Move focus to the zone to the right", scope: "editor", defaultChord: "ctrl+arrowright" },
+    description: "Move focus to the zone to the right", scope: "editor", defaultChord: "mod+e", sequence: "l" },
   // --- sidebar tabs (scope: editor — active when editor/sidebar focused, NOT terminal) ---
   { id: "sidebar.next", object: "sidebar", action: "next", label: "Next sidebar tab",
     description: "Switch FILES / GIT (forward)", scope: "editor", defaultChord: "mod+shift+]" },
