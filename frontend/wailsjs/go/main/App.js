@@ -34,10 +34,6 @@ export function AddTodoNextItem(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['AddTodoNextItem'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function DraftTodoMessage(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['DraftTodoMessage'](arg1, arg2, arg3, arg4);
-}
-
 export function AddTrackedRepo(arg1, arg2) {
   return window['go']['main']['App']['AddTrackedRepo'](arg1, arg2);
 }
@@ -182,10 +178,6 @@ export function DeleteLocalBranch(arg1, arg2) {
   return window['go']['main']['App']['DeleteLocalBranch'](arg1, arg2);
 }
 
-export function RemoveGoneLocalBranches(arg1) {
-  return window['go']['main']['App']['RemoveGoneLocalBranches'](arg1);
-}
-
 export function DeleteOrganization(arg1) {
   return window['go']['main']['App']['DeleteOrganization'](arg1);
 }
@@ -240,6 +232,10 @@ export function DismissPicker() {
 
 export function DismissReviewRequest(arg1) {
   return window['go']['main']['App']['DismissReviewRequest'](arg1);
+}
+
+export function DraftTodoMessage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DraftTodoMessage'](arg1, arg2, arg3, arg4);
 }
 
 export function EnsureContextEditorWorkspace(arg1) {
@@ -574,10 +570,6 @@ export function MarkPRViewed(arg1) {
   return window['go']['main']['App']['MarkPRViewed'](arg1);
 }
 
-export function UpdatePRBranch(arg1, arg2) {
-  return window['go']['main']['App']['UpdatePRBranch'](arg1, arg2);
-}
-
 export function MarkReviewRequestViewed(arg1) {
   return window['go']['main']['App']['MarkReviewRequestViewed'](arg1);
 }
@@ -706,6 +698,10 @@ export function RemoveContextRelation(arg1) {
   return window['go']['main']['App']['RemoveContextRelation'](arg1);
 }
 
+export function RemoveGoneLocalBranches(arg1) {
+  return window['go']['main']['App']['RemoveGoneLocalBranches'](arg1);
+}
+
 export function RemoveRepoLocalPath(arg1) {
   return window['go']['main']['App']['RemoveRepoLocalPath'](arg1);
 }
@@ -734,12 +730,12 @@ export function ResetAIPrompt(arg1) {
   return window['go']['main']['App']['ResetAIPrompt'](arg1);
 }
 
-export function ResolveToolConfirmation(arg1, arg2) {
-  return window['go']['main']['App']['ResolveToolConfirmation'](arg1, arg2);
-}
-
 export function ResetKeybinding(arg1) {
   return window['go']['main']['App']['ResetKeybinding'](arg1);
+}
+
+export function ResolveToolConfirmation(arg1, arg2) {
+  return window['go']['main']['App']['ResolveToolConfirmation'](arg1, arg2);
 }
 
 export function ReviewPRWithAI(arg1, arg2, arg3, arg4) {
@@ -770,12 +766,12 @@ export function SearchContextIDs(arg1) {
   return window['go']['main']['App']['SearchContextIDs'](arg1);
 }
 
-export function SearchContexts(arg1) {
-  return window['go']['main']['App']['SearchContexts'](arg1);
-}
-
 export function SearchContextItems(arg1, arg2) {
   return window['go']['main']['App']['SearchContextItems'](arg1, arg2);
+}
+
+export function SearchContexts(arg1) {
+  return window['go']['main']['App']['SearchContexts'](arg1);
 }
 
 export function SearchJQL(arg1) {
@@ -944,6 +940,10 @@ export function UpdateKeybinding(arg1, arg2, arg3, arg4) {
 
 export function UpdateOrganization(arg1, arg2) {
   return window['go']['main']['App']['UpdateOrganization'](arg1, arg2);
+}
+
+export function UpdatePRBranch(arg1, arg2) {
+  return window['go']['main']['App']['UpdatePRBranch'](arg1, arg2);
 }
 
 export function UpdateTerminalCommand(arg1, arg2, arg3, arg4) {

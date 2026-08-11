@@ -239,6 +239,7 @@ export interface AppLogEntry {
   caller: string;
   msg: string;
   error?: string;
+  fields?: string;
   createdAt: string;
 }
 

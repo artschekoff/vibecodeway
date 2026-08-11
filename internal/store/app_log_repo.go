@@ -15,6 +15,7 @@ type AppLog struct {
 	Caller    string  `json:"caller"`
 	Msg       string  `json:"msg"`
 	Error     string  `json:"error,omitempty"`
+	Fields    string  `json:"fields,omitempty"`
 	CreatedAt string  `json:"createdAt"`
 }
 
@@ -27,11 +28,11 @@ type AppLogRepo struct {
 func NewAppLogRepo(db *sql.DB) *AppLogRepo { return &AppLogRepo{db: db} }
 
 // Add inserts a single log entry.
-func (r *AppLogRepo) Add(ctx context.Context, level string, ts float64, caller, msg, errMsg string) error {
+func (r *AppLogRepo) Add(ctx context.Context, level string, ts float64, caller, msg, errMsg, fields string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO app_logs (level, ts, caller, msg, error, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		level, ts, caller, msg, errMsg, now,
+		`INSERT INTO app_logs (level, ts, caller, msg, error, fields, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		level, ts, caller, msg, errMsg, fields, now,
 	)
 	if err != nil {
 		return fmt.Errorf("insert app_log: %w", err)
@@ -45,7 +46,7 @@ func (r *AppLogRepo) List(ctx context.Context, limit int) ([]AppLog, error) {
 		limit = 200
 	}
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, level, ts, caller, msg, error, created_at
+		`SELECT id, level, ts, caller, msg, error, fields, created_at
 		   FROM app_logs
 		  ORDER BY id DESC
 		  LIMIT ?`,
@@ -59,7 +60,7 @@ func (r *AppLogRepo) List(ctx context.Context, limit int) ([]AppLog, error) {
 	var result []AppLog
 	for rows.Next() {
 		var e AppLog
-		if err := rows.Scan(&e.ID, &e.Level, &e.Ts, &e.Caller, &e.Msg, &e.Error, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Level, &e.Ts, &e.Caller, &e.Msg, &e.Error, &e.Fields, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan app_log: %w", err)
 		}
 		result = append(result, e)

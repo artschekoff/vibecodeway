@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	anthropicSDK "github.com/anthropics/anthropic-sdk-go"
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
@@ -45,18 +46,23 @@ func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []
 		}
 	}
 
+	start := time.Now()
 	resp, err := c.dispatch(ctx, dbSettings, apiKey, messages, tools)
 	if err != nil {
 		return nil, err
 	}
+	elapsed := time.Since(start)
 	resp.Source = source
 
-	c.logger.Info("llm.chat_with_tools",
+	c.logger.Info(llmLogMessage("llm.chat_with_tools", resp.Model, resp.Usage, elapsed),
 		zap.String("provider", dbSettings.Provider),
 		zap.String("model", resp.Model),
 		zap.Int("promptTokens", resp.Usage.PromptTokens),
 		zap.Int("completionTokens", resp.Usage.CompletionTokens),
+		zap.Int("totalTokens", resp.Usage.TotalTokens),
+		zap.Int64("durationMs", elapsed.Milliseconds()),
 		zap.Int("toolCalls", len(resp.ToolCalls)),
+		zap.String("request", requestPreview(messages)),
 	)
 	return resp, nil
 }

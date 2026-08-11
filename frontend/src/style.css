@@ -6992,3 +6992,9 @@ select {
   outline: 1px solid var(--accent, #7aa2f7);
   background: color-mix(in srgb, var(--accent, #7aa2f7) 14%, transparent);
 }
+
+/* App Logs — log detail modal */
+.app-log-modal-caller { color: var(--text-muted); font-family: var(--font-mono, monospace); font-size: 12px; }
+.app-log-modal-msg { font-size: 13px; margin: 0 0 8px; word-break: break-word; }
+.app-log-modal-section { font-size: 12px; color: var(--text-muted); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.app-log-modal-pre { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 12px; font-family: var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow: auto; margin: 0; }

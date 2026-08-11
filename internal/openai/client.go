@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	openai "github.com/sashabaranov/go-openai"
@@ -199,18 +200,23 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 		}
 	}
 
+	start := time.Now()
 	resp, err := c.dispatch(ctx, dbSettings, apiKey, messages, nil)
 	if err != nil {
 		return nil, err
 	}
+	elapsed := time.Since(start)
 	resp.Source = source
 
-	c.logger.Info("llm.chat_completion",
+	c.logger.Info(llmLogMessage("llm.chat_completion", resp.Model, resp.Usage, elapsed),
 		zap.String("provider", dbSettings.Provider),
 		zap.String("model", resp.Model),
 		zap.Int("promptTokens", resp.Usage.PromptTokens),
 		zap.Int("completionTokens", resp.Usage.CompletionTokens),
+		zap.Int("totalTokens", resp.Usage.TotalTokens),
+		zap.Int64("durationMs", elapsed.Milliseconds()),
 		zap.String("source", string(source)),
+		zap.String("request", requestPreview(messages)),
 	)
 	return resp, nil
 }

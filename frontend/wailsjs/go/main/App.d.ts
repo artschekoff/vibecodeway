@@ -26,8 +26,6 @@ export function AddTerminalCommand(arg1:string,arg2:string,arg3:boolean):Promise
 
 export function AddTodoNextItem(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<Array<store.AITodoItem>>;
 
-export function DraftTodoMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
-
 export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo>;
 
 export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.Event>;
@@ -100,8 +98,6 @@ export function DeleteJiraIssue(arg1:string):Promise<void>;
 
 export function DeleteLocalBranch(arg1:string,arg2:string):Promise<void>;
 
-export function RemoveGoneLocalBranches(arg1:string):Promise<number>;
-
 export function DeleteOrganization(arg1:string):Promise<void>;
 
 export function DeletePersonAssignment(arg1:string):Promise<void>;
@@ -129,6 +125,8 @@ export function DiscardPendingUpload(arg1:string):Promise<void>;
 export function DismissPicker():Promise<void>;
 
 export function DismissReviewRequest(arg1:string):Promise<void>;
+
+export function DraftTodoMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function EnsureContextEditorWorkspace(arg1:string):Promise<main.ContextEditorPrep>;
 
@@ -296,8 +294,6 @@ export function MarkPRCommentViewed(arg1:string):Promise<void>;
 
 export function MarkPRViewed(arg1:string):Promise<void>;
 
-export function UpdatePRBranch(arg1:string,arg2:number):Promise<void>;
-
 export function MarkReviewRequestViewed(arg1:string):Promise<void>;
 
 export function MarkSlackChannelAllViewed(arg1:string):Promise<void>;
@@ -362,6 +358,8 @@ export function ReloadAllContexts():Promise<Array<service.ReloadAllResult>>;
 
 export function RemoveContextRelation(arg1:string):Promise<void>;
 
+export function RemoveGoneLocalBranches(arg1:string):Promise<number>;
+
 export function RemoveRepoLocalPath(arg1:string):Promise<void>;
 
 export function RemoveSlackChannel(arg1:string):Promise<void>;
@@ -376,9 +374,9 @@ export function ReorderTodoNext(arg1:Array<string>):Promise<Array<store.AITodoIt
 
 export function ResetAIPrompt(arg1:string):Promise<void>;
 
-export function ResolveToolConfirmation(arg1:string,arg2:boolean):Promise<void>;
-
 export function ResetKeybinding(arg1:string):Promise<void>;
+
+export function ResolveToolConfirmation(arg1:string,arg2:boolean):Promise<void>;
 
 export function ReviewPRWithAI(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.ReviewPRResult>;
 
@@ -394,9 +392,9 @@ export function SaveRepoFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SearchContextIDs(arg1:string):Promise<Array<string>>;
 
-export function SearchContexts(arg1:string):Promise<Array<store.ContextSearchHit>>;
-
 export function SearchContextItems(arg1:string,arg2:string):Promise<store.ContextItemMatches>;
+
+export function SearchContexts(arg1:string):Promise<Array<store.ContextSearchHit>>;
 
 export function SearchJQL(arg1:string):Promise<Array<jira.SearchResult>>;
 
@@ -481,6 +479,8 @@ export function UpdateContext(arg1:string,arg2:string,arg3:string):Promise<store
 export function UpdateKeybinding(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UpdateOrganization(arg1:string,arg2:string):Promise<store.Organization>;
+
+export function UpdatePRBranch(arg1:string,arg2:number):Promise<void>;
 
 export function UpdateTerminalCommand(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 

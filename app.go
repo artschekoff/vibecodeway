@@ -1271,10 +1271,11 @@ type AppLogEntry struct {
 	Caller    string  `json:"caller"`
 	Msg       string  `json:"msg"`
 	Error     string  `json:"error,omitempty"`
+	Fields    string  `json:"fields,omitempty"`
 	CreatedAt string  `json:"createdAt"`
 }
 
-// GetAppLogs returns the last `limit` warn/error entries from the database.
+// GetAppLogs returns the last `limit` info-and-above entries from the database.
 func (a *App) GetAppLogs(limit int) ([]AppLogEntry, error) {
 	rows, err := a.appLogRepo.List(a.ctx, limit)
 	if err != nil {
@@ -1284,7 +1285,7 @@ func (a *App) GetAppLogs(limit int) ([]AppLogEntry, error) {
 	for i, r := range rows {
 		result[i] = AppLogEntry{
 			ID: r.ID, Level: r.Level, Ts: r.Ts,
-			Caller: r.Caller, Msg: r.Msg, Error: r.Error, CreatedAt: r.CreatedAt,
+			Caller: r.Caller, Msg: r.Msg, Error: r.Error, Fields: r.Fields, CreatedAt: r.CreatedAt,
 		}
 	}
 	return result, nil

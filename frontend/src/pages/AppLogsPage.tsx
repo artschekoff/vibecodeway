@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { GetAppLogs, ClearAppLogs } from "../../wailsjs/go/main/App";
 import type { AppLogEntry } from "../types";
+import { AppLogDetailModal } from "../components/AppLogDetailModal";
 
 const LEVELS = [
   { value: "", label: "All" },
+  { value: "debug", label: "Debug" },
+  { value: "info", label: "Info" },
   { value: "warn", label: "Warn" },
   { value: "error", label: "Error" },
 ];
@@ -31,6 +34,7 @@ export default function AppLogsPage() {
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [levelFilter, setLevelFilter] = useState("");
+  const [selected, setSelected] = useState<AppLogEntry | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -120,7 +124,7 @@ export default function AppLogsPage() {
             </thead>
             <tbody>
               {visible.map((e) => (
-                <tr key={e.id}>
+                <tr key={e.id} onClick={() => setSelected(e)} style={{ cursor: "pointer" }}>
                   <td className="settings-logs-cell-date">{formatTs(e.ts)}</td>
                   <td className="settings-logs-cell-level">
                     <span className={`settings-logs-trigger settings-logs-trigger--${e.level}`}>
@@ -142,6 +146,7 @@ export default function AppLogsPage() {
             </tbody>
           </table>
         )}
+        {selected && <AppLogDetailModal entry={selected} onClose={() => setSelected(null)} />}
       </div>
     </div>
   );

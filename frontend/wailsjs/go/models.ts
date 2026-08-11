@@ -255,6 +255,7 @@ export namespace main {
 	    caller: string;
 	    msg: string;
 	    error?: string;
+	    fields?: string;
 	    createdAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -269,6 +270,7 @@ export namespace main {
 	        this.caller = source["caller"];
 	        this.msg = source["msg"];
 	        this.error = source["error"];
+	        this.fields = source["fields"];
 	        this.createdAt = source["createdAt"];
 	    }
 	}
@@ -1494,11 +1496,11 @@ export namespace store {
 	    orgId: string;
 	    orgName: string;
 	    summary: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ContextSearchHit(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -2529,6 +2531,7 @@ export namespace vcsstore {
 	    url: string;
 	    headBranch: string;
 	    mergeable: string;
+	    mergeStateStatus: string;
 	    ciStatus: string;
 	    prCreatedAt: string;
 	    prUpdatedAt: string;
@@ -2556,6 +2559,7 @@ export namespace vcsstore {
 	        this.url = source["url"];
 	        this.headBranch = source["headBranch"];
 	        this.mergeable = source["mergeable"];
+	        this.mergeStateStatus = source["mergeStateStatus"];
 	        this.ciStatus = source["ciStatus"];
 	        this.prCreatedAt = source["prCreatedAt"];
 	        this.prUpdatedAt = source["prUpdatedAt"];
