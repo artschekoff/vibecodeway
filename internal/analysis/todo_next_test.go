@@ -1,6 +1,8 @@
 package analysis
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,5 +40,65 @@ func TestComputeStalePRs(t *testing.T) {
 	got := computeStalePRs(prs, now, 7)
 	if len(got) != 1 || got[0] != 1 {
 		t.Fatalf("computeStalePRs = %v, want [1]", got)
+	}
+}
+
+func TestComputeImplementTickets(t *testing.T) {
+	issues := []appstore.BoardJiraAssignment{
+		{Key: "JH-1", Status: "To Do"},          // actionable
+		{Key: "JH-2", Status: "In Progress"},     // actionable
+		{Key: "JH-3", Status: "Done"},            // terminal → skip
+		{Key: "JH-4", Status: "Ready for QA"},    // downstream/waiting → skip
+		{Key: "JH-5", Status: "Ready to Merge"},  // downstream → skip
+		{Key: "JH-6", Status: "Closed"},          // terminal → skip
+		{Key: "JH-7", Status: "In Development"},   // actionable
+		{Key: "JH-8", Status: "  to do  "},       // normalized (trim+case) → actionable
+	}
+	got := computeImplementTickets(issues)
+	want := []string{"JH-1", "JH-2", "JH-7", "JH-8"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("computeImplementTickets = %v, want %v", got, want)
+	}
+}
+
+// activeTickets drops fully-terminal tickets but keeps downstream/waiting ones
+// (which still warrant check_status) so the board the AI sees isn't buried.
+func TestActiveTicketsDropsTerminalKeepsWaiting(t *testing.T) {
+	issues := []appstore.BoardJiraAssignment{
+		{Key: "JH-1", Status: "To Do"},
+		{Key: "JH-2", Status: "Done"},         // dropped
+		{Key: "JH-3", Status: "Ready for QA"}, // kept (check_status)
+		{Key: "JH-4", Status: "Closed"},       // dropped
+	}
+	got := activeTickets(issues)
+	var keys []string
+	for _, it := range got {
+		keys = append(keys, it.Key)
+	}
+	want := []string{"JH-1", "JH-3"}
+	if !reflect.DeepEqual(keys, want) {
+		t.Fatalf("activeTickets keys = %v, want %v", keys, want)
+	}
+}
+
+func TestTodoNextPromptSurfacesImplementTicketsAndDeclutters(t *testing.T) {
+	in := TodoInput{
+		JiraIssues: []appstore.BoardJiraAssignment{
+			{Key: "JH-1", Summary: "Build thing", Status: "To Do"},
+			{Key: "JH-9", Summary: "Old done work", Status: "Done"},
+		},
+		ImplementTicketKeys: []string{"JH-1"},
+		StalePRNumbers:      []int{42},
+	}
+	got := todoNextPrompt(defaultTodoNextPrompt, in)
+
+	if !strings.Contains(got, "IMPLEMENT_TICKETS (assigned tickets that are open work to build): [JH-1]") {
+		t.Fatalf("prompt must surface the implement tickets line:\n%s", got)
+	}
+	if !strings.Contains(got, "JH-1") {
+		t.Fatalf("prompt must include actionable ticket JH-1:\n%s", got)
+	}
+	if strings.Contains(got, "JH-9") {
+		t.Fatalf("terminal (Done) ticket JH-9 must be decluttered from the board:\n%s", got)
 	}
 }
