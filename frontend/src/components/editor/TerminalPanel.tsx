@@ -146,7 +146,15 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   useHotkeyScope("terminal", focused);
   useHotkey("terminal.new", () => addTerminal(), { scope: "terminal" });
   useHotkey("terminal.here", () => openTerminalAt(spawnCwd), { scope: "terminal" });
-  useHotkey("terminal.insert", () => insertSelectRef.current?.focus(), { scope: "terminal" });
+  useHotkey("terminal.insert", () => {
+    const el = insertSelectRef.current;
+    if (!el) return;
+    el.focus();
+    // Focus alone doesn't open a native <select>; showPicker() opens the dropdown.
+    // Guarded: absent in jsdom / older webviews (falls back to focus) and can throw
+    // without user activation. Cast because lib.dom types showPicker on inputs only.
+    try { (el as { showPicker?: () => void }).showPicker?.(); } catch { /* no user-activation / unsupported */ }
+  }, { scope: "terminal" });
   useHotkey("terminal.next", () => cycleTerminal(1), { scope: "terminal" });
   useHotkey("terminal.prev", () => cycleTerminal(-1), { scope: "terminal" });
 

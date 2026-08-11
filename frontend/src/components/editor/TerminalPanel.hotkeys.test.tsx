@@ -35,10 +35,19 @@ describe("TerminalPanel hotkeys (layer)", () => {
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(2));
   });
 
-  it("⌘T then I focuses the insert-command menu", async () => {
-    await renderPanel();
-    fireEvent.keyDown(window, { key: "t", metaKey: true });
-    fireEvent.keyDown(window, { key: "i" });
-    expect(document.activeElement).toBe(screen.getByLabelText("Insert terminal command"));
+  it("⌘T then I opens the insert-command menu (focus + showPicker)", async () => {
+    // jsdom has no showPicker(); define it so the handler can call it, then clean up.
+    const showPicker = vi.fn();
+    (HTMLSelectElement.prototype as unknown as { showPicker: () => void }).showPicker = showPicker;
+    try {
+      await renderPanel();
+      fireEvent.keyDown(window, { key: "t", metaKey: true });
+      fireEvent.keyDown(window, { key: "i" });
+      const select = screen.getByLabelText("Insert terminal command");
+      expect(document.activeElement).toBe(select);
+      expect(showPicker).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (HTMLSelectElement.prototype as unknown as { showPicker?: () => void }).showPicker;
+    }
   });
 });
