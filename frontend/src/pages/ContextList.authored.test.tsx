@@ -112,4 +112,14 @@ describe("Code Reviews — authored PRs (My PRs)", () => {
     expect(screen.getByText(/CI failed/i)).toBeInTheDocument();
     expect(screen.getByText(/Conflicts/i)).toBeInTheDocument();
   });
+
+  it("offers the editor-opening 'Review with AI' button on an authored PR", async () => {
+    renderList();
+
+    fireEvent.click(await screen.findByRole("button", { name: /code reviews/i }));
+    fireEvent.click(await screen.findByText("acme/widgets"));
+    await screen.findByText("My feature");
+
+    expect(screen.getByRole("button", { name: /review with ai/i })).toBeInTheDocument();
+  });
 });

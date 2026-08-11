@@ -1473,6 +1473,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               review={review}
                               checkoutLoading={reviewCheckoutLoading}
                               onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                              onReview={() => void handleReviewWithAI(review)}
+                              reviewing={reviewingId === review.id}
                               isUnviewed={!review.viewedAt}
                               onMarkViewed={() => handleMarkReviewViewed(review.id)}
                             />
