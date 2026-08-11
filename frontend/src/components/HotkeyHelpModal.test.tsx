@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { HotkeyProvider } from "../hotkeys/HotkeyProvider";
+import { HotkeyProvider, useHotkey } from "../hotkeys/HotkeyProvider";
 import { HotkeyHelpModal } from "./HotkeyHelpModal";
 
 describe("HotkeyHelpModal", () => {
@@ -36,6 +36,33 @@ describe("HotkeyHelpModal", () => {
 
     // Escape closes.
     fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("runs the highlighted command on Enter and closes — even when its scope is inactive", async () => {
+    const spy = vi.fn();
+    function Harness() {
+      // Registered under the "terminal" scope but that scope is NOT active
+      // here (no terminal focus). Keyboard chords wouldn't fire it, but
+      // picking it from the palette must.
+      useHotkey("terminal.new", spy, { scope: "terminal" });
+      return <HotkeyHelpModal />;
+    }
+    render(
+      <HotkeyProvider platform="darwin" keybindings={[]}>
+        <Harness />
+      </HotkeyProvider>
+    );
+
+    fireEvent.keyDown(window, { key: "h", metaKey: true });
+    await screen.findByRole("dialog");
+
+    const filter = screen.getByPlaceholderText(/filter/i);
+    fireEvent.change(filter, { target: { value: "new terminal" } });
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(spy).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

@@ -59,6 +59,7 @@ interface HotkeyContextValue {
   leader: LeaderState | null;
   registry: Map<string, Set<HandlerEntry>>;
   activeScopes: Set<Scope>;
+  runCommand: (commandId: string) => boolean;
 }
 
 const HotkeyContext = createContext<HotkeyContextValue | null>(null);
@@ -200,6 +201,33 @@ export function HotkeyProvider({
     [pickHandler]
   );
 
+  // Explicitly run a command by id (e.g. selected from the help palette).
+  // Unlike keyboard dispatch this is NOT gated on the handler's scope being
+  // active: picking a command from a menu is an explicit request, so we fire
+  // the active-scope handler if one exists, else the highest-priority enabled
+  // handler regardless of focus. Returns false if nothing is registered.
+  const runCommand = useCallback(
+    (commandId: string): boolean => {
+      let chosen = pickHandler(commandId);
+      if (!chosen) {
+        const handlers = registryRef.current.get(commandId);
+        if (handlers) {
+          for (const scope of SCOPE_PRIORITY) {
+            for (const h of handlers) {
+              if (h.enabled && h.scope === scope) { chosen = h; break; }
+            }
+            if (chosen) break;
+          }
+        }
+      }
+      if (!chosen) return false;
+      chosen.fn();
+      fireHotkeyEvent(commandId);
+      return true;
+    },
+    [pickHandler]
+  );
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const token = eventToToken(e, platform);
@@ -308,8 +336,9 @@ export function HotkeyProvider({
       leader,
       registry: registryRef.current,
       activeScopes: activeScopesRef.current,
+      runCommand,
     }),
-    [platform, keymap, dispatchList, leader]
+    [platform, keymap, dispatchList, leader, runCommand]
   );
 
   return (
@@ -387,6 +416,11 @@ export function useChordHint(commandId: string): string {
 export function useCommandList(): { command: (typeof COMMANDS)[number]; chord: string }[] {
   const { dispatchList } = useHotkeyContext();
   return dispatchList;
+}
+
+/** Run a command by id (e.g. selected from the help palette). See runCommand. */
+export function useCommandDispatch(): (commandId: string) => boolean {
+  return useHotkeyContext().runCommand;
 }
 
 /** Internal: exposes leader state + platform to WhichKeyHud. */

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useCommandList, useHotkey } from "../hotkeys/HotkeyProvider";
+import { useCommandDispatch, useCommandList, useHotkey } from "../hotkeys/HotkeyProvider";
 
 /**
  * Splits camelCase into words and capitalizes each, special-casing the
@@ -36,6 +36,7 @@ export function HotkeyHelpModal() {
   const [highlight, setHighlight] = useState(0);
   const filterRef = useRef<HTMLInputElement | null>(null);
   const commandList = useCommandList();
+  const runCommand = useCommandDispatch();
 
   useHotkey("help.open", () => setOpen(true));
 
@@ -85,12 +86,25 @@ export function HotkeyHelpModal() {
     return [...map.entries()];
   }, [filtered]);
 
+  // Run the given row's command and close the palette. Closing only on a
+  // successful run keeps the palette open if nothing was registered to handle
+  // the command (so the user isn't left wondering why the window vanished).
+  const execute = (row: Row | undefined) => {
+    if (!row) return;
+    if (runCommand(row.id)) setOpen(false);
+  };
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
         setOpen(false);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        execute(filtered[highlight]);
         return;
       }
       if (e.key === "ArrowDown") {
@@ -105,7 +119,8 @@ export function HotkeyHelpModal() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, filtered.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, filtered, highlight]);
 
   if (!open) return null;
 
@@ -139,12 +154,16 @@ export function HotkeyHelpModal() {
               {groupRows.map((r) => {
                 rowIndex += 1;
                 const isHighlighted = rowIndex === highlight;
+                const idx = rowIndex;
                 return (
                   <div
                     key={r.id}
                     className={
                       "hotkey-help-row" + (isHighlighted ? " hotkey-help-row--highlighted" : "")
                     }
+                    onMouseEnter={() => setHighlight(idx)}
+                    onClick={() => execute(r)}
+                    style={{ cursor: "pointer" }}
                   >
                     <span className="hotkey-help-chord">{r.chord}</span>
                     <span className="hotkey-help-path">
