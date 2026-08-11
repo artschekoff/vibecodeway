@@ -6394,6 +6394,10 @@ select {
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
+  /* .content is a fixed-height flex column; overflow:hidden zeroes each card's
+     flex min-height, so without this the cards shrink to fit (collapsing to their
+     borders) instead of the container scrolling. Keep cards at natural height. */
+  flex-shrink: 0;
 }
 
 .ai-prompt-card__header {
