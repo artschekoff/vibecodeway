@@ -4,7 +4,7 @@ import { useHotkey, useHotkeyScope } from "../hotkeys/HotkeyProvider";
 export type Zone = "editor" | "terminal" | "sidebar";
 type Dir = "up" | "down" | "left" | "right";
 
-// Ctrl+arrow adjacency. Layout: editor top-left, terminal bottom-left, sidebar right.
+// ⌘E + h/j/k/l (vim) adjacency. Layout: editor top-left, terminal bottom-left, sidebar right.
 // ponytail: sidebar reaches editor (left) / terminal (down); editor↔terminal covers the rest.
 const ADJ: Record<Zone, Partial<Record<Dir, Zone>>> = {
   editor: { down: "terminal", right: "sidebar" },
@@ -41,7 +41,7 @@ export function EditorFocusProvider({ children }: { children: React.ReactNode })
     if (next) setActive(next);
   }, [setActive]);
 
-  // Editor zone owns the Ctrl+arrow scope while this provider (the editor tab) is mounted.
+  // Editor zone owns the ⌘E leader scope while this provider (the editor tab) is mounted.
   useHotkeyScope("editor", true);
   useHotkey("editor.focusUp", () => go("up"), { scope: "editor" });
   useHotkey("editor.focusDown", () => go("down"), { scope: "editor" });

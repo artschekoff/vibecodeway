@@ -28,17 +28,19 @@ function renderStub() {
 }
 
 describe("EditorFocusContext", () => {
-  it("Ctrl+ArrowDown moves focus editor -> terminal", () => {
+  it("⌘E then j moves focus editor -> terminal", () => {
     renderStub();
     expect(screen.getByTestId("editor")).toHaveClass("zone--active");
-    fireEvent.keyDown(window, { key: "ArrowDown", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "e", metaKey: true });
+    fireEvent.keyDown(window, { key: "j" });
     expect(screen.getByTestId("terminal")).toHaveClass("zone--active");
     expect(screen.getByTestId("editor")).not.toHaveClass("zone--active");
   });
 
-  it("Ctrl+ArrowRight moves focus editor -> sidebar", () => {
+  it("⌘E then l moves focus editor -> sidebar", () => {
     renderStub();
-    fireEvent.keyDown(window, { key: "ArrowRight", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "e", metaKey: true });
+    fireEvent.keyDown(window, { key: "l" });
     expect(screen.getByTestId("sidebar")).toHaveClass("zone--active");
   });
 });
