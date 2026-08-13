@@ -305,9 +305,9 @@ export function HotkeyProvider({
       }
 
       // No sequenced children — try to fire a bare binding now. Multiple
-      // unrelated bare commands can still share a chord across scopes (e.g.
-      // mod+shift+] is both "sidebar.next" and "terminal.next"); try each in
-      // SCOPE_PRIORITY order until one has an active registered handler.
+      // unrelated bare commands can still share a chord across scopes (a
+      // higher-priority active scope wins); try each in SCOPE_PRIORITY order
+      // until one has an active registered handler.
       for (const binding of orderByScopePriority(group)) {
         if (fire(binding)) {
           e.preventDefault();
