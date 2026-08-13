@@ -8,6 +8,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestKeybindings_TabsCloseSeeded_106(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	kb, err := s.GetKeybindingByCommand(ctx, "tabs.close")
+	require.NoError(t, err)
+	assert.Equal(t, "cmd,shift", kb.ModifierKeys)
+	assert.Equal(t, "w", kb.KeyCode)
+	assert.Equal(t, "", kb.Sequence)
+	assert.Equal(t, "global", kb.Scope)
+	assert.Equal(t, "cmd,shift", kb.DefaultModifierKeys)
+	assert.Equal(t, "w", kb.DefaultKeyCode)
+}
+
 func TestGetKeybindings_ReturnsBothDefaults(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

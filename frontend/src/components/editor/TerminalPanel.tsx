@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { Terminal } from "./Terminal";
 import { TerminalWrite } from "../../../wailsjs/go/main/App";
@@ -13,6 +13,24 @@ let seq = 0;
 const nextKey = () => `t${++seq}`;
 
 const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+
+// Insert-command picker styles (a custom popover, since a native <select> can't
+// be opened programmatically in WebKit). Mirrors EditorSettingsMenu's popover.
+const insertTrigger: React.CSSProperties = {
+  fontSize: 11, marginLeft: 8, background: "none", border: "1px solid var(--border)",
+  borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", padding: "1px 6px",
+};
+const insertPopover: React.CSSProperties = {
+  position: "fixed", zIndex: 50,
+  minWidth: 180, maxHeight: 260, overflowY: "auto",
+  background: "var(--bg-panel, var(--bg))", border: "1px solid var(--border)",
+  borderRadius: 6, padding: 4, display: "flex", flexDirection: "column", gap: 2,
+  boxShadow: "0 6px 20px rgba(0,0,0,0.3)", fontSize: 11, color: "var(--text)",
+};
+const insertItem: React.CSSProperties = {
+  textAlign: "left", background: "none", border: "none", color: "var(--text)",
+  cursor: "pointer", padding: "3px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap",
+};
 
 // Tab title: repo name first, then the folder name (usually the branch/worktree).
 // A worktree lives at `<repo>/.worktrees/<branch>`, so the repo is the segment
@@ -38,7 +56,10 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   const sessionByKey = useRef<Map<string, string>>(new Map());
   const wrapperByKey = useRef<Map<string, HTMLDivElement>>(new Map());
   const rootRef = useRef<HTMLDivElement>(null);
-  const insertSelectRef = useRef<HTMLSelectElement>(null);
+  const insertMenuRef = useRef<HTMLDivElement>(null);
+  const insertBtnRef = useRef<HTMLButtonElement>(null);
+  const [insertOpen, setInsertOpen] = useState(false);
+  const [insertPos, setInsertPos] = useState<{ left: number; top: number } | null>(null);
   const [focused, setFocused] = useState(false);
   const lastInsertId = useRef(0);
   const { commands } = useTerminalCommands();
@@ -144,19 +165,33 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   // terminal zone holds DOM focus. ⌘T (new / H here / I insert), ⌘⇧] / ⌘⇧[
   // (next / prev). The residual capture listener below still owns ⌘W and ⌃1-9.
   useHotkeyScope("terminal", focused);
-  useHotkey("terminal.new", () => addTerminal(), { scope: "terminal" });
-  useHotkey("terminal.here", () => openTerminalAt(spawnCwd), { scope: "terminal" });
-  useHotkey("terminal.insert", () => {
-    const el = insertSelectRef.current;
-    if (!el) return;
-    el.focus();
-    // Focus alone doesn't open a native <select>; showPicker() opens the dropdown.
-    // Guarded: absent in jsdom / older webviews (falls back to focus) and can throw
-    // without user activation. Cast because lib.dom types showPicker on inputs only.
-    try { (el as { showPicker?: () => void }).showPicker?.(); } catch { /* no user-activation / unsupported */ }
-  }, { scope: "terminal" });
+  // Registered as "global" (not "terminal") so ⌘T / ⌘T H / ⌘T I fire regardless
+  // of whether the terminal panel holds DOM focus — matching registry.ts. The
+  // panel just needs to be mounted for these handlers to be live.
+  useHotkey("terminal.new", () => addTerminal(), { scope: "global" });
+  useHotkey("terminal.here", () => openTerminalAt(spawnCwd), { scope: "global" });
+  // A native <select> can't be opened programmatically in WebKit (Wails' macOS
+  // webview): showPicker() is Chromium-only. So the picker is a React
+  // state-driven popover the hotkey just flips open.
+  useHotkey("terminal.insert", () => setInsertOpen(true), { scope: "global" });
   useHotkey("terminal.next", () => cycleTerminal(1), { scope: "terminal" });
   useHotkey("terminal.prev", () => cycleTerminal(-1), { scope: "terminal" });
+
+  // The toolbar row is `overflow-x: auto`, which per CSS also clips vertically —
+  // an absolutely-positioned popover inside it would be cut to the row's height.
+  // So anchor the menu with position:fixed to the trigger's viewport rect,
+  // measured before paint to avoid a flash.
+  useLayoutEffect(() => {
+    if (!insertOpen) return;
+    const r = insertBtnRef.current?.getBoundingClientRect();
+    if (r) setInsertPos({ left: r.left, top: r.bottom + 4 });
+  }, [insertOpen]);
+
+  // When the picker opens (via ⌘T I or click), move focus onto its first item so
+  // arrow keys / Enter / Escape drive it straight from the keyboard.
+  useEffect(() => {
+    if (insertOpen) insertMenuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus();
+  }, [insertOpen]);
 
   // cmux "surface" keymap for the terminal tabs. Capture phase on the panel root
   // runs before xterm's textarea listener; stopPropagation keeps the keys out of
@@ -222,20 +257,53 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
         >
           <Plus size={13} />
         </button>
-        <select
-          ref={insertSelectRef}
-          aria-label="Insert terminal command"
-          value=""
-          onChange={(e) => {
-            const c = commands.find((cmd) => cmd.id === e.target.value);
-            if (c) insertCommand(c.command, c.sendEnter);
-            e.currentTarget.selectedIndex = 0;
-          }}
-          style={{ fontSize: 11, marginLeft: 8 }}
-        >
-          <option value="">Insert command…</option>
-          {commands.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-        </select>
+        <div style={{ position: "relative" }}>
+          <button
+            ref={insertBtnRef}
+            aria-label="Insert terminal command"
+            aria-haspopup="menu"
+            aria-expanded={insertOpen}
+            title="Insert command"
+            onClick={() => setInsertOpen((o) => !o)}
+            style={insertTrigger}
+          >
+            Insert command…
+          </button>
+          {insertOpen && insertPos && (
+            <>
+              {/* click-away */}
+              <div onClick={() => setInsertOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+              <div
+                ref={insertMenuRef}
+                role="menu"
+                onKeyDown={(e) => {
+                  const items = Array.from(
+                    insertMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []
+                  );
+                  const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+                  if (e.key === "Escape") { e.preventDefault(); setInsertOpen(false); focusActiveTerminal(); }
+                  else if (e.key === "ArrowDown") { e.preventDefault(); items[Math.min(idx + 1, items.length - 1)]?.focus(); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); items[Math.max(idx - 1, 0)]?.focus(); }
+                }}
+                style={{ ...insertPopover, left: insertPos.left, top: insertPos.top }}
+              >
+                {commands.length === 0 && (
+                  <div style={{ padding: "3px 8px", color: "var(--text-muted)" }}>No commands</div>
+                )}
+                {commands.map((c) => (
+                  <button
+                    key={c.id}
+                    role="menuitem"
+                    style={insertItem}
+                    onClick={() => { insertCommand(c.command, c.sendEnter); setInsertOpen(false); }}
+                  >
+                    {c.title}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {terminals.map((t) => (

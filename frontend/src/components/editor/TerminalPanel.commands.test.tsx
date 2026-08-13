@@ -45,8 +45,9 @@ describe("TerminalPanel command selector", () => {
   it("substitutes <context-name> and types the command without Enter", async () => {
     render(<TerminalPanel spawnCwd="/r/api" contextName="tell-us-more-fin" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getByTestId("term")).toBeInTheDocument());
-    const select = await screen.findByLabelText("Insert terminal command");
-    fireEvent.change(select, { target: { value: "c1" } });
+    // Open the insert-command popover, then pick the command by title.
+    fireEvent.click(await screen.findByLabelText("Insert terminal command"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Inject" }));
     await waitFor(() =>
       expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "/load-context tell-us-more-fin")
     );
@@ -55,8 +56,8 @@ describe("TerminalPanel command selector", () => {
   it("appends Enter (\\r) when the command has sendEnter", async () => {
     render(<TerminalPanel spawnCwd="/r/api" contextName="ctx" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getByTestId("term")).toBeInTheDocument());
-    const select = await screen.findByLabelText("Insert terminal command");
-    fireEvent.change(select, { target: { value: "c2" } });
+    fireEvent.click(await screen.findByLabelText("Insert terminal command"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Run" }));
     await waitFor(() => expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "npm test\r"));
   });
 });

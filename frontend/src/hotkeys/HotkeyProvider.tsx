@@ -60,6 +60,9 @@ interface HotkeyContextValue {
   registry: Map<string, Set<HandlerEntry>>;
   activeScopes: Set<Scope>;
   runCommand: (commandId: string) => boolean;
+  // Pause/resume keyboard dispatch. Used while capturing a new key combination
+  // (rebinding) so the keys being pressed don't also trigger live shortcuts.
+  suspendDispatch: (suspended: boolean) => void;
 }
 
 const HotkeyContext = createContext<HotkeyContextValue | null>(null);
@@ -154,6 +157,9 @@ export function HotkeyProvider({
   // Currently active scopes (beyond "global", which is always active).
   const activeScopesRef = useRef<Set<Scope>>(new Set());
 
+  // When true, the global keydown handler bails immediately — used while a
+  // rebinding UI is capturing a combination.
+  const suspendRef = useRef(false);
   const leaderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leaderPendingRef = useRef<{ children: Binding[]; defaultBinding?: Binding } | null>(null);
   const [leader, setLeader] = useState<LeaderState | null>(null);
@@ -230,6 +236,7 @@ export function HotkeyProvider({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (suspendRef.current) return; // a rebinding UI owns the keyboard
       const token = eventToToken(e, platform);
       if (!token) return;
 
@@ -337,6 +344,7 @@ export function HotkeyProvider({
       registry: registryRef.current,
       activeScopes: activeScopesRef.current,
       runCommand,
+      suspendDispatch: (suspended: boolean) => { suspendRef.current = suspended; },
     }),
     [platform, keymap, dispatchList, leader, runCommand]
   );
@@ -421,6 +429,15 @@ export function useCommandList(): { command: (typeof COMMANDS)[number]; chord: s
 /** Run a command by id (e.g. selected from the help palette). See runCommand. */
 export function useCommandDispatch(): (commandId: string) => boolean {
   return useHotkeyContext().runCommand;
+}
+
+/**
+ * Pause/resume global keyboard dispatch. Wrap a key-combination capture
+ * (rebinding) in suspend(true)…suspend(false) so the pressed keys don't also
+ * fire the shortcuts they're bound to.
+ */
+export function useSuspendHotkeys(): (suspended: boolean) => void {
+  return useHotkeyContext().suspendDispatch;
 }
 
 /** Internal: exposes leader state + platform to WhichKeyHud. */

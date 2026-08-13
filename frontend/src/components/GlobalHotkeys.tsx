@@ -9,13 +9,18 @@ import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
  * currently-active context tab. Mounted once inside TabProvider.
  */
 export function GlobalHotkeys() {
-  const { tabs, activeTabId, focusNextTab, focusPrevTab } = useTabContext();
+  const { tabs, activeTabId, focusNextTab, focusPrevTab, closeTab } = useTabContext();
   const active = tabs.find((t) => t.id === activeTabId);
   const contextId = active?.contextId;
   const contextKey = active?.contextKey;
 
   useHotkey("tabs.next", focusNextTab, { scope: "global" });
   useHotkey("tabs.prev", focusPrevTab, { scope: "global" });
+
+  // ⌘⇧W — close the active context tab. closeTab is a no-op on pinned tabs.
+  useHotkey("tabs.close", () => {
+    if (activeTabId) closeTab(activeTabId);
+  }, { scope: "global" });
 
   // ⌘C N — copy the active context key (no bare-⌘C binding, so native copy is safe).
   useHotkey("context.copyName", () => {

@@ -163,7 +163,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    GetKeybindings().then((b) => setBindings(b ?? [])).catch(() => {});
+    const load = () => GetKeybindings().then((b) => setBindings(b ?? [])).catch(() => {});
+    void load();
+    // Re-fetch when a rebind is saved anywhere (help modal, Settings) so the
+    // live keymap reflects the new combos without an app restart.
+    window.addEventListener("keybindings-changed", load);
+    return () => window.removeEventListener("keybindings-changed", load);
   }, []);
 
   return (

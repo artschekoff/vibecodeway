@@ -29,13 +29,13 @@ function formatKey(keyCode: string): string {
   return KEY_SYMBOLS[keyCode] ?? keyCode.toUpperCase();
 }
 
-interface PendingCombo {
+export interface PendingCombo {
   modifierKeys: string; // comma-separated
   keyCode: string;
   sequence: string; // optional trailing single key (leader chord), "" when none
 }
 
-function captureCombo(e: KeyboardEvent): Omit<PendingCombo, "sequence"> | null {
+export function captureCombo(e: KeyboardEvent): Omit<PendingCombo, "sequence"> | null {
   const mods: string[] = [];
   if (e.metaKey) mods.push("cmd");
   if (e.ctrlKey) mods.push("ctrl");

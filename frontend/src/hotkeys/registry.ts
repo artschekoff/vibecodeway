@@ -26,6 +26,8 @@ export const COMMANDS: Command[] = [
     description: "Switch to the next open context tab", scope: "global", defaultChord: "mod+]" },
   { id: "tabs.prev", object: "tabs", action: "prev", label: "Previous open context",
     description: "Switch to the previous open context tab", scope: "global", defaultChord: "mod+[" },
+  { id: "tabs.close", object: "tabs", action: "close", label: "Close context tab",
+    description: "Close the active context tab", scope: "global", defaultChord: "mod+shift+w" },
   // --- editor zone focus (vim-like leader: ⌘E then h/j/k/l) ---
   // Shares the ⌘E lead with the bare "editor.open" command: ⌘E alone still
   // opens the editor (fall-through default), ⌘E + h/j/k/l moves zone focus.
@@ -47,13 +49,18 @@ export const COMMANDS: Command[] = [
     description: "Reload the file list from disk/git", scope: "files", defaultChord: "mod+r" },
   { id: "files.focusSearch", object: "files", action: "focusSearch", label: "Focus file search",
     description: "Move focus to the file filter input", scope: "files", defaultChord: "mod+f", sequence: "f" },
-  // --- terminal (scope: terminal) ---
+  // --- terminal ---
+  // new / here / insert are scope:"global" so ⌘T works anywhere in the app (the
+  // terminal is rarely the focused element when you want to open one). `object`
+  // stays "terminal" so they still group under TERMINAL in the help/settings UI.
+  // next / prev stay scope:"terminal" — cycling only makes sense with the panel
+  // focused, and their chord (⌘⇧]/⌘⇧[) is shared with sidebar.next/prev.
   { id: "terminal.new", object: "terminal", action: "new", label: "New terminal",
-    description: "Open a new terminal (same as +)", scope: "terminal", defaultChord: "mod+t", defaultAction: true },
+    description: "Open a new terminal (same as +)", scope: "global", defaultChord: "mod+t", defaultAction: true },
   { id: "terminal.here", object: "terminal", action: "here", label: "Terminal here",
-    description: "Open a terminal at the selected path", scope: "terminal", defaultChord: "mod+t", sequence: "h" },
+    description: "Open a terminal at the selected path", scope: "global", defaultChord: "mod+t", sequence: "h" },
   { id: "terminal.insert", object: "terminal", action: "insert", label: "Insert command",
-    description: "Open the insert-command menu", scope: "terminal", defaultChord: "mod+t", sequence: "i" },
+    description: "Open the insert-command menu", scope: "global", defaultChord: "mod+t", sequence: "i" },
   { id: "terminal.next", object: "terminal", action: "next", label: "Next terminal",
     description: "Switch to the next terminal", scope: "terminal", defaultChord: "mod+shift+]" },
   { id: "terminal.prev", object: "terminal", action: "prev", label: "Previous terminal",

@@ -35,19 +35,25 @@ describe("TerminalPanel hotkeys (layer)", () => {
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(2));
   });
 
-  it("⌘T then I opens the insert-command menu (focus + showPicker)", async () => {
-    // jsdom has no showPicker(); define it so the handler can call it, then clean up.
-    const showPicker = vi.fn();
-    (HTMLSelectElement.prototype as unknown as { showPicker: () => void }).showPicker = showPicker;
-    try {
-      await renderPanel();
-      fireEvent.keyDown(window, { key: "t", metaKey: true });
-      fireEvent.keyDown(window, { key: "i" });
-      const select = screen.getByLabelText("Insert terminal command");
-      expect(document.activeElement).toBe(select);
-      expect(showPicker).toHaveBeenCalledTimes(1);
-    } finally {
-      delete (HTMLSelectElement.prototype as unknown as { showPicker?: () => void }).showPicker;
-    }
+  it("⌘T works without terminal focus (global scope)", async () => {
+    // Deliberately do NOT focus the terminal zone. The commands are scope:"global",
+    // so they must still fire — this is the bug where ⌘T did nothing unless the
+    // terminal already held DOM focus.
+    render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
+    await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+    fireEvent.keyDown(window, { key: "h" });
+    await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(2));
+  });
+
+  it("⌘T then I opens the insert-command menu (state-driven popover)", async () => {
+    await renderPanel();
+    // Menu is closed until the hotkey opens it.
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+    fireEvent.keyDown(window, { key: "i" });
+    // A React popover — not a native <select> — so it works in WebKit, where
+    // showPicker() is unavailable. Opening it does not depend on any native API.
+    expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 });

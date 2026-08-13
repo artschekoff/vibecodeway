@@ -10,12 +10,14 @@ vi.mock("../../wailsjs/go/main/App", () => ({ GetVCSPRsForContext, RefreshContex
 vi.mock("../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL }));
 
 const mockTab = vi.hoisted(() => ({ current: { id: "t1", type: "context", contextId: "c1", contextKey: "JH-42", title: "JH-42", pinned: false } as Record<string, unknown> | null }));
+const closeTab = vi.hoisted(() => vi.fn());
 vi.mock("../contexts/TabContext", () => ({
   useTabContext: () => ({
     tabs: mockTab.current ? [mockTab.current] : [],
     activeTabId: mockTab.current ? "t1" : null,
     focusNextTab: vi.fn(),
     focusPrevTab: vi.fn(),
+    closeTab,
   }),
 }));
 
@@ -68,6 +70,12 @@ describe("GlobalHotkeys", () => {
     fireEvent.keyDown(window, { key: "c", metaKey: true });
     fireEvent.keyDown(window, { key: "n" });
     expect(writeText).toHaveBeenCalledWith("JH-42");
+  });
+
+  it("⌘⇧W closes the active context tab", () => {
+    renderHotkeys();
+    fireEvent.keyDown(window, { key: "w", metaKey: true, shiftKey: true });
+    expect(closeTab).toHaveBeenCalledWith("t1");
   });
 
   it("a bare ⌘C does NOT preventDefault (native copy still works)", () => {
