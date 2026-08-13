@@ -307,8 +307,11 @@ export default function MyBoardPage() {
                 </div>
                 {t.rationale && <div className="board-card-meta">{t.rationale}</div>}
                 <div className="todo-actions">
+                  {t.contextId && (
+                    <button title="Open context" onClick={() => openContextTab(t.contextId, t.contextKey)}><FolderOpen size={13} /></button>
+                  )}
                   {refUrl && (
-                    <button title="Open context" onClick={() => BrowserOpenURL(refUrl)}><ExternalLink size={13} /></button>
+                    <button title={t.refType === "jira" ? "Open in Jira" : "Open PR"} onClick={() => BrowserOpenURL(refUrl)}><ExternalLink size={13} /></button>
                   )}
                   {TODO_DRAFT_ACTIONS[t.kind] && (
                     <button title={TODO_DRAFT_ACTIONS[t.kind]} onClick={() => setDraftFor(t)}><MessageSquare size={13} /></button>

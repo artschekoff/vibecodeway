@@ -1053,6 +1053,8 @@ export namespace store {
 	    rationale: string;
 	    refType: string;
 	    refKey: string;
+	    contextId: string;
+	    contextKey: string;
 	    priority: string;
 	    position: number;
 	    status: string;
@@ -1072,6 +1074,8 @@ export namespace store {
 	        this.rationale = source["rationale"];
 	        this.refType = source["refType"];
 	        this.refKey = source["refKey"];
+	        this.contextId = source["contextId"];
+	        this.contextKey = source["contextKey"];
 	        this.priority = source["priority"];
 	        this.position = source["position"];
 	        this.status = source["status"];

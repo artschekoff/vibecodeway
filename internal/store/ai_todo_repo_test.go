@@ -5,8 +5,38 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestListTodoItems_ResolvesJiraContext(t *testing.T) {
+	s := newTodoTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "JH-5127", org.ID)
+	require.NoError(t, err)
+	_, err = s.DB().ExecContext(ctx,
+		`INSERT INTO jira_issues (id, context_id, jira_key, summary, status, jira_updated, created_at)
+		 VALUES ('ji-1', ?, 'JH-5127', 's', 'To Do', '', datetime('now'))`, c.ID)
+	require.NoError(t, err)
+
+	require.NoError(t, s.ReplaceTodoItems(ctx, []AITodoItem{
+		{Kind: "implement", Title: "Implement JH-5127", RefType: "jira", RefKey: "JH-5127", Priority: "high", Position: 0, Source: "ai"},
+		{Kind: "make_pr", Title: "PR work", RefType: "pr", RefKey: "o/r#1", Priority: "low", Position: 1, Source: "ai"},
+	}))
+
+	items, err := s.ListTodoItems(ctx)
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	// The jira ref resolves to its in-app context…
+	assert.Equal(t, c.ID, items[0].ContextID)
+	assert.Equal(t, "JH-5127", items[0].ContextKey)
+	// …a pr ref (or any unlinked ref) stays empty.
+	assert.Equal(t, "", items[1].ContextID)
+	assert.Equal(t, "", items[1].ContextKey)
+}
 
 func newTodoTestStore(t *testing.T) *Store {
 	t.Helper()

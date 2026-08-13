@@ -10,9 +10,20 @@ import (
 
 // ListTodoItems returns the board-wide TODO NEXT list ordered by position.
 func (s *Store) ListTodoItems(ctx context.Context) ([]AITodoItem, error) {
+	// Resolve each jira-ref todo to its in-app context (if one exists) so the
+	// board can deep-link into it. A jira_key can appear under several contexts
+	// (UNIQUE is per (context_id, jira_key)); pick one deterministically via
+	// MIN(context_id), mirroring GetBoardJiraAssignments. COALESCE keeps the
+	// columns as "" (not NULL) for pr/review refs and unmatched keys.
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, kind, title, rationale, ref_type, ref_key, priority, position, status, source, created_at, updated_at
-		FROM ai_todo_items ORDER BY position ASC, created_at ASC
+		SELECT t.id, t.kind, t.title, t.rationale, t.ref_type, t.ref_key, t.priority,
+		       t.position, t.status, t.source, t.created_at, t.updated_at,
+		       COALESCE(ji.context_id, ''), COALESCE(c.key, '')
+		FROM ai_todo_items t
+		LEFT JOIN (SELECT jira_key, MIN(context_id) AS context_id FROM jira_issues GROUP BY jira_key) ji
+		       ON t.ref_type = 'jira' AND ji.jira_key = t.ref_key
+		LEFT JOIN contexts c ON c.id = ji.context_id
+		ORDER BY t.position ASC, t.created_at ASC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list todo items: %w", err)
@@ -23,7 +34,8 @@ func (s *Store) ListTodoItems(ctx context.Context) ([]AITodoItem, error) {
 	for rows.Next() {
 		var t AITodoItem
 		if err := rows.Scan(&t.ID, &t.Kind, &t.Title, &t.Rationale, &t.RefType, &t.RefKey,
-			&t.Priority, &t.Position, &t.Status, &t.Source, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			&t.Priority, &t.Position, &t.Status, &t.Source, &t.CreatedAt, &t.UpdatedAt,
+			&t.ContextID, &t.ContextKey); err != nil {
 			return nil, fmt.Errorf("scan todo item: %w", err)
 		}
 		out = append(out, t)

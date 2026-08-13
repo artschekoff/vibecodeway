@@ -567,7 +567,11 @@ type AITodoItem struct {
 	Rationale string `json:"rationale"`
 	RefType   string `json:"refType"`  // jira | pr | review | ""
 	RefKey    string `json:"refKey"`   // e.g. JH-4922 or juna-health/juna-api#218
-	Priority  string `json:"priority"` // critical | high | medium | low
+	// Resolved at read time (not stored): the in-app context this ref maps to,
+	// so the board can deep-link into it. "" when the ref has no linked context.
+	ContextID  string `json:"contextId"`
+	ContextKey string `json:"contextKey"`
+	Priority   string `json:"priority"` // critical | high | medium | low
 	Position  int    `json:"position"`
 	Status    string `json:"status"` // pending | done | dismissed
 	Source    string `json:"source"` // ai | user

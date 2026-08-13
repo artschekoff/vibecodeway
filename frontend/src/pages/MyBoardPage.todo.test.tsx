@@ -1,8 +1,9 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const T = vi.hoisted(() => ({ openContextTab: vi.fn() }));
 vi.mock("../contexts/TabContext", () => ({
-  useTabContext: () => ({ openContextTab: vi.fn() }),
+  useTabContext: () => ({ openContextTab: T.openContextTab }),
 }));
 
 const H = vi.hoisted(() => ({
@@ -68,18 +69,30 @@ describe("MyBoardPage — TODO NEXT (BY AI)", () => {
     await waitFor(() => expect(screen.getByText(/Check staging deploy/)).toBeInTheDocument());
   });
 
-  it("shows an Open context button that opens the PR URL", async () => {
+  it("shows an Open PR button that opens the external PR URL", async () => {
     const { BrowserOpenURL } = await import("../../wailsjs/runtime/runtime");
     H.ListTodoNext.mockResolvedValue([
       { id: "1", kind: "rerequest_pr", title: "Ping reviewers on #42", priority: "high", position: 0, refType: "pr", refKey: "o/r#42", status: "pending", source: "ai" },
     ]);
     render(<MyBoardPage />);
-    const open = await screen.findByRole("button", { name: /Open context/i });
+    const open = await screen.findByRole("button", { name: /Open PR/i });
     fireEvent.click(open);
     expect(BrowserOpenURL).toHaveBeenCalledWith("https://github.com/o/r/pull/42");
   });
 
-  it("shows no Open context button when the todo has no resolvable ref", async () => {
+  it("shows an in-app Open context button that deep-links to the resolved context", async () => {
+    const { BrowserOpenURL } = await import("../../wailsjs/runtime/runtime");
+    H.ListTodoNext.mockResolvedValue([
+      { id: "1", kind: "implement", title: "Implement JH-5127", priority: "high", position: 0, refType: "jira", refKey: "JH-5127", contextId: "ctx-9", contextKey: "JH-5127", status: "pending", source: "ai" },
+    ]);
+    render(<MyBoardPage />);
+    const open = await screen.findByRole("button", { name: /Open context/i });
+    fireEvent.click(open);
+    expect(T.openContextTab).toHaveBeenCalledWith("ctx-9", "JH-5127");
+    expect(BrowserOpenURL).not.toHaveBeenCalled();
+  });
+
+  it("shows no Open context button when the todo has no resolved context", async () => {
     H.ListTodoNext.mockResolvedValue([
       { id: "1", kind: "implement", title: "Finish the thing", priority: "high", position: 0, status: "pending", source: "ai" },
     ]);
