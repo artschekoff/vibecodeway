@@ -13,13 +13,23 @@ describe("registry", () => {
   it("declares the required commands", () => {
     for (const id of ["search.global", "editor.open", "help.open", "terminal.new",
       "terminal.here", "terminal.insert", "files.reload", "files.focusSearch",
-      "pr.open", "pr.reload", "context.copyName", "sidebar.next", "sidebar.prev",
+      "pr.open", "pr.reload", "context.copyName", "sidebar.files", "sidebar.git",
       "tabs.next", "tabs.prev", "tabs.close"]) {
       expect(commandById(id), id).toBeTruthy();
     }
   });
   it("binds ⌘⇧W to closing the active context tab", () => {
     expect(commandLabel(commandById("tabs.close")!, "darwin")).toBe("⌘⇧W · Tabs · Close");
+  });
+  it("binds the remapped switch chords", () => {
+    expect(commandLabel(commandById("tabs.next")!, "darwin")).toBe("⌘⇧] · Tabs · Next");
+    expect(commandLabel(commandById("tabs.prev")!, "darwin")).toBe("⌘⇧[ · Tabs · Prev");
+    expect(commandLabel(commandById("terminal.next")!, "darwin")).toBe("⌘] · Terminal · Next");
+    expect(commandLabel(commandById("terminal.prev")!, "darwin")).toBe("⌘[ · Terminal · Prev");
+    expect(commandLabel(commandById("sidebar.files")!, "darwin")).toBe("⌘B F · Sidebar · Files");
+    expect(commandLabel(commandById("sidebar.git")!, "darwin")).toBe("⌘B G · Sidebar · Git");
+    expect(commandById("sidebar.next")).toBeUndefined();
+    expect(commandById("sidebar.prev")).toBeUndefined();
   });
   it("builds a leading_button · object · action label", () => {
     expect(commandLabel(commandById("terminal.new")!, "darwin")).toBe("⌘T · Terminal · New");

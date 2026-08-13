@@ -23,9 +23,9 @@ export const COMMANDS: Command[] = [
   { id: "pr.reload", object: "pr", action: "reload", label: "Reload pull requests",
     description: "Re-sync the pull-request list", scope: "global", defaultChord: "mod+p", sequence: "r", defaultAction: true },
   { id: "tabs.next", object: "tabs", action: "next", label: "Next open context",
-    description: "Switch to the next open context tab", scope: "global", defaultChord: "mod+]" },
+    description: "Switch to the next open context tab", scope: "global", defaultChord: "mod+shift+]" },
   { id: "tabs.prev", object: "tabs", action: "prev", label: "Previous open context",
-    description: "Switch to the previous open context tab", scope: "global", defaultChord: "mod+[" },
+    description: "Switch to the previous open context tab", scope: "global", defaultChord: "mod+shift+[" },
   { id: "tabs.close", object: "tabs", action: "close", label: "Close context tab",
     description: "Close the active context tab", scope: "global", defaultChord: "mod+shift+w" },
   // --- editor zone focus (vim-like leader: ⌘E then h/j/k/l) ---
@@ -40,10 +40,11 @@ export const COMMANDS: Command[] = [
   { id: "editor.focusRight", object: "editor", action: "focusRight", label: "Focus zone right",
     description: "Move focus to the zone to the right", scope: "editor", defaultChord: "mod+e", sequence: "l" },
   // --- sidebar tabs (scope: editor — active when editor/sidebar focused, NOT terminal) ---
-  { id: "sidebar.next", object: "sidebar", action: "next", label: "Next sidebar tab",
-    description: "Switch FILES / GIT (forward)", scope: "editor", defaultChord: "mod+shift+]" },
-  { id: "sidebar.prev", object: "sidebar", action: "prev", label: "Previous sidebar tab",
-    description: "Switch FILES / GIT (back)", scope: "editor", defaultChord: "mod+shift+[" },
+  // ⌘B is a leader: ⌘B F shows FILES, ⌘B G shows GIT (direct select, no cycling).
+  { id: "sidebar.files", object: "sidebar", action: "files", label: "Show FILES",
+    description: "Show the FILES sidebar tab", scope: "editor", defaultChord: "mod+b", sequence: "f" },
+  { id: "sidebar.git", object: "sidebar", action: "git", label: "Show GIT",
+    description: "Show the GIT sidebar tab", scope: "editor", defaultChord: "mod+b", sequence: "g" },
   // --- files ---
   { id: "files.reload", object: "files", action: "reload", label: "Reload files",
     description: "Reload the file list from disk/git", scope: "files", defaultChord: "mod+r" },
@@ -53,8 +54,7 @@ export const COMMANDS: Command[] = [
   // new / here / insert are scope:"global" so ⌘T works anywhere in the app (the
   // terminal is rarely the focused element when you want to open one). `object`
   // stays "terminal" so they still group under TERMINAL in the help/settings UI.
-  // next / prev stay scope:"terminal" — cycling only makes sense with the panel
-  // focused, and their chord (⌘⇧]/⌘⇧[) is shared with sidebar.next/prev.
+  // next / prev stay scope:"terminal" — cycling only makes sense with the panel focused.
   { id: "terminal.new", object: "terminal", action: "new", label: "New terminal",
     description: "Open a new terminal (same as +)", scope: "global", defaultChord: "mod+t", defaultAction: true },
   { id: "terminal.here", object: "terminal", action: "here", label: "Terminal here",
@@ -62,9 +62,9 @@ export const COMMANDS: Command[] = [
   { id: "terminal.insert", object: "terminal", action: "insert", label: "Insert command",
     description: "Open the insert-command menu", scope: "global", defaultChord: "mod+t", sequence: "i" },
   { id: "terminal.next", object: "terminal", action: "next", label: "Next terminal",
-    description: "Switch to the next terminal", scope: "terminal", defaultChord: "mod+shift+]" },
+    description: "Switch to the next terminal", scope: "terminal", defaultChord: "mod+]" },
   { id: "terminal.prev", object: "terminal", action: "prev", label: "Previous terminal",
-    description: "Switch to the previous terminal", scope: "terminal", defaultChord: "mod+shift+[" },
+    description: "Switch to the previous terminal", scope: "terminal", defaultChord: "mod+[" },
 ].map((c) => ({ ...c })) as Command[];
 
 export function commandById(id: string): Command | undefined {
