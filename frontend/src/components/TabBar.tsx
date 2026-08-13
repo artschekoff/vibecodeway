@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { X, Pin, Globe, FileCode2, Settings, ScrollText, Sparkles, LayoutDashboard } from "lucide-react";
+import { X, Pin, Globe, FileCode2, ChevronRight, Settings, ScrollText, Sparkles, LayoutDashboard } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -58,6 +58,7 @@ function TabIcon({ tab, orgColor }: { tab: Tab; orgColor?: string }) {
     );
   }
   if (tab.type === "context") return <FileCode2 size={20} />;
+  if (tab.type === "editor") return <ChevronRight size={20} />;
   if (tab.type === "settings") return <Settings size={20} />;
   if (tab.type === "logs") return <ScrollText size={20} />;
   if (tab.type === "prompts") return <Sparkles size={20} />;
