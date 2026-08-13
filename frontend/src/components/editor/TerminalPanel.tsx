@@ -60,6 +60,12 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   const insertBtnRef = useRef<HTMLButtonElement>(null);
   const [insertOpen, setInsertOpen] = useState(false);
   const [insertPos, setInsertPos] = useState<{ left: number; top: number } | null>(null);
+  // Keyboard-navigable active row. State-driven (not DOM focus) so ↑/↓/Enter work
+  // regardless of what holds focus — a native <button>.focus() doesn't stick in
+  // WebKit on click, and the shell/xterm would otherwise eat the keys.
+  const [insertActive, setInsertActive] = useState(0);
+  const insertActiveRef = useRef(0);
+  insertActiveRef.current = insertActive;
   const [focused, setFocused] = useState(false);
   const lastInsertId = useRef(0);
   const { commands } = useTerminalCommands();
@@ -187,11 +193,30 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
     if (r) setInsertPos({ left: r.left, top: r.bottom + 4 });
   }, [insertOpen]);
 
-  // When the picker opens (via ⌘T I or click), move focus onto its first item so
-  // arrow keys / Enter / Escape drive it straight from the keyboard.
+  // The picker is keyboard-driven while open: a capture-phase window listener owns
+  // ↑/↓/Enter/Escape so they can't leak into the shell (xterm), and drives the
+  // active row via state. Reset to the top each time it opens.
+  useEffect(() => { if (insertOpen) setInsertActive(0); }, [insertOpen]);
   useEffect(() => {
-    if (insertOpen) insertMenuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus();
-  }, [insertOpen]);
+    if (!insertOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setInsertActive((i) => Math.min(i + 1, commands.length - 1)); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setInsertActive((i) => Math.max(i - 1, 0)); }
+      else if (e.key === "Enter") {
+        e.preventDefault(); e.stopPropagation();
+        const c = commands[insertActiveRef.current];
+        if (c) { insertCommand(c.command, c.sendEnter); setInsertOpen(false); }
+      } else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setInsertOpen(false); focusActiveTerminal(); }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertOpen, commands]);
+  // Keep the active row visible when navigating a long list.
+  useEffect(() => {
+    if (!insertOpen) return;
+    insertMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']")[insertActive]?.scrollIntoView?.({ block: "nearest" });
+  }, [insertActive, insertOpen]);
 
   // cmux "surface" keymap for the terminal tabs. Capture phase on the panel root
   // runs before xterm's textarea listener; stopPropagation keeps the keys out of
@@ -276,25 +301,18 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
               <div
                 ref={insertMenuRef}
                 role="menu"
-                onKeyDown={(e) => {
-                  const items = Array.from(
-                    insertMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []
-                  );
-                  const idx = items.indexOf(document.activeElement as HTMLButtonElement);
-                  if (e.key === "Escape") { e.preventDefault(); setInsertOpen(false); focusActiveTerminal(); }
-                  else if (e.key === "ArrowDown") { e.preventDefault(); items[Math.min(idx + 1, items.length - 1)]?.focus(); }
-                  else if (e.key === "ArrowUp") { e.preventDefault(); items[Math.max(idx - 1, 0)]?.focus(); }
-                }}
                 style={{ ...insertPopover, left: insertPos.left, top: insertPos.top }}
               >
                 {commands.length === 0 && (
                   <div style={{ padding: "3px 8px", color: "var(--text-muted)" }}>No commands</div>
                 )}
-                {commands.map((c) => (
+                {commands.map((c, i) => (
                   <button
                     key={c.id}
                     role="menuitem"
-                    style={insertItem}
+                    aria-selected={i === insertActive}
+                    style={{ ...insertItem, background: i === insertActive ? "var(--bg-hover, rgba(127,127,127,0.15))" : "none" }}
+                    onMouseEnter={() => setInsertActive(i)}
                     onClick={() => { insertCommand(c.command, c.sendEnter); setInsertOpen(false); }}
                   >
                     {c.title}

@@ -60,4 +60,26 @@ describe("TerminalPanel command selector", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "Run" }));
     await waitFor(() => expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "npm test\r"));
   });
+
+  it("navigates the menu with ArrowDown and selects with Enter", async () => {
+    render(<TerminalPanel spawnCwd="/r/api" contextName="ctx" />, { wrapper: Wrap });
+    await waitFor(() => expect(screen.getByTestId("term")).toBeInTheDocument());
+    fireEvent.click(await screen.findByLabelText("Insert terminal command"));
+    await screen.findAllByRole("menuitem");
+    // ArrowDown moves the active item from Inject (0) to Run (1); Enter selects it.
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() => expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "npm test\r"));
+  });
+
+  it("Enter with no arrow selects the first item", async () => {
+    render(<TerminalPanel spawnCwd="/r/api" contextName="tell-us-more-fin" />, { wrapper: Wrap });
+    await waitFor(() => expect(screen.getByTestId("term")).toBeInTheDocument());
+    fireEvent.click(await screen.findByLabelText("Insert terminal command"));
+    await screen.findAllByRole("menuitem");
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() =>
+      expect(TerminalWrite).toHaveBeenCalledWith("sess-1", "/load-context tell-us-more-fin")
+    );
+  });
 });
