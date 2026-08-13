@@ -63,11 +63,10 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   useEffect(() => { localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth)); }, [sidebarWidth]);
   useEffect(() => { localStorage.setItem(TERMINAL_KEY, String(terminalHeight)); }, [terminalHeight]);
 
-  // Sidebar FILES/GIT switch (⌘⇧] / ⌘⇧[). Scope "editor" so the same chord
-  // routes to terminal.next/prev instead when the terminal zone is focused.
-  const toggleSidebar = () => setSidebarTab((t) => (t === "files" ? "git" : "files"));
-  useHotkey("sidebar.next", toggleSidebar, { scope: "editor" });
-  useHotkey("sidebar.prev", toggleSidebar, { scope: "editor" });
+  // Sidebar FILES/GIT via the ⌘B leader: ⌘B F -> FILES, ⌘B G -> GIT. Scope
+  // "editor" so it's active only while the editor/sidebar zone is focused.
+  useHotkey("sidebar.files", () => setSidebarTab("files"), { scope: "editor" });
+  useHotkey("sidebar.git", () => setSidebarTab("git"), { scope: "editor" });
 
   useEffect(() => {
     let active = true;
