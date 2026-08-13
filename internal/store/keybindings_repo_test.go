@@ -99,3 +99,48 @@ func TestKeybindings_SeededHotkeysAndReset(t *testing.T) {
 	assert.Equal(t, "cmd", got.ModifierKeys)
 	assert.Equal(t, "f", got.KeyCode)
 }
+
+func TestKeybindings_SwitchRemap_107(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	all, err := s.GetKeybindings(ctx)
+	require.NoError(t, err)
+	byCmd := map[string]Keybinding{}
+	for _, k := range all {
+		byCmd[k.Command] = k
+	}
+
+	// Context tabs -> cmd+shift
+	tn := byCmd["tabs.next"]
+	assert.Equal(t, "cmd,shift", tn.ModifierKeys)
+	assert.Equal(t, "]", tn.KeyCode)
+	assert.Equal(t, "cmd,shift", tn.DefaultModifierKeys)
+	assert.Equal(t, "cmd,shift", byCmd["tabs.prev"].ModifierKeys)
+	assert.Equal(t, "[", byCmd["tabs.prev"].KeyCode)
+
+	// Terminal switch -> plain cmd
+	term := byCmd["terminal.next"]
+	assert.Equal(t, "cmd", term.ModifierKeys)
+	assert.Equal(t, "]", term.KeyCode)
+	assert.Equal(t, "cmd", term.DefaultModifierKeys)
+	assert.Equal(t, "cmd", byCmd["terminal.prev"].ModifierKeys)
+	assert.Equal(t, "[", byCmd["terminal.prev"].KeyCode)
+
+	// Sidebar: old next/prev gone, new direct files/git under ⌘B
+	_, hadNext := byCmd["sidebar.next"]
+	_, hadPrev := byCmd["sidebar.prev"]
+	assert.False(t, hadNext, "sidebar.next removed")
+	assert.False(t, hadPrev, "sidebar.prev removed")
+
+	f := byCmd["sidebar.files"]
+	assert.Equal(t, "cmd", f.ModifierKeys)
+	assert.Equal(t, "b", f.KeyCode)
+	assert.Equal(t, "f", f.Sequence)
+	assert.Equal(t, "editor", f.Scope)
+
+	g := byCmd["sidebar.git"]
+	assert.Equal(t, "cmd", g.ModifierKeys)
+	assert.Equal(t, "b", g.KeyCode)
+	assert.Equal(t, "g", g.Sequence)
+}
