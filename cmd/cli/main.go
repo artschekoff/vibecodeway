@@ -92,6 +92,9 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newGetAISettingsCmd())
 	root.AddCommand(newSetAISettingsCmd())
 
+	// VCS operations
+	root.AddCommand(newRepoListCmd())
+
 	return root
 }
 

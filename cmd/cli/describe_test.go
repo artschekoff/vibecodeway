@@ -41,7 +41,7 @@ func TestDescribe_IncludesCoreCommands(t *testing.T) {
 		m := c.(map[string]any)
 		names[m["name"].(string)] = true
 	}
-	for _, want := range []string{"describe", "context-list", "context-get", "add-text", "jira-search", "slack-list-workspaces"} {
+	for _, want := range []string{"describe", "context-list", "context-get", "add-text", "jira-search", "slack-list-workspaces", "repo-list"} {
 		if !names[want] {
 			t.Errorf("expected %q in commands, got %v", want, names)
 		}
