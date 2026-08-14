@@ -31,11 +31,12 @@ const passphraseEnvVar = "VIBECODEWAY_PASSPHRASE"
 
 // serviceEnv holds all objects needed to call ContextService methods.
 type serviceEnv struct {
-	store  *appstore.Store
-	svc    *jiraservice.ContextService
-	openAI *openaiclient.Client
-	runner *githubrunner.Runner
-	logger *zap.Logger
+	store    *appstore.Store
+	svc      *jiraservice.ContextService
+	vcsStore *vcsstore.Store
+	openAI   *openaiclient.Client
+	runner   *githubrunner.Runner
+	logger   *zap.Logger
 }
 
 // openServiceEnv opens the database, reads the passphrase from the env, and
@@ -84,11 +85,12 @@ func openServiceEnv() (*serviceEnv, error) {
 	openAI := openaiclient.NewClient(s, logger)
 
 	return &serviceEnv{
-		store:  s,
-		svc:    svc,
-		openAI: openAI,
-		runner: ghRunner,
-		logger: logger,
+		store:    s,
+		svc:      svc,
+		vcsStore: vcsStore,
+		openAI:   openAI,
+		runner:   ghRunner,
+		logger:   logger,
 	}, nil
 }
 
