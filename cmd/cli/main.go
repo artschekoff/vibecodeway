@@ -94,6 +94,7 @@ func newRootCmd() *cobra.Command {
 
 	// VCS operations
 	root.AddCommand(newRepoListCmd())
+	root.AddCommand(newBranchAddCmd())
 
 	return root
 }
