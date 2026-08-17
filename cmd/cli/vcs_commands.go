@@ -84,6 +84,10 @@ func newBranchAddCmd() *cobra.Command {
 			}
 
 			if branch == "" && prNumber > 0 {
+				// env.runner is hard-wired to GitHub. Correct today (only github is
+				// enabled per vcs.IsPlatformEnabled), but if another platform is ever
+				// enabled this must route through a platform-appropriate runner
+				// instead of assuming GitHub.
 				pr, err := env.runner.GetPRByNumber(ctx, owner, name, prNumber)
 				if err != nil {
 					return fmt.Errorf("resolving head branch of PR #%d: %w", prNumber, err)
@@ -115,7 +119,10 @@ func newBranchAddCmd() *cobra.Command {
 
 	return setAgentDocs(cmd,
 		"Link a repository (and optionally one branch) to a context. Pass --branch for a branch link, "+
-			"--pr-number to resolve the branch from a pull request via gh, or neither to track every PR of the repo.",
+			"--pr-number to resolve the branch from a pull request via gh, or neither to track every PR of the repo. "+
+			"Idempotent: re-adding an existing repo+branch link returns it and updates the label. "+
+			"--pr-number only resolves the head branch; unlike the app's 'add specific PR' action, it does not "+
+			"store the PR itself or its comments — nothing PR-shaped appears until the next sync.",
 		"--context-id UUID | --context-key STRING (one required)\n"+
 			"--owner-repo STRING (required; 'owner/repo')\n"+
 			"--branch STRING (optional)\n"+

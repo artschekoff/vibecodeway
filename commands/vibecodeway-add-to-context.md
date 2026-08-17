@@ -17,6 +17,14 @@ All operations use `vibecodeway-cli` (Bash). JSON on stdout; errors on stderr.
 Follow **Safe JSON handling** in `/vibecodeway-prime` (prefer `jq` with
 **single-quoted** programs; never `cli | python3 <<'PY'`).
 
+**Safe shell quoting for user text.** Any user-supplied string interpolated
+into a CLI flag (`--summary`, `--content`, `--name`) must be **single-quoted**,
+not double-quoted — a double quote, backtick, or `$(` in the pasted text
+breaks the call or executes code inside double quotes. If the text is
+multi-line or itself contains a single quote, do not try to escape it inline:
+write it to a temp file and pass `--file-path` (works with `add-text`)
+instead. This mirrors the single-quoted-`jq` rule above.
+
 ## Hard rules (before any other tool)
 
 1. **First tool call must be `vibecodeway-cli`.**
@@ -46,10 +54,18 @@ Print one line stating the classification before writing, e.g.
 ## Step 2 — Resolve the context
 
 ```bash
-vibecodeway-cli context-list | jq '[.[] | {key, id, orgId, status}]'
+vibecodeway-cli context-list --include-archived | jq '[.[] | {key, id, orgId, status}]'
 ```
 
-- **Exact key match** → use it, go to Step 3.
+Use `--include-archived` — without it, only ACTIVE contexts are returned, so an
+archived context looks like "not found", and offering to create one in that
+case would violate the `contexts.key` UNIQUE constraint and surface a raw
+SQLite error.
+
+- **Exact key match (any status, including archived)** → use it, go to Step 3.
+  An archived hit counts as found — the write verbs (`branch-add`, `event-add`,
+  `add-text`, `jira-add`) work on archived contexts. Never offer to create a
+  context whose key already exists, active or archived.
 - **No exact match** → do NOT create anything yet. Show the closest keys
   (case-insensitive substring match on what the user typed) and ask:
 
@@ -101,6 +117,9 @@ vibecodeway-cli branch-add --context-key <key> --owner-repo juna-health/frontend
 
 If it fails with a gh auth error, tell the user to run `gh auth login` and stop.
 
+Note: `--pr-number` only resolves and links the head branch — it does not store
+the PR itself or its comments, so nothing PR-shaped shows up until the next sync.
+
 ### repo
 
 No branch — tracks every PR of the repo:
@@ -124,7 +143,7 @@ Never decide this alone. Ask:
 **Event:**
 
 ```bash
-vibecodeway-cli event-add --context-key <key> --summary "<the string>" --type user_note
+vibecodeway-cli event-add --context-key <key> --summary '<the string>' --type user_note
 ```
 
 Pick a more specific `--type` when the wording is unambiguous — `blocker_identified`
@@ -132,13 +151,23 @@ for "blocked by …", `decision_made` for "we decided …", `work_completed` for
 "finished …". When in doubt use `user_note`. Run `vibecodeway-cli describe` and
 read `event-add`'s `input` for the full list.
 
+If `<the string>` is multi-line or contains a single quote, write it to a temp
+file and use `add-text --file-path` instead (see Text material below) — `event-add`
+has no `--file-path` option, so keep it to short, single-line summaries.
+
 **Text material:**
 
 ```bash
-vibecodeway-cli add-text --context-key <key> --name "<short title>" --content "<the string>"
+vibecodeway-cli add-text --context-key <key> --name '<short title>' --content '<the string>'
 ```
 
-Ask for a short `--name` if the user has not implied one.
+Ask for a short `--name` if the user has not implied one. For multi-line text or
+text containing a single quote, write it to a temp file and use `--file-path`
+instead of `--content`:
+
+```bash
+vibecodeway-cli add-text --context-key <key> --name '<short title>' --file-path /tmp/pasted-text.md
+```
 
 ## Step 5 — Report
 

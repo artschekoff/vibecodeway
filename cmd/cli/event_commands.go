@@ -98,7 +98,7 @@ func newEventAddCmd() *cobra.Command {
 			"--summary STRING (required)\n"+
 			"--type STRING (optional; default 'user_note'; one of "+strings.Join(userEventTypes, ", ")+")\n"+
 			"--reference STRING (optional; original text or URL)",
-		`{"id":"uuid","contextId":"uuid","type":"user_note","timestamp":"RFC3339","sourceType":"user","summary":"string","rawReference":"string","createdAt":"RFC3339"}`,
+		`{"id":"uuid","contextId":"uuid","type":"user_note","timestamp":"RFC3339","sourceType":"user","sourceId":"","author":"","summary":"string","rawReference":"string","createdAt":"RFC3339"}`,
 		`vibecodeway-cli event-add --context-key sprint-42 --summary "QA found a regression in login" --type blocker_identified`,
 	)
 }

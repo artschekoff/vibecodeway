@@ -77,6 +77,13 @@ func openServiceEnv() (*serviceEnv, error) {
 
 	vcsStore := vcsstore.NewStore(s.DB())
 	ghRunner := githubrunner.NewRunner(logger)
+	// Bootstrap the runner with any previously stored GitHub token so gh CLI calls
+	// (e.g. branch-add --pr-number) work even when the user authenticated GitHub
+	// inside the app but never ran `gh auth login`. Mirrors app.go's bootstrap.
+	// A missing or unreadable token is not fatal — most CLI verbs don't need gh.
+	if auth, err := vcsStore.Auth.GetAuth(context.Background(), "github"); err == nil && auth.Token != "" {
+		ghRunner.SetToken(auth.Token)
+	}
 	vcsProvider := vcsservice.NewVCSProvider(vcsStore, logger, s, ghRunner)
 
 	svc := jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)

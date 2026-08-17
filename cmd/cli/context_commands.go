@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -299,6 +300,9 @@ func newOrgListCmd() *cobra.Command {
 			orgs, err := env.store.ListOrganizations(context.Background())
 			if err != nil {
 				return fmt.Errorf("listing organizations: %w", err)
+			}
+			if orgs == nil {
+				orgs = []appstore.Organization{}
 			}
 			return writeJSON(orgs)
 		},
