@@ -47,6 +47,9 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newSetJiraConfigCmd())
 	root.AddCommand(newSetSlackConfigCmd())
 
+	// Event log
+	root.AddCommand(newEventAddCmd())
+
 	// Text entries
 	root.AddCommand(newTextListCmd())
 	root.AddCommand(newTextDeleteCmd())
