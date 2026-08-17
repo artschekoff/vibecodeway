@@ -73,6 +73,7 @@ local reads (`context-list`, `context-get`, `text-list`, …).
 | "Load task assignment / tech assignment / text notes" | `/vibecodeway-load-task-assignment` |
 | "List contexts", "show contexts" | `vibecodeway-cli context-list` |
 | "Which repos are connected / where are my repos / workspaces on disk" or `/vibecodeway-list-repos` | `/vibecodeway-list-repos` — `vibecodeway-cli repo-list` |
+| "Add this to context X", "attach this ticket/branch/PR/note to X" or `/vibecodeway-add-to-context` | `/vibecodeway-add-to-context` — classify the string, then one write call |
 | "Create / update / delete / archive a context" | drive CLI from schema (`context-create`, `context-update`, `context-delete`, `context-toggle-status`) |
 | "Add / list / delete text entries" | `add-text`, `text-list`, `text-delete`, `text-toggle` |
 | "Upload / list / delete files" | `add-file`, `file-list`, `file-delete`, `file-toggle` |

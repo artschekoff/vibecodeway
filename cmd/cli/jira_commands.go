@@ -43,14 +43,11 @@ func newJiraSearchCmd() *cobra.Command {
 }
 
 func newJiraAddCmd() *cobra.Command {
-	var contextID, jiraKeys string
+	var contextID, contextKey, jiraKeys string
 	cmd := &cobra.Command{
 		Use:   "jira-add",
 		Short: "Add Jira issues to a context by key",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if contextID == "" {
-				return fmt.Errorf("--context-id is required")
-			}
 			if jiraKeys == "" {
 				return fmt.Errorf("--jira-keys is required")
 			}
@@ -61,12 +58,17 @@ func newJiraAddCmd() *cobra.Command {
 			}
 			defer env.store.Close() //nolint:errcheck
 
+			id, err := resolveContextID(ctx, env, contextID, contextKey)
+			if err != nil {
+				return err
+			}
+
 			keys := splitComma(jiraKeys)
-			added, err := env.svc.AddIssuesToContext(ctx, contextID, keys)
+			added, err := env.svc.AddIssuesToContext(ctx, id, keys)
 			if err != nil {
 				return fmt.Errorf("adding issues: %w", err)
 			}
-			newComments, err := env.svc.SyncAllComments(ctx, contextID)
+			newComments, err := env.svc.SyncAllComments(ctx, id)
 			if err != nil {
 				return fmt.Errorf("syncing comments: %w", err)
 			}
@@ -74,14 +76,14 @@ func newJiraAddCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
+	cmd.Flags().StringVar(&contextKey, "context-key", "", "Context key, e.g. 'sprint-42'")
 	cmd.Flags().StringVar(&jiraKeys, "jira-keys", "", "Comma-separated Jira keys, e.g. 'JH-1,JH-5'")
-	_ = cmd.MarkFlagRequired("context-id")
 	_ = cmd.MarkFlagRequired("jira-keys")
 	return setAgentDocs(cmd,
 		"Add one or more Jira issues to a context by key, then sync comments.",
-		"--context-id UUID (required)\n--jira-keys STRING (required; comma-separated, e.g. JH-1,JH-5)",
+		"--context-id UUID | --context-key STRING (one required)\n--jira-keys STRING (required; comma-separated, e.g. JH-1,JH-5)",
 		`{"added":"int","newComments":"int"}`,
-		`vibecodeway-cli jira-add --context-id <uuid> --jira-keys JH-1,JH-5,JH-12`,
+		`vibecodeway-cli jira-add --context-key sprint-42 --jira-keys JH-1,JH-5,JH-12`,
 	)
 }
 

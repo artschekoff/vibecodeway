@@ -44,8 +44,12 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newContextDeleteCmd())
 	root.AddCommand(newContextToggleStatusCmd())
 	root.AddCommand(newContextGetCmd())
+	root.AddCommand(newOrgListCmd())
 	root.AddCommand(newSetJiraConfigCmd())
 	root.AddCommand(newSetSlackConfigCmd())
+
+	// Event log
+	root.AddCommand(newEventAddCmd())
 
 	// Text entries
 	root.AddCommand(newTextListCmd())
@@ -94,6 +98,7 @@ func newRootCmd() *cobra.Command {
 
 	// VCS operations
 	root.AddCommand(newRepoListCmd())
+	root.AddCommand(newBranchAddCmd())
 
 	return root
 }
