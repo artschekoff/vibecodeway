@@ -283,3 +283,30 @@ func newSetSlackConfigCmd() *cobra.Command {
 		`vibecodeway-cli set-slack-config --context-id <uuid> --workspace myworkspace --search-query "in:general"`,
 	)
 }
+
+// newOrgListCmd lists organizations so a context can be created in the right one.
+func newOrgListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "org-list",
+		Short: "List organizations",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			env, err := openServiceEnv()
+			if err != nil {
+				return err
+			}
+			defer env.store.Close() //nolint:errcheck
+
+			orgs, err := env.store.ListOrganizations(context.Background())
+			if err != nil {
+				return fmt.Errorf("listing organizations: %w", err)
+			}
+			return writeJSON(orgs)
+		},
+	}
+	return setAgentDocs(cmd,
+		"List organizations with their UUID and name. Read-only. Use to pick the --org-id required by context-create.",
+		"(no flags)",
+		`[{"id":"uuid","name":"string","sortOrder":"int","createdAt":"RFC3339","updatedAt":"RFC3339"}]`,
+		`vibecodeway-cli org-list`,
+	)
+}

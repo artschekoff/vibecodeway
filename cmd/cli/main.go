@@ -44,6 +44,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newContextDeleteCmd())
 	root.AddCommand(newContextToggleStatusCmd())
 	root.AddCommand(newContextGetCmd())
+	root.AddCommand(newOrgListCmd())
 	root.AddCommand(newSetJiraConfigCmd())
 	root.AddCommand(newSetSlackConfigCmd())
 
