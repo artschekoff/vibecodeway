@@ -95,3 +95,34 @@ func TestDescribe_LongHelpHasSections(t *testing.T) {
 		}
 	}
 }
+
+func TestDescribe_IncludesAddToContextCommands(t *testing.T) {
+	got := runDescribe(t)
+	names := map[string]bool{}
+	for _, c := range got["commands"].([]any) {
+		names[c.(map[string]any)["name"].(string)] = true
+	}
+	// The /vibecodeway-add-to-context skill drives exactly these verbs.
+	for _, want := range []string{"branch-add", "event-add", "org-list", "jira-add", "add-text", "context-create"} {
+		if !names[want] {
+			t.Errorf("expected %q in commands, got %v", want, names)
+		}
+	}
+}
+
+func TestDescribe_JiraAddAcceptsContextKey(t *testing.T) {
+	got := runDescribe(t)
+	for _, c := range got["commands"].([]any) {
+		m := c.(map[string]any)
+		if m["name"] != "jira-add" {
+			continue
+		}
+		for _, f := range m["flags"].([]any) {
+			if f.(map[string]any)["name"] == "context-key" {
+				return
+			}
+		}
+		t.Fatalf("jira-add must expose --context-key, flags: %v", m["flags"])
+	}
+	t.Fatal("jira-add not found in describe output")
+}
