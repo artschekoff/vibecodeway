@@ -21,6 +21,7 @@ import {
   ToggleSlackDMConfigActive,
   UpdateContext,
   ToggleContextStatus,
+  CountOpenTickets,
   SetJiraConfig,
   AddIssuesToContext,
   AddSlackChannels,
@@ -80,6 +81,7 @@ import {
   SearchContextItems,
   ListContextsByOrg,
   GetContextChanges,
+  ConfirmAction,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
@@ -1160,6 +1162,17 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const { context } = detail;
 
   const handleToggleContextStatus = async () => {
+    // Warn before deactivating a context that still has open tickets — doing so
+    // hides its work from the board and halts background refresh.
+    if (context.status === "active") {
+      try {
+        const open = await CountOpenTickets(context.id);
+        // Native dialog — window.confirm() is a no-op in the Wails webview.
+        if (open > 0 && !(await ConfirmAction("Deactivate context", `${context.key} still has ${open} open ticket${open === 1 ? "" : "s"}. Deactivate anyway?`))) {
+          return;
+        }
+      } catch { /* best-effort: fall through to the toggle */ }
+    }
     try {
       const updated = await ToggleContextStatus(context.id);
       setDetail((prev) => prev ? ({ ...prev, context: { ...prev.context, status: updated.status } } as service.ContextDetail) : prev);

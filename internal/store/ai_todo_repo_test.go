@@ -38,6 +38,52 @@ func TestListTodoItems_ResolvesJiraContext(t *testing.T) {
 	assert.Equal(t, "", items[1].ContextKey)
 }
 
+func TestListTodoItems_ResolvesPRContext(t *testing.T) {
+	s := newTodoTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+	c, err := s.CreateContext(ctx, "JH-3051", org.ID)
+	require.NoError(t, err)
+
+	// A PR is opened on a branch attached to the context:
+	// vcs_pull_requests -> context_vcs_branches -> contexts.
+	_, err = s.DB().ExecContext(ctx,
+		`INSERT INTO vcs_repos (id, platform, owner, name, created_at)
+		 VALUES ('repo-1', 'github', 'juna-health', 'juna-api', datetime('now'))`)
+	require.NoError(t, err)
+	_, err = s.DB().ExecContext(ctx,
+		`INSERT INTO context_vcs_branches (id, context_id, repo_id, branch, created_at)
+		 VALUES ('br-1', ?, 'repo-1', 'feature/jh-3051', datetime('now'))`, c.ID)
+	require.NoError(t, err)
+	_, err = s.DB().ExecContext(ctx,
+		`INSERT INTO vcs_pull_requests (id, repo_id, branch_id, pr_number, head_branch, fetched_at)
+		 VALUES ('pr-1', 'repo-1', 'br-1', 247, 'feature/jh-3051', datetime('now'))`)
+	require.NoError(t, err)
+
+	require.NoError(t, s.ReplaceTodoItems(ctx, []AITodoItem{
+		// Bare "repoName#num" form (what the board data produces today).
+		{Kind: "rerequest_pr", Title: "Rerequest review for PR JH-3051", RefType: "pr", RefKey: "juna-api#247", Priority: "high", Position: 0, Source: "ai"},
+		// Owner-qualified "owner/repoName#num" form (prompt example).
+		{Kind: "rerequest_pr", Title: "Rerequest review for PR JH-3051", RefType: "pr", RefKey: "juna-health/juna-api#247", Priority: "high", Position: 1, Source: "ai"},
+		// A pr ref with no matching PR row stays empty.
+		{Kind: "make_pr", Title: "PR work", RefType: "pr", RefKey: "other#9", Priority: "low", Position: 2, Source: "ai"},
+	}))
+
+	items, err := s.ListTodoItems(ctx)
+	require.NoError(t, err)
+	require.Len(t, items, 3)
+	// Both ref_key forms resolve to the PR's context.
+	assert.Equal(t, c.ID, items[0].ContextID)
+	assert.Equal(t, "JH-3051", items[0].ContextKey)
+	assert.Equal(t, c.ID, items[1].ContextID)
+	assert.Equal(t, "JH-3051", items[1].ContextKey)
+	// An unmatched pr ref stays empty.
+	assert.Equal(t, "", items[2].ContextID)
+	assert.Equal(t, "", items[2].ContextKey)
+}
+
 func newTodoTestStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := Open(filepath.Join(t.TempDir(), "test.db"))

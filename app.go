@@ -349,6 +349,13 @@ func (a *App) ToggleContextStatus(id string) (*appstore.Context, error) {
 	return a.cliRunner.ToggleContextStatus(a.ctx, id)
 }
 
+// CountOpenTickets returns how many of a context's Jira tickets are not yet
+// terminal (done/closed/…). The UI calls this before a manual deactivation so it
+// can warn when hiding a context that still has open work.
+func (a *App) CountOpenTickets(id string) (int, error) {
+	return a.db.CountOpenTickets(a.ctx, id)
+}
+
 // SetContextsOrder persists the display order of contexts.
 // ids must contain the full ordered list of context IDs from top to bottom.
 func (a *App) SetContextsOrder(ids []string) error {

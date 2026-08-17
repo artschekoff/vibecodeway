@@ -1,83 +1,93 @@
 ---
 name: vibecodeway-load-context
 description: >-
-  Load a saved context from vibecodeway into the conversation via
-  vibecodeway-cli. Lists available contexts, asks which to load, then
-  fetches and presents the full context data. Use when the user says "load
-  context", "get context", "show contexts", or wants to work with a saved
-  Jira/Slack context.
+  Load a saved vibecodeway context via vibecodeway-cli (local DB). FIRST
+  ACTION: run vibecodeway-cli — not MCP, not gh, not Jira REST, not repo
+  search. Use when the user says "load context", "get context", "show
+  contexts", or invokes /vibecodeway-load-context [KEY].
 ---
 
 # Load Context
 
-All operations use `vibecodeway-cli` (Bash). JSON on stdout; errors on
-stderr. Prefer `/vibecodeway-prime` first if the CLI schema is not
-already loaded.
+`vibecodeway-cli` is a global binary (`/usr/local/bin/vibecodeway-cli`). It
+reads the **local** consolidator DB. It is **always in scope** — even when
+the active workspace/worktree is another repo, even when path guards block
+`~/.claude` or other projects.
 
-`context-list` / `context-get` read the **local** consolidator DB. Do **not** call
-`jira-cli`, `acli`, `jira-refresh`, or `reload-all` unless the user explicitly
-asks to refresh from Jira/Slack.
+All operations use `vibecodeway-cli` (Bash). JSON on stdout; errors on stderr.
+Follow **Safe JSON handling** in `/vibecodeway-prime` (prefer `jq` with
+**single-quoted** programs; never `cli | python3 <<'PY'`).
 
-Follow **Safe JSON handling** in `/vibecodeway-prime` (prefer `jq`;
-never `cli | python3 <<'PY'`).
+## Hard rules (before any other tool)
+
+1. **First tool call must be `vibecodeway-cli`.** If the user named a key
+   (e.g. `/vibecodeway-load-context JH-5139`), run `context-get` immediately.
+2. Do **not** search MCP, `ctx_search`, git worktrees, `.vibecodeway` /
+   `.ponytail` folders, GitHub issues, or Jira REST as a substitute.
+3. Do **not** call `jira-cli`, `acli`, `jira-refresh`, or `reload-all` unless
+   the user explicitly asks to refresh from Jira/Slack.
+4. Do **not** wait on `/vibecodeway-prime` when a key is already given. Load
+   prime only if you need `describe` for an unknown flag.
+5. If `command not found: vibecodeway-cli`, tell the user to run
+   `make install-cli` from the vibecodeway repo and stop.
+6. Pipe to `jq` — do not write `/tmp` if worktree scope may block files
+   outside the active repo.
 
 ## Workflow
 
 ### Step 1: Resolve which context to load
 
-**If the user already named a context key** (e.g. `/vibecodeway-load-context JH-4922`):
-skip the list UI and go straight to Step 3 with that key.
+**If the user already named a context key**, skip to Step 3.
 
 **Otherwise**, list contexts:
 
 ```bash
-vibecodeway-cli context-list | jq '[.[] | {key, status, id}]'
+vibecodeway-cli context-list | jq '[.[] | {key, status, id, issueCount}]'
 ```
-
-**Output:** JSON array of context objects (`id`, `key`, `status`, issue counts, …).
 
 ### Step 2: Present contexts and ask which to load
 
-(Only when Step 1 listed contexts — skipped if the user already named a key.)
+(Only when Step 1 listed contexts.)
 
-Display as a numbered list:
-- **Key**
-- **Status** (active / archived)
-- **Issue count**
-- **JQL / query** (truncated if long)
-
-Ask which context to load. If only one exists, still confirm before loading.
+Show: key, status, issue count. Ask which to load. If only one exists, still confirm.
 
 ### Step 3: Fetch the full context
 
 ```bash
-vibecodeway-cli context-get --context-key <selected_key> > /tmp/cc-ctx.json
-jq '{
+vibecodeway-cli context-get --context-key KEY | jq '{
   key: .context.key,
   status: .context.status,
-  issues: [.issues[]? | {jiraKey, summary, status, priority, assignee, issueType, parentKey, description, commentCount: (.comments|length? // 0)}]
-}' /tmp/cc-ctx.json
+  snapshotStatus: .context.snapshotStatus,
+  snapshotIsStale: .context.snapshotIsStale,
+  issues: [.issues[]? | {
+    jiraKey, summary, status, priority, assignee, issueType, parentKey,
+    description,
+    commentCount: ((.comments // []) | length)
+  }]
+}'
 ```
 
-**Input:** `--context-key STRING` or `--context-id UUID` (one required)  
-**Output:** JSON context detail (Jira config, Slack config, issues, counts, …).
+Use `--context-id UUID` when you already have it from `context-list`.
 
-To include comment bodies when needed:
+If the user asked for the **last event / last comment / comments**, also project comment bodies:
 
 ```bash
-jq '{issues: [.issues[]? | {jiraKey, summary, status, description, comments: [.comments[]? | {author, created, body}]}]}' /tmp/cc-ctx.json
+vibecodeway-cli context-get --context-key KEY | jq '{
+  snapshotIsStale: .context.snapshotIsStale,
+  issues: [.issues[]? | {
+    jiraKey, summary,
+    comments: [(.comments // [])[] | {author, created, body}]
+  }]
+}'
 ```
+
+If comments are empty and `snapshotIsStale` is true, say so and offer
+`jira-sync-comments` / `jira-refresh` — do not run them unless asked.
 
 ### Step 4: Present the context data
 
-Summarize for the user:
+1. **Overview** — key, status, issue count, stale-snapshot warning if any.
+2. **Issue list** — key, summary, status, comment count.
+3. **Next steps** — analyze, `jira-search`, or work a specific issue.
 
-1. **Overview** — key, JQL, total issues, date range of activity.
-2. **Issue list** — key, summary, status, comment count per issue.
-3. **Next steps** — ask if they want to:
-   - Analyze / summarize the context
-   - Search for new issues (`vibecodeway-cli jira-search --context-key <key>`)
-   - Work with a specific issue
-
-Keep the summary concise. Full data is already in context — do not dump every
-comment unless asked.
+Keep the summary concise. Do not dump every comment unless asked.

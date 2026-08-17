@@ -1,15 +1,27 @@
 ---
 name: vibecodeway-prime
 description: >-
-  Entry point for vibecodeway — load the full CLI schema via
-  vibecodeway-cli describe, then route to the right slash command or
-  CLI call. Use at the start of any vibecodeway task.
+  Entry point for vibecodeway — load the CLI schema via vibecodeway-cli
+  describe, then route. FIRST ACTION: run vibecodeway-cli. Not MCP, not gh,
+  not Jira REST, not repo search. Use at the start of any vibecodeway task.
 ---
 
 # Prime — VibeCodeWay CLI Router
 
-Load the authoritative CLI schema first, then route the user's request. All
-operations go through `vibecodeway-cli` (Bash).
+Load the authoritative CLI schema first, then route. All operations go
+through `vibecodeway-cli` (Bash). The binary is **always in scope** even
+when the active worktree is another repo.
+
+## Hard rules (before any other tool)
+
+1. **First tool call must be `vibecodeway-cli`.** Do not search MCP,
+   `ctx_search`, git worktrees, `.vibecodeway` / `.ponytail`, GitHub, or
+   Jira REST to "find" vibecodeway.
+2. If the user already invoked `/vibecodeway-load-context KEY` or
+   `/vibecodeway-load-task-assignment KEY`, run that CLI flow immediately.
+   Do not treat the slash name as documentation-only.
+3. If `command not found: vibecodeway-cli`, tell the user to run
+   `make install-cli` from the vibecodeway repo and stop.
 
 ## Step 1 — Load the schema
 
@@ -40,10 +52,6 @@ vibecodeway-cli describe
 Every command documents **description**, **input**, **output**, and **flags**.
 Keep this as the source of truth — prefer it over `--help`.
 
-If the binary is missing (`command not found: vibecodeway-cli`), tell
-the user to run `make install-cli` from the vibecodeway repo root and
-stop.
-
 ## Step 2 — Quick auth check (when a task needs Jira/Slack)
 
 ```bash
@@ -61,7 +69,7 @@ local reads (`context-list`, `context-get`, `text-list`, …).
 
 | Task signal | Action |
 |---|---|
-| "Load / show / get a saved context" | `/vibecodeway-load-context` |
+| "Load / show / get a saved context" or `/vibecodeway-load-context [KEY]` | `/vibecodeway-load-context` — if KEY is given, `context-get` immediately |
 | "Load task assignment / tech assignment / text notes" | `/vibecodeway-load-task-assignment` |
 | "List contexts", "show contexts" | `vibecodeway-cli context-list` |
 | "Which repos are connected / where are my repos / workspaces on disk" or `/vibecodeway-list-repos` | `/vibecodeway-list-repos` — `vibecodeway-cli repo-list` |
@@ -75,7 +83,7 @@ local reads (`context-list`, `context-get`, `text-list`, …).
 ## Step 4 — Rules
 
 - Always use `vibecodeway-cli` for vibecodeway work.
-- For load-context flows, delegate to the slash commands above; do not duplicate their steps here.
+- For load-context flows, follow `/vibecodeway-load-context`; do not duplicate its steps here.
 - For everything else, drive the CLI using the schema from Step 1: read `input`, `flags`, and `output` to build the call and parse the result.
 - Every command prints JSON to stdout on success; errors go to stderr with a non-zero exit.
 - Prefer `--context-key` when the user names a context; use `--context-id` (UUID) when you already have it from `context-list`.
@@ -85,14 +93,16 @@ local reads (`context-list`, `context-get`, `text-list`, …).
 
 CLI output is JSON. Follow these rules whenever you inspect or summarize it.
 
-### Preferred: `jq`
+### Preferred: `jq` (single-quoted programs — zsh treats `//` as a comment in double quotes)
 
 ```bash
 vibecodeway-cli context-list | jq '[.[] | {key, status, id}]'
 vibecodeway-cli context-get --context-key KEY | jq '{key: .context.key, issues: [.issues[]? | {jiraKey, summary, status, assignee}]}'
 ```
 
-### Allowed: Python via temp file
+Pipe stdout. Avoid writing `/tmp` when worktree scope may block files outside the active repo.
+
+### Allowed: Python via temp file (only if `/tmp` is writable)
 
 ```bash
 vibecodeway-cli context-get --context-key KEY > /tmp/cc-ctx.json
@@ -103,6 +113,7 @@ python3 -c 'import json; d=json.load(open("/tmp/cc-ctx.json")); print(d["context
 
 | Anti-pattern | Why it breaks |
 |---|---|
+| Searching MCP / gh / Jira REST / the git repo for "vibecodeway context" | Wrong source; local consolidator DB via `vibecodeway-cli` is the only load path |
 | `cli … \| python3 <<'PY' … PY` | Pipe + heredoc fight over stdin; Python may **execute JSON as code** → `NameError: true is not defined` |
 | `python3 -c` with nested `\"` inside f-strings | Shell escaping corrupts the script → `SyntaxError` |
 | Feeding CLI JSON straight into `python3` with no `-c` / script file | JSON is executed as Python |

@@ -37,6 +37,7 @@ import {
   DeleteContextText,
   DeleteUploadedFile,
   ToggleContextStatus,
+  CountOpenTickets,
   SetContextWorkflowStatus,
   UpsertSlackDMConfig,
   DeleteSlackDMConfig,
@@ -68,6 +69,7 @@ import {
   ListLocalBranches,
   DeleteLocalBranch,
   RemoveGoneLocalBranches,
+  ConfirmAction,
   CheckoutLocalBranch,
   SwitchMainWorkingTree,
   FetchPruneRepoPath,
@@ -753,6 +755,17 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   };
 
   const handleToggleStatus = async (_e: React.MouseEvent, c: Context) => {
+    // Deactivating a context hides its work from the board and stops background
+    // refresh — warn before doing that while tickets are still open.
+    if (c.status === "active") {
+      try {
+        const open = await CountOpenTickets(c.id);
+        // Native dialog — window.confirm() is a no-op in the Wails webview.
+        if (open > 0 && !(await ConfirmAction("Deactivate context", `${c.key} still has ${open} open ticket${open === 1 ? "" : "s"}. Deactivate anyway?`))) {
+          return;
+        }
+      } catch { /* best-effort: fall through to the toggle */ }
+    }
     try {
       const updated = await ToggleContextStatus(c.id);
       setContexts((prev) => prev.map((ctx) => ctx.id === updated.id ? { ...ctx, status: updated.status } : ctx));
@@ -916,7 +929,12 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const handleClearGoneBranches = async (pathId: string) => {
     const gone = (localBranches[pathId] ?? []).filter((b) => b.isGone).length;
     if (gone === 0) return;
-    if (!window.confirm(`Delete ${gone} local branch${gone === 1 ? "" : "es"} whose upstream is gone?`)) return;
+    // Native dialog — window.confirm() is a no-op in the Wails webview.
+    const ok = await ConfirmAction(
+      "Clear gone branches",
+      `Delete ${gone} local branch${gone === 1 ? "" : "es"} whose upstream is gone?`,
+    );
+    if (!ok) return;
     setClearingGoneId(pathId);
     try {
       await RemoveGoneLocalBranches(pathId);

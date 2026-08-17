@@ -10,19 +10,33 @@ import (
 
 // ListTodoItems returns the board-wide TODO NEXT list ordered by position.
 func (s *Store) ListTodoItems(ctx context.Context) ([]AITodoItem, error) {
-	// Resolve each jira-ref todo to its in-app context (if one exists) so the
-	// board can deep-link into it. A jira_key can appear under several contexts
-	// (UNIQUE is per (context_id, jira_key)); pick one deterministically via
-	// MIN(context_id), mirroring GetBoardJiraAssignments. COALESCE keeps the
-	// columns as "" (not NULL) for pr/review refs and unmatched keys.
+	// Resolve each ref todo to its in-app context (if one exists) so the board
+	// can deep-link into it.
+	//   - jira refs: via jira_issues -> contexts. A jira_key can appear under
+	//     several contexts (UNIQUE is per (context_id, jira_key)); pick one
+	//     deterministically via MIN(context_id), mirroring GetBoardJiraAssignments.
+	//   - pr refs: via vcs_pull_requests -> context_vcs_branches -> contexts (the
+	//     PR is opened on a branch attached to the context). ref_key is
+	//     AI-generated, so match both "name#num" and "owner/name#num" forms.
+	// COALESCE keeps the columns as "" (not NULL) for review refs and unmatched keys.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT t.id, t.kind, t.title, t.rationale, t.ref_type, t.ref_key, t.priority,
 		       t.position, t.status, t.source, t.created_at, t.updated_at,
-		       COALESCE(ji.context_id, ''), COALESCE(c.key, '')
+		       COALESCE(ji.context_id, pr.context_id, ''),
+		       COALESCE(jc.key, pc.key, '')
 		FROM ai_todo_items t
 		LEFT JOIN (SELECT jira_key, MIN(context_id) AS context_id FROM jira_issues GROUP BY jira_key) ji
 		       ON t.ref_type = 'jira' AND ji.jira_key = t.ref_key
-		LEFT JOIN contexts c ON c.id = ji.context_id
+		LEFT JOIN contexts jc ON jc.id = ji.context_id
+		LEFT JOIN (
+			SELECT b.context_id AS context_id,
+			       r.name || '#' || p.pr_number AS short_ref,
+			       r.owner || '/' || r.name || '#' || p.pr_number AS full_ref
+			FROM vcs_pull_requests p
+			JOIN vcs_repos r ON r.id = p.repo_id
+			JOIN context_vcs_branches b ON b.id = p.branch_id
+		) pr ON t.ref_type = 'pr' AND t.ref_key IN (pr.short_ref, pr.full_ref)
+		LEFT JOIN contexts pc ON pc.id = pr.context_id
 		ORDER BY t.position ASC, t.created_at ASC
 	`)
 	if err != nil {

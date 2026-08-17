@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { RefreshCw, Search, Trash2 } from "lucide-react";
 import { GetAppLogs, ClearAppLogs } from "../../wailsjs/go/main/App";
 import type { AppLogEntry } from "../types";
 import { AppLogDetailModal } from "../components/AppLogDetailModal";
@@ -11,6 +11,17 @@ const LEVELS = [
   { value: "warn", label: "Warn" },
   { value: "error", label: "Error" },
 ];
+
+const SORTS = [
+  { value: "date", label: "Date" },
+  { value: "level", label: "Level" },
+  { value: "caller", label: "Caller" },
+] as const;
+
+type SortKey = (typeof SORTS)[number]["value"];
+
+// Higher rank surfaces first when sorting by level (most severe on top).
+const LEVEL_RANK: Record<string, number> = { error: 4, warn: 3, info: 2, debug: 1 };
 
 const LIMIT = 200;
 
@@ -34,6 +45,8 @@ export default function AppLogsPage() {
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [levelFilter, setLevelFilter] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("date");
+  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AppLogEntry | null>(null);
   const [error, setError] = useState("");
 
@@ -66,15 +79,59 @@ export default function AppLogsPage() {
     }
   };
 
-  const visible = levelFilter
-    ? entries.filter((e) => e.level === levelFilter)
-    : entries;
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = entries.filter((e) => {
+      if (levelFilter && e.level !== levelFilter) return false;
+      if (q) {
+        const caller = (e.caller ?? "").toLowerCase();
+        const msg = (e.msg ?? "").toLowerCase();
+        if (!caller.includes(q) && !msg.includes(q)) return false;
+      }
+      return true;
+    });
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "level") {
+        const d = (LEVEL_RANK[b.level] ?? 0) - (LEVEL_RANK[a.level] ?? 0);
+        if (d !== 0) return d;
+        return b.ts - a.ts;
+      }
+      if (sortBy === "caller") {
+        const d = (a.caller ?? "").localeCompare(b.caller ?? "");
+        if (d !== 0) return d;
+        return b.ts - a.ts;
+      }
+      // date: newest first
+      return b.ts - a.ts;
+    });
+  }, [entries, levelFilter, query, sortBy]);
 
   return (
     <div className="page">
       <div className="topbar">
-        <div style={{ flex: 1 }}>
+        <div>
           <h1 style={{ fontSize: 16, margin: 0 }}>App Logs</h1>
+        </div>
+        <div className="settings-logs-search" style={{ flex: 1 }}>
+          <Search size={14} className="settings-logs-search-icon" />
+          <input
+            type="search"
+            placeholder="Search caller or message…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="settings-logs-filter-bar" style={{ margin: 0 }}>
+          <label htmlFor="app-logs-sort">Sort</label>
+          <select
+            id="app-logs-sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
         </div>
         <div className="settings-logs-filter-bar" style={{ margin: 0 }}>
           <label htmlFor="app-logs-level">Level</label>

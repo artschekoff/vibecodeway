@@ -23,14 +23,10 @@ type TodoInput struct {
 	Now                 time.Time
 }
 
-// terminalTicketStatuses are Jira statuses meaning the work is finished. Tickets in
-// these states are noise on the board — they are decluttered before the AI sees them
-// and never become implement todos.
-var terminalTicketStatuses = map[string]bool{
-	"done": true, "closed": true, "resolved": true, "cancelled": true, "canceled": true,
-	"won't do": true, "wont do": true, "duplicate": true, "merged": true, "deployed": true,
-	"released": true, "verified": true, "shipped": true,
-}
+// Tickets whose status is terminal (done/closed/…) are noise on the board — they
+// are decluttered before the AI sees them and never become implement todos. The
+// canonical "done" taxonomy lives in the store package (appstore.IsTerminalTicketStatus)
+// so board decluttering, context auto-archival, and the deactivate guard agree.
 
 // downstreamTicketStatuses are states where the build work is done and the ticket is
 // waiting on someone else (QA, staging, merge, review). These stay on the board so the
@@ -52,8 +48,7 @@ func normTicketStatus(s string) string { return strings.ToLower(strings.TrimSpac
 func computeImplementTickets(issues []appstore.BoardJiraAssignment) []string {
 	var out []string
 	for _, it := range issues {
-		st := normTicketStatus(it.Status)
-		if terminalTicketStatuses[st] || downstreamTicketStatuses[st] {
+		if appstore.IsTerminalTicketStatus(it.Status) || downstreamTicketStatuses[normTicketStatus(it.Status)] {
 			continue
 		}
 		out = append(out, it.Key)
@@ -67,7 +62,7 @@ func computeImplementTickets(issues []appstore.BoardJiraAssignment) []string {
 func activeTickets(issues []appstore.BoardJiraAssignment) []appstore.BoardJiraAssignment {
 	out := make([]appstore.BoardJiraAssignment, 0, len(issues))
 	for _, it := range issues {
-		if terminalTicketStatuses[normTicketStatus(it.Status)] {
+		if appstore.IsTerminalTicketStatus(it.Status) {
 			continue
 		}
 		out = append(out, it)

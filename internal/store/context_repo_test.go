@@ -25,6 +25,27 @@ func findByID(list []Context, id string) *Context {
 	return nil
 }
 
+// Background refresh enumerates contexts via ListContexts(ctx, false); archived
+// (deactivated) contexts must be excluded so they are never re-synced.
+func TestListContextsExcludesArchivedWhenNotIncluded(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+	active, err := s.CreateContext(ctx, "active-ctx", org.ID)
+	require.NoError(t, err)
+	archived, err := s.CreateContext(ctx, "archived-ctx", org.ID)
+	require.NoError(t, err)
+	_, err = s.ArchiveContexts(ctx, []string{archived.ID})
+	require.NoError(t, err)
+
+	list, err := s.ListContexts(ctx, false)
+	require.NoError(t, err)
+	assert.NotNil(t, findByID(list, active.ID), "active context should be listed")
+	assert.Nil(t, findByID(list, archived.ID), "archived context must be excluded")
+}
+
 func TestListContextsImportanceAverage(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

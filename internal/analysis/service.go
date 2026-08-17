@@ -1664,9 +1664,25 @@ func (s *Service) attachedRepoLines(ctx context.Context, contextID string) []str
 		if b.Branch != "" {
 			line += " (branch " + b.Branch + ")"
 		}
+		line += repoInfoSuffix(repo.FullName(), repo.Label, repo.Description)
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+// repoInfoSuffix formats the "Repository Info (for AI context)" hint appended to
+// an attached-repo line: the repo identity plus its optional label and
+// description, so the coding agent knows what code lives at the path (e.g. which
+// worktree is the backend vs. the frontend). Fields that are empty are omitted.
+func repoInfoSuffix(fullName, label, description string) string {
+	suffix := " — " + fullName
+	if l := strings.TrimSpace(label); l != "" {
+		suffix += " [" + l + "]"
+	}
+	if d := strings.TrimSpace(description); d != "" {
+		suffix += ": " + d
+	}
+	return suffix
 }
 
 // BuildAgentTask assembles the instruction string handed to an external

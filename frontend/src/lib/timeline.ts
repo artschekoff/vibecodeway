@@ -108,6 +108,13 @@ export function toLaneEvent(e: {
   };
 }
 
+// "2026-08-13" → "13.08". Rows are indented to their day column, but a long
+// summary overflows past it, so each row still states its own day.
+export function formatDayShort(key: string): string {
+  const [, mm, dd] = key.split("-");
+  return `${dd}.${mm}`;
+}
+
 export function eventsInWindow(events: LaneEvent[], columns: DayColumn[]): LaneEvent[] {
   const keys = new Set(columns.map((c) => c.key));
   return events.filter((e) => keys.has(e.dayKey));

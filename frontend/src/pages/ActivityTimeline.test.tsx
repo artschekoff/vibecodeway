@@ -9,6 +9,11 @@ vi.mock("../../wailsjs/go/main/App", () => ({
   GetContextRelations: vi.fn(),
 }));
 
+const openContextTab = vi.fn();
+vi.mock("../contexts/TabContext", () => ({
+  useTabContext: () => ({ openContextTab }),
+}));
+
 import {
   ListOrganizations, ListContextsByOrg, ListEvents, ListWorkflowStatuses, GetContextRelations,
 } from "../../wailsjs/go/main/App";
@@ -68,5 +73,12 @@ describe("ActivityTimeline", () => {
       const titles = Array.from(container.querySelectorAll(".timeline-connectors title")).map((t) => t.textContent);
       expect(titles).toContain("blocked-by → db");
     });
+  });
+
+  it("clicking a lane key opens that context in a tab", async () => {
+    render(<ActivityTimeline />);
+    await waitFor(() => expect(screen.getByText("auth")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "auth" }));
+    expect(openContextTab).toHaveBeenCalledWith("c1", "auth", "Acme", "org1");
   });
 });

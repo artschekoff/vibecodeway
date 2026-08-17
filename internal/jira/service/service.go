@@ -1101,6 +1101,18 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		svc.logger.Warn("refresh: touch context failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 
+	// Auto-deactivate once every Jira ticket is terminal: the work is finished, so
+	// the context should leave the board and stop being background-refreshed.
+	// ContextAllTicketsDone is false for contexts with no tickets, so those are
+	// never archived on this basis.
+	if allDone, err := svc.store.ContextAllTicketsDone(ctx, contextID); err != nil {
+		svc.logger.Warn("refresh: all-tickets-done check failed", zap.String("contextID", contextID), zap.Error(err))
+	} else if allDone {
+		if _, err := svc.store.ArchiveContexts(ctx, []string{contextID}); err != nil {
+			svc.logger.Warn("refresh: auto-archive failed", zap.String("contextID", contextID), zap.Error(err))
+		}
+	}
+
 	return result, nil
 }
 

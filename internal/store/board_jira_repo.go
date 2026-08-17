@@ -98,6 +98,9 @@ func (s *Store) ListBoardJiraAssignments(ctx context.Context, orderBy string) ([
 		LEFT JOIN (SELECT jira_key, MIN(context_id) AS context_id FROM jira_issues GROUP BY jira_key) ji
 		       ON ji.jira_key = b.jira_key
 		LEFT JOIN contexts c ON c.id = ji.context_id
+		-- Drop assignments whose (deterministically-picked) context is archived;
+		-- keep unlinked assignments (no context) untouched.
+		WHERE (ji.context_id IS NULL OR c.status = 'active')
 		`+jiraAssignmentsOrderBy(orderBy))
 	if err != nil {
 		return nil, fmt.Errorf("list board jira: %w", err)

@@ -118,6 +118,10 @@ export function ConfirmAction(arg1, arg2) {
   return window['go']['main']['App']['ConfirmAction'](arg1, arg2);
 }
 
+export function CountOpenTickets(arg1) {
+  return window['go']['main']['App']['CountOpenTickets'](arg1);
+}
+
 export function CreateContext(arg1, arg2) {
   return window['go']['main']['App']['CreateContext'](arg1, arg2);
 }

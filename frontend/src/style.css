@@ -6258,6 +6258,34 @@ select {
   font-size: 0.8125rem;
 }
 
+.settings-logs-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 320px;
+}
+
+.settings-logs-search-icon {
+  position: absolute;
+  left: 0.5rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.settings-logs-search input {
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem 0.25rem 1.75rem;
+  font-size: 0.8125rem;
+}
+
+.settings-logs-search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
 .settings-logs-table {
   width: 100%;
   border-collapse: collapse;
@@ -6566,7 +6594,15 @@ select {
   background: var(--surface); border-right: 1px solid var(--border);
   padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; justify-content: flex-start;
 }
-.timeline-lane-key { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Opens the context — underlined at rest so it reads as a link, not a heading. */
+.timeline-lane-key {
+  font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+  background: none; border: 0; padding: 0; text-align: left; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+.timeline-lane-key:hover { color: var(--accent); text-decoration-color: var(--accent); }
 .timeline-status-badge {
   align-self: flex-start; font-size: 11px; color: #fff; padding: 2px 8px;
   border-radius: var(--radius-sm); text-transform: capitalize;
@@ -6586,6 +6622,7 @@ select {
 .timeline-lane-events { flex: 1 1 auto; overflow-y: auto; padding: 4px 10px; }
 .timeline-event-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 2px 0; }
 .timeline-event-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.timeline-event-day { color: var(--text-muted); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .timeline-event-summary { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
 .timeline-event-meta { color: var(--text-muted); flex: 0 0 auto; }
 .timeline-empty { color: var(--text-muted); font-size: 12px; padding: 6px 0; }
@@ -6818,12 +6855,31 @@ select {
 
 .hotkey-help-row {
   display: grid;
-  grid-template-columns: 90px 1fr 1fr;
+  grid-template-columns: 90px 1fr 1fr auto;
   gap: 10px;
   align-items: center;
   padding: 6px 8px;
   border-radius: 8px;
   font-size: 13px;
+}
+
+.hotkey-help-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  min-height: 22px;
+}
+
+.hotkey-help-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hotkey-help-listening {
+  color: var(--accent);
+  font-style: italic;
 }
 
 .hotkey-help-row--highlighted {

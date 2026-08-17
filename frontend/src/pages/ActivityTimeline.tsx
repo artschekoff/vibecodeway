@@ -10,6 +10,7 @@ import {
   WINDOW_DAYS,
 } from "../lib/timeline";
 import { useTimelineData } from "../hooks/useTimelineData";
+import { useTabContext } from "../contexts/TabContext";
 import TimelineLane from "../components/timeline/TimelineLane";
 
 interface Org {
@@ -18,6 +19,7 @@ interface Org {
 }
 
 export default function ActivityTimeline() {
+  const { openContextTab } = useTabContext();
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [orgId, setOrgId] = useState<string>("");
   // `today` is captured once so the window is stable across re-renders.
@@ -149,6 +151,14 @@ export default function ActivityTimeline() {
                     columns={columns}
                     statusLabel={info?.label ?? lane.status}
                     statusColor={info?.color ?? ""}
+                    onOpen={() =>
+                      openContextTab(
+                        lane.contextId,
+                        lane.contextKey,
+                        orgs.find((o) => o.id === orgId)?.name,
+                        orgId,
+                      )
+                    }
                   />
                 );
               })

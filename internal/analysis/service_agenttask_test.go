@@ -75,6 +75,25 @@ func TestBuildAgentTask(t *testing.T) {
 	assert.Contains(t, out, "/tmp/repoA")  // attached repo path
 }
 
+// TestBuildAgentTask_includesRepoInfo proves the "Repository Info" (owner/name,
+// label, description) is surfaced in the agent task so the coding agent knows
+// what each attached repo/worktree is (e.g. backend / frontend).
+func TestBuildAgentTask_includesRepoInfo(t *testing.T) {
+	svc, contextID := newAgentTaskTestService(t)
+
+	branches, err := svc.vcsStore.Branches.ListBranches(context.Background(), contextID)
+	require.NoError(t, err)
+	require.NotEmpty(t, branches)
+	require.NoError(t, svc.vcsStore.Repos.UpdateRepoMeta(context.Background(),
+		branches[0].RepoID, "backend", "Billing service for practices", ""))
+
+	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")
+	require.NoError(t, err)
+	assert.Contains(t, out, "acme/repoA")                  // repo identity
+	assert.Contains(t, out, "backend")                     // repo label hint
+	assert.Contains(t, out, "Billing service for practices") // repo description hint
+}
+
 // TestBuildAgentTask_multiRepo proves the attached-repos loop appends every
 // qualifying repo rather than stopping at (or returning) the first match —
 // unlike contextRepoPath, which intentionally stops at the first repo.

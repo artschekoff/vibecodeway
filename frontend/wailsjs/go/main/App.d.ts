@@ -68,6 +68,8 @@ export function CommitStepOutput(arg1:string,arg2:number,arg3:string,arg4:string
 
 export function ConfirmAction(arg1:string,arg2:string):Promise<boolean>;
 
+export function CountOpenTickets(arg1:string):Promise<number>;
+
 export function CreateContext(arg1:string,arg2:string):Promise<store.Context>;
 
 export function CreateContextEventHook(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.ContextEventHook>;

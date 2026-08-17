@@ -157,7 +157,7 @@ func (s *Store) ListBoardAssignments(ctx context.Context, name string) ([]BoardA
 		       pa.generated_at, pa.analyzed_through, pa.is_outdated, pa.updated_at
 		FROM context_person_assignments pa
 		JOIN contexts c ON c.id = pa.context_id
-		WHERE (? = '' OR pa.name = ?)
+		WHERE (? = '' OR pa.name = ?) AND c.status = 'active'
 		ORDER BY pa.is_outdated DESC, pa.updated_at DESC
 	`
 	rows, err := s.db.QueryContext(ctx, query, name, name)
@@ -196,7 +196,7 @@ func (s *Store) ListBoardPRsByAuthor(ctx context.Context, author string) ([]Boar
 		JOIN context_vcs_branches b ON b.id = p.branch_id
 		JOIN contexts c ON c.id = b.context_id
 		JOIN vcs_repos r ON r.id = p.repo_id
-		WHERE p.author = ? AND p.state = 'open'
+		WHERE p.author = ? AND p.state = 'open' AND c.status = 'active'
 		ORDER BY p.pr_updated_at DESC
 	`, author)
 	if err != nil {
