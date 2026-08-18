@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, SetProductivitySettings, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
 import type { store } from "../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
@@ -86,6 +86,8 @@ export default function SettingsPage() {
   const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
   const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
   const [prStaleThreshold, setPrStaleThreshold] = useState(7);
+  const [workdayHours, setWorkdayHours] = useState(8);
+  const [taskHours, setTaskHours] = useState(2);
   const [terminalAppPath, setTerminalAppPath] = useState("");
   const [codingAgentApp, setCodingAgentApp] = useState("cursor");
   const [autoLinkRepos, setAutoLinkRepos] = useState(true);
@@ -138,6 +140,8 @@ export default function SettingsPage() {
           setReviewsRefetchEnabled(typedAppS.reviewsRefetchEnabled);
           setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
           setPrStaleThreshold(typedAppS.prStaleThresholdDays ?? 7);
+          setWorkdayHours(typedAppS.workdayHours ?? 8);
+          setTaskHours(typedAppS.taskHours ?? 2);
           setTerminalAppPath(typedAppS.terminalAppPath ?? "");
           setCodingAgentApp(typedAppS.codingAgentApp ?? "cursor");
           setAutoLinkRepos(typedAppS.autoLinkReposOnContextCreate ?? true);
@@ -209,12 +213,15 @@ export default function SettingsPage() {
       );
       await SetAutoLinkRepos(autoLinkRepos);
       await SetPRStaleThresholdDays(Math.max(1, prStaleThreshold));
+      await SetProductivitySettings(Math.max(0.5, workdayHours), Math.max(0.25, taskHours));
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
       setTerminalAppPath(updated.terminalAppPath ?? "");
       setCodingAgentApp(updated.codingAgentApp ?? "cursor");
       setAutoLinkRepos(updated.autoLinkReposOnContextCreate ?? true);
       setPrStaleThreshold(updated.prStaleThresholdDays ?? 7);
+      setWorkdayHours(updated.workdayHours ?? 8);
+      setTaskHours(updated.taskHours ?? 2);
       setRefetchMessage("Saved.");
     } catch (e) {
       setError(String(e));
@@ -491,6 +498,41 @@ export default function SettingsPage() {
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                 A pull request awaiting review beyond this many days is flagged stale in TODO NEXT.
+              </div>
+            </div>
+
+            {/* Theoretical productivity model (Closed Tasks dashboard) */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <label style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  Workday (hours)
+                </label>
+                <input
+                  type="number"
+                  className="passphrase-input"
+                  min={0.5}
+                  max={24}
+                  step={0.5}
+                  value={workdayHours}
+                  onChange={(e) => setWorkdayHours(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+                <label style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  Hours per task
+                </label>
+                <input
+                  type="number"
+                  className="passphrase-input"
+                  min={0.25}
+                  max={24}
+                  step={0.25}
+                  value={taskHours}
+                  onChange={(e) => setTaskHours(Number(e.target.value))}
+                  style={{ width: 80 }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                The Closed Tasks dashboard assumes every closed task costs this many hours and that a full day is this long.
               </div>
             </div>
 
