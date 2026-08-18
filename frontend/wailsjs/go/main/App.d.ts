@@ -30,7 +30,7 @@ export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo
 
 export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.Event>;
 
-export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<vcsstore.ContextVCSBranch>;
+export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean):Promise<vcsstore.ContextVCSBranch>;
 
 export function AdjustTodoNext(arg1:string):Promise<Array<store.AITodoItem>>;
 
@@ -194,6 +194,8 @@ export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.Reason
 
 export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
+export function GetProductivityStats():Promise<any>;
+
 export function GetRepoFileTree(arg1:string):Promise<Array<string>>;
 
 export function GetStatusLog(arg1:string):Promise<Array<store.StatusLogEntry>>;
@@ -235,6 +237,8 @@ export function ListContextsByOrg(arg1:string):Promise<Array<store.Context>>;
 export function ListEvents(arg1:string):Promise<Array<store.Event>>;
 
 export function ListGlobalEventHooks():Promise<Array<store.GlobalEventHook>>;
+
+export function ListKnownJiraStatuses():Promise<Array<string>>;
 
 export function ListLocalBranches(arg1:string):Promise<Array<vcs.LocalBranch>>;
 
@@ -431,6 +435,8 @@ export function SetJiraConfig(arg1:string,arg2:string):Promise<jirastore.JiraPro
 export function SetOrganizationsOrder(arg1:Array<string>):Promise<void>;
 
 export function SetPRStaleThresholdDays(arg1:number):Promise<void>;
+
+export function SetProductivitySettings(arg1:number,arg2:number):Promise<void>;
 
 export function SetSlackConfig(arg1:string,arg2:string,arg3:string):Promise<slackstore.SlackProvider>;
 

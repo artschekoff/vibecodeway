@@ -42,8 +42,8 @@ export function AddUserEvent(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddUserEvent'](arg1, arg2, arg3);
 }
 
-export function AddVCSBranch(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['AddVCSBranch'](arg1, arg2, arg3, arg4, arg5);
+export function AddVCSBranch(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['AddVCSBranch'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function AdjustTodoNext(arg1) {
@@ -370,6 +370,10 @@ export function GetPersonAssignments(arg1) {
   return window['go']['main']['App']['GetPersonAssignments'](arg1);
 }
 
+export function GetProductivityStats() {
+  return window['go']['main']['App']['GetProductivityStats']();
+}
+
 export function GetRepoFileTree(arg1) {
   return window['go']['main']['App']['GetRepoFileTree'](arg1);
 }
@@ -452,6 +456,10 @@ export function ListEvents(arg1) {
 
 export function ListGlobalEventHooks() {
   return window['go']['main']['App']['ListGlobalEventHooks']();
+}
+
+export function ListKnownJiraStatuses() {
+  return window['go']['main']['App']['ListKnownJiraStatuses']();
 }
 
 export function ListLocalBranches(arg1) {
@@ -844,6 +852,10 @@ export function SetOrganizationsOrder(arg1) {
 
 export function SetPRStaleThresholdDays(arg1) {
   return window['go']['main']['App']['SetPRStaleThresholdDays'](arg1);
+}
+
+export function SetProductivitySettings(arg1, arg2) {
+  return window['go']['main']['App']['SetProductivitySettings'](arg1, arg2);
 }
 
 export function SetSlackConfig(arg1, arg2, arg3) {
