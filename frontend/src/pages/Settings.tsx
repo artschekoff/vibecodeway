@@ -213,7 +213,9 @@ export default function SettingsPage() {
       );
       await SetAutoLinkRepos(autoLinkRepos);
       await SetPRStaleThresholdDays(Math.max(1, prStaleThreshold));
-      await SetProductivitySettings(Math.max(0.5, workdayHours), Math.max(0.25, taskHours));
+      // Clamping (including the upper bound) is enforced server-side in
+      // SetProductivitySettings — the single authority for this policy.
+      await SetProductivitySettings(workdayHours, taskHours);
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
       setTerminalAppPath(updated.terminalAppPath ?? "");
@@ -514,7 +516,7 @@ export default function SettingsPage() {
                   max={24}
                   step={0.5}
                   value={workdayHours}
-                  onChange={(e) => setWorkdayHours(Number(e.target.value))}
+                  onChange={(e) => setWorkdayHours(Math.max(0.5, Number(e.target.value)))}
                   style={{ width: 80 }}
                 />
                 <label style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
@@ -527,7 +529,7 @@ export default function SettingsPage() {
                   max={24}
                   step={0.25}
                   value={taskHours}
-                  onChange={(e) => setTaskHours(Number(e.target.value))}
+                  onChange={(e) => setTaskHours(Math.max(0.25, Number(e.target.value)))}
                   style={{ width: 80 }}
                 />
               </div>

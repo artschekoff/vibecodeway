@@ -68,4 +68,29 @@ describe("ProductivityPage", () => {
       ).toBeInTheDocument()
     );
   });
+
+  it("shows an empty-history explanation instead of the headline on a fresh database", async () => {
+    mockStats.mockResolvedValue({
+      ...baseStats,
+      today: 0,
+      hoursToday: 0,
+      tasksToNorm: 4,
+      tasksToBeatYesterday: 0,
+      tasksToBeatWeek: 0,
+      tasksToBeatMonth: 0,
+      daily: [
+        { day: "2026-08-15", count: 0 },
+        { day: "2026-08-16", count: 0 },
+        { day: "2026-08-17", count: 0 },
+      ],
+    });
+    render(<ProductivityPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/history starts now/i)).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/You closed 0 tasks today/)).not.toBeInTheDocument();
+    // Cards and bars stay visible below the explanation.
+    expect(screen.getByTestId("baseline-yesterday")).toBeInTheDocument();
+    expect(screen.getAllByTestId("productivity-bar")).toHaveLength(3);
+  });
 });
