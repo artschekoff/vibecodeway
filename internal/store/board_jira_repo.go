@@ -47,6 +47,30 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Snapshot the stored statuses before they are overwritten: an open →
+	// terminal transition here is the only "task closed" signal the app gets,
+	// since Jira's own resolution date is never fetched.
+	prevStatus := make(map[string]string)
+	prevRows, err := tx.QueryContext(ctx, `SELECT jira_key, status FROM board_jira_assignments`)
+	if err != nil {
+		return fmt.Errorf("read previous board jira statuses: %w", err)
+	}
+	for prevRows.Next() {
+		var key, status string
+		if err := prevRows.Scan(&key, &status); err != nil {
+			_ = prevRows.Close()
+			return fmt.Errorf("scan previous board jira status: %w", err)
+		}
+		prevStatus[key] = status
+	}
+	if err := prevRows.Err(); err != nil {
+		_ = prevRows.Close()
+		return fmt.Errorf("read previous board jira statuses: %w", err)
+	}
+	if err := prevRows.Close(); err != nil {
+		return fmt.Errorf("close previous board jira statuses: %w", err)
+	}
+
 	// Delete keys no longer assigned.
 	if len(issues) == 0 {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM board_jira_assignments`); err != nil {
@@ -75,11 +99,21 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 				issue_type = excluded.issue_type,
 				priority = excluded.priority,
 				created = excluded.created,
-				org = excluded.org,
+				-- Jira search can't return the org custom field (acli allowlist), so an
+				-- empty incoming org means "unknown", not "cleared": keep what we have.
+				org = COALESCE(NULLIF(excluded.org, ''), board_jira_assignments.org),
 				fetched_at = excluded.fetched_at`,
 			it.Key, it.Summary, it.Status, it.IssueType, it.Priority, it.Created, it.Org, now)
 		if err != nil {
 			return fmt.Errorf("upsert board jira %s: %w", it.Key, err)
+		}
+
+		// Only a *transition* counts. An issue that is already terminal the first
+		// time we see it has no observed close date and is skipped.
+		if old, seen := prevStatus[it.Key]; seen && !IsTerminalTicketStatus(old) && IsTerminalTicketStatus(it.Status) {
+			if err := recordTaskCompletion(ctx, tx, it, now); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()
