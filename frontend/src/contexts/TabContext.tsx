@@ -26,6 +26,7 @@ interface TabContextValue {
   openAskTab: () => void;
   openTimelineTab: () => void;
   openActivityFeedTab: () => void;
+  openProductivityTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
   closeOtherTabs: (keepId: string) => void;
@@ -228,6 +229,13 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, [focusOrOpen]);
 
+  const openProductivityTab = useCallback(() => {
+    focusOrOpen(
+      (t) => t.type === "productivity",
+      () => ({ id: newTabId(), type: "productivity" as const, title: "Closed Tasks", pinned: false })
+    );
+  }, [focusOrOpen]);
+
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId);
@@ -375,6 +383,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openAskTab,
         openTimelineTab,
         openActivityFeedTab,
+        openProductivityTab,
         closeTab,
         forceCloseTab,
         closeOtherTabs,
