@@ -146,6 +146,18 @@ describe("openActivityFeedTab", () => {
   });
 });
 
+describe("openProductivityTab", () => {
+  it("opens and focuses a single productivity tab", () => {
+    const { result } = renderHook(() => useTabContext(), { wrapper });
+    act(() => result.current.openProductivityTab());
+    expect(result.current.tabs.filter((t) => t.type === "productivity")).toHaveLength(1);
+    expect(result.current.tabs.find((t) => t.type === "productivity")?.title).toBe("Closed Tasks");
+
+    act(() => result.current.openProductivityTab());
+    expect(result.current.tabs.filter((t) => t.type === "productivity")).toHaveLength(1);
+  });
+});
+
 describe("forceCloseTab", () => {
   it("closes a pinned tab that closeTab would ignore", () => {
     const { result } = renderHook(() => useTabContext(), { wrapper });

@@ -396,6 +396,8 @@ export interface AppSettings {
   codingAgentApp: string;
   autoLinkReposOnContextCreate: boolean;
   prStaleThresholdDays: number;
+  workdayHours: number;
+  taskHours: number;
   updatedAt: string;
 }
 
@@ -460,6 +462,8 @@ export interface VCSBranch {
   branch: string;
   label: string;
   createdAt: string;
+  /** false = link the branch but never resolve its PRs (e.g. tracking main). */
+  autodetectPr: boolean;
   repo?: VCSRepo;
 }
 
@@ -619,7 +623,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "editor";
+export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "productivity" | "editor";
 
 export type ActivitySource = "jira" | "github";
 
@@ -668,4 +672,26 @@ export interface Tab {
   initialCwd?: string;  // editor tab: worktree path to open the terminal in initially
   title: string;
   pinned: boolean;
+}
+
+// --- Productivity dashboard ---
+
+export interface DayCount {
+  day: string;  // local YYYY-MM-DD
+  count: number;
+}
+
+export interface ProductivityStats {
+  today: number;
+  yesterday: number;
+  weekAvg: number;
+  monthAvg: number;
+  daily: DayCount[];
+  workdayHours: number;
+  taskHours: number;
+  hoursToday: number;
+  tasksToNorm: number;
+  tasksToBeatYesterday: number;
+  tasksToBeatWeek: number;
+  tasksToBeatMonth: number;
 }

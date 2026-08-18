@@ -29,6 +29,12 @@ func (a *App) GetAppSettings() (*appstore.AppSettings, error) {
 
 // SetAppSettings persists new application settings and immediately restarts the
 // background refresh goroutine so changes take effect without an app restart.
+//
+// This binding only owns the six fields listed below (context/reviews refetch,
+// terminal app path, coding agent). Read-modify-write on the persisted record so
+// every other field (EditorSettings, WorkdayHours, TaskHours, ...) survives —
+// building a fresh struct here previously zeroed anything this binding doesn't
+// know about.
 func (a *App) SetAppSettings(
 	contextEnabled bool, contextIntervalMin int,
 	reviewsEnabled bool, reviewsIntervalMin int,
@@ -42,23 +48,23 @@ func (a *App) SetAppSettings(
 		reviewsIntervalMin = 1
 	}
 	codingAgentApp = strings.TrimSpace(codingAgentApp)
-	current, _ := a.db.GetAppSettings(a.ctx)
-	settings := appstore.AppSettings{
-		ContextRefetchEnabled:     contextEnabled,
-		ContextRefetchIntervalMin: contextIntervalMin,
-		ReviewsRefetchEnabled:     reviewsEnabled,
-		ReviewsRefetchIntervalMin: reviewsIntervalMin,
-		TerminalAppPath:           terminalAppPath,
-		CodingAgentApp:            codingAgentApp,
-	}
-	if current != nil {
-		settings.AutoLinkReposOnContextCreate = current.AutoLinkReposOnContextCreate
-		settings.PRStaleThresholdDays = current.PRStaleThresholdDays
-	}
-	if err := a.db.SetAppSettings(a.ctx, settings); err != nil {
+	current, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
 		return err
 	}
-	a.restartBackgroundRefresh(settings)
+	if current == nil {
+		current = &appstore.AppSettings{}
+	}
+	current.ContextRefetchEnabled = contextEnabled
+	current.ContextRefetchIntervalMin = contextIntervalMin
+	current.ReviewsRefetchEnabled = reviewsEnabled
+	current.ReviewsRefetchIntervalMin = reviewsIntervalMin
+	current.TerminalAppPath = terminalAppPath
+	current.CodingAgentApp = codingAgentApp
+	if err := a.db.SetAppSettings(a.ctx, *current); err != nil {
+		return err
+	}
+	a.restartBackgroundRefresh(*current)
 	return nil
 }
 
@@ -73,6 +79,31 @@ func (a *App) SetPRStaleThresholdDays(days int) error {
 		return err
 	}
 	current.PRStaleThresholdDays = days
+	return a.db.SetAppSettings(a.ctx, *current)
+}
+
+// SetProductivitySettings sets the theoretical workday length and the assumed
+// cost of one closed task, both in hours. This is the single authority for the
+// clamp policy: workdayHours is clamped to [0.5, 24] and taskHours to [0.25, 24].
+// Server-side is the only layer a caller cannot bypass, so the UI and Compute's
+// own zero-guard defer to the bounds enforced here.
+func (a *App) SetProductivitySettings(workdayHours, taskHours float64) error {
+	if workdayHours < 0.5 {
+		workdayHours = 0.5
+	} else if workdayHours > 24 {
+		workdayHours = 24
+	}
+	if taskHours < 0.25 {
+		taskHours = 0.25
+	} else if taskHours > 24 {
+		taskHours = 24
+	}
+	current, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return err
+	}
+	current.WorkdayHours = workdayHours
+	current.TaskHours = taskHours
 	return a.db.SetAppSettings(a.ctx, *current)
 }
 
