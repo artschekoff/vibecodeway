@@ -83,7 +83,9 @@ func (a *App) GetSupportedPlatforms() []vcsstore.VCSPlatformInfo {
 // AddVCSBranch links a repository (and optionally a branch) to a context.
 // ownerRepo must be in "owner/repo" format. branch may be empty to track all PRs for the repo.
 // label is an optional human-readable tag (e.g. "api", "data") stored on the branch link.
-func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch, label string) (*vcsstore.ContextVCSBranch, error) {
+// autodetectPR=false links the branch without ever resolving its pull requests —
+// what you want for a long-lived branch like main.
+func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch, label string, autodetectPR bool) (*vcsstore.ContextVCSBranch, error) {
 	p := vcs.Platform(platform)
 	if !vcs.IsPlatformEnabled(p) {
 		return nil, fmt.Errorf("platform %q is not supported yet", platform)
@@ -100,7 +102,7 @@ func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch, label string)
 		return nil, fmt.Errorf("ensuring repo: %w", err)
 	}
 
-	b, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, branch, label)
+	b, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, branch, label, autodetectPR)
 	if err != nil {
 		return nil, fmt.Errorf("adding branch: %w", err)
 	}
@@ -148,7 +150,7 @@ func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int)
 		return fmt.Errorf("ensuring repo: %w", err)
 	}
 
-	branch, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, pr.HeadBranch, "")
+	branch, err := a.vcsStore.Branches.AddBranch(a.ctx, contextID, repo.ID, pr.HeadBranch, "", true)
 	if err != nil {
 		return fmt.Errorf("adding branch link for PR #%d: %w", prNumber, err)
 	}
@@ -1233,7 +1235,7 @@ func (a *App) autoLinkReposOnce(contextID string) (int, error) {
 	}
 	added := 0
 	for _, m := range matches {
-		if _, err := a.AddVCSBranch(contextID, m.Platform, m.OwnerRepo, m.Branch, m.Label); err != nil {
+		if _, err := a.AddVCSBranch(contextID, m.Platform, m.OwnerRepo, m.Branch, m.Label, true); err != nil {
 			a.logger.Sugar().Warnf("AutoLinkRepos: add branch failed: %s", err.Error())
 			continue
 		}

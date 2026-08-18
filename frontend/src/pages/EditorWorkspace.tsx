@@ -147,7 +147,12 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         <div ref={(el) => registerZone("terminal", el)} tabIndex={-1}
           className={activeZone === "terminal" ? "zone--active" : undefined}
           style={{ height: terminalHeight, borderTop: "1px solid var(--border)" }}>
-          {cwd ? <TerminalPanel spawnCwd={cwd} contextName={contextKey} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined} /> : <div style={{ fontSize: 12, padding: 12 }}>No repo path on disk.</div>}
+          {/* Mounted unconditionally: TerminalPanel owns the ⌘T hotkey handlers, so
+              gating it on `cwd` made ⌘T a silent no-op until GetContextChanges
+              resolved (and forever for a context with no repo on disk). The panel
+              handles an empty spawnCwd itself and seeds its first terminal once
+              a path arrives. */}
+          <TerminalPanel spawnCwd={cwd} contextName={contextKey} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined} />
         </div>
       </div>
       <ResizeHandle

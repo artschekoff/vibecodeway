@@ -31,6 +31,7 @@ type commentLister interface {
 type JiraAPI interface {
 	commentLister
 	ViewIssue(ctx context.Context, key string) (*jira.IssueDetail, error)
+	IssueOrg(ctx context.Context, key string) (string, error)
 	Search(ctx context.Context, jql string) ([]jira.SearchResult, error)
 	TransitionIssue(ctx context.Context, key, status string) error
 	AuthStatus(ctx context.Context) (string, error)
@@ -1394,6 +1395,15 @@ func (svc *ContextService) TransitionJiraIssue(ctx context.Context, key, status 
 		svc.logger.Warn("transition: local status update failed", zap.String("key", key), zap.Error(err))
 	}
 	return nil
+}
+
+// IssueOrg returns an issue's org/scope custom field. One acli call per key
+// (~5s) — see jira.Client.IssueOrg; callers must cache, never loop over a page.
+func (svc *ContextService) IssueOrg(ctx context.Context, key string) (string, error) {
+	if key == "" {
+		return "", fmt.Errorf("issue key is required")
+	}
+	return svc.jira.IssueOrg(ctx, key)
 }
 
 func (svc *ContextService) SearchJQL(ctx context.Context, jql string) ([]jira.SearchResult, error) {

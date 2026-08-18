@@ -23,7 +23,7 @@ const H = vi.hoisted(() => ({
   DeleteTodoNextItem: vi.fn(),
 }));
 vi.mock("../../wailsjs/go/main/App", () => H);
-vi.mock("../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL: vi.fn() }));
+vi.mock("../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL: vi.fn(), EventsOn: vi.fn(() => () => {}) }));
 
 import MyBoardPage from "./MyBoardPage";
 

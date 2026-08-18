@@ -21,18 +21,20 @@ async function renderPanel() {
 beforeEach(() => vi.clearAllMocks());
 
 describe("TerminalPanel hotkeys (layer)", () => {
-  it("⌘T opens a new terminal (leader lapses to default)", async () => {
-    await renderPanel();
-    fireEvent.keyDown(window, { key: "t", metaKey: true }); // leader
-    fireEvent.keyDown(window, { key: "x" }); // non-matching follow -> default terminal.new
-    await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(2));
-  });
-
-  it("⌘T then H opens a terminal here (spawnCwd)", async () => {
+  // ⌘T is a lone bare chord, NOT a leader: it must spawn the terminal on the
+  // press itself. While "here" and "insert" hung off it as sequenced children,
+  // every ⌘T sat in a 600ms leader window first and read as "didn't fire".
+  it("⌘T opens a new terminal on the press, with no follow-key and no timer", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "t", metaKey: true });
-    fireEvent.keyDown(window, { key: "h" });
-    await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(2));
+    // Synchronous on purpose: no waitFor, so a 600ms leader window would fail here.
+    expect(screen.getAllByTestId("term")).toHaveLength(2);
+  });
+
+  it("⌘⇧T opens a terminal here (spawnCwd)", async () => {
+    await renderPanel();
+    fireEvent.keyDown(window, { key: "t", metaKey: true, shiftKey: true });
+    expect(screen.getAllByTestId("term")).toHaveLength(2);
   });
 
   it("⌘T works without terminal focus (global scope)", async () => {
@@ -42,16 +44,14 @@ describe("TerminalPanel hotkeys (layer)", () => {
     render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
     fireEvent.keyDown(window, { key: "t", metaKey: true });
-    fireEvent.keyDown(window, { key: "h" });
-    await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(2));
+    expect(screen.getAllByTestId("term")).toHaveLength(2);
   });
 
-  it("⌘T then I opens the insert-command menu (state-driven popover)", async () => {
+  it("⌘I opens the insert-command menu (state-driven popover)", async () => {
     await renderPanel();
     // Menu is closed until the hotkey opens it.
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    fireEvent.keyDown(window, { key: "t", metaKey: true });
-    fireEvent.keyDown(window, { key: "i" });
+    fireEvent.keyDown(window, { key: "i", metaKey: true });
     // A React popover — not a native <select> — so it works in WebKit, where
     // showPicker() is unavailable. Opening it does not depend on any native API.
     expect(screen.getByRole("menu")).toBeInTheDocument();

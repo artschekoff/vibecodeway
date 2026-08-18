@@ -23,6 +23,30 @@ func IsTerminalTicketStatus(status string) bool {
 	return terminalTicketStatuses[strings.ToLower(strings.TrimSpace(status))]
 }
 
+// ListKnownJiraStatuses returns every distinct, non-blank status seen on synced
+// Jira issues, sorted alphabetically. acli exposes no way to enumerate a
+// project's workflow statuses or an issue's available transitions, so the
+// statuses already synced from Jira are the only real source for the
+// status-change dropdown — the alternative is inventing names Jira rejects.
+func (s *Store) ListKnownJiraStatuses(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DISTINCT status FROM jira_issues
+		 WHERE TRIM(status) <> '' ORDER BY status COLLATE NOCASE`)
+	if err != nil {
+		return nil, fmt.Errorf("listing known jira statuses: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var st string
+		if err := rows.Scan(&st); err != nil {
+			return nil, err
+		}
+		out = append(out, st)
+	}
+	return out, rows.Err()
+}
+
 // contextTicketCounts returns how many Jira issues are linked to the context
 // (total) and how many of those are non-terminal ("open"). Contexts hold few
 // issues, so statuses are classified in Go against the canonical set rather than

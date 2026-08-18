@@ -27,43 +27,61 @@ describe("HotkeyProvider", () => {
   });
 
   it("fires the sequence child on leader + letter", () => {
-    const here = vi.fn();
+    const focusDown = vi.fn();
     render(
       <HotkeyProvider platform="darwin">
-        <Probe id="terminal.here" fn={here} />
+        <ScopeActivator scope="editor" />
+        <Probe id="editor.focusDown" fn={focusDown} scope="editor" />
       </HotkeyProvider>
     );
     act(() => {
-      fireEvent.keyDown(window, { key: "t", metaKey: true });
+      fireEvent.keyDown(window, { key: "e", metaKey: true });
     });
     act(() => {
-      fireEvent.keyDown(window, { key: "h" });
+      fireEvent.keyDown(window, { key: "j" });
     });
-    expect(here).toHaveBeenCalledTimes(1);
+    expect(focusDown).toHaveBeenCalledTimes(1);
   });
 
   it("fires the default action on leader timeout", () => {
     vi.useFakeTimers();
+    const openEditor = vi.fn();
+    const focusDown = vi.fn();
+    // Register the whole editor object group, so ⌘E opens a leader whose bare
+    // fall-through (editor.open) fires on timeout rather than firing immediately.
+    render(
+      <HotkeyProvider platform="darwin">
+        <ScopeActivator scope="editor" />
+        <Probe id="editor.open" fn={openEditor} />
+        <Probe id="editor.focusDown" fn={focusDown} scope="editor" />
+      </HotkeyProvider>
+    );
+    act(() => {
+      fireEvent.keyDown(window, { key: "e", metaKey: true });
+    });
+    expect(openEditor).toHaveBeenCalledTimes(0); // leader is pending, not fired yet
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(openEditor).toHaveBeenCalledTimes(1);
+    expect(focusDown).toHaveBeenCalledTimes(0);
+    vi.useRealTimers();
+  });
+
+  it("fires ⌘T immediately — it is a bare chord, not a leader", () => {
+    vi.useFakeTimers();
     const newTerm = vi.fn();
-    const here = vi.fn();
-    // Register the whole terminal object group (as the terminal panel does),
-    // so ⌘T opens a leader whose defaultAction (terminal.new) fires on
-    // timeout rather than firing immediately as a lone bare command.
     render(
       <HotkeyProvider platform="darwin">
         <Probe id="terminal.new" fn={newTerm} />
-        <Probe id="terminal.here" fn={here} />
+        <Probe id="terminal.here" fn={vi.fn()} />
+        <Probe id="terminal.insert" fn={vi.fn()} />
       </HotkeyProvider>
     );
     act(() => {
       fireEvent.keyDown(window, { key: "t", metaKey: true });
     });
-    expect(newTerm).toHaveBeenCalledTimes(0); // leader is pending, not fired yet
-    act(() => {
-      vi.advanceTimersByTime(600);
-    });
-    expect(newTerm).toHaveBeenCalledTimes(1);
-    expect(here).toHaveBeenCalledTimes(0);
+    expect(newTerm).toHaveBeenCalledTimes(1); // no timer advance needed
     vi.useRealTimers();
   });
 

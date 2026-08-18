@@ -206,4 +206,34 @@ describe("EditorWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: /refresh prs/i }));
     await waitFor(() => expect(screen.getByText("gh auth failed")).toBeInTheDocument());
   });
+  // ⌘T (and every other terminal hotkey) is registered by TerminalPanel, so the
+  // panel must be mounted even before GetContextChanges resolves and even for a
+  // context whose repos aren't on disk — otherwise the key silently does nothing.
+  it("keeps the terminal hotkeys alive before repo paths load", async () => {
+    let resolveChanges: (v: unknown) => void = () => {};
+    GetContextChanges.mockReturnValue(new Promise((r) => { resolveChanges = r; }));
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    // Panel mounted (so its ⌘T handlers are registered) before any repo path exists.
+    expect(screen.getByRole("button", { name: /new terminal/i })).toBeInTheDocument();
+    resolveChanges([{ repoName: "acme/api", repoPath: "/r/api", files: [] }]);
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+    await waitFor(() => expect(screen.getAllByTestId("terminal")).toHaveLength(2));
+  });
+
+  it("keeps the terminal hotkeys alive for a context with no repo path on disk", async () => {
+    GetContextChanges.mockResolvedValue([{ repoName: "acme/api", repoPath: "", files: [] }]);
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    expect(await screen.findByText(/no repo path on disk/i)).toBeInTheDocument();
+    // Panel still mounted, so the terminal hotkeys stay registered.
+    expect(screen.getByRole("button", { name: /new terminal/i })).toBeInTheDocument();
+  });
 });

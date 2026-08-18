@@ -70,7 +70,7 @@ func TestFirstAttachedRepoPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, app.vcsStore.Repos.UpdateLocalPath(app.ctx, repo.ID, "/tmp/x"))
 
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "main", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "main", "", true)
 	require.NoError(t, err)
 
 	path, err := app.firstAttachedRepoPath(contextID)
@@ -91,7 +91,7 @@ func TestFirstAttachedRepoPath_usesRepoPaths(t *testing.T) {
 	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repo.ID, "/tmp/y")
 	require.NoError(t, err)
 
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "main", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "main", "", true)
 	require.NoError(t, err)
 
 	path, err := app.firstAttachedRepoPath(contextID)

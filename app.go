@@ -113,6 +113,10 @@ type App struct {
 
 	bg bgRefreshState
 
+	// orgBackfillRunning guards the board's per-key org lookup so overlapping
+	// board refreshes don't start a second (slow) backfill loop.
+	orgBackfillRunning atomic.Bool
+
 	ptyMgr *pty.Manager
 	emit   func(name string, data ...interface{})
 }
@@ -264,6 +268,12 @@ func (a *App) GetJiraInstanceURL() string {
 // acli) and updates the local copy. status is the target status name.
 func (a *App) TransitionJiraIssue(key, status string) error {
 	return a.svc.TransitionJiraIssue(a.ctx, key, status)
+}
+
+// ListKnownJiraStatuses returns the distinct statuses seen on synced Jira issues.
+// Feeds the status-change dropdown, which would otherwise offer invented names.
+func (a *App) ListKnownJiraStatuses() ([]string, error) {
+	return a.db.ListKnownJiraStatuses(a.ctx)
 }
 
 // SetSlackPassphrase stores the SLACK_MCP_PASSPHRASE value that will be injected
@@ -451,7 +461,7 @@ func (a *App) AddIssuesToContext(contextID string, jiraKeys []string) (int, erro
 	// Auto-add GitHub repos detected in issue descriptions (best-effort)
 	repos := a.svc.ExtractGitHubReposFromIssues(a.ctx, contextID, jiraKeys)
 	for _, ownerRepo := range repos {
-		if _, addErr := a.AddVCSBranch(contextID, "github", ownerRepo, "", ""); addErr != nil {
+		if _, addErr := a.AddVCSBranch(contextID, "github", ownerRepo, "", "", true); addErr != nil {
 			a.logger.Sugar().Warnf("auto-add repo %q from Jira issue: %v", ownerRepo, addErr)
 		}
 	}

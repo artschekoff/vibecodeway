@@ -99,7 +99,7 @@ func newBranchAddCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("ensuring repo: %w", err)
 			}
-			b, err := env.vcsStore.Branches.AddBranch(ctx, id, repo.ID, branch, label)
+			b, err := env.vcsStore.Branches.AddBranch(ctx, id, repo.ID, branch, label, true)
 			if err != nil {
 				return fmt.Errorf("adding branch: %w", err)
 			}

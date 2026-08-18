@@ -587,6 +587,77 @@ export namespace main {
 
 }
 
+export namespace productivity {
+	
+	export class DayCount {
+	    day: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DayCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.day = source["day"];
+	        this.count = source["count"];
+	    }
+	}
+	export class Stats {
+	    today: number;
+	    yesterday: number;
+	    weekAvg: number;
+	    monthAvg: number;
+	    daily: DayCount[];
+	    workdayHours: number;
+	    taskHours: number;
+	    hoursToday: number;
+	    tasksToNorm: number;
+	    tasksToBeatYesterday: number;
+	    tasksToBeatWeek: number;
+	    tasksToBeatMonth: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Stats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.today = source["today"];
+	        this.yesterday = source["yesterday"];
+	        this.weekAvg = source["weekAvg"];
+	        this.monthAvg = source["monthAvg"];
+	        this.daily = this.convertValues(source["daily"], DayCount);
+	        this.workdayHours = source["workdayHours"];
+	        this.taskHours = source["taskHours"];
+	        this.hoursToday = source["hoursToday"];
+	        this.tasksToNorm = source["tasksToNorm"];
+	        this.tasksToBeatYesterday = source["tasksToBeatYesterday"];
+	        this.tasksToBeatWeek = source["tasksToBeatWeek"];
+	        this.tasksToBeatMonth = source["tasksToBeatMonth"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace service {
 	
 	export class ContextDetail {
@@ -1120,6 +1191,8 @@ export namespace store {
 	    autoLinkReposOnContextCreate: boolean;
 	    editorSettings: string;
 	    prStaleThresholdDays: number;
+	    workdayHours: number;
+	    taskHours: number;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1137,6 +1210,8 @@ export namespace store {
 	        this.autoLinkReposOnContextCreate = source["autoLinkReposOnContextCreate"];
 	        this.editorSettings = source["editorSettings"];
 	        this.prStaleThresholdDays = source["prStaleThresholdDays"];
+	        this.workdayHours = source["workdayHours"];
+	        this.taskHours = source["taskHours"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
@@ -2425,6 +2500,7 @@ export namespace vcsstore {
 	    branch: string;
 	    label: string;
 	    createdAt: string;
+	    autodetectPr: boolean;
 	    repo?: VCSRepo;
 	
 	    static createFrom(source: any = {}) {
@@ -2439,6 +2515,7 @@ export namespace vcsstore {
 	        this.branch = source["branch"];
 	        this.label = source["label"];
 	        this.createdAt = source["createdAt"];
+	        this.autodetectPr = source["autodetectPr"];
 	        this.repo = this.convertValues(source["repo"], VCSRepo);
 	    }
 	

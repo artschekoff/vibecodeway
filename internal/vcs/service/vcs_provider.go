@@ -134,6 +134,11 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 				if branch.Repo == nil {
 					continue
 				}
+				// "Autodetect PR" off: the user wants the branch tracked (e.g. main)
+				// without dragging in its pull requests.
+				if !branch.AutodetectPR {
+					continue
+				}
 				platform := vcs.Platform(branch.Repo.Platform)
 				runner, ok := p.runners[platform]
 				if !ok {

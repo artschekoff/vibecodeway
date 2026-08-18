@@ -387,7 +387,7 @@ func (a *App) ApplyContextUpdateActions(contextID string, actions []appstore.Con
 			if act.Platform == "" || act.OwnerRepo == "" || act.Branch == "" {
 				err = fmt.Errorf("platform, ownerRepo, and branch are required")
 			} else {
-				_, err = a.AddVCSBranch(contextID, act.Platform, act.OwnerRepo, act.Branch, act.RepoLabel)
+				_, err = a.AddVCSBranch(contextID, act.Platform, act.OwnerRepo, act.Branch, act.RepoLabel, true)
 			}
 		case "add_relation":
 			err = a.addRelationByKey(contextID, act.TargetContextKey, act.RelationType)

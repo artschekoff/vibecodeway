@@ -80,9 +80,11 @@ const contextDetail = {
 const {
   GetContextDetail,
   SearchContextItems,
+  ListKnownJiraStatuses,
 } = vi.hoisted(() => ({
   GetContextDetail: vi.fn(),
   SearchContextItems: vi.fn(),
+  ListKnownJiraStatuses: vi.fn(),
 }));
 
 vi.mock("../../wailsjs/go/main/App", () => {
@@ -131,6 +133,7 @@ vi.mock("../../wailsjs/go/main/App", () => {
     ListEvents: emptyArray(),
     ListRepoLocalPaths: emptyArray(),
     ListSlackDMConfigs: emptyArray(),
+    ListKnownJiraStatuses: ListKnownJiraStatuses.mockResolvedValue([]),
     ListWorkflowStatuses: emptyArray(),
     MarkAssignmentsOutdated: noop(),
     MarkBranchAllViewed: noop(),
@@ -200,6 +203,50 @@ beforeEach(() => {
   GetContextDetail.mockReset();
   SearchContextItems.mockReset();
   GetContextDetail.mockResolvedValue(contextDetail);
+});
+
+describe("ContextDetail issue status options", () => {
+  const issue = {
+    id: "i-1",
+    contextId: "ctx-1",
+    jiraKey: "JH-5353",
+    summary: "Error loading metrics",
+    status: "To Do",
+    assignee: "",
+    issueType: "Bug",
+    description: "",
+    jiraUpdated: "",
+    parentKey: "",
+    createdAt: "2026-01-01T00:00:00Z",
+    isActive: true,
+  };
+
+  it("offers the statuses this Jira actually uses, not invented ones", async () => {
+    // Statuses that exist in the workflow, as synced from Jira.
+    ListKnownJiraStatuses.mockResolvedValue([
+      "Done", "In Code Review", "In Progress", "Ready for QA", "To Do",
+    ]);
+    GetContextDetail.mockResolvedValue({ ...contextDetail, issues: [issue] });
+
+    renderDetail();
+
+    const select = await screen.findByLabelText("status of JH-5353");
+    const options = Array.from(select.querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toEqual(["To Do", "Done", "In Code Review", "In Progress", "Ready for QA"]);
+    // "In Review" is not a status in this Jira — offering it sends a transition Jira rejects.
+    expect(options).not.toContain("In Review");
+  });
+
+  it("falls back to the issue's own status when nothing has been synced yet", async () => {
+    ListKnownJiraStatuses.mockResolvedValue([]);
+    GetContextDetail.mockResolvedValue({ ...contextDetail, issues: [issue] });
+
+    renderDetail();
+
+    const select = await screen.findByLabelText("status of JH-5353");
+    const options = Array.from(select.querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toEqual(["To Do"]);
+  });
 });
 
 describe("ContextDetail PR filtering", () => {

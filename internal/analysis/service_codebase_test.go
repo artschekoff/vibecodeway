@@ -97,7 +97,7 @@ func linkRepo(t *testing.T, svc *Service, contextID, localPath string) {
 	require.NoError(t, err)
 	require.NoError(t, vs.Repos.UpdateLocalPath(ctx, repo.ID, localPath))
 
-	_, err = vs.Branches.AddBranch(ctx, contextID, repo.ID, "main", "")
+	_, err = vs.Branches.AddBranch(ctx, contextID, repo.ID, "main", "", true)
 	require.NoError(t, err)
 
 	svc.SetVCSStore(vs)

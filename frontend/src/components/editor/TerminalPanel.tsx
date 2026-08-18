@@ -331,7 +331,9 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
             <Terminal cwd={t.cwd} onSession={(id) => setSession(t.key, id)} />
           </div>
         ))}
-        {terminals.length === 0 && <div style={{ fontSize: 12, padding: 12 }}>No terminal.</div>}
+        {terminals.length === 0 && (
+          <div style={{ fontSize: 12, padding: 12 }}>{spawnCwd ? "No terminal." : "No repo path on disk."}</div>
+        )}
       </div>
     </div>
   );

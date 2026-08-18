@@ -137,3 +137,47 @@ func keysOf(items []BoardJiraAssignment) []string {
 	}
 	return out
 }
+
+// The org custom field can't come back from a Jira search (acli allowlist), so
+// it's backfilled per key afterwards. These two calls drive that loop.
+func TestBoardJiraAssignments_OrgBackfill(t *testing.T) {
+	s := newBJAStore(t)
+	ctx := t.Context()
+
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{
+		{Key: "JH-1", Summary: "one", Status: "Open", Org: "juna-api"},
+		{Key: "JH-2", Summary: "two", Status: "Open"},
+		{Key: "JH-3", Summary: "three", Status: "Open"},
+	}))
+
+	missing, err := s.ListBoardKeysMissingOrg(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"JH-2", "JH-3"}, missing)
+
+	require.NoError(t, s.SetBoardAssignmentOrg(ctx, "JH-2", "rdbms"))
+	// A key whose org is genuinely unset must drop out of the queue too, otherwise
+	// the backfill re-fetches it on every refresh forever.
+	require.NoError(t, s.SetBoardAssignmentOrg(ctx, "JH-3", ""))
+
+	missing, err = s.ListBoardKeysMissingOrg(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, missing)
+
+	byKey := map[string]BoardJiraAssignment{}
+	list, err := s.ListBoardJiraAssignments(ctx, "priority")
+	require.NoError(t, err)
+	for _, it := range list {
+		byKey[it.Key] = it
+	}
+	assert.Equal(t, "rdbms", byKey["JH-2"].Org)
+	assert.Equal(t, "juna-api", byKey["JH-1"].Org)
+
+	// A later refresh (search can't return org -> empty) must not undo the backfill.
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{
+		{Key: "JH-2", Summary: "two", Status: "Open"},
+	}))
+	list, err = s.ListBoardJiraAssignments(ctx, "priority")
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "rdbms", list[0].Org)
+}

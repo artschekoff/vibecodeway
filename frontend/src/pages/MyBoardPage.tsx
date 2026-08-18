@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare, Compass, Sparkles, ArrowUp, ArrowDown, X } from "lucide-react";
-import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, ReconcileMyOpenPRs, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL, ListTodoNext, GenerateTodoNext, AdjustTodoNext, ReorderTodoNext, DeleteTodoNextItem } from "../../wailsjs/go/main/App";
-import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
+import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, ReconcileMyOpenPRs, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL, ListMyAssignedJiraIssues, ListTodoNext, GenerateTodoNext, AdjustTodoNext, ReorderTodoNext, DeleteTodoNextItem } from "../../wailsjs/go/main/App";
+import { BrowserOpenURL, EventsOn } from "../../wailsjs/runtime/runtime";
 import { todoRefUrl } from "../lib/todoRef";
 import { useTabContext } from "../contexts/TabContext";
 import { TodoActionModal } from "../components/TodoActionModal";
@@ -122,6 +122,16 @@ export default function MyBoardPage() {
     };
     void init();
   }, [load]);
+
+  // The org/scope of each ticket is backfilled in the background (one slow acli
+  // call per key — a Jira search can't return custom fields), so re-read the
+  // assignments when it lands instead of leaving the org chips/filter empty
+  // until the next manual refresh.
+  useEffect(() => EventsOn("board:orgs-updated", () => {
+    void ListMyAssignedJiraIssues("priority")
+      .then((rows) => setJiraIssues((rows as store.BoardJiraAssignment[]) ?? []))
+      .catch(() => { /* board keeps the rows it already has */ });
+  }), []);
 
   // Load orgs (for "Create context") + the Jira base URL (for per-ticket links) once.
   useEffect(() => {

@@ -48,7 +48,7 @@ func TestGetContextChanges_usesRepoPaths(t *testing.T) {
 	// Path only in vcs_repo_paths; local_path stays empty (as in prod).
 	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repo.ID, dir)
 	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "main", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "main", "", true)
 	require.NoError(t, err)
 
 	changes, err := app.GetContextChanges(contextID)
@@ -73,7 +73,7 @@ func TestGetContextChanges_prefersWorktreePath(t *testing.T) {
 	require.NoError(t, err)
 	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repo.ID, dir)
 	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "feat/x", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "feat/x", "", true)
 	require.NoError(t, err)
 
 	// Create the worktree for the branch, exactly as ReviewPRWithAI does.

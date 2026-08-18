@@ -89,7 +89,7 @@ func TestKeybindings_SeededHotkeysAndReset(t *testing.T) {
 
 	th, ok := byCmd["terminal.here"]
 	require.True(t, ok)
-	assert.Equal(t, "h", th.Sequence)
+	assert.Equal(t, "t", th.KeyCode)
 
 	// Rebind then reset restores the default.
 	require.NoError(t, s.UpdateKeybinding(ctx, "search.global", "cmd,shift", "k", ""))
@@ -143,4 +143,40 @@ func TestKeybindings_SwitchRemap_107(t *testing.T) {
 	assert.Equal(t, "cmd", g.ModifierKeys)
 	assert.Equal(t, "b", g.KeyCode)
 	assert.Equal(t, "g", g.Sequence)
+}
+
+
+// Migration 110 takes "here" and "insert" off the ⌘T lead so ⌘T is a lone bare
+// chord and a new terminal opens on the keypress instead of after the 600ms
+// leader window.
+func TestKeybindings_TerminalUnleader_110(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	all, err := s.GetKeybindings(ctx)
+	require.NoError(t, err)
+	byCmd := map[string]Keybinding{}
+	for _, k := range all {
+		byCmd[k.Command] = k
+	}
+
+	// ⌘T stays the bare "new terminal" chord, with nothing sequenced under it.
+	newTerm := byCmd["terminal.new"]
+	assert.Equal(t, "cmd", newTerm.ModifierKeys)
+	assert.Equal(t, "t", newTerm.KeyCode)
+	assert.Equal(t, "", newTerm.Sequence)
+
+	here := byCmd["terminal.here"]
+	assert.Equal(t, "cmd,shift", here.ModifierKeys)
+	assert.Equal(t, "t", here.KeyCode)
+	assert.Equal(t, "", here.Sequence)
+	assert.Equal(t, "cmd,shift", here.DefaultModifierKeys)
+	assert.Equal(t, "", here.DefaultSequence)
+
+	insert := byCmd["terminal.insert"]
+	assert.Equal(t, "cmd", insert.ModifierKeys)
+	assert.Equal(t, "i", insert.KeyCode)
+	assert.Equal(t, "", insert.Sequence)
+	assert.Equal(t, "i", insert.DefaultKeyCode)
+	assert.Equal(t, "", insert.DefaultSequence)
 }

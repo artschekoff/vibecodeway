@@ -61,6 +61,7 @@ import {
   UpdateUserEvent,
   ListEvents,
   GetJiraInstanceURL,
+  ListKnownJiraStatuses,
   GetPersonAssignments,
   GeneratePersonAssignments,
   GenerateSinglePersonAssignment,
@@ -543,6 +544,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [editEventType, setEditEventType] = useState("user_note");
   const [editEventSummary, setEditEventSummary] = useState("");
   const [jiraInstanceUrl, setJiraInstanceUrl] = useState<string>("");
+  const [knownJiraStatuses, setKnownJiraStatuses] = useState<string[]>([]);
   const [workspaces, setWorkspaces] = useState<VCSWorkspace[]>([]);
   const {
     checkout: handleCheckout,
@@ -725,6 +727,12 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     GetJiraInstanceURL().then(setJiraInstanceUrl).catch(() => {});
   }, []);
 
+  // Statuses actually seen on synced Jira issues. acli cannot enumerate a
+  // project's workflow, so this is the only real source for the dropdown.
+  useEffect(() => {
+    ListKnownJiraStatuses().then((ss) => setKnownJiraStatuses(ss ?? [])).catch(() => {});
+  }, []);
+
   useEffect(() => {
     void ListWorkflowStatuses().then((ss) => setWorkflowStatuses(ss ?? []));
   }, [id]);
@@ -810,7 +818,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       let added = 0;
       for (const m of matches) {
         try {
-          await AddVCSBranch(id, m.platform, m.ownerRepo, m.branch, m.label);
+          await AddVCSBranch(id, m.platform, m.ownerRepo, m.branch, m.label, true);
           added++;
         } catch { /* skip individual failures (e.g. already linked) */ }
       }
@@ -951,7 +959,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       }
       for (const b of (newVCSBranches ?? [])) {
         progress.next(`Linking ${b.ownerRepo}:${b.branch}`);
-        try { await AddVCSBranch(id, b.platform, b.ownerRepo, b.branch, b.label ?? ""); } catch { /* best-effort */ }
+        try { await AddVCSBranch(id, b.platform, b.ownerRepo, b.branch, b.label ?? "", b.autodetectPr); } catch { /* best-effort */ }
       }
       // Relations
       for (const relId of (relationsPayload?.removedRelationIds ?? [])) {
@@ -1982,7 +1990,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                         if (vb) void handleCheckout(branchName, vb.repoId);
                       },
                       onChangeStatus: (jiraKey: string, status: string) => void handleTransitionIssue(jiraKey, status),
-                      statusOptions: [...new Set([...issues.map((i) => i.status), "To Do", "In Progress", "In Review", "Done"].filter(Boolean))],
+                      statusOptions: knownJiraStatuses,
                     };
                     for (const issue of parents) {
                       rows.push(<IssueCard key={issue.id} issue={issue} {...baseProps} />);

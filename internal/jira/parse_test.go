@@ -37,3 +37,22 @@ func TestParseSearchResultsOrgScope(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "", got[0].Org)
 }
+
+// acli's `workitem search` rejects any field outside its allowlist and fails the
+// whole search, so searchFields must never carry a custom field or "created".
+func TestSearchFieldsStayInsideAcliAllowlist(t *testing.T) {
+	assert.NotContains(t, searchFields, "customfield")
+	assert.NotContains(t, searchFields, "created")
+}
+
+func TestParseIssueOrg(t *testing.T) {
+	// `workitem view --fields customfield_X` shape: the field is an option object.
+	got, err := parseIssueOrg(`{"key":"JH-5369","fields":{"` + OrgScopeFieldID + `":{"value":"rdbms","id":"10066"}}}`)
+	assert.NoError(t, err)
+	assert.Equal(t, "rdbms", got)
+
+	// Field unset on the issue -> empty, not an error.
+	got, err = parseIssueOrg(`{"key":"JH-1","fields":{}}`)
+	assert.NoError(t, err)
+	assert.Equal(t, "", got)
+}

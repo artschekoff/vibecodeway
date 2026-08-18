@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../contexts/TabContext", () => ({
@@ -23,7 +23,7 @@ const H = vi.hoisted(() => ({
   DeleteTodoNextItem: vi.fn(),
 }));
 vi.mock("../../wailsjs/go/main/App", () => H);
-vi.mock("../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL: vi.fn() }));
+vi.mock("../../wailsjs/runtime/runtime", () => ({ BrowserOpenURL: vi.fn(), EventsOn: vi.fn(() => () => {}) }));
 
 import MyBoardPage from "./MyBoardPage";
 
@@ -102,5 +102,26 @@ describe("MyBoardPage — My Jira To-Do", () => {
     render(<MyBoardPage />);
     await waitFor(() => expect(screen.getByRole("button", { name: /open context JH-1-ctx/i })).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /create context from JH-1/i })).not.toBeInTheDocument();
+  });
+
+  // Org/scope is backfilled in the background (a Jira search can't return the
+  // custom field), so the board must pick it up on the event instead of showing
+  // an empty org chip/filter until the next manual refresh.
+  it("re-reads the assignments when the org backfill reports new values", async () => {
+    const { EventsOn } = await import("../../wailsjs/runtime/runtime");
+    H.ListMyAssignedJiraIssues.mockResolvedValue([
+      { key: "JH-1", summary: "Fix login", status: "Open", issueType: "Task", priority: "High", created: "2026-07-20T10:00:00Z", org: "rdbms", seen: false, fetchedAt: "" },
+    ]);
+    render(<MyBoardPage />);
+    await screen.findByText("Fix login");
+    expect(screen.queryByText("rdbms")).not.toBeInTheDocument();
+
+    const handler = (EventsOn as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .find(([name]) => name === "board:orgs-updated")![1] as () => void;
+    act(() => handler());
+
+    // Chip on the row, and the org now offered in the filter dropdown.
+    expect(await screen.findByTitle("Organization (Jira scope)")).toHaveTextContent("rdbms");
+    expect(screen.getByRole("option", { name: "rdbms" })).toBeInTheDocument();
   });
 });

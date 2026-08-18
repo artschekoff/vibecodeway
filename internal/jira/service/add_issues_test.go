@@ -22,6 +22,8 @@ type fakeJira struct {
 	searchErr     map[string]error
 }
 
+func (f *fakeJira) IssueOrg(_ context.Context, _ string) (string, error) { return "", nil }
+
 func (f *fakeJira) ViewIssue(_ context.Context, key string) (*jira.IssueDetail, error) {
 	if issue, ok := f.issues[key]; ok {
 		return issue, nil

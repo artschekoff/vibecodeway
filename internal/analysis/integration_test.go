@@ -126,7 +126,7 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme-org", "backend")
 	require.NoError(t, err)
 
-	branch, err := vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "feat/oauth2", "OAuth2 branch")
+	branch, err := vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "feat/oauth2", "OAuth2 branch", true)
 	require.NoError(t, err)
 
 	prResult, err := vcsStore.PullRequests.UpsertPR(ctx,
@@ -345,7 +345,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "juna-health", "juna-api")
 	require.NoError(t, err)
 
-	branch, err := vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "feat_JH-477_task_JH-2210_pr", "Pro paywall branch")
+	branch, err := vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "feat_JH-477_task_JH-2210_pr", "Pro paywall branch", true)
 	require.NoError(t, err)
 
 	prResult, err := vcsStore.PullRequests.UpsertPR(ctx,

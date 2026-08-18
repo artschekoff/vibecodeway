@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	"go.uber.org/zap"
 )
 
 // CreateContextFromJiraIssue creates a new context (keyed by the Jira issue key)
@@ -47,7 +50,78 @@ func (a *App) RefreshMyAssignedJiraIssues(orderBy string) ([]appstore.BoardJiraA
 	if err := a.db.UpsertBoardJiraAssignments(a.ctx, issues); err != nil {
 		return nil, fmt.Errorf("persist assigned jira: %w", err)
 	}
+	go a.backfillBoardOrgs()
 	return a.db.ListBoardJiraAssignments(a.ctx, orderBy)
+}
+
+// orgBackfillWorkers caps concurrent `acli workitem view` calls. Each takes ~5s
+// and acli spawns a process per call, so this trades wall-clock for not
+// saturating the machine while the user works.
+const orgBackfillWorkers = 4
+
+// backfillBoardOrgs fills in the org/scope of board assignments one key at a
+// time, because a Jira search can't return custom fields (see jira.searchFields)
+// and `workitem view` only takes one key per ~5s call. Runs in the background so
+// the board renders immediately from cache; results are permanent, so this is
+// slow once and then a no-op. Emits "board:orgs-updated" when anything changed.
+func (a *App) backfillBoardOrgs() {
+	if !a.orgBackfillRunning.CompareAndSwap(false, true) {
+		return // a backfill is already walking the queue
+	}
+	defer a.orgBackfillRunning.Store(false)
+
+	keys, err := a.db.ListBoardKeysMissingOrg(a.ctx)
+	if err != nil {
+		a.logger.Warn("board org backfill: list keys failed", zap.Error(err))
+		return
+	}
+	if len(keys) == 0 {
+		return
+	}
+	a.logger.Info("board org backfill: starting", zap.Int("keys", len(keys)))
+
+	jobs := make(chan string)
+	var wg sync.WaitGroup
+	var updated atomic.Int64
+
+	for range min(orgBackfillWorkers, len(keys)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for key := range jobs {
+				org, err := a.svc.IssueOrg(a.ctx, key)
+				if err != nil {
+					// Leave the key queued: a transient acli failure should be
+					// retried on the next refresh, not cached as "no org".
+					a.logger.Warn("board org backfill: lookup failed",
+						zap.String("key", key), zap.Error(err))
+					continue
+				}
+				if err := a.db.SetBoardAssignmentOrg(a.ctx, key, org); err != nil {
+					a.logger.Warn("board org backfill: store failed",
+						zap.String("key", key), zap.Error(err))
+					continue
+				}
+				updated.Add(1)
+			}
+		}()
+	}
+	for _, key := range keys {
+		select {
+		case <-a.ctx.Done():
+			close(jobs)
+			wg.Wait()
+			return
+		case jobs <- key:
+		}
+	}
+	close(jobs)
+	wg.Wait()
+
+	a.logger.Info("board org backfill: done", zap.Int64("updated", updated.Load()))
+	if updated.Load() > 0 && a.emit != nil {
+		a.emit("board:orgs-updated")
+	}
 }
 
 // ListMyAssignedJiraIssues returns the persisted assigned Jira issues sorted by

@@ -58,7 +58,7 @@ func (a *App) ensurePRReviewContext(repoID string, prNumber int, headBranch, prT
 	}
 
 	if headBranch != "" {
-		if _, aerr := a.AddVCSBranch(ctxRow.ID, repo.Platform, repo.Owner+"/"+repo.Name, headBranch, prTitle); aerr != nil {
+		if _, aerr := a.AddVCSBranch(ctxRow.ID, repo.Platform, repo.Owner+"/"+repo.Name, headBranch, prTitle, true); aerr != nil {
 			a.logger.Sugar().Warnf("ReviewPRWithAI: add branch failed: %s", aerr.Error())
 		}
 	}

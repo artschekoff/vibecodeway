@@ -30,7 +30,7 @@ func TestUpsertPR_RoundTripsMergeStateStatus(t *testing.T) {
 	require.NoError(t, err)
 	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme", "web")
 	require.NoError(t, err)
-	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feat/x", "")
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feat/x", "", true)
 	require.NoError(t, err)
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -59,7 +59,7 @@ func TestListCommentsForPRs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a branch
-	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "main", "")
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "main", "", true)
 	require.NoError(t, err)
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -120,7 +120,7 @@ func TestUpsertCommentReportsIsNew(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a branch
-	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "main", "")
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "main", "", true)
 	require.NoError(t, err)
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -158,7 +158,7 @@ func TestListOpenPRsWithRepoAndSetPRState(t *testing.T) {
 	require.NoError(t, err)
 	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme", "api")
 	require.NoError(t, err)
-	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feat/x", "")
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feat/x", "", true)
 	require.NoError(t, err)
 
 	now := time.Now().UTC().Format(time.RFC3339)

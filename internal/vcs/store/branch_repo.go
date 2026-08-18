@@ -20,19 +20,25 @@ func NewBranchRepo(db *sql.DB) *BranchRepo { return &BranchRepo{db: db} }
 
 // AddBranch inserts a new branch link. Returns ErrNotFound if the repo doesn't exist.
 // Returns the existing row if the (contextID, repoID, branch) tuple already exists.
-func (r *BranchRepo) AddBranch(ctx context.Context, contextID, repoID, branch, label string) (*ContextVCSBranch, error) {
+// autodetectPR=false makes the sync skip PR resolution for this link; re-adding an
+// existing link updates the flag so the user can toggle it from the add form.
+func (r *BranchRepo) AddBranch(ctx context.Context, contextID, repoID, branch, label string, autodetectPR bool) (*ContextVCSBranch, error) {
 	// Check for existing
 	var b ContextVCSBranch
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, context_id, repo_id, branch, label, created_at FROM context_vcs_branches
+		`SELECT id, context_id, repo_id, branch, label, created_at, autodetect_pr FROM context_vcs_branches
 		 WHERE context_id = ? AND repo_id = ? AND branch = ?`,
 		contextID, repoID, branch,
-	).Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt)
+	).Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt, &b.AutodetectPR)
 	if err == nil {
 		// Update label if provided
 		if label != "" && label != b.Label {
 			_, _ = r.db.ExecContext(ctx, `UPDATE context_vcs_branches SET label = ? WHERE id = ?`, label, b.ID)
 			b.Label = label
+		}
+		if autodetectPR != b.AutodetectPR {
+			_, _ = r.db.ExecContext(ctx, `UPDATE context_vcs_branches SET autodetect_pr = ? WHERE id = ?`, autodetectPR, b.ID)
+			b.AutodetectPR = autodetectPR
 		}
 		return &b, nil
 	}
@@ -43,21 +49,21 @@ func (r *BranchRepo) AddBranch(ctx context.Context, contextID, repoID, branch, l
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err = r.db.ExecContext(ctx,
-		`INSERT INTO context_vcs_branches (id, context_id, repo_id, branch, label, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		id, contextID, repoID, branch, label, now,
+		`INSERT INTO context_vcs_branches (id, context_id, repo_id, branch, label, created_at, autodetect_pr) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, contextID, repoID, branch, label, now, autodetectPR,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert vcs branch: %w", err)
 	}
-	return &ContextVCSBranch{ID: id, ContextID: contextID, RepoID: repoID, Branch: branch, Label: label, CreatedAt: now}, nil
+	return &ContextVCSBranch{ID: id, ContextID: contextID, RepoID: repoID, Branch: branch, Label: label, CreatedAt: now, AutodetectPR: autodetectPR}, nil
 }
 
 // GetBranch returns a branch by ID.
 func (r *BranchRepo) GetBranch(ctx context.Context, id string) (*ContextVCSBranch, error) {
 	var b ContextVCSBranch
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, context_id, repo_id, branch, label, created_at FROM context_vcs_branches WHERE id = ?`, id,
-	).Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt)
+		`SELECT id, context_id, repo_id, branch, label, created_at, autodetect_pr FROM context_vcs_branches WHERE id = ?`, id,
+	).Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt, &b.AutodetectPR)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -70,7 +76,7 @@ func (r *BranchRepo) GetBranch(ctx context.Context, id string) (*ContextVCSBranc
 // ListBranches returns all branches for a context, with repo info joined.
 func (r *BranchRepo) ListBranches(ctx context.Context, contextID string) ([]ContextVCSBranch, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT b.id, b.context_id, b.repo_id, b.branch, b.label, b.created_at,
+		SELECT b.id, b.context_id, b.repo_id, b.branch, b.label, b.created_at, b.autodetect_pr,
 		       rp.platform, rp.owner, rp.name, rp.created_at
 		FROM context_vcs_branches b
 		JOIN vcs_repos rp ON rp.id = b.repo_id
@@ -87,7 +93,7 @@ func (r *BranchRepo) ListBranches(ctx context.Context, contextID string) ([]Cont
 		var b ContextVCSBranch
 		var repo VCSRepo
 		if err := rows.Scan(
-			&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt,
+			&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt, &b.AutodetectPR,
 			&repo.Platform, &repo.Owner, &repo.Name, &repo.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan vcs branch: %w", err)
@@ -102,7 +108,7 @@ func (r *BranchRepo) ListBranches(ctx context.Context, contextID string) ([]Cont
 // ListAllBranchesForRepo returns all context branches for a repo.
 func (r *BranchRepo) ListAllBranchesForRepo(ctx context.Context, repoID string) ([]ContextVCSBranch, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, context_id, repo_id, branch, label, created_at FROM context_vcs_branches
+		`SELECT id, context_id, repo_id, branch, label, created_at, autodetect_pr FROM context_vcs_branches
 		 WHERE repo_id = ? ORDER BY created_at ASC`,
 		repoID,
 	)
@@ -114,7 +120,7 @@ func (r *BranchRepo) ListAllBranchesForRepo(ctx context.Context, repoID string) 
 	var result []ContextVCSBranch
 	for rows.Next() {
 		var b ContextVCSBranch
-		if err := rows.Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.ContextID, &b.RepoID, &b.Branch, &b.Label, &b.CreatedAt, &b.AutodetectPR); err != nil {
 			return nil, fmt.Errorf("scan vcs branch: %w", err)
 		}
 		result = append(result, b)

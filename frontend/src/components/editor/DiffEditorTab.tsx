@@ -26,7 +26,7 @@ type ModifiedEditor = {
   removeContentWidget?: (w: ContentWidget) => void;
   executeEdits?: (source: string, edits: { range: unknown; text: string }[]) => boolean;
   onDidChangeModelContent?: (cb: () => void) => { dispose: () => void };
-  getModel?: () => { getLineCount: () => number } | null;
+  getModel?: () => { getLineCount: () => number; getLineMaxColumn?: (line: number) => number } | null;
 };
 type DiffEditorInstance = { getModifiedEditor: () => ModifiedEditor; getLineChanges?: () => LineChange[] | null };
 // Minimal shape of the monaco namespace we use for blame decorations.
@@ -125,14 +125,17 @@ export function DiffEditorTab({
       // One segmented pill split into two halves (Keep | Revert). Styled inline so
       // the row layout can't be defeated by a stale CSS bundle or a Monaco content-
       // widget stylesheet — the earlier .hunk-actions flex rule wasn't taking effect.
+      // The pill carries the opaque background; halves are transparent so their hover
+      // tint composites over it instead of over the code line behind the widget.
       const dom = document.createElement("div");
       dom.className = "hunk-actions";
       dom.style.cssText =
-        "display:inline-flex;flex-direction:row;align-items:stretch;border:1px solid var(--border);" +
+        "display:inline-flex;flex-direction:row;flex-wrap:nowrap;width:max-content;align-items:stretch;" +
+        "background:var(--surface2);border:1px solid var(--border);" +
         "border-radius:5px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.3);" +
-        "transform:translateY(-2px);font-size:10px;line-height:1;z-index:5;";
+        "margin-left:8px;font-size:10px;line-height:1;z-index:5;";
       const half =
-        "border:0;background:var(--surface2);padding:3px 9px;cursor:pointer;font-size:10px;" +
+        "border:0;background:transparent;padding:3px 9px;cursor:pointer;font-size:10px;" +
         "line-height:1;white-space:nowrap;font-weight:600;font-family:inherit;";
       const accept = document.createElement("button");
       accept.textContent = "✓ Keep";
@@ -143,16 +146,21 @@ export function DiffEditorTab({
       reject.title = "Reject this change (restore the base version)";
       reject.style.cssText = half + "color:#f87171;border-left:1px solid var(--border);";
       // Inline hover (a :hover rule can't reach an inline-styled node reliably here).
-      accept.onmouseenter = () => { accept.style.background = "rgba(74,222,128,0.14)"; };
-      accept.onmouseleave = () => { accept.style.background = "var(--surface2)"; };
-      reject.onmouseenter = () => { reject.style.background = "rgba(248,113,113,0.14)"; };
-      reject.onmouseleave = () => { reject.style.background = "var(--surface2)"; };
+      accept.onmouseenter = () => { accept.style.background = "#2c4a3a"; };
+      accept.onmouseleave = () => { accept.style.background = "transparent"; };
+      reject.onmouseenter = () => { reject.style.background = "#4a2c34"; };
+      reject.onmouseleave = () => { reject.style.background = "transparent"; };
       dom.appendChild(accept);
       dom.appendChild(reject);
       const widget: ContentWidget = {
         getId: () => `hunk-action-${i}`,
         getDomNode: () => dom,
-        getPosition: () => ({ position: { lineNumber: line, column: 1 }, preference: [1, 0] }),
+        // EXACT, anchored past the end of the hunk's first line: sits beside the code
+        // instead of on top of it, so neighbouring hunks never stack over each other.
+        getPosition: () => ({
+          position: { lineNumber: line, column: me.getModel?.()?.getLineMaxColumn?.(line) ?? 1 },
+          preference: [0],
+        }),
       };
       accept.onclick = () => { me.removeContentWidget?.(widget); };
       reject.onclick = () => rejectHunk(change);

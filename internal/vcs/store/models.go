@@ -38,13 +38,16 @@ type VCSRepoPath struct {
 
 // ContextVCSBranch links a specific branch of a VCSRepo to a context.
 type ContextVCSBranch struct {
-	ID        string   `json:"id"`
-	ContextID string   `json:"contextId"`
-	RepoID    string   `json:"repoId"`
-	Branch    string   `json:"branch"`
-	Label     string   `json:"label"`
-	CreatedAt string   `json:"createdAt"`
-	Repo      *VCSRepo `json:"repo,omitempty"`
+	ID        string `json:"id"`
+	ContextID string `json:"contextId"`
+	RepoID    string `json:"repoId"`
+	Branch    string `json:"branch"`
+	Label     string `json:"label"`
+	CreatedAt string `json:"createdAt"`
+	// AutodetectPR: when false the sync skips PR resolution for this link, so a
+	// long-lived branch (main) can be tracked without pulling its pull requests.
+	AutodetectPR bool     `json:"autodetectPr"`
+	Repo         *VCSRepo `json:"repo,omitempty"`
 }
 
 // PullRequest represents a PR/MR stored for a branch.

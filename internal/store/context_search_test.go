@@ -34,7 +34,7 @@ func TestSearchContextIDs_JiraKeyAndRepo(t *testing.T) {
 	err = vcsStore.Repos.UpdateRepoMeta(ctx, repo.ID, "", "Handles all SSO and OAuth flows", "")
 	require.NoError(t, err, "update repo meta")
 
-	_, err = vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "main", "")
+	_, err = vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "main", "", true)
 	require.NoError(t, err, "add branch")
 
 	tests := []struct {
@@ -177,7 +177,7 @@ func TestSearchIndexesPRContent(t *testing.T) {
 	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme", "auth-service")
 	require.NoError(t, err, "ensure repo")
 
-	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feature/zeta", "")
+	branch, err := vcsStore.Branches.AddBranch(ctx, c.ID, repo.ID, "feature/zeta", "", true)
 	require.NoError(t, err, "add branch")
 
 	prResult, err := vcsStore.PullRequests.UpsertPR(ctx, repo.ID, branch.ID, 1,

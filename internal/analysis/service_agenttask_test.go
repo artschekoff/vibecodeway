@@ -57,7 +57,7 @@ func newAgentTaskTestService(t *testing.T) (*Service, string) {
 	require.NoError(t, err)
 	require.NoError(t, vs.Repos.UpdateLocalPath(ctx, repo.ID, "/tmp/repoA"))
 
-	_, err = vs.Branches.AddBranch(ctx, ctxRow.ID, repo.ID, "main", "")
+	_, err = vs.Branches.AddBranch(ctx, ctxRow.ID, repo.ID, "main", "", true)
 	require.NoError(t, err)
 
 	svc.SetVCSStore(vs)
@@ -104,7 +104,7 @@ func TestBuildAgentTask_multiRepo(t *testing.T) {
 	repoB, err := vs.Repos.EnsureRepo(context.Background(), "github", "acme", "repoB")
 	require.NoError(t, err)
 	require.NoError(t, vs.Repos.UpdateLocalPath(context.Background(), repoB.ID, "/tmp/repoB"))
-	_, err = vs.Branches.AddBranch(context.Background(), contextID, repoB.ID, "develop", "")
+	_, err = vs.Branches.AddBranch(context.Background(), contextID, repoB.ID, "develop", "", true)
 	require.NoError(t, err)
 
 	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")
@@ -124,7 +124,7 @@ func TestBuildAgentTask_usesRepoPaths(t *testing.T) {
 	// Path only in vcs_repo_paths; local_path left empty (as in prod).
 	_, err = vs.RepoPaths.Add(context.Background(), repoC.ID, "/tmp/repoC")
 	require.NoError(t, err)
-	_, err = vs.Branches.AddBranch(context.Background(), contextID, repoC.ID, "main", "")
+	_, err = vs.Branches.AddBranch(context.Background(), contextID, repoC.ID, "main", "", true)
 	require.NoError(t, err)
 
 	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")

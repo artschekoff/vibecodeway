@@ -6,6 +6,7 @@ import {vcsstore} from '../models';
 import {slackstore} from '../models';
 import {agent} from '../models';
 import {service} from '../models';
+import {productivity} from '../models';
 import {vcs} from '../models';
 import {jira} from '../models';
 import {jirastore} from '../models';
@@ -194,7 +195,7 @@ export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.Reason
 
 export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
 
-export function GetProductivityStats():Promise<any>;
+export function GetProductivityStats():Promise<productivity.Stats>;
 
 export function GetRepoFileTree(arg1:string):Promise<Array<string>>;
 

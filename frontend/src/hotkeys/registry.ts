@@ -55,12 +55,17 @@ export const COMMANDS: Command[] = [
   // terminal is rarely the focused element when you want to open one). `object`
   // stays "terminal" so they still group under TERMINAL in the help/settings UI.
   // next / prev stay scope:"terminal" — cycling only makes sense with the panel focused.
+  //
+  // Each has its OWN chord — deliberately not a ⌘T leader. "here" and "insert"
+  // used to hang off ⌘T as sequenced children, which forced every ⌘T through the
+  // 600ms leader window before the terminal appeared; opening a terminal is the
+  // hot path and has to land on the keypress.
   { id: "terminal.new", object: "terminal", action: "new", label: "New terminal",
-    description: "Open a new terminal (same as +)", scope: "global", defaultChord: "mod+t", defaultAction: true },
+    description: "Open a new terminal (same as +)", scope: "global", defaultChord: "mod+t" },
   { id: "terminal.here", object: "terminal", action: "here", label: "Terminal here",
-    description: "Open a terminal at the selected path", scope: "global", defaultChord: "mod+t", sequence: "h" },
+    description: "Open a terminal at the selected path", scope: "global", defaultChord: "mod+shift+t" },
   { id: "terminal.insert", object: "terminal", action: "insert", label: "Insert command",
-    description: "Open the insert-command menu", scope: "global", defaultChord: "mod+t", sequence: "i" },
+    description: "Open the insert-command menu", scope: "global", defaultChord: "mod+i" },
   { id: "terminal.next", object: "terminal", action: "next", label: "Next terminal",
     description: "Switch to the next terminal", scope: "terminal", defaultChord: "mod+]" },
   { id: "terminal.prev", object: "terminal", action: "prev", label: "Previous terminal",

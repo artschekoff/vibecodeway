@@ -17,7 +17,7 @@ func TestEnsureContextEditorWorkspace_ready(t *testing.T) {
 	require.NoError(t, err)
 	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repo.ID, dir)
 	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "feat/x", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "feat/x", "", true)
 	require.NoError(t, err)
 
 	prep, err := app.EnsureContextEditorWorkspace(contextID)
@@ -37,7 +37,7 @@ func TestEnsureContextEditorWorkspace_offersChoiceWhenNoWorkspace(t *testing.T) 
 	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repo.ID, dir)
 	require.NoError(t, err)
 	// Empty branch => repo-only link, no worktree gets created.
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "", "", true)
 	require.NoError(t, err)
 
 	prep, err := app.EnsureContextEditorWorkspace(contextID)
@@ -56,7 +56,7 @@ func TestEnsureContextEditorWorkspace_noLocalPath(t *testing.T) {
 
 	repo, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "repoNoPath")
 	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "feat/y", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repo.ID, "feat/y", "", true)
 	require.NoError(t, err)
 
 	prep, err := app.EnsureContextEditorWorkspace(contextID)
@@ -76,14 +76,14 @@ func TestEnsureContextEditorWorkspace_returnsAllWorktrees(t *testing.T) {
 	require.NoError(t, err)
 	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repoA.ID, dirA)
 	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repoA.ID, "feat/x", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repoA.ID, "feat/x", "", true)
 	require.NoError(t, err)
 
 	repoB, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "repoB")
 	require.NoError(t, err)
 	_, err = app.vcsStore.RepoPaths.Add(app.ctx, repoB.ID, dirB)
 	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repoB.ID, "feat/x", "")
+	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repoB.ID, "feat/x", "", true)
 	require.NoError(t, err)
 
 	prep, err := app.EnsureContextEditorWorkspace(contextID)

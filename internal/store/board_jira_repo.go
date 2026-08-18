@@ -91,8 +91,8 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 
 	for _, it := range issues {
 		_, err := tx.ExecContext(ctx, `
-			INSERT INTO board_jira_assignments (jira_key, summary, status, issue_type, priority, created, org, seen, fetched_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+			INSERT INTO board_jira_assignments (jira_key, summary, status, issue_type, priority, created, org, org_checked, seen, fetched_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
 			ON CONFLICT(jira_key) DO UPDATE SET
 				summary = excluded.summary,
 				status = excluded.status,
@@ -100,10 +100,12 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 				priority = excluded.priority,
 				created = excluded.created,
 				-- Jira search can't return the org custom field (acli allowlist), so an
-				-- empty incoming org means "unknown", not "cleared": keep what we have.
+				-- empty incoming org means "unknown", not "cleared": keep what we have
+				-- and leave the key queued for the per-key backfill.
 				org = COALESCE(NULLIF(excluded.org, ''), board_jira_assignments.org),
+				org_checked = CASE WHEN excluded.org <> '' THEN 1 ELSE board_jira_assignments.org_checked END,
 				fetched_at = excluded.fetched_at`,
-			it.Key, it.Summary, it.Status, it.IssueType, it.Priority, it.Created, it.Org, now)
+			it.Key, it.Summary, it.Status, it.IssueType, it.Priority, it.Created, it.Org, boolToInt(it.Org != ""), now)
 		if err != nil {
 			return fmt.Errorf("upsert board jira %s: %w", it.Key, err)
 		}
@@ -157,6 +159,41 @@ func (s *Store) ListBoardJiraAssignments(ctx context.Context, orderBy string) ([
 		out = append(out, it)
 	}
 	return out, rows.Err()
+}
+
+// ListBoardKeysMissingOrg returns the assignment keys whose org/scope has never
+// been looked up. Drives the per-key backfill: a Jira search can't return the
+// custom field, so it has to be fetched one `workitem view` at a time.
+func (s *Store) ListBoardKeysMissingOrg(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT jira_key FROM board_jira_assignments WHERE org_checked = 0 ORDER BY jira_key`)
+	if err != nil {
+		return nil, fmt.Errorf("list board keys missing org: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, fmt.Errorf("scan board key missing org: %w", err)
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+// SetBoardAssignmentOrg records the looked-up org for a key. An empty org is a
+// valid answer ("the field isn't set on this issue") and still marks the key
+// checked, so it leaves the backfill queue.
+func (s *Store) SetBoardAssignmentOrg(ctx context.Context, key, org string) error {
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE board_jira_assignments SET org = ?, org_checked = 1 WHERE jira_key = ?`,
+		org, key,
+	); err != nil {
+		return fmt.Errorf("set board org for %s: %w", key, err)
+	}
+	return nil
 }
 
 // MarkBoardJiraAssignmentsSeen marks every persisted assignment as seen.

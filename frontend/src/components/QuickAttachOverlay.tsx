@@ -119,7 +119,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
           await AddIssuesToContext(contextID, [kind.key]);
           break;
         case "vcs_branch":
-          await AddVCSBranch(contextID, kind.platform, kind.ownerRepo, kind.branch, "");
+          await AddVCSBranch(contextID, kind.platform, kind.ownerRepo, kind.branch, "", true);
           break;
         case "vcs_pr":
           await AddSpecificPR(contextID, kind.platform, kind.ownerRepo, kind.prNumber);

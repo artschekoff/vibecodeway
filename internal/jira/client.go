@@ -52,15 +52,20 @@ func (c *Client) GetInstanceURL(ctx context.Context) string {
 	return "https://" + host
 }
 
+// searchFields is the field list passed to `acli jira workitem search`.
+// acli enforces a fixed allowlist here and rejects anything outside it with
+// "field 'X' is not allowed", which fails the WHOLE search — so this list must
+// never grow a custom field (customfield_*) or "created". Custom fields are only
+// retrievable via `acli jira workitem view` (see ViewIssue / OrgScopeFieldID).
+const searchFields = "key,summary,status,assignee,issuetype,priority"
+
 // Search executes a JQL search and returns matching issues.
 func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error) {
 	flags := []string{
 		"--jql", jql,
-		// NOTE: acli's workitem search rejects fields outside its allowlist —
-		// "created" is NOT permitted here (unlike the REST API), so requesting it
-		// makes the whole search fail. priority is allowed. See parseSearchResults:
-		// Created stays "" for search results (acli can't return it here).
-		"--fields", "key,summary,status,assignee,issuetype,priority," + OrgScopeFieldID,
+		// See searchFields: Created and Org stay "" for search results because
+		// acli's search allowlist can't return them.
+		"--fields", searchFields,
 		"--json",
 	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "search"}, nil, flags)
@@ -81,6 +86,28 @@ func (c *Client) ViewIssue(ctx context.Context, key string) (*IssueDetail, error
 		return nil, fmt.Errorf("jira view %s: %w", key, err)
 	}
 	return parseIssueDetail(out)
+}
+
+// IssueOrg returns the issue's org/scope custom field value, or "" when unset.
+// `workitem view` is the ONLY acli command that returns custom fields (search
+// rejects them, see searchFields) and it takes one key per call at roughly 5s,
+// so callers must treat this as expensive and cache the result.
+func (c *Client) IssueOrg(ctx context.Context, key string) (string, error) {
+	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "view"}, []string{key},
+		[]string{"--fields", OrgScopeFieldID, "--json"})
+	if err != nil {
+		return "", fmt.Errorf("jira view %s org: %w", key, err)
+	}
+	return parseIssueOrg(out)
+}
+
+// parseIssueOrg pulls the org/scope value out of a `workitem view` payload.
+func parseIssueOrg(raw string) (string, error) {
+	var item acliIssue
+	if err := json.Unmarshal([]byte(raw), &item); err != nil {
+		return "", fmt.Errorf("parsing org field: %w", err)
+	}
+	return item.field(OrgScopeFieldID), nil
 }
 
 // TransitionIssue moves a work item to the target status (by name). acli resolves

@@ -61,6 +61,35 @@ func TestContextTicketState(t *testing.T) {
 	assert.False(t, doneC)
 }
 
+func TestListKnownJiraStatuses(t *testing.T) {
+	s := newTodoTestStore(t)
+	ctx := context.Background()
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+
+	// Statuses spread over two contexts: the list is workflow-wide, not per-context.
+	a, err := s.CreateContext(ctx, "CTX-A", org.ID)
+	require.NoError(t, err)
+	b, err := s.CreateContext(ctx, "CTX-B", org.ID)
+	require.NoError(t, err)
+	insertJiraIssue(t, s, "a1", a.ID, "JH-1", "To Do")
+	insertJiraIssue(t, s, "a2", a.ID, "JH-2", "In Code Review")
+	insertJiraIssue(t, s, "a3", a.ID, "JH-3", "To Do") // duplicate collapses
+	insertJiraIssue(t, s, "b1", b.ID, "JH-4", "Ready for QA")
+	insertJiraIssue(t, s, "b2", b.ID, "JH-5", "") // blank is not a status
+
+	got, err := s.ListKnownJiraStatuses(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"In Code Review", "Ready for QA", "To Do"}, got)
+}
+
+func TestListKnownJiraStatuses_emptyWhenNoIssues(t *testing.T) {
+	s := newTodoTestStore(t)
+	got, err := s.ListKnownJiraStatuses(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
 func insertJiraIssue(t *testing.T, s *Store, id, ctxID, key, status string) {
 	t.Helper()
 	_, err := s.DB().ExecContext(context.Background(),

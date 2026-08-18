@@ -15,6 +15,8 @@ export interface VCSBranchInput {
   ownerRepo: string;
   branch: string;
   label?: string;
+  /** false = link the branch but never resolve its PRs (e.g. tracking main). */
+  autodetectPr: boolean;
 }
 
 interface Props {
@@ -165,6 +167,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [vcsOwnerRepo, setVCSOwnerRepo] = useState("");
   const [vcsBranch, setVCSBranch] = useState("");
   const [vcsLabel, setVCSLabel] = useState("");
+  const [vcsAutodetectPR, setVCSAutodetectPR] = useState(true);
   const [vcsAddError, setVCSAddError] = useState("");
   const [aiMatching, setAiMatching] = useState(false);
   const [aiMatchNote, setAiMatchNote] = useState("");
@@ -714,10 +717,11 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
       setVCSAddError("This branch is already linked.");
       return;
     }
-    setNewVCSBranches((prev) => [...prev, { platform: vcsPlatform, ownerRepo, branch, label: vcsLabel.trim() }]);
+    setNewVCSBranches((prev) => [...prev, { platform: vcsPlatform, ownerRepo, branch, label: vcsLabel.trim(), autodetectPr: vcsAutodetectPR }]);
     setVCSOwnerRepo("");
     setVCSBranch("");
     setVCSLabel("");
+    setVCSAutodetectPR(true);
     setBranchPickerOpen(false);
     setRepoBranches([]);
     setBranchFilter("");
@@ -734,7 +738,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
         !newVCSBranches.some((b) => b.platform === m.platform && b.ownerRepo === m.ownerRepo && b.branch === m.branch) &&
         !existingVCSBranches.some((b) => b.repo?.platform === m.platform && `${b.repo?.owner}/${b.repo?.name}` === m.ownerRepo && b.branch === m.branch)
       );
-      setNewVCSBranches((prev) => [...prev, ...fresh.map((m) => ({ platform: m.platform as VCSPlatform, ownerRepo: m.ownerRepo, branch: m.branch, label: m.label }))]);
+      setNewVCSBranches((prev) => [...prev, ...fresh.map((m) => ({ platform: m.platform as VCSPlatform, ownerRepo: m.ownerRepo, branch: m.branch, label: m.label, autodetectPr: true }))]);
       setAiMatchNote(fresh.length ? `Added ${fresh.length} matched branch(es) — review and Save.` : "No new matching branches found.");
     } catch (e) {
       setAiMatchNote(e instanceof Error ? e.message : "Unknown error");
@@ -1645,6 +1649,9 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         {b.label && (
                           <span className="vcs-label-badge">{b.label}</span>
                         )}
+                        {!b.autodetectPr && (
+                          <span className="vcs-label-badge" title="PRs will not be resolved for this branch">no PR</span>
+                        )}
                         <button
                           type="button"
                           className="channel-remove-btn"
@@ -1670,6 +1677,9 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{b.branch ? `:${b.branch}` : " · all PRs"}</span>
                         {b.label && (
                           <span className="vcs-label-badge">{b.label}</span>
+                        )}
+                        {!b.autodetectPr && (
+                          <span className="vcs-label-badge" title="PRs will not be resolved for this branch">no PR</span>
                         )}
                         <button
                           type="button"
@@ -1963,12 +1973,25 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                     />
                   </div>
 
+                  {/* Row: autodetect PR */}
+                  <div className="vcs-add-row" style={{ marginTop: 6 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={vcsAutodetectPR}
+                        onChange={(e) => setVCSAutodetectPR(e.target.checked)}
+                      />
+                      Autodetect PR
+                    </label>
+                  </div>
+
                   {vcsAddError && (
                     <div className="field-error" style={{ marginTop: 4 }}>{vcsAddError}</div>
                   )}
 
                   <div className="form-hint" style={{ marginTop: 8 }}>
                     Branches load automatically after you stop typing. Leave branch empty to track all open PRs.
+                    Uncheck <strong>Autodetect PR</strong> to link the branch alone — useful for main, which would otherwise pull in every PR on it.
                   </div>
                 </div>
               </div>

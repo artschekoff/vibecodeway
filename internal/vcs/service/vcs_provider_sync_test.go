@@ -24,6 +24,7 @@ type mockRunner struct {
 	authored            []vcs.PRData
 	authoredErr         error
 	prByNumber          map[int]*vcs.PRData // served by GetPRByNumber (reconcile path)
+	branchPRCalls       []string            // branches passed to ListPRsForBranch
 }
 
 func (m *mockRunner) Platform() vcs.Platform { return m.platform }
@@ -40,7 +41,8 @@ func (m *mockRunner) ListAuthoredPRs(_ context.Context, _, _, _ string) ([]vcs.P
 	return m.authored, m.authoredErr
 }
 
-func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, _ string) ([]vcs.PRData, error) {
+func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, branch string) ([]vcs.PRData, error) {
+	m.branchPRCalls = append(m.branchPRCalls, branch)
 	return nil, nil
 }
 func (m *mockRunner) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs.CommentData, error) {
@@ -91,6 +93,16 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			on_checkout_command  TEXT NOT NULL DEFAULT '',
 			created_at           TEXT NOT NULL,
 			UNIQUE (platform, owner, name)
+		);
+		CREATE TABLE IF NOT EXISTS context_vcs_branches (
+			id            TEXT PRIMARY KEY,
+			context_id    TEXT NOT NULL,
+			repo_id       TEXT NOT NULL REFERENCES vcs_repos(id) ON DELETE CASCADE,
+			branch        TEXT NOT NULL,
+			label         TEXT NOT NULL DEFAULT '',
+			created_at    TEXT NOT NULL,
+			autodetect_pr INTEGER NOT NULL DEFAULT 1,
+			UNIQUE (context_id, repo_id, branch)
 		);
 		CREATE TABLE IF NOT EXISTS vcs_review_requests (
 			id            TEXT PRIMARY KEY,
@@ -361,4 +373,25 @@ func TestSyncReviewRequests_NoPlatformRunner_ReturnsError(t *testing.T) {
 
 	err := p.SyncReviewRequests(context.Background(), vcs.PlatformGitHub)
 	assert.Error(t, err)
+}
+
+// A branch linked with "Autodetect PR" off must never hit the platform for PRs —
+// that's what lets a long-lived branch (main) be tracked without dragging in every
+// pull request on it. Links with the flag on still resolve as before.
+func TestSyncSkipsPRLookupWhenAutodetectPROff(t *testing.T) {
+	runner := &mockRunner{platform: vcs.PlatformGitHub}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "main", "", false)
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/x", "", true)
+	require.NoError(t, err)
+
+	_, err = p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"feat/x"}, runner.branchPRCalls)
 }
