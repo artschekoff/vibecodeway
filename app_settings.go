@@ -76,6 +76,25 @@ func (a *App) SetPRStaleThresholdDays(days int) error {
 	return a.db.SetAppSettings(a.ctx, *current)
 }
 
+// SetProductivitySettings sets the theoretical workday length and the assumed
+// cost of one closed task, both in hours. Non-positive values fall back to the
+// 8h/2h defaults so the dashboard can never divide by zero.
+func (a *App) SetProductivitySettings(workdayHours, taskHours float64) error {
+	if workdayHours <= 0 {
+		workdayHours = 8
+	}
+	if taskHours <= 0 {
+		taskHours = 2
+	}
+	current, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return err
+	}
+	current.WorkdayHours = workdayHours
+	current.TaskHours = taskHours
+	return a.db.SetAppSettings(a.ctx, *current)
+}
+
 // SetAutoLinkRepos toggles whether matched repos are auto-linked when a new
 // context is created. Persisted in app_settings; preserves all other fields.
 func (a *App) SetAutoLinkRepos(enabled bool) error {

@@ -226,16 +226,18 @@ const (
 
 // AppSettings holds application-level preferences stored in the local database.
 type AppSettings struct {
-	ContextRefetchEnabled        bool   `json:"contextRefetchEnabled"`
-	ContextRefetchIntervalMin    int    `json:"contextRefetchIntervalMin"`
-	ReviewsRefetchEnabled        bool   `json:"reviewsRefetchEnabled"`
-	ReviewsRefetchIntervalMin    int    `json:"reviewsRefetchIntervalMin"`
-	TerminalAppPath              string `json:"terminalAppPath"`
-	CodingAgentApp               string `json:"codingAgentApp"`
-	AutoLinkReposOnContextCreate bool   `json:"autoLinkReposOnContextCreate"`
-	EditorSettings               string `json:"editorSettings"`       // opaque JSON blob owned by the frontend
-	PRStaleThresholdDays         int    `json:"prStaleThresholdDays"` // PR considered stale after N days awaiting review
-	UpdatedAt                    string `json:"updatedAt"`
+	ContextRefetchEnabled        bool    `json:"contextRefetchEnabled"`
+	ContextRefetchIntervalMin    int     `json:"contextRefetchIntervalMin"`
+	ReviewsRefetchEnabled        bool    `json:"reviewsRefetchEnabled"`
+	ReviewsRefetchIntervalMin    int     `json:"reviewsRefetchIntervalMin"`
+	TerminalAppPath              string  `json:"terminalAppPath"`
+	CodingAgentApp               string  `json:"codingAgentApp"`
+	AutoLinkReposOnContextCreate bool    `json:"autoLinkReposOnContextCreate"`
+	EditorSettings               string  `json:"editorSettings"`       // opaque JSON blob owned by the frontend
+	PRStaleThresholdDays         int     `json:"prStaleThresholdDays"` // PR considered stale after N days awaiting review
+	WorkdayHours                 float64 `json:"workdayHours"`         // theoretical workday length, hours
+	TaskHours                    float64 `json:"taskHours"`            // theoretical cost of one closed task, hours
+	UpdatedAt                    string  `json:"updatedAt"`
 }
 
 // SyncSession tracks one refresh run (Refresh All or per-source).
@@ -577,4 +579,15 @@ type AITodoItem struct {
 	Source    string `json:"source"` // ai | user
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+// TaskCompletion is one Jira issue observed moving from an open status to a
+// terminal one. CompletedAt is when the app detected it, not Jira's own
+// resolution timestamp — the app never sees the latter.
+type TaskCompletion struct {
+	Key         string `json:"key"`
+	IssueType   string `json:"issueType"`
+	Org         string `json:"org"`
+	Status      string `json:"status"`
+	CompletedAt string `json:"completedAt"`
 }
