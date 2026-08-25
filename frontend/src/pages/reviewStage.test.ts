@@ -75,8 +75,16 @@ describe("stageMeta / REQUESTED_STAGE_ORDER", () => {
       badge: "Reviewed by you",
       className: " pr-status--waiting",
     });
-    expect(stageMeta("terminal").badge).toBe("");
-    expect(stageMeta("authored").badge).toBe("");
+    expect(stageMeta("terminal")).toEqual({
+      title: "Merged / Closed",
+      badge: "",
+      className: "",
+    });
+    expect(stageMeta("authored")).toEqual({
+      title: "My PRs",
+      badge: "",
+      className: "",
+    });
   });
 });
 
