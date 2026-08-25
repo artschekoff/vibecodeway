@@ -101,7 +101,8 @@ func (r *Runner) StartDeviceAuth(ctx context.Context) (*vcs.DeviceCodeInfo, erro
 		return nil, fmt.Errorf("parse device code response: %w", err)
 	}
 
-	r.logger.Info("github device auth started",
+	r.logger.Info(
+		"github device auth started",
 		zap.String("user_code", result.UserCode),
 		zap.Int("interval", result.Interval),
 		zap.Int("expires_in", result.ExpiresIn),
@@ -300,7 +301,8 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 	if branch != "" {
 		args = append(args, "--head", branch)
 	}
-	r.logger.Info("gh pr list",
+	r.logger.Info(
+		"gh pr list",
 		zap.String("repo", owner+"/"+repo),
 		zap.String("branch", branch),
 	)
@@ -649,6 +651,7 @@ func (r *Runner) annotateReReviews(ctx context.Context, owner, repo string, prs 
 		reviewsByNumber[pr.Number] = raw
 	}
 	applyReReviewStatus(prs, reviewsByNumber, login)
+	applyMyReviewState(prs, reviewsByNumber, login)
 	return reviewsByNumber
 }
 
@@ -975,6 +978,37 @@ func applyReReviewStatus(prs []vcs.PRData, reviewsByNumber map[int][]byte, login
 		case "CHANGES_REQUESTED", "APPROVED", "DISMISSED":
 			prs[i].ReviewStatus = reviewStatusReReviewRequired
 		}
+	}
+}
+
+// normalizeMyReviewState maps a GitHub review-state enum to the value stored in
+// vcs_review_requests.my_review_state. DISMISSED and PENDING collapse to "" — a
+// dismissed or unsubmitted review leaves the user with no standing decision.
+func normalizeMyReviewState(state string) string {
+	switch state {
+	case "APPROVED":
+		return "approved"
+	case "CHANGES_REQUESTED":
+		return "changes_requested"
+	case "COMMENTED":
+		return "commented"
+	default:
+		return ""
+	}
+}
+
+// applyMyReviewState records `login`'s own standing decision on every PR whose
+// reviews payload was fetched. PRs missing from reviewsByNumber keep a nil pointer,
+// which tells the persistence layer "unknown — do not overwrite". Reuses the payload
+// annotateReReviews already fetched, so this costs no extra API calls.
+func applyMyReviewState(prs []vcs.PRData, reviewsByNumber map[int][]byte, login string) {
+	for i := range prs {
+		raw, ok := reviewsByNumber[prs[i].Number]
+		if !ok {
+			continue
+		}
+		state := normalizeMyReviewState(latestReviewStateFromJSON(raw, login))
+		prs[i].MyReviewState = &state
 	}
 }
 
