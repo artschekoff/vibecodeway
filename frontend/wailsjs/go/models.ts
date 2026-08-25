@@ -2703,6 +2703,7 @@ export namespace vcsstore {
 	    reviewers?: ReviewerDecision[];
 	    kind: string;
 	    ciStatus: string;
+	    myReviewState: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ReviewRequest(source);
@@ -2727,6 +2728,7 @@ export namespace vcsstore {
 	        this.reviewers = this.convertValues(source["reviewers"], ReviewerDecision);
 	        this.kind = source["kind"];
 	        this.ciStatus = source["ciStatus"];
+	        this.myReviewState = source["myReviewState"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

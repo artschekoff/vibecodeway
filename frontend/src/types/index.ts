@@ -544,6 +544,9 @@ export interface ReviewRequest {
   reviewers?: ReviewerDecision[];
   kind?: "requested" | "authored";
   ciStatus?: string; // "", PENDING, SUCCESS, FAILURE
+  // My own standing review decision on this PR: "", "approved",
+  // "changes_requested" or "commented". Mirrors vcs_review_requests.my_review_state.
+  myReviewState?: string;
 }
 
 // --- Context Relations ---
