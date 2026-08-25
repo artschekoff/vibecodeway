@@ -54,10 +54,29 @@ describe("stageMeta / REQUESTED_STAGE_ORDER", () => {
     ]);
   });
 
-  it("gives every stage a section title", () => {
-    for (const stage of REQUESTED_STAGE_ORDER) {
-      expect(stageMeta(stage).title.length).toBeGreaterThan(0);
-    }
+  it("gives every stage a section title and pins badge/className values", () => {
+    expect(stageMeta("awaiting_first")).toEqual({
+      title: "Awaiting your first review",
+      badge: "Review Required",
+      className: " pr-status--awaiting-first",
+    });
+    expect(stageMeta("re_review")).toEqual({
+      title: "Re-review requested",
+      badge: "Re-review requested",
+      className: " pr-status--re-review",
+    });
+    expect(stageMeta("approved")).toEqual({
+      title: "Approved",
+      badge: "Approved",
+      className: " pr-status--approved",
+    });
+    expect(stageMeta("reviewed_waiting")).toEqual({
+      title: "Reviewed — waiting for author",
+      badge: "Reviewed by you",
+      className: " pr-status--waiting",
+    });
+    expect(stageMeta("terminal").badge).toBe("");
+    expect(stageMeta("authored").badge).toBe("");
   });
 });
 

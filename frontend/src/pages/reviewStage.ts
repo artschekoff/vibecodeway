@@ -36,7 +36,7 @@ export function reviewStage(r: ReviewRequest): ReviewStage {
   return "reviewed_waiting";
 }
 
-export interface StageMeta {
+interface StageMeta {
   // title heads the section in the reviews list.
   title: string;
   // badge is the chip rendered on the card; "" defers to reviewStatusMeta so
