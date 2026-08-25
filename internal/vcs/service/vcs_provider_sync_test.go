@@ -45,15 +45,19 @@ func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, branch string) ([
 	m.branchPRCalls = append(m.branchPRCalls, branch)
 	return nil, nil
 }
+
 func (m *mockRunner) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs.CommentData, error) {
 	return nil, nil
 }
+
 func (m *mockRunner) ListRepoBranches(_ context.Context, _, _ string) ([]string, error) {
 	return nil, nil
 }
+
 func (m *mockRunner) StartDeviceAuth(_ context.Context) (*vcs.DeviceCodeInfo, error) {
 	return nil, nil
 }
+
 func (m *mockRunner) CompleteDeviceAuth(_ context.Context, _ string, _ int) (vcs.AuthResult, error) {
 	return vcs.AuthResult{}, nil
 }
@@ -122,6 +126,7 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			mergeable     TEXT NOT NULL DEFAULT '',
 			kind          TEXT NOT NULL DEFAULT 'requested',
 			ci_status     TEXT NOT NULL DEFAULT '',
+			my_review_state TEXT NOT NULL DEFAULT '',
 			UNIQUE (repo_id, pr_number)
 		);
 	`)
@@ -141,10 +146,12 @@ func newTestProvider(t *testing.T, runner vcs.VCSRunner) (*VCSProvider, *vcsstor
 func TestSyncAuthoredPRsUpsertsAuthoredKind(t *testing.T) {
 	runner := &mockRunner{
 		platform: vcs.PlatformGitHub,
-		authored: []vcs.PRData{{Number: 5, Title: "mine", Author: "me", State: "open",
+		authored: []vcs.PRData{{
+			Number: 5, Title: "mine", Author: "me", State: "open",
 			ReviewStatus: "changes_requested", URL: "u", HeadBranch: "b", CreatedAt: "2026-01-01T00:00:00Z",
 			Mergeable: "CONFLICTING", CIStatus: "FAILURE",
-			Reviewers: []vcs.ReviewerDecision{{Login: "bob", State: "changes_requested"}}}},
+			Reviewers: []vcs.ReviewerDecision{{Login: "bob", State: "changes_requested"}},
+		}},
 	}
 	p, vs := newTestProvider(t, runner)
 	ctx := context.Background()

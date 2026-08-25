@@ -32,7 +32,8 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 	}
 
 	var existing string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id FROM vcs_review_requests WHERE repo_id = ? AND pr_number = ?`,
 		repoID, prNumber,
 	).Scan(&existing)
@@ -165,12 +166,24 @@ func (r *ReviewRequestRepo) UpdateMergeable(ctx context.Context, repoID string, 
 	return err
 }
 
+// UpdateMyReviewState records the authenticated user's own standing review decision
+// on a PR ("", "approved", "changes_requested", "commented"), leaving every other
+// column untouched. Callers must invoke this only when they actually resolved the
+// PR's reviews — a PR whose reviews were not fetched must keep its stored value
+// rather than be silently reset to "".
+func (r *ReviewRequestRepo) UpdateMyReviewState(ctx context.Context, repoID string, prNumber int, state string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_review_requests SET my_review_state = ? WHERE repo_id = ? AND pr_number = ?`,
+		state, repoID, prNumber)
+	return err
+}
+
 // ListReviewRequests returns non-dismissed review requests, optionally filtered by repoID.
 func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID string) ([]ReviewRequest, error) {
 	q := `
 		SELECT id, repo_id, pr_number, pr_title, pr_author, pr_url,
 		       review_status, head_branch, requested_at, fetched_at, reviewed_at, dismissed_at,
-		       viewed_at, reviewers, mergeable, kind, ci_status
+		       viewed_at, reviewers, mergeable, kind, ci_status, my_review_state
 		FROM vcs_review_requests
 		WHERE dismissed_at IS NULL`
 	var args []any
@@ -194,7 +207,7 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 			&rr.ID, &rr.RepoID, &rr.PRNumber, &rr.PRTitle, &rr.PRAuthor,
 			&rr.PRURL, &rr.ReviewStatus, &rr.HeadBranch, &rr.RequestedAt, &rr.FetchedAt,
 			&rr.ReviewedAt, &rr.DismissedAt, &rr.ViewedAt, &reviewersJSON, &rr.Mergeable,
-			&rr.Kind, &rr.CIStatus,
+			&rr.Kind, &rr.CIStatus, &rr.MyReviewState,
 		); err != nil {
 			return nil, fmt.Errorf("scan review request: %w", err)
 		}
