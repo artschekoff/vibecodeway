@@ -485,3 +485,37 @@ func TestMyStateFromReviewers(t *testing.T) {
 	assert.Equal(t, "", myStateFromReviewers(ds, "nobody"))
 	assert.Equal(t, "", myStateFromReviewers(nil, "me"))
 }
+
+// The nil-vs-empty distinction is the load-bearing invariant of this feature: a PR
+// whose reviews were not resolved this sync (MyReviewState == nil) must not overwrite
+// a previously recorded decision with "". This pins that guard against regression.
+func TestSyncReviewRequestsPreservesStoredMyReviewStateWhenUnresolved(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		// PR 11 reappears in review-requested, but the runner did not resolve
+		// reviews for it this time (MyReviewState left nil).
+		reviewRequests: []vcs.PRData{{
+			Number: 11, Title: "t", Author: "carol", State: "open",
+			ReviewStatus: "review_required", URL: "u", HeadBranch: "b",
+			CreatedAt: "2026-08-01T00:00:00Z", Mergeable: "MERGEABLE",
+		}},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	// A prior sync already recorded a standing approval for this PR.
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 11, "t", "carol",
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+	require.NoError(t, err)
+	require.NoError(t, vs.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, 11, "approved"))
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].MyReviewState,
+		"a PR whose reviews were not resolved this sync must keep its stored decision")
+}
