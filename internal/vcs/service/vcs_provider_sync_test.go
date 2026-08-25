@@ -402,3 +402,86 @@ func TestSyncSkipsPRLookupWhenAutodetectPROff(t *testing.T) {
 
 	assert.Equal(t, []string{"feat/x"}, runner.branchPRCalls)
 }
+
+func TestSyncReviewRequestsPersistsMyReviewState(t *testing.T) {
+	approved := "approved"
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		reviewRequests: []vcs.PRData{{
+			Number: 7, Title: "t", Author: "carol", State: "open",
+			ReviewStatus: "review_required", URL: "u", HeadBranch: "b",
+			CreatedAt: "2026-08-01T00:00:00Z", Mergeable: "MERGEABLE",
+			MyReviewState: &approved,
+		}},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].MyReviewState)
+}
+
+func TestSyncReviewRequestsTagsChangesRequestedSearchHits(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		// PR 8 appears only in the changes-requested search, with no MyReviewState set.
+		changesRequested: []vcs.PRData{{
+			Number: 8, Title: "t", Author: "carol", State: "open",
+			ReviewStatus: "changes_requested", URL: "u", HeadBranch: "b",
+			CreatedAt: "2026-08-01T00:00:00Z", Mergeable: "MERGEABLE",
+		}},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "changes_requested", list[0].MyReviewState)
+}
+
+func TestReconcileRecordsMyApprovalAfterPRDropsOffTheList(t *testing.T) {
+	runner := &mockRunner{platform: vcs.PlatformGitHub}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	// A stored PR from a previous sync, with no standing decision yet.
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 9, "t", "carol",
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+	require.NoError(t, err)
+
+	// It is gone from both searches, but `gh pr view` shows it open and approved by me.
+	runner.prByNumber = map[int]*vcs.PRData{9: {
+		Number: 9, State: "open", Mergeable: "MERGEABLE",
+		Reviewers: []vcs.ReviewerDecision{{Login: "me", State: "approved"}},
+	}}
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].MyReviewState)
+}
+
+func TestMyStateFromReviewers(t *testing.T) {
+	ds := []vcs.ReviewerDecision{
+		{Login: "alice", State: "approved"},
+		{Login: "me", State: "changes_requested"},
+	}
+	assert.Equal(t, "changes_requested", myStateFromReviewers(ds, "me"))
+	assert.Equal(t, "", myStateFromReviewers(ds, "nobody"))
+	assert.Equal(t, "", myStateFromReviewers(nil, "me"))
+}
