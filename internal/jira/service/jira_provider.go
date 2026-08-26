@@ -55,7 +55,8 @@ func (p *JiraProvider) IsConfigured(ctx context.Context, contextID string) (bool
 // upsertWithMessage persists an issue detail and mirrors it into the message store.
 // Shared by Refresh's existing-issue pass and its newly-discovered-children pass.
 func (p *JiraProvider) upsertWithMessage(ctx context.Context, contextID string, detail *jira.IssueDetail) (jirastore.IssueUpsertResult, error) {
-	res, err := p.jiraRepo.UpsertIssue(ctx, contextID,
+	res, err := p.jiraRepo.UpsertIssue(
+		ctx, contextID,
 		detail.Key, detail.Summary, detail.Status, detail.Assignee,
 		detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
 		detail.Priority,
@@ -246,7 +247,8 @@ func (p *JiraProvider) Reload(ctx context.Context, contextID string) (provider.S
 			p.logger.Warn("jira reload: view issue failed", zap.String("key", r.Key), zap.Error(err))
 			continue
 		}
-		reloadRes, err := p.jiraRepo.UpsertIssue(ctx, contextID,
+		reloadRes, err := p.jiraRepo.UpsertIssue(
+			ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
 			detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
 			detail.Priority,

@@ -18,7 +18,8 @@ const (
 // step_index is set to max(existing)+1 atomically.
 func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*ReasoningChainStep, error) {
 	var maxIdx int
-	_ = s.db.QueryRowContext(ctx,
+	_ = s.db.QueryRowContext(
+		ctx,
 		`SELECT COALESCE(MAX(step_index), -1) FROM reasoning_chain_steps WHERE entity_type = ? AND entity_id = ?`,
 		step.EntityType, step.EntityID,
 	).Scan(&maxIdx)
@@ -73,13 +74,15 @@ func (s *Store) AppendChainStep(ctx context.Context, step ReasoningChainStep) (*
 			return nil, fmt.Errorf("begin append step tx: %w", txErr)
 		}
 		defer func() { _ = tx.Rollback() }()
-		if _, txErr = tx.ExecContext(ctx,
+		if _, txErr = tx.ExecContext(
+			ctx,
 			`UPDATE reasoning_chain_steps SET is_current = 0 WHERE entity_type = ? AND entity_id = ?`,
 			step.EntityType, step.EntityID,
 		); txErr != nil {
 			return nil, fmt.Errorf("clear current flags: %w", txErr)
 		}
-		if _, txErr = tx.ExecContext(ctx, `
+		if _, txErr = tx.ExecContext(
+			ctx, `
 			INSERT INTO reasoning_chain_steps
 			  (id, entity_type, entity_id, step_index, source_type, message_id,
 			   message_content, user_instruction, input_state, output_state,
@@ -163,7 +166,8 @@ func (s *Store) SetChainCurrentStep(ctx context.Context, entityType, entityID, s
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(
+		ctx,
 		`UPDATE reasoning_chain_steps SET is_current = 0 WHERE entity_type = ? AND entity_id = ?`,
 		entityType, entityID,
 	); err != nil {
@@ -172,7 +176,8 @@ func (s *Store) SetChainCurrentStep(ctx context.Context, entityType, entityID, s
 
 	// RETURNING requires SQLite >= 3.35; if older, do a separate SELECT after UPDATE.
 	var outputState string
-	if err := tx.QueryRowContext(ctx,
+	if err := tx.QueryRowContext(
+		ctx,
 		`UPDATE reasoning_chain_steps SET is_current = 1 WHERE id = ? RETURNING output_state`,
 		stepID,
 	).Scan(&outputState); err != nil {
@@ -184,7 +189,8 @@ func (s *Store) SetChainCurrentStep(ctx context.Context, entityType, entityID, s
 
 // TruncateChainFrom deletes all steps with step_index >= fromStepIndex for (entityType, entityID).
 func (s *Store) TruncateChainFrom(ctx context.Context, entityType, entityID string, fromStepIndex int) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`DELETE FROM reasoning_chain_steps WHERE entity_type = ? AND entity_id = ? AND step_index >= ?`,
 		entityType, entityID, fromStepIndex,
 	)
@@ -193,7 +199,8 @@ func (s *Store) TruncateChainFrom(ctx context.Context, entityType, entityID stri
 
 // UpdateChainStepQuality writes the quality_score and quality_notes fields for an existing step.
 func (s *Store) UpdateChainStepQuality(ctx context.Context, stepID string, score float64, notes string) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE reasoning_chain_steps SET quality_score = ?, quality_notes = ? WHERE id = ?`,
 		score, notes, stepID,
 	)

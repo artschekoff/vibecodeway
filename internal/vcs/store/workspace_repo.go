@@ -25,7 +25,8 @@ func (r *WorkspaceRepo) Create(ctx context.Context, w *VCSWorkspace) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	w.CreatedAt = now
 	w.UpdatedAt = now
-	_, err := r.db.ExecContext(ctx,
+	_, err := r.db.ExecContext(
+		ctx,
 		`INSERT INTO vcs_workspaces (id, repo_path_id, repo_id, branch, worktree_path, status, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		w.ID, w.RepoPathID, w.RepoID, w.Branch, w.WorktreePath, w.Status, now, now,

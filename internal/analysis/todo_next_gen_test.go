@@ -17,6 +17,7 @@ type fakeTodoAI struct{ content string }
 func (f fakeTodoAI) ChatCompletion(_ context.Context, _ []openai.Message) (*openai.Response, error) {
 	return &openai.Response{Content: f.content}, nil
 }
+
 func (fakeTodoAI) DescribeSettings(_ context.Context) (*appstore.AISettings, openai.Source, error) {
 	return &appstore.AISettings{}, openai.SourceNone, nil
 }

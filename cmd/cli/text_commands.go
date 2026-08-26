@@ -32,7 +32,8 @@ func newTextListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List plain-text entries stored for a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","name":"string","content":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}]`,
@@ -64,7 +65,8 @@ func newTextDeleteCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Text entry UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Permanently delete a plain-text entry from a context.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
@@ -97,7 +99,8 @@ func newTextToggleCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Text entry UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle is_active for a text entry. Inactive entries are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","name":"string","content":"string","isActive":"bool",...}`,

@@ -29,7 +29,8 @@ func newRepoListCmd() *cobra.Command {
 			return writeJSON(repos)
 		},
 	}
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List every connected (tracked) repository with its local checkout paths "+
 			"(vcs_repo_paths) and git-worktree workspaces (vcs_workspaces). Read-only. "+
 			"Use to answer 'which repos are connected and where on disk are they / their workspaces'. "+
@@ -117,7 +118,8 @@ func newBranchAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&platform, "platform", "github", "VCS platform (only 'github' is supported)")
 	_ = cmd.MarkFlagRequired("owner-repo")
 
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Link a repository (and optionally one branch) to a context. Pass --branch for a branch link, "+
 			"--pr-number to resolve the branch from a pull request via gh, or neither to track every PR of the repo. "+
 			"Idempotent: re-adding an existing repo+branch link returns it and updates the label. "+

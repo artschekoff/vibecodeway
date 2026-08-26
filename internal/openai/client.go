@@ -208,7 +208,8 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []Message) (*Respo
 	elapsed := time.Since(start)
 	resp.Source = source
 
-	c.logger.Info(llmLogMessage("llm.chat_completion", resp.Model, resp.Usage, elapsed),
+	c.logger.Info(
+		llmLogMessage("llm.chat_completion", resp.Model, resp.Usage, elapsed),
 		zap.String("provider", dbSettings.Provider),
 		zap.String("model", resp.Model),
 		zap.Int("promptTokens", resp.Usage.PromptTokens),

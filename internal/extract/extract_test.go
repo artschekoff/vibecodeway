@@ -63,7 +63,7 @@ func TestErrUnsupportedFormat_MessageIsDerivedFromAllowedExtensions(t *testing.T
 func TestFromFile_PNG_WithWrongMagicBytes_ReturnsError(t *testing.T) {
 	// A file with a .png extension containing JPEG bytes must be rejected.
 	tmp := filepath.Join(t.TempDir(), "fake.png")
-	require.NoError(t, os.WriteFile(tmp, []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}, 0600))
+	require.NoError(t, os.WriteFile(tmp, []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}, 0o600))
 
 	_, _, err := extract.FromFile(tmp)
 	require.Error(t, err)
@@ -73,7 +73,7 @@ func TestFromFile_PNG_WithWrongMagicBytes_ReturnsError(t *testing.T) {
 func TestFromFile_JPEG_WithWrongMagicBytes_ReturnsError(t *testing.T) {
 	// A file with a .jpg extension containing PNG bytes must be rejected.
 	tmp := filepath.Join(t.TempDir(), "fake.jpg")
-	require.NoError(t, os.WriteFile(tmp, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A}, 0600))
+	require.NoError(t, os.WriteFile(tmp, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A}, 0o600))
 
 	_, _, err := extract.FromFile(tmp)
 	require.Error(t, err)
@@ -83,7 +83,7 @@ func TestFromFile_JPEG_WithWrongMagicBytes_ReturnsError(t *testing.T) {
 func TestFromFile_WEBP_WithWrongMagicBytes_ReturnsError(t *testing.T) {
 	// A file with a .webp extension that lacks the RIFF…WEBP signature must be rejected.
 	tmp := filepath.Join(t.TempDir(), "fake.webp")
-	require.NoError(t, os.WriteFile(tmp, []byte("not a webp file at all!!"), 0600))
+	require.NoError(t, os.WriteFile(tmp, []byte("not a webp file at all!!"), 0o600))
 
 	_, _, err := extract.FromFile(tmp)
 	require.Error(t, err)
@@ -124,7 +124,7 @@ func TestFromFile_FileTooLarge_ReturnsErrFileTooLarge(t *testing.T) {
 func TestFromFile_SmallFile_NotRejectedForSize(t *testing.T) {
 	// A small .txt file must never be rejected for exceeding the size limit.
 	tmp := filepath.Join(t.TempDir(), "small.txt")
-	require.NoError(t, os.WriteFile(tmp, []byte("hello world"), 0600))
+	require.NoError(t, os.WriteFile(tmp, []byte("hello world"), 0o600))
 
 	_, _, err := extract.FromFile(tmp)
 	require.NoError(t, err)

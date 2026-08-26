@@ -75,7 +75,8 @@ func (s *Store) UpsertSnapshot(ctx context.Context, sn *ContextSnapshot) error {
 	if sn.CurrentStepOverridden {
 		overriddenInt = 1
 	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(
+		ctx, `
 		INSERT INTO context_snapshots
 		  (context_id, current_step_desc, current_step_confidence, current_step_from, current_step_overridden,
 		   section_operational, section_narrative, section_engineering,

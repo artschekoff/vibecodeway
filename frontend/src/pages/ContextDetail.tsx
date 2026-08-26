@@ -115,6 +115,7 @@ import { PRStatusBadge } from "../components/PRStatusBadge";
 import { OpenEditorPicker } from "../components/OpenEditorPicker";
 import { WorkspacePicker } from "../components/WorkspacePicker";
 import { useOpenContextEditor } from "../lib/useOpenContextEditor";
+import { ProseEditor } from "../components/ProseEditor";
 
 // ── Task list helpers ────────────────────────────────────────────────────────
 
@@ -1394,9 +1395,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                             {!pa && (
                               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                 <div style={{ fontSize: 11, color: "var(--text-muted)" }}>No assignment yet.</div>
-                                <textarea
+                                <ProseEditor
                                   className="passphrase-input"
-                                  style={{ fontSize: 12, minHeight: 52, resize: "vertical", width: "100%", fontFamily: "inherit" }}
+                                  style={{ minHeight: 52, resize: "vertical", width: "100%" }}
                                   placeholder="Additional context (optional): e.g. Focus on backend API"
                                   value={customPrompt}
                                   onChange={(e) => setParticipantCustomPrompts((prev) => ({ ...prev, [expandedPersonName]: e.target.value }))}
@@ -1458,8 +1459,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
 
                                 {editingPersonId === pa.id ? (
                                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                    <textarea
-                                      style={{ fontSize: 12, minHeight: 180, resize: "vertical", width: "100%", fontFamily: "inherit", color: "var(--text-muted)", lineHeight: 1.5, margin: 0, textAlign: "left", letterSpacing: "normal" }}
+                                    <ProseEditor
+                                      style={{ minHeight: 180, resize: "vertical", width: "100%", color: "var(--text-muted)", lineHeight: 1.5, margin: 0, letterSpacing: "normal" }}
                                       value={editPersonBody}
                                       onChange={(e) => setEditPersonBody(e.target.value)}
                                       autoFocus
@@ -1602,8 +1603,8 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                                             </div>
                                             {editingStepKey === key && (
                                               <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                                                <textarea
-                                                  style={{ width: "100%", minHeight: 60, resize: "vertical", fontSize: 11, fontFamily: "inherit", textAlign: "left", padding: "6px 8px", boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)" }}
+                                                <ProseEditor
+                                                  style={{ width: "100%", minHeight: 60, resize: "vertical", padding: "6px 8px", boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)" }}
                                                   value={editStepContent[key] ?? step.messageContent}
                                                   onChange={e => setEditStepContent(p => ({ ...p, [key]: e.target.value }))}
                                                 />

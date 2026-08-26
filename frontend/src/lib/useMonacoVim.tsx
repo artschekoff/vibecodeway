@@ -1,0 +1,65 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useVimMode } from "./vimMode";
+
+type VimMode = { dispose: () => void };
+
+/**
+ * Binds monaco-vim to any Monaco editor, driven by the app-wide vim setting.
+ * Both the prose boxes (ProseEditor) and the code editor (DiffEditorTab) use
+ * this, so they share one keymap, one status line and one on/off switch.
+ *
+ * Usage: call `attach(editor)` from Monaco's `onMount`, and render
+ * `<VimStatusBar />` wherever the ex/command line belongs.
+ */
+export function useMonacoVim() {
+  const enabled = useVimMode();
+  const editorRef = useRef<unknown>(null);
+  const statusRef = useRef<HTMLDivElement | null>(null);
+  const modeRef = useRef<VimMode | null>(null);
+  // Bumped when the editor mounts, so the binding effect re-runs once the
+  // instance exists (onMount fires after the first render).
+  const [mounted, setMounted] = useState(0);
+
+  const attach = useCallback((editor: unknown) => {
+    editorRef.current = editor;
+    setMounted((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!enabled || !editorRef.current || !statusRef.current) return;
+    let cancelled = false;
+    void import("monaco-vim").then(({ initVimMode }) => {
+      if (cancelled || !editorRef.current || !statusRef.current) return;
+      modeRef.current = initVimMode(editorRef.current, statusRef.current);
+    });
+    // Disposing restores the editor's normal keybindings, so flipping the
+    // setting off takes effect without a remount.
+    return () => {
+      cancelled = true;
+      modeRef.current?.dispose();
+      modeRef.current = null;
+    };
+  }, [enabled, mounted]);
+
+  const VimStatusBar = useCallback(
+    () => (
+      <div
+        ref={statusRef}
+        data-testid="vim-status"
+        style={{
+          display: enabled ? "block" : "none",
+          fontFamily: "ui-monospace, monospace",
+          fontSize: 11,
+          color: "var(--text-muted)",
+          padding: "2px 6px",
+          borderTop: "1px solid var(--border)",
+          minHeight: 18,
+          flexShrink: 0,
+        }}
+      />
+    ),
+    [enabled],
+  );
+
+  return { enabled, attach, VimStatusBar };
+}

@@ -6,6 +6,7 @@ import { todoRefUrl } from "../lib/todoRef";
 import { useTabContext } from "../contexts/TabContext";
 import { TodoActionModal } from "../components/TodoActionModal";
 import type { store, vcsstore } from "../../wailsjs/go/models";
+import { ProseEditor } from "../components/ProseEditor";
 
 const PERSON_NAME_KEY = "cc:board-person-name";
 const PRIORITY_RANK: Record<string, number> = { Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1 };
@@ -289,7 +290,7 @@ export default function MyBoardPage() {
 
         {adjustOpen && (
           <div className="todo-adjust">
-            <textarea
+            <ProseEditor
               value={adjustText}
               onChange={(e) => setAdjustText(e.target.value)}
               placeholder="e.g. drop the docs task, do the deploy check first, add: ask design about JH-99"

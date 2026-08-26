@@ -119,7 +119,8 @@ func newDescribeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Prints a JSON document describing every command: name, short help, description, input, output JSON shape, flags, and an example. Consumed by coding agents that need a schema of the CLI without parsing text help.",
 		"(none)",
 		`{"binary":"vibecodeway-cli","version":"string","commands":[{"name":"string","short":"string","description":"string","input":"string","output":"json shape string","example":"string","flags":[{"name":"string","type":"string","default":"string","description":"string"}]}]}`,

@@ -19,7 +19,7 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
   ),
 }));
 
-const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite } = vi.hoisted(() => ({
+const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, ListEvents, AddUserEvent, DeleteUserEvent } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   RefreshContext: vi.fn(),
   RefreshContextPRs: vi.fn(),
@@ -27,8 +27,11 @@ const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings,
   SetEditorSettings: vi.fn(),
   ListTerminalCommands: vi.fn().mockResolvedValue([]),
   TerminalWrite: vi.fn(),
+  ListEvents: vi.fn().mockResolvedValue([]),
+  AddUserEvent: vi.fn(),
+  DeleteUserEvent: vi.fn(),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, ListEvents, AddUserEvent, DeleteUserEvent }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";

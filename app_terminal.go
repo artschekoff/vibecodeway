@@ -7,7 +7,8 @@ import "github.com/artschekoff/vibecodeway/internal/pty"
 // exit fires "term:exit:<id>". Returns the session id.
 func (a *App) TerminalStart(cwd string) (string, error) {
 	name, args := pty.DefaultShell()
-	return a.ptyMgr.Start(cwd, name, args,
+	return a.ptyMgr.Start(
+		cwd, name, args,
 		func(id, chunk string) { a.emit("term:data:"+id, chunk) },
 		func(id string, _ error) { a.emit("term:exit:" + id) },
 	)

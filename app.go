@@ -404,6 +404,14 @@ func (a *App) SetContextOrg(contextID, orgID string) error {
 
 // ListContextsByOrg returns all contexts belonging to a given organization.
 func (a *App) ListContextsByOrg(orgID string) ([]appstore.Context, error) {
+	// needs_attention is set by sync notifications and was never taken back off.
+	// Sweep the flags that no longer mean anything before reading the list, so the
+	// Needs Attention panel only shows contexts the user still has to act on.
+	if n, err := a.db.ClearStaleNeedsAttention(a.ctx); err != nil {
+		a.logger.Warn("clear stale needs_attention failed", zap.Error(err))
+	} else if n > 0 {
+		a.logger.Info("cleared stale needs_attention flags", zap.Int("count", n))
+	}
 	return a.db.ListContextsByOrg(a.ctx, orgID)
 }
 
@@ -512,9 +520,13 @@ func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID,
 		}
 		a.emitDomainEvent(contextID, eventType, appstore.EventSourceJira, entityID, "", reason)
 	}
-	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
-		a.logger.Warn("jira notify: flag needs_attention failed",
-			zap.String("contextID", contextID), zap.Error(err))
+	// A ticket reaching a terminal status ("… → Done") needs no reaction — flagging
+	// it only fills the Needs Attention panel with tiles the user must dismiss.
+	if !appstore.IsTerminalTicketStatus(newValue) {
+		if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
+			a.logger.Warn("jira notify: flag needs_attention failed",
+				zap.String("contextID", contextID), zap.Error(err))
+		}
 	}
 	return nil
 }
@@ -1257,7 +1269,8 @@ func (a *App) AssignAuthorBatch(assignments []appstore.AuthorAssignment) error {
 
 // CreateUserAndAssign creates a new org user and maps (sourceID, rawAuthor) → that user.
 func (a *App) CreateUserAndAssign(displayName, email, orgID, sourceID, rawAuthor string) (*appstore.User, error) {
-	return a.db.CreateUserAndAssign(a.ctx,
+	return a.db.CreateUserAndAssign(
+		a.ctx,
 		appstore.CreateUserArgs{OrgID: orgID, DisplayName: displayName, Email: email},
 		sourceID, rawAuthor,
 	)

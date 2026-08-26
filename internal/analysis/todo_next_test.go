@@ -46,13 +46,13 @@ func TestComputeStalePRs(t *testing.T) {
 func TestComputeImplementTickets(t *testing.T) {
 	issues := []appstore.BoardJiraAssignment{
 		{Key: "JH-1", Status: "To Do"},          // actionable
-		{Key: "JH-2", Status: "In Progress"},     // actionable
-		{Key: "JH-3", Status: "Done"},            // terminal → skip
-		{Key: "JH-4", Status: "Ready for QA"},    // downstream/waiting → skip
-		{Key: "JH-5", Status: "Ready to Merge"},  // downstream → skip
-		{Key: "JH-6", Status: "Closed"},          // terminal → skip
-		{Key: "JH-7", Status: "In Development"},   // actionable
-		{Key: "JH-8", Status: "  to do  "},       // normalized (trim+case) → actionable
+		{Key: "JH-2", Status: "In Progress"},    // actionable
+		{Key: "JH-3", Status: "Done"},           // terminal → skip
+		{Key: "JH-4", Status: "Ready for QA"},   // downstream/waiting → skip
+		{Key: "JH-5", Status: "Ready to Merge"}, // downstream → skip
+		{Key: "JH-6", Status: "Closed"},         // terminal → skip
+		{Key: "JH-7", Status: "In Development"}, // actionable
+		{Key: "JH-8", Status: "  to do  "},      // normalized (trim+case) → actionable
 	}
 	got := computeImplementTickets(issues)
 	want := []string{"JH-1", "JH-2", "JH-7", "JH-8"}

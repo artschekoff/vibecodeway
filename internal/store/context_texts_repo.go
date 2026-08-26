@@ -47,7 +47,8 @@ func (s *Store) ToggleContextTextActive(ctx context.Context, id string) (*Contex
 	}
 
 	var t ContextText
-	err = s.db.QueryRowContext(ctx,
+	err = s.db.QueryRowContext(
+		ctx,
 		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_texts WHERE id = ?", id,
 	).Scan(&t.ID, &t.ContextID, &t.Name, &t.Content, &t.CreatedAt, &t.UpdatedAt, &t.IsActive)
 	if err != nil {
@@ -70,7 +71,8 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		_, err := s.db.ExecContext(ctx,
+		_, err := s.db.ExecContext(
+			ctx,
 			"INSERT INTO context_texts (id, context_id, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 			t.ID, t.ContextID, t.Name, t.Content, t.CreatedAt, t.UpdatedAt,
 		)
@@ -92,7 +94,8 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 		return t, nil
 	}
 
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		"UPDATE context_texts SET name = ?, content = ?, updated_at = ? WHERE id = ?",
 		name, content, now, id,
 	)
@@ -108,7 +111,8 @@ func (s *Store) UpsertContextText(ctx context.Context, id, contextID, name, cont
 	}
 
 	var t ContextText
-	err = s.db.QueryRowContext(ctx,
+	err = s.db.QueryRowContext(
+		ctx,
 		"SELECT id, context_id, name, content, created_at, updated_at, is_active FROM context_texts WHERE id = ?", id,
 	).Scan(&t.ID, &t.ContextID, &t.Name, &t.Content, &t.CreatedAt, &t.UpdatedAt, &t.IsActive)
 	if errors.Is(err, sql.ErrNoRows) {

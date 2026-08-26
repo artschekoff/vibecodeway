@@ -18,7 +18,8 @@ func (s *Store) AppendEstimationLog(ctx context.Context, e EstimationLog) error 
 	if e.RecordedAt == "" {
 		e.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(
+		ctx, `
 		INSERT INTO estimation_log
 		  (id, context_id, recorded_at, trigger_type, trigger_description,
 		   delta_hours, estimated_hours_before, estimated_hours_after,

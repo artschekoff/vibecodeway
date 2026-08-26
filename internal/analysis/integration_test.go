@@ -90,7 +90,8 @@ func TestAnalysis_FullPipeline(t *testing.T) {
 	contextID := ctxRow.ID
 
 	// --- seed a Jira issue ---
-	_, err = jiraRepo.UpsertIssue(ctx, contextID,
+	_, err = jiraRepo.UpsertIssue(
+		ctx, contextID,
 		"PROJ-42",
 		"Implement user authentication with OAuth2",
 		"In Progress",
@@ -129,7 +130,8 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 	branch, err := vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "feat/oauth2", "OAuth2 branch", true)
 	require.NoError(t, err)
 
-	prResult, err := vcsStore.PullRequests.UpsertPR(ctx,
+	prResult, err := vcsStore.PullRequests.UpsertPR(
+		ctx,
 		repo.ID, branch.ID, 17,
 		"feat: add OAuth2 login flow",
 		"alice",
@@ -146,7 +148,8 @@ charlie [2026-05-10 10:05]: Also — mobile clients need a refresh-token flow si
 	)
 	require.NoError(t, err)
 
-	_, _, err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, _, err = vcsStore.PullRequests.UpsertComment(
+		ctx,
 		prResult.ID,
 		"gh-comment-9901",
 		nil,
@@ -260,7 +263,8 @@ func TestAnalysis_RealJiraTicket(t *testing.T) {
 	contextID := ctxRow.ID
 
 	// Parent story JH-477 with full description from Jira.
-	_, err = jiraRepo.UpsertIssue(ctx, contextID,
+	_, err = jiraRepo.UpsertIssue(
+		ctx, contextID,
 		"JH-477",
 		"[Practice] Pro Paywall -- Referral Missed Opportunities Blur",
 		"In Progress",
@@ -325,7 +329,8 @@ Source: Referral pro-paywall implementation meeting — May 5, 2026 (Liora, Arte
 	require.NoError(t, err)
 
 	// Subtask JH-2210 (API engineering scope).
-	_, err = jiraRepo.UpsertIssue(ctx, contextID,
+	_, err = jiraRepo.UpsertIssue(
+		ctx, contextID,
 		"JH-2210",
 		"[juna-api] - development (JH-477 - [Practice] Pro Paywall -- Referral Missed Opportunities Blur)",
 		"In Progress",
@@ -348,7 +353,8 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	branch, err := vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "feat_JH-477_task_JH-2210_pr", "Pro paywall branch", true)
 	require.NoError(t, err)
 
-	prResult, err := vcsStore.PullRequests.UpsertPR(ctx,
+	prResult, err := vcsStore.PullRequests.UpsertPR(
+		ctx,
 		repo.ID, branch.ID, 221,
 		"feat[2210]: practice pro paywall — referral widget missed-opportunities gate",
 		"artschekoff",
@@ -365,7 +371,8 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	)
 	require.NoError(t, err)
 
-	_, _, err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, _, err = vcsStore.PullRequests.UpsertComment(
+		ctx,
 		prResult.ID,
 		"gh-review-pr221-1",
 		nil,
@@ -378,7 +385,8 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	)
 	require.NoError(t, err)
 
-	_, _, err = vcsStore.PullRequests.UpsertComment(ctx,
+	_, _, err = vcsStore.PullRequests.UpsertComment(
+		ctx,
 		prResult.ID,
 		"gh-review-pr221-2",
 		nil,
@@ -541,7 +549,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 		md.WriteString("---\n\n## Extraction notes\n\n" + *packet.ExtractionNotes + "\n")
 	}
 
-	require.NoError(t, os.WriteFile(outPath, []byte(md.String()), 0644))
+	require.NoError(t, os.WriteFile(outPath, []byte(md.String()), 0o644))
 	t.Logf("wrote report to %s", outPath)
 }
 

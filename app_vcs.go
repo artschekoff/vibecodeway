@@ -155,7 +155,8 @@ func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int)
 		return fmt.Errorf("adding branch link for PR #%d: %w", prNumber, err)
 	}
 
-	res, err := a.vcsStore.PullRequests.UpsertPR(a.ctx,
+	res, err := a.vcsStore.PullRequests.UpsertPR(
+		a.ctx,
 		repo.ID, branch.ID, pr.Number,
 		pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
 		pr.Mergeable, pr.MergeStateStatus, pr.CIStatus, pr.IsDraft, pr.CreatedAt, pr.UpdatedAt,
@@ -171,7 +172,8 @@ func (a *App) AddSpecificPR(contextID, platform, ownerRepo string, prNumber int)
 		return nil
 	}
 	for _, c := range comments {
-		if _, _, err := a.vcsStore.PullRequests.UpsertComment(a.ctx,
+		if _, _, err := a.vcsStore.PullRequests.UpsertComment(
+			a.ctx,
 			res.ID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
 			c.Path, c.Line, c.IsResolved, c.InReplyToID,
 			c.CreatedAt, c.UpdatedAt,

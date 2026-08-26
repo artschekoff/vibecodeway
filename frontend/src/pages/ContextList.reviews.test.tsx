@@ -122,3 +122,54 @@ describe("Code Reviews — viewed markers + reviewers", () => {
     await waitFor(() => expect(MarkAllReviewRequestsViewed).toHaveBeenCalled());
   });
 });
+
+describe("Code Reviews — stage sections", () => {
+  it("groups PRs into awaiting / re-review / approved / reviewed sections", async () => {
+    GetPendingCodeReviews.mockResolvedValue([
+      { id: "a", repoId: "repo1", prNumber: 1, prTitle: "Fresh one", prAuthor: "carol",
+        prUrl: "https://x/1", reviewStatus: "review_required", headBranch: "b1",
+        requestedAt: "", fetchedAt: "", kind: "requested" },
+      { id: "b", repoId: "repo1", prNumber: 2, prTitle: "Back to me", prAuthor: "carol",
+        prUrl: "https://x/2", reviewStatus: "re_review_required", headBranch: "b2",
+        requestedAt: "", fetchedAt: "", kind: "requested", myReviewState: "changes_requested" },
+      { id: "c", repoId: "repo1", prNumber: 3, prTitle: "All good", prAuthor: "carol",
+        prUrl: "https://x/3", reviewStatus: "approved", headBranch: "b3",
+        requestedAt: "", fetchedAt: "", kind: "requested", myReviewState: "approved" },
+      { id: "d", repoId: "repo1", prNumber: 4, prTitle: "Author's turn", prAuthor: "carol",
+        prUrl: "https://x/4", reviewStatus: "changes_requested", headBranch: "b4",
+        requestedAt: "", fetchedAt: "", kind: "requested", myReviewState: "changes_requested" },
+    ]);
+
+    renderList();
+    fireEvent.click(await screen.findByRole("button", { name: /code reviews/i }));
+    fireEvent.click(await screen.findByText("acme/widgets"));
+    await waitFor(() => expect(screen.getByText("Fresh one")).toBeInTheDocument());
+
+    expect(screen.getByTestId("review-section-awaiting_first")).toHaveTextContent("Awaiting your first review");
+    expect(screen.getByTestId("review-section-re_review")).toHaveTextContent("Re-review requested");
+    expect(screen.getByTestId("review-section-approved")).toHaveTextContent("Approved");
+    expect(screen.getByTestId("review-section-reviewed_waiting")).toHaveTextContent("Reviewed — waiting for author");
+
+    // My own standing decision is visible on the cards that have one.
+    expect(screen.getAllByText("You: changes requested")).toHaveLength(2);
+    expect(screen.getByText("You: approved")).toBeInTheDocument();
+  });
+
+  it("counts only actionable PRs on the repo header", async () => {
+    GetPendingCodeReviews.mockResolvedValue([
+      { id: "a", repoId: "repo1", prNumber: 1, prTitle: "Fresh one", prAuthor: "carol",
+        prUrl: "https://x/1", reviewStatus: "review_required", headBranch: "b1",
+        requestedAt: "", fetchedAt: "", kind: "requested" },
+      { id: "c", repoId: "repo1", prNumber: 3, prTitle: "All good", prAuthor: "carol",
+        prUrl: "https://x/3", reviewStatus: "approved", headBranch: "b3",
+        requestedAt: "", fetchedAt: "", kind: "requested", myReviewState: "approved" },
+    ]);
+
+    renderList();
+    fireEvent.click(await screen.findByRole("button", { name: /code reviews/i }));
+    const header = await screen.findByText("acme/widgets");
+    // One awaiting_first PR is actionable; the approved one is not.
+    await waitFor(() =>
+      expect(header.parentElement?.querySelector(".detail-section-count")?.textContent).toBe("1"));
+  });
+});

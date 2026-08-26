@@ -18,7 +18,8 @@ func (r *Repo) UpsertSlackProvider(ctx context.Context, contextID, workspace, se
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		"SELECT id FROM slack_provider WHERE context_id = ?", contextID,
 	).Scan(&existing)
 

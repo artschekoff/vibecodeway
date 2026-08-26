@@ -40,7 +40,8 @@ func newAuthStatusCmd() *cobra.Command {
 			return writeJSON(map[string]string{"status": status})
 		},
 	}
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Return the current Jira authentication status for the acli tool.",
 		"(none)",
 		`{"status":"authenticated|unauthenticated|error"}`,
@@ -76,7 +77,8 @@ func newGetAISettingsCmd() *cobra.Command {
 			})
 		},
 	}
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Get AI configuration metadata. source is env or db. Keys are never included — only whether they are set.",
 		"(none)",
 		`{"provider":"string","hasKey":"bool","hasOpenAIKey":"bool","hasAnthropicKey":"bool","model":"string","baseUrl":"string","source":"env|db","updatedAt":"RFC3339"}`,
@@ -118,7 +120,8 @@ func newSetAISettingsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&anthropicKey, "anthropic-key", "", "Anthropic API key")
 	cmd.Flags().StringVar(&model, "model", "", "Model name, e.g. gpt-4o or claude-3-5-sonnet-20241022")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Custom base URL for local/proxy providers")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Set AI configuration. Keys are stored in plain text in the database. Any flag left empty retains its current value.",
 		"--provider openai|anthropic|local (optional)\n--api-key STRING (optional)\n--anthropic-key STRING (optional)\n--model STRING (optional)\n--base-url STRING (optional)",
 		`{"provider":"string","hasKey":"bool","model":"string","baseUrl":"string",...}`,

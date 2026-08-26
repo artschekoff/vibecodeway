@@ -21,7 +21,8 @@ func (s *Store) AddEvent(ctx context.Context, e Event) (*Event, error) {
 	if e.CreatedAt == "" {
 		e.CreatedAt = now
 	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(
+		ctx, `
 		INSERT INTO event_log
 		  (id, context_id, sync_session_id, type, timestamp, source_type, source_id, author, summary, raw_reference, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -134,7 +135,8 @@ func (s *Store) DeleteEvent(ctx context.Context, eventID string) error {
 
 // UpdateEvent updates the type and summary of a user-authored event.
 func (s *Store) UpdateEvent(ctx context.Context, eventID, eventType, summary string) (*Event, error) {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE event_log SET type = ?, summary = ? WHERE id = ? AND source_type = 'user'`,
 		eventType, summary, eventID,
 	)

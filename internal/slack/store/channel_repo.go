@@ -16,13 +16,15 @@ func (r *Repo) UpsertSlackChannel(ctx context.Context, contextID, workspace, cha
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		"SELECT id FROM slack_channels WHERE context_id = ? AND workspace = ? AND channel_name = ?",
 		contextID, workspace, channelName,
 	).Scan(&existing)
 
 	if err == nil {
-		_, err = r.db.ExecContext(ctx,
+		_, err = r.db.ExecContext(
+			ctx,
 			"UPDATE slack_channels SET channel_id = ?, start_from = ? WHERE id = ?",
 			channelID, startFrom, existing,
 		)
@@ -94,7 +96,8 @@ func (r *Repo) ToggleSlackChannelActive(ctx context.Context, id string) (*SlackC
 func (r *Repo) RemoveSlackChannel(ctx context.Context, id string) error {
 	// Look up context_id + channel_id before deleting so we can cascade threads.
 	var contextID, channelID string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		"SELECT context_id, channel_id FROM slack_channels WHERE id = ?", id,
 	).Scan(&contextID, &channelID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -109,7 +112,8 @@ func (r *Repo) RemoveSlackChannel(ctx context.Context, id string) error {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(
+		ctx,
 		"DELETE FROM slack_threads WHERE context_id = ? AND channel_id = ?",
 		contextID, channelID,
 	); err != nil {

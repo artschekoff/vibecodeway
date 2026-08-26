@@ -25,10 +25,12 @@ func (f *fakePR) ListReviewRequestsForUser(_ context.Context, _, _, login string
 	f.lastLogin = login
 	return f.reviewReq, nil
 }
+
 func (f *fakePR) ListChangesRequestedForUser(_ context.Context, _, _, login string) ([]vcs.PRData, error) {
 	f.lastLogin = login
 	return f.changesReq, nil
 }
+
 func (f *fakePR) GetPRByNumber(_ context.Context, _, _ string, _ int) (*vcs.PRData, error) {
 	return f.pr, nil
 }
@@ -36,14 +38,17 @@ func (f *fakePR) UpdatePRBranch(_ context.Context, _, _ string, _ int) error { r
 func (f *fakePR) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs.CommentData, error) {
 	return f.comments, nil
 }
+
 func (f *fakePR) ApprovePR(_ context.Context, _, _ string, number int, body string) error {
 	f.approved, f.lastBody = number, body
 	return nil
 }
+
 func (f *fakePR) RequestChangesPR(_ context.Context, _, _ string, number int, body string) error {
 	f.changesFor, f.lastBody = number, body
 	return nil
 }
+
 func (f *fakePR) CommentPR(_ context.Context, _, _ string, number int, body string) error {
 	f.commented, f.lastBody = number, body
 	return nil

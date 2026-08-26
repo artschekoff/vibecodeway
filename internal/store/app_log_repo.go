@@ -30,7 +30,8 @@ func NewAppLogRepo(db *sql.DB) *AppLogRepo { return &AppLogRepo{db: db} }
 // Add inserts a single log entry.
 func (r *AppLogRepo) Add(ctx context.Context, level string, ts float64, caller, msg, errMsg, fields string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := r.db.ExecContext(ctx,
+	_, err := r.db.ExecContext(
+		ctx,
 		`INSERT INTO app_logs (level, ts, caller, msg, error, fields, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		level, ts, caller, msg, errMsg, fields, now,
 	)
@@ -45,7 +46,8 @@ func (r *AppLogRepo) List(ctx context.Context, limit int) ([]AppLog, error) {
 	if limit <= 0 {
 		limit = 200
 	}
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := r.db.QueryContext(
+		ctx,
 		`SELECT id, level, ts, caller, msg, error, fields, created_at
 		   FROM app_logs
 		  ORDER BY id DESC

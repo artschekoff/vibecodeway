@@ -21,6 +21,7 @@ func (c *captureAI) ChatCompletion(_ context.Context, m []openai.Message) (*open
 	c.last = m
 	return &openai.Response{Content: c.content}, nil
 }
+
 func (*captureAI) DescribeSettings(_ context.Context) (*appstore.AISettings, openai.Source, error) {
 	return &appstore.AISettings{}, openai.SourceNone, nil
 }

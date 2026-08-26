@@ -21,7 +21,8 @@ func NewRepoPathRepo(db *sql.DB) *RepoPathRepo { return &RepoPathRepo{db: db} }
 func (r *RepoPathRepo) Add(ctx context.Context, repoID, path string) (*VCSRepoPath, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := r.db.ExecContext(ctx,
+	_, err := r.db.ExecContext(
+		ctx,
 		`INSERT INTO vcs_repo_paths (id, repo_id, path, created_at) VALUES (?, ?, ?, ?)`,
 		id, repoID, path, now,
 	)
@@ -33,7 +34,8 @@ func (r *RepoPathRepo) Add(ctx context.Context, repoID, path string) (*VCSRepoPa
 
 // ListForRepo returns all paths registered for a given repo, ordered by created_at.
 func (r *RepoPathRepo) ListForRepo(ctx context.Context, repoID string) ([]VCSRepoPath, error) {
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := r.db.QueryContext(
+		ctx,
 		`SELECT id, repo_id, path, created_at FROM vcs_repo_paths WHERE repo_id = ? ORDER BY created_at`,
 		repoID,
 	)
@@ -57,7 +59,8 @@ func (r *RepoPathRepo) ListForRepo(ctx context.Context, repoID string) ([]VCSRep
 // Returns the existing or newly created VCSRepoPath.
 func (r *RepoPathRepo) Upsert(ctx context.Context, repoID, path string) (*VCSRepoPath, error) {
 	var p VCSRepoPath
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id, repo_id, path, created_at FROM vcs_repo_paths WHERE repo_id = ? AND path = ?`,
 		repoID, path,
 	).Scan(&p.ID, &p.RepoID, &p.Path, &p.CreatedAt)
@@ -73,7 +76,8 @@ func (r *RepoPathRepo) Upsert(ctx context.Context, repoID, path string) (*VCSRep
 // Get returns a single VCSRepoPath by ID.
 func (r *RepoPathRepo) Get(ctx context.Context, id string) (*VCSRepoPath, error) {
 	var p VCSRepoPath
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id, repo_id, path, created_at FROM vcs_repo_paths WHERE id = ?`, id,
 	).Scan(&p.ID, &p.RepoID, &p.Path, &p.CreatedAt)
 	if err == sql.ErrNoRows {

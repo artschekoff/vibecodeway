@@ -43,7 +43,8 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		taskHours          float64
 		updatedAt          string
 	)
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT context_refetch_enabled, context_refetch_interval_min,
 		        reviews_refetch_enabled, reviews_refetch_interval_min,
 		        terminal_app_path, coding_agent_app,
@@ -93,7 +94,8 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		autoLink = 1
 	}
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO app_settings
 		     (id, context_refetch_enabled, context_refetch_interval_min,
 		      reviews_refetch_enabled, reviews_refetch_interval_min,

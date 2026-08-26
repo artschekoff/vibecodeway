@@ -27,6 +27,7 @@ import { VersionDiffModal } from "./VersionDiffModal";
 import { PlanModal } from "./PlanModal";
 import { parseBody, toggleAt, addStep, moveTask } from "../lib/taskList";
 import { splitInlineCode } from "../lib/inlineRefs";
+import { ProseEditor } from "./ProseEditor";
 
 interface Props {
   pa: PersonAssignment;
@@ -432,21 +433,19 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <textarea
+            <ProseEditor
               aria-label="Prompt"
               style={{
                 width: "100%",
                 minHeight: 160,
                 resize: "vertical",
-                fontFamily: "monospace",
-                fontSize: 11,
                 padding: "8px 10px",
                 boxSizing: "border-box",
                 background: "var(--surface)",
                 border: "1px solid var(--border)",
                 borderRadius: 6,
                 color: "var(--text)",
-                lineHeight: 1.4,
+                lineHeight: 1.4
               }}
               value={promptState.draftPrompt}
               onChange={(e) =>
@@ -637,22 +636,20 @@ export function PersonAssignmentDetail({ pa, steps, onUpdated }: Props) {
             </button>
           </div>
         )}
-        <textarea
+        <ProseEditor
           id="pa-output"
           aria-label="Output"
           style={{
             width: "100%",
             minHeight: 200,
             resize: "vertical",
-            fontFamily: "inherit",
-            fontSize: 12,
             padding: "8px 10px",
             boxSizing: "border-box",
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
-            lineHeight: 1.6,
+            lineHeight: 1.6
           }}
           value={outputDraft}
           onChange={(e) => setOutputDraft(e.target.value)}

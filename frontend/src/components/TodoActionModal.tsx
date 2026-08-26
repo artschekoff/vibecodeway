@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DraftTodoMessage } from "../../wailsjs/go/main/App";
+import { ProseEditor } from "./ProseEditor";
 
 interface Props {
   kind: string;
@@ -71,11 +72,11 @@ export function TodoActionModal({ kind, title, refKey, rationale, actionLabel, o
         {loading ? (
           <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>Drafting…</div>
         ) : (
-          <textarea
+          <ProseEditor
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={8}
-            style={{ width: "100%", fontSize: 12, lineHeight: 1.6, marginBottom: 16, color: "var(--text)", fontFamily: "inherit", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px", resize: "vertical" }}
+            style={{ width: "100%", lineHeight: 1.6, marginBottom: 16, color: "var(--text)", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px", resize: "vertical" }}
           />
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

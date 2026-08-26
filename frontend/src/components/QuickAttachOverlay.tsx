@@ -16,6 +16,7 @@ import {
 import type { Context, Organization } from "../types";
 import { parseAttachableContent } from "../lib/parseAttachableContent";
 import TypingIndicator from "./TypingIndicator";
+import { ProseEditor } from "./ProseEditor";
 
 interface Props {
   visible: boolean;
@@ -287,7 +288,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
 
         {kind.type === "text" && destination === "log" && (
           <div className="quick-attach-log-draft">
-            <textarea
+            <ProseEditor
               className="chat-input"
               value={logDraft}
               onChange={(e) => setLogDraft(e.target.value)}

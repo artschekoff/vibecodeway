@@ -16,7 +16,8 @@ func (s *Store) ResolveAuthor(ctx context.Context, sourceID, externalName string
 		return ""
 	}
 	var userID string
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT user_id FROM author_mappings WHERE source_id = ? AND external_name = ?`,
 		sourceID, externalName,
 	).Scan(&userID)

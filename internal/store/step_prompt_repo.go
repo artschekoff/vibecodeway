@@ -27,7 +27,8 @@ func (s *Store) InsertStepPrompt(ctx context.Context, stepID, llmPrompt string) 
 // GetStepPrompt returns the stored LLM prompt for a step, or "" if none.
 func (s *Store) GetStepPrompt(ctx context.Context, stepID string) (string, error) {
 	var prompt string
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT COALESCE(llm_prompt,'') FROM step_prompts WHERE step_id = ?`, stepID,
 	).Scan(&prompt)
 	if errors.Is(err, sql.ErrNoRows) {

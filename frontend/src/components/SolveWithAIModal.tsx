@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SolveWithAI } from "../../wailsjs/go/main/App";
+import { ProseEditor } from "./ProseEditor";
 
 interface Props {
   contextId: string;
@@ -70,22 +71,20 @@ export function SolveWithAIModal({ contextId, onClose, onOpenEditor }: Props) {
         <div id="solve-with-ai-modal-title" style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
           Solve with AI
         </div>
-        <textarea
+        <ProseEditor
           value={task}
           onChange={(e) => setTask(e.target.value)}
           rows={4}
           style={{
             width: "100%",
-            fontSize: 12,
             lineHeight: 1.6,
             marginBottom: 16,
             color: "var(--text)",
-            fontFamily: "inherit",
             background: "var(--surface2)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             padding: "8px 10px",
-            resize: "vertical",
+            resize: "vertical"
           }}
         />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

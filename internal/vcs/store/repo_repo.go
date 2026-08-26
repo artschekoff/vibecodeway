@@ -21,7 +21,8 @@ func NewRepoRepo(db *sql.DB) *RepoRepo { return &RepoRepo{db: db} }
 // GetRepo returns a repo by ID.
 func (r *RepoRepo) GetRepo(ctx context.Context, id string) (*VCSRepo, error) {
 	var repo VCSRepo
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id, platform, owner, name, local_path, label, description, on_checkout_command, created_at FROM vcs_repos WHERE id = ?`, id,
 	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.OnCheckoutCommand, &repo.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -36,7 +37,8 @@ func (r *RepoRepo) GetRepo(ctx context.Context, id string) (*VCSRepo, error) {
 // EnsureRepo returns the existing repo for (platform, owner, name) or creates it.
 func (r *RepoRepo) EnsureRepo(ctx context.Context, platform, owner, name string) (*VCSRepo, error) {
 	var repo VCSRepo
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id, platform, owner, name, local_path, label, description, on_checkout_command, created_at FROM vcs_repos WHERE platform = ? AND owner = ? AND name = ?`,
 		platform, owner, name,
 	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.OnCheckoutCommand, &repo.CreatedAt)
@@ -49,7 +51,8 @@ func (r *RepoRepo) EnsureRepo(ctx context.Context, platform, owner, name string)
 
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = r.db.ExecContext(ctx,
+	_, err = r.db.ExecContext(
+		ctx,
 		`INSERT INTO vcs_repos (id, platform, owner, name, local_path, label, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, platform, owner, name, "", "", "", now,
 	)
@@ -112,7 +115,8 @@ func (r *RepoRepo) DeleteRepo(ctx context.Context, id string) error {
 
 // UpdateRepoMeta updates the label, description, and on-checkout command for a tracked repo.
 func (r *RepoRepo) UpdateRepoMeta(ctx context.Context, id, label, description, onCheckoutCommand string) error {
-	res, err := r.db.ExecContext(ctx,
+	res, err := r.db.ExecContext(
+		ctx,
 		`UPDATE vcs_repos SET label = ?, description = ?, on_checkout_command = ? WHERE id = ?`, label, description, onCheckoutCommand, id,
 	)
 	if err != nil {

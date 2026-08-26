@@ -39,7 +39,8 @@ func (s *Store) CreateUser(ctx context.Context, args CreateUserArgs) (*User, err
 // GetUser returns a user by ID. Returns ErrNotFound if not found.
 func (s *Store) GetUser(ctx context.Context, id string) (*User, error) {
 	var u User
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT id, org_id, display_name, email, avatar_url, created_at, updated_at FROM users WHERE id = ?`, id,
 	).Scan(&u.ID, &u.OrgID, &u.DisplayName, &u.Email, &u.AvatarURL, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {

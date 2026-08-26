@@ -80,7 +80,8 @@ func (s *Store) ReplacePersonAssignments(ctx context.Context, contextID string, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(
+		ctx,
 		`DELETE FROM context_person_assignments WHERE context_id = ?`, contextID,
 	); err != nil {
 		return nil, fmt.Errorf("delete old person assignments: %w", err)
@@ -115,7 +116,8 @@ func (s *Store) ReplacePersonAssignments(ctx context.Context, contextID string, 
 // UpdatePersonAssignmentBody updates the body of a single person assignment (user manual edit).
 func (s *Store) UpdatePersonAssignmentBody(ctx context.Context, id, body string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE context_person_assignments SET body = ?, updated_at = ? WHERE id = ?`,
 		body, now, id,
 	)
@@ -132,7 +134,8 @@ func (s *Store) UpsertPersonAssignment(ctx context.Context, contextID string, pa
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existingID string
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT id FROM context_person_assignments WHERE context_id = ? AND name = ?`,
 		contextID, pa.Name,
 	).Scan(&existingID)
@@ -161,7 +164,8 @@ func (s *Store) UpsertPersonAssignment(ctx context.Context, contextID string, pa
 
 // DeletePersonAssignment removes a person assignment by ID.
 func (s *Store) DeletePersonAssignment(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`DELETE FROM context_person_assignments WHERE id = ?`, id,
 	)
 	if err != nil {
@@ -176,7 +180,8 @@ func (s *Store) SetPersonAssignmentOutdated(ctx context.Context, id string, outd
 	if outdated {
 		v = 1
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE context_person_assignments SET is_outdated = ?, updated_at = ? WHERE id = ?`,
 		v, time.Now().UTC().Format(time.RFC3339), id,
 	)
@@ -185,7 +190,8 @@ func (s *Store) SetPersonAssignmentOutdated(ctx context.Context, id string, outd
 
 // SetPersonAssignmentAnalyzedThrough advances the watermark timestamp.
 func (s *Store) SetPersonAssignmentAnalyzedThrough(ctx context.Context, id, ts string) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE context_person_assignments SET analyzed_through = ?, updated_at = ? WHERE id = ?`,
 		ts, time.Now().UTC().Format(time.RFC3339), id,
 	)

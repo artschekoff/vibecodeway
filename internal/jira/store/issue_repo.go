@@ -142,7 +142,8 @@ func (r *Repo) UpsertIssue(ctx context.Context, contextID string, jiraKey, summa
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing, oldStatus string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		"SELECT id, status FROM jira_issues WHERE context_id = ? AND jira_key = ?",
 		contextID, jiraKey,
 	).Scan(&existing, &oldStatus)
@@ -210,7 +211,8 @@ func (r *Repo) FindContextsByJiraKeys(ctx context.Context, keys []string) (map[s
 	for i, k := range keys {
 		args[i] = k
 	}
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := r.db.QueryContext(
+		ctx,
 		"SELECT jira_key, context_id FROM jira_issues WHERE jira_key IN ("+placeholders+")",
 		args...,
 	)

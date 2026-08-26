@@ -22,11 +22,13 @@ func TestAskConfirmsWriteTool(t *testing.T) {
 
 	ran := false
 	reg := &tooling.Registry{}
-	reg.Register(tooling.Tool{Name: "edit_context", Write: true,
+	reg.Register(tooling.Tool{
+		Name: "edit_context", Write: true,
 		Handler: func(_ context.Context, _ map[string]any, _ tooling.Ctx) (any, error) {
 			ran = true
 			return map[string]any{"ok": true}, nil
-		}})
+		},
+	})
 
 	fake := &fakeChat{turns: []*openai.Response{
 		{ToolCalls: []openai.ToolCall{{ID: "call-1", Name: "edit_context", Arguments: `{"contextId":"x","status":"archived"}`}}},
@@ -60,11 +62,13 @@ func TestAskDeclinedWriteToolNotRun(t *testing.T) {
 
 	ran := false
 	reg := &tooling.Registry{}
-	reg.Register(tooling.Tool{Name: "edit_context", Write: true,
+	reg.Register(tooling.Tool{
+		Name: "edit_context", Write: true,
 		Handler: func(_ context.Context, _ map[string]any, _ tooling.Ctx) (any, error) {
 			ran = true
 			return map[string]any{"ok": true}, nil
-		}})
+		},
+	})
 
 	fake := &fakeChat{turns: []*openai.Response{
 		{ToolCalls: []openai.ToolCall{{ID: "call-1", Name: "edit_context", Arguments: `{}`}}},

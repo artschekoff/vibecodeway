@@ -50,7 +50,8 @@ func (s *Store) ListContextEmbeddings(ctx context.Context, contextID string) (ma
 // HasEmbedding reports whether a message already has a stored embedding.
 func (s *Store) HasEmbedding(ctx context.Context, messageID string) (bool, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT COUNT(1) FROM message_embeddings WHERE message_id = ?`, messageID,
 	).Scan(&n)
 	return n > 0, err

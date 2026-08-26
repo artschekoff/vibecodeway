@@ -4,6 +4,7 @@ import { AskAI, ListOrganizations, ListAgentTools, ResolveToolConfirmation } fro
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type { agent } from "../../wailsjs/go/models";
 import type { Organization } from "../types";
+import { ProseEditor } from "../components/ProseEditor";
 
 type ProgressEvent = { phase: string; tool?: string; args?: string; result?: string; callId?: string };
 type PendingConfirm = { tool: string; args: string; callId: string };
@@ -90,13 +91,13 @@ export default function AskAIPage() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <textarea
+        <ProseEditor
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="e.g. Which contexts depend on the payments refactor, and what's blocking them?"
           rows={3}
-          style={{ width: "100%", resize: "vertical", padding: 10, fontSize: 14, fontFamily: "inherit" }}
+          style={{ width: "100%", resize: "vertical", padding: 10 }}
         />
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button className="btn btn-primary" onClick={() => void ask()} disabled={loading || !question.trim()}>

@@ -187,7 +187,8 @@ func (s *Store) ListBoardKeysMissingOrg(ctx context.Context) ([]string, error) {
 // valid answer ("the field isn't set on this issue") and still marks the key
 // checked, so it leaves the backfill queue.
 func (s *Store) SetBoardAssignmentOrg(ctx context.Context, key, org string) error {
-	if _, err := s.db.ExecContext(ctx,
+	if _, err := s.db.ExecContext(
+		ctx,
 		`UPDATE board_jira_assignments SET org = ?, org_checked = 1 WHERE jira_key = ?`,
 		org, key,
 	); err != nil {
