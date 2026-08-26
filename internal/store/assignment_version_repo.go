@@ -20,7 +20,8 @@ func (s *Store) CreateAssignmentVersion(ctx context.Context, personAssignmentID,
 	defer func() { _ = tx.Rollback() }()
 
 	if setActive {
-		if _, err := tx.ExecContext(ctx,
+		if _, err := tx.ExecContext(
+			ctx,
 			`UPDATE person_assignment_versions SET is_active = 0 WHERE person_assignment_id = ?`,
 			personAssignmentID,
 		); err != nil {
@@ -90,13 +91,15 @@ func (s *Store) SetActiveAssignmentVersion(ctx context.Context, personAssignment
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(
+		ctx,
 		`UPDATE person_assignment_versions SET is_active = 0 WHERE person_assignment_id = ?`,
 		personAssignmentID,
 	); err != nil {
 		return fmt.Errorf("deactivate: %w", err)
 	}
-	res, err := tx.ExecContext(ctx,
+	res, err := tx.ExecContext(
+		ctx,
 		`UPDATE person_assignment_versions SET is_active = 1 WHERE id = ? AND person_assignment_id = ?`,
 		versionID, personAssignmentID,
 	)
@@ -125,7 +128,8 @@ func (s *Store) UpsertAssignmentBodyAndVersion(ctx context.Context, personAssign
 
 	// 1. Update the assignment body.
 	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(
+		ctx,
 		`UPDATE context_person_assignments SET body = ?, updated_at = ? WHERE id = ?`,
 		body, now, personAssignmentID,
 	); err != nil {
@@ -133,7 +137,8 @@ func (s *Store) UpsertAssignmentBodyAndVersion(ctx context.Context, personAssign
 	}
 
 	// 2. Deactivate existing versions.
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(
+		ctx,
 		`UPDATE person_assignment_versions SET is_active = 0 WHERE person_assignment_id = ?`,
 		personAssignmentID,
 	); err != nil {

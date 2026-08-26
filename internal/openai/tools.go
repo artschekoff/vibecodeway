@@ -54,7 +54,8 @@ func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []
 	elapsed := time.Since(start)
 	resp.Source = source
 
-	c.logger.Info(llmLogMessage("llm.chat_with_tools", resp.Model, resp.Usage, elapsed),
+	c.logger.Info(
+		llmLogMessage("llm.chat_with_tools", resp.Model, resp.Usage, elapsed),
 		zap.String("provider", dbSettings.Provider),
 		zap.String("model", resp.Model),
 		zap.Int("promptTokens", resp.Usage.PromptTokens),

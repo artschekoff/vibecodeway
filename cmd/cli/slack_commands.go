@@ -28,7 +28,8 @@ func newSlackListWorkspacesCmd() *cobra.Command {
 			return writeJSON(results)
 		},
 	}
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List Slack workspaces the app is connected to.",
 		"(none)",
 		`["workspace-name",...]`,
@@ -63,7 +64,8 @@ func newSlackSearchChannelsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&pattern, "pattern", "", "Channel name pattern, e.g. '*deploy*'")
 	_ = cmd.MarkFlagRequired("workspace")
 	_ = cmd.MarkFlagRequired("pattern")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Search Slack channels by name pattern in a workspace. Use to find channel IDs before slack-add-channels.",
 		"--workspace STRING (required)\n--pattern STRING (required)",
 		`[{"channelId":"string","channelName":"string"}]`,
@@ -115,7 +117,8 @@ func newSlackAddChannelsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&startFrom, "start-from", "", "Date filter (YYYY-MM-DD)")
 	_ = cmd.MarkFlagRequired("context-id")
 	_ = cmd.MarkFlagRequired("workspace")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Add one or more Slack channels to a context. --channel-ids and --channel-names must be the same length.",
 		"--context-id UUID (required)\n--workspace STRING (required)\n--channel-ids STRING (required; comma-separated)\n--channel-names STRING (required; comma-separated)\n--start-from YYYY-MM-DD (optional)",
 		`{"added":"int"}`,
@@ -148,7 +151,8 @@ func newSlackListChannelsCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List Slack channels linked to a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","channelId":"string","channelName":"string","workspace":"string","isActive":"bool"}]`,
@@ -180,7 +184,8 @@ func newSlackRemoveChannelCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Channel record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Remove a Slack channel from a context. Use slack-list-channels to find the UUID.",
 		"--id UUID (required; channel record UUID)",
 		`{"removed":"uuid"}`,
@@ -213,7 +218,8 @@ func newSlackToggleChannelCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Channel record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle is_active for a Slack channel. Inactive channels are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","channelId":"string","isActive":"bool",...}`,
@@ -262,7 +268,8 @@ func newSlackLoadThreadCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("workspace")
 	_ = cmd.MarkFlagRequired("channel-id")
 	_ = cmd.MarkFlagRequired("thread-ts")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Fetch a Slack thread by channel ID and thread timestamp, then store it in a context.",
 		"--context-id UUID (required)\n--workspace STRING (required)\n--channel-id STRING (required)\n--thread-ts STRING (required)\n--channel-name STRING (optional)\n--permalink STRING (optional)\n--search-query STRING (optional)",
 		`{"loaded":"thread-ts"}`,
@@ -295,7 +302,8 @@ func newSlackListThreadsCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List stored Slack threads for a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","channelId":"string","threadTs":"string","isActive":"bool","createdAt":"RFC3339"}]`,
@@ -327,7 +335,8 @@ func newSlackDeleteThreadCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Thread record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Remove a Slack thread from local storage.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
@@ -360,7 +369,8 @@ func newSlackToggleThreadCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Thread record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle is_active for a Slack thread. Inactive threads are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","threadTs":"string","isActive":"bool",...}`,
@@ -393,7 +403,8 @@ func newSlackListDMConfigsCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List Slack DM configs for a context. Each config controls which DMs are fetched from a workspace.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","workspace":"string","startFrom":"string","isActive":"bool"}]`,
@@ -429,7 +440,8 @@ func newSlackUpsertDMConfigCmd() *cobra.Command {
 	cmd.Flags().StringVar(&startFrom, "start-from", "", "Date filter (YYYY-MM-DD)")
 	_ = cmd.MarkFlagRequired("context-id")
 	_ = cmd.MarkFlagRequired("workspace")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Create or update a Slack DM config for a workspace, then load DM content.",
 		"--context-id UUID (required)\n--workspace STRING (required)\n--start-from YYYY-MM-DD (optional)",
 		`{"id":"uuid","workspace":"string","startFrom":"string","isActive":"bool",...}`,
@@ -461,7 +473,8 @@ func newSlackDeleteDMConfigCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "DM config UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Delete a Slack DM config and its associated entries.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
@@ -494,7 +507,8 @@ func newSlackToggleDMConfigCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "DM config UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle is_active for a Slack DM config. Inactive configs are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","workspace":"string","isActive":"bool",...}`,
@@ -528,7 +542,8 @@ func newSlackRemoveDMEntryCmd() *cobra.Command {
 	cmd.Flags().StringVar(&entryID, "entry-id", "", "DM entry ID")
 	_ = cmd.MarkFlagRequired("dm-config-id")
 	_ = cmd.MarkFlagRequired("entry-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Remove a specific DM entry from a DM config.",
 		"--dm-config-id UUID (required)\n--entry-id STRING (required)",
 		`{"removed":"entry-id"}`,
@@ -562,7 +577,8 @@ func newSlackPreviewDMsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&workspace, "workspace", "", "Slack workspace name")
 	cmd.Flags().StringVar(&startFrom, "start-from", "", "Date filter (YYYY-MM-DD)")
 	_ = cmd.MarkFlagRequired("workspace")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Fetch DMs from a Slack workspace without storing them. Useful before slack-upsert-dm-config.",
 		"--workspace STRING (required)\n--start-from YYYY-MM-DD (optional)",
 		`{"content":"string"}`,

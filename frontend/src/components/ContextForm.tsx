@@ -9,6 +9,7 @@ import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, P
 import type { store, main } from "../../wailsjs/go/models";
 import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo, ContextRelation, RelationInput, RelationsPayload, ContextRelationType } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
+import { ProseEditor } from "./ProseEditor";
 
 export interface VCSBranchInput {
   platform: VCSPlatform;
@@ -939,7 +940,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
             <div className="ctx-panel">
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Describe what changed</label>
-                <textarea
+                <ProseEditor
                   className="quick-update-note"
                   value={quickText}
                   onChange={(e) => setQuickText(e.target.value)}
@@ -1072,7 +1073,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                 {/* JQL search section */}
                 <div className="channel-search-section">
                   <div className="channel-search-label">Search issues (JQL)</div>
-                  <textarea
+                  <ProseEditor
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onFocus={() => setJqlFocused(true)}
@@ -1482,7 +1483,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         }}
                       ><X size={11} /></button>
                     </div>
-                    <textarea
+                    <ProseEditor
                       className="text-file-content"
                       value={f.content}
                       onChange={(e) =>
@@ -1517,7 +1518,7 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                         onClick={() => setNewFiles((prev) => prev.filter((x) => x.tempId !== f.tempId))}
                       ><X size={11} /></button>
                     </div>
-                    <textarea
+                    <ProseEditor
                       className="text-file-content"
                       value={f.content}
                       onChange={(e) =>

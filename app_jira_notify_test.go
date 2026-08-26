@@ -39,3 +39,33 @@ func TestOnJiraNotifyEmitsStatusEventOnce(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, evs2, 1, "duplicate notification must not emit a second event")
 }
+
+// A ticket moving INTO a terminal status ("Ready for QA → Done") needs no
+// reaction, so it must not flag the context — those tiles were pure noise in the
+// Needs Attention panel.
+func TestOnJiraNotifySkipsFlagForTerminalStatus(t *testing.T) {
+	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "org")
+	require.NoError(t, err)
+	done, err := s.CreateContext(ctx, "PROJ-DONE", org.ID)
+	require.NoError(t, err)
+	live, err := s.CreateContext(ctx, "PROJ-LIVE", org.ID)
+	require.NoError(t, err)
+
+	a := &App{db: s, ctx: ctx, logger: newTestLogger()}
+
+	require.NoError(t, a.onJiraNotify(ctx, done.ID, "jira_issue", "j-1", "jira_status_changed", "Ready for QA", "Done"))
+	got, err := s.GetContext(ctx, done.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "not_started", got.SnapshotStatus, "a ticket reaching Done needs no attention")
+
+	// A non-terminal transition still flags.
+	require.NoError(t, a.onJiraNotify(ctx, live.ID, "jira_issue", "j-2", "jira_status_changed", "To Do", "In Code Review"))
+	got2, err := s.GetContext(ctx, live.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "needs_attention", got2.SnapshotStatus)
+}

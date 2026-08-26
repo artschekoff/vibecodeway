@@ -124,7 +124,8 @@ func (r *Runner) Run(ctx context.Context, subCmdPath []string, positionalArgs []
 		if errMsg == "" {
 			errMsg = err.Error()
 		}
-		r.logger.Error("acli exec failed",
+		r.logger.Error(
+			"acli exec failed",
 			zap.String("cmd", subcmd),
 			zap.String("stderr", errMsg),
 			zap.Error(err),

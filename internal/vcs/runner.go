@@ -60,6 +60,11 @@ type PRData struct {
 	CreatedAt string
 	UpdatedAt string
 	Reviewers []ReviewerDecision `json:"reviewers,omitempty"`
+	// MyReviewState is the authenticated user's own standing review decision:
+	// "", "approved", "changes_requested" or "commented". nil means the PR's
+	// reviews payload was not fetched for this call, so persisting layers must
+	// leave any stored value alone instead of resetting it.
+	MyReviewState *string
 }
 
 // ReviewerDecision is one reviewer's latest effective decision on a PR.

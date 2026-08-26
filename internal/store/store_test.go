@@ -51,7 +51,8 @@ func TestOldUnprefixedTablesAbsent(t *testing.T) {
 func assertTableExists(t *testing.T, s *Store, name string) {
 	t.Helper()
 	var count int
-	err := s.db.QueryRowContext(context.Background(),
+	err := s.db.QueryRowContext(
+		context.Background(),
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name,
 	).Scan(&count)
 	require.NoError(t, err)
@@ -61,7 +62,8 @@ func assertTableExists(t *testing.T, s *Store, name string) {
 func assertTableAbsent(t *testing.T, s *Store, name string) {
 	t.Helper()
 	var count int
-	err := s.db.QueryRowContext(context.Background(),
+	err := s.db.QueryRowContext(
+		context.Background(),
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name,
 	).Scan(&count)
 	require.NoError(t, err)

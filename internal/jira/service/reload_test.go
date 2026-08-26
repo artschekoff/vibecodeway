@@ -24,13 +24,16 @@ func (p *slowProvider) Name() string { return p.name }
 func (p *slowProvider) IsConfigured(_ context.Context, _ string) (bool, error) {
 	return true, nil
 }
+
 func (p *slowProvider) Reload(_ context.Context, _ string) (provider.Stats, error) {
 	time.Sleep(p.delay)
 	return provider.Stats{}, nil
 }
+
 func (p *slowProvider) Refresh(_ context.Context, _ string) (provider.Stats, error) {
 	return provider.Stats{}, nil
 }
+
 func (p *slowProvider) CollectItems(_ context.Context, _ string, _ time.Time, _ bool) ([]provider.Item, error) {
 	return nil, nil
 }

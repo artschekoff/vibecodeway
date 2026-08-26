@@ -7,6 +7,7 @@ import {
   DeleteWorkflowStatus,
 } from "../../wailsjs/go/main/App";
 import type { WorkflowStatus } from "../types";
+import { ProseEditor } from "./ProseEditor";
 
 const SLUG_RE = /^[a-z][a-z0-9_]*$/;
 
@@ -116,9 +117,9 @@ export default function WorkflowStatusManager() {
                     Color
                     {editColor && <button type="button" style={{ fontSize: 10, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }} onClick={() => setEditColor("")}>clear</button>}
                   </label>
-                  <textarea
+                  <ProseEditor
                     className="form-control"
-                    style={{ fontSize: 11, resize: "vertical", minHeight: 56 }}
+                    style={{ resize: "vertical", minHeight: 56 }}
                     placeholder="AI hint: when to use this status and what signals a transition…"
                     value={editAiHint}
                     onChange={(e) => setEditAiHint(e.target.value)}
@@ -194,9 +195,9 @@ export default function WorkflowStatusManager() {
               Color (optional)
               {newColor && <button type="button" style={{ fontSize: 10, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }} onClick={() => setNewColor("")}>clear</button>}
             </label>
-            <textarea
+            <ProseEditor
               className="form-control"
-              style={{ fontSize: 11, resize: "vertical", minHeight: 56 }}
+              style={{ resize: "vertical", minHeight: 56 }}
               placeholder="AI hint (optional): when to use this status and what signals a transition…"
               value={newAiHint}
               onChange={(e) => setNewAiHint(e.target.value)}

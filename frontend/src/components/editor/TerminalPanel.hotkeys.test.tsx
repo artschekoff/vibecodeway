@@ -14,8 +14,6 @@ const Wrap = ({ children }: { children: React.ReactNode }) => (
 async function renderPanel() {
   render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
   await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
-  // Give the terminal zone its scope — React's onFocus bubbles up to the root.
-  fireEvent.focus(screen.getByTestId("term"));
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -45,6 +43,54 @@ describe("TerminalPanel hotkeys (layer)", () => {
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
     fireEvent.keyDown(window, { key: "t", metaKey: true });
     expect(screen.getAllByTestId("term")).toHaveLength(2);
+  });
+
+  // The visible terminal is the active one: every terminal is mounted, only the
+  // active wrapper gets display:block.
+  function activeIndex(): number {
+    return screen.getAllByTestId("term").findIndex(
+      (el) => (el.parentElement as HTMLElement).style.display === "block");
+  }
+
+  it("⌘] / ⌘[ cycle the active terminal", async () => {
+    await renderPanel();
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+    expect(screen.getAllByTestId("term")).toHaveLength(3);
+    fireEvent.focus(screen.getAllByTestId("term")[0]);
+
+    const start = activeIndex();
+    fireEvent.keyDown(window, { key: "]", metaKey: true });
+    expect(activeIndex()).toBe((start + 1) % 3);
+
+    fireEvent.keyDown(window, { key: "[", metaKey: true });
+    expect(activeIndex()).toBe(start);
+  });
+
+  it("⌘] cycles without terminal focus, like ⌘T", async () => {
+    // Same shape as the ⌘T bug above: the panel is mounted and visible, but DOM
+    // focus is elsewhere (the editor, a tab strip, the body after a tab click).
+    render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
+    await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+    expect(screen.getAllByTestId("term")).toHaveLength(2);
+
+    const start = activeIndex();
+    fireEvent.keyDown(window, { key: "]", metaKey: true });
+    expect(activeIndex()).toBe((start + 1) % 2);
+  });
+
+  it("⌘] still cycles after clicking a terminal tab", async () => {
+    // Clicking a tab is how a user switches terminals by mouse. The tab div is
+    // not focusable, so the click drops DOM focus out of the panel — and with it
+    // the "terminal" scope the cycle hotkeys were gated on.
+    await renderPanel();
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+    fireEvent.click(screen.getAllByText("api")[0]);
+
+    const start = activeIndex();
+    fireEvent.keyDown(window, { key: "]", metaKey: true });
+    expect(activeIndex()).toBe((start + 1) % 2);
   });
 
   it("⌘I opens the insert-command menu (state-driven popover)", async () => {

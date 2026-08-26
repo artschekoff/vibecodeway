@@ -160,7 +160,8 @@ func (r *Runner) Run(ctx context.Context, subCmdPath []string, flags []string) (
 		if errMsg == "" {
 			errMsg = err.Error()
 		}
-		r.logger.Error("slack-cli exec failed",
+		r.logger.Error(
+			"slack-cli exec failed",
 			zap.String("cmd", key),
 			zap.String("stderr", errMsg),
 			zap.Error(err),

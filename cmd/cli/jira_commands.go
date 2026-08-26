@@ -34,7 +34,8 @@ func newJiraSearchCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	cmd.Flags().StringVar(&contextKey, "context-key", "", "Context key")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Run the context's saved JQL against Jira and return a diff of new vs existing issues. Call before jira-add to preview imports.",
 		"--context-id UUID | --context-key STRING (one required)",
 		`{"new":[{"key":"string","summary":"string","status":"string"}],"existing":[{"key":"string","summary":"string","status":"string"}]}`,
@@ -79,7 +80,8 @@ func newJiraAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&contextKey, "context-key", "", "Context key, e.g. 'sprint-42'")
 	cmd.Flags().StringVar(&jiraKeys, "jira-keys", "", "Comma-separated Jira keys, e.g. 'JH-1,JH-5'")
 	_ = cmd.MarkFlagRequired("jira-keys")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Add one or more Jira issues to a context by key, then sync comments.",
 		"--context-id UUID | --context-key STRING (one required)\n--jira-keys STRING (required; comma-separated, e.g. JH-1,JH-5)",
 		`{"added":"int","newComments":"int"}`,
@@ -112,7 +114,8 @@ func newJiraSyncCommentsCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Fetch new comments from Jira for all issues already stored in a context.",
 		"--context-id UUID (required)",
 		`{"newComments":"int"}`,
@@ -145,7 +148,8 @@ func newJiraSearchJQLCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&jql, "jql", "", "JQL query string")
 	_ = cmd.MarkFlagRequired("jql")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Run an arbitrary JQL query against Jira and return matching issues. Does not modify any context data.",
 		"--jql STRING (required)",
 		`[{"key":"string","summary":"string","status":"string","assignee":"string",...}]`,
@@ -178,7 +182,8 @@ func newJiraRefreshCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Re-fetch all Jira issues and Slack data for a context from their upstream sources.",
 		"--context-id UUID (required)",
 		`{"contextId":"uuid","jira":{"updated":"int","new":"int"},"slack":{...},...}`,
@@ -210,7 +215,8 @@ func newJiraDeleteIssueCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Issue internal UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Remove a Jira issue and its comments from local storage. Does not modify Jira. Use context-get to find the internal UUID for a Jira key.",
 		"--id UUID (required; internal UUID, not JH-1)",
 		`{"deleted":"uuid"}`,
@@ -242,7 +248,8 @@ func newJiraDeleteCommentCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Comment internal UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Remove a Jira comment from local storage. Does not modify Jira.",
 		"--id UUID (required; internal UUID)",
 		`{"deleted":"uuid"}`,
@@ -275,7 +282,8 @@ func newJiraToggleIssueCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Issue internal UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle is_active for a Jira issue. Inactive issues are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","key":"string","isActive":"bool",...}`,
@@ -308,7 +316,8 @@ func newJiraToggleCommentCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Comment internal UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle is_active for a Jira comment. Inactive comments are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","isActive":"bool",...}`,
@@ -335,7 +344,8 @@ func newReloadAllCmd() *cobra.Command {
 			return writeJSON(results)
 		},
 	}
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Re-fetch data for every active context from Jira and Slack. Runs a refresh for each context sequentially.",
 		"(none)",
 		`[{"contextId":"uuid","jira":{...},"slack":{...},...}]`,

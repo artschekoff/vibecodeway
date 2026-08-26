@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
 import { reviewStatusMeta } from "./reviewStatus";
+import { reviewStage, stageMeta, myReviewLabel, REQUESTED_STAGE_ORDER, type ReviewStage } from "./reviewStage";
 import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2, Search } from "lucide-react";
 import {
   DndContext,
@@ -92,6 +93,7 @@ import type {
   WorkflowStatus,
 } from "../types";
 import { effectiveStatus } from "../types";
+import { needsAttentionTiles } from "./needsAttentionPanel";
 import type { VCSBranchInput } from "../components/ContextForm";
 import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
@@ -132,7 +134,9 @@ function ReviewCard({
   onMarkViewed?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const isWaiting = !!review.reviewedAt;
+  const stage = reviewStage(review);
+  // Dim the cards that are no longer my move.
+  const isWaiting = stage === "reviewed_waiting" || stage === "terminal";
 
   const handleCopy = () => {
     if (!review.prUrl) return;
@@ -143,6 +147,14 @@ function ReviewCard({
   };
 
   const status = reviewStatusMeta(review.reviewStatus);
+  const meta = stageMeta(stage);
+  // A stage with no badge of its own (terminal, authored) keeps the PR-wide decision badge.
+  const badge = meta.badge
+    ? { label: meta.badge, className: meta.className }
+    : status.label
+      ? { label: status.label, className: status.className }
+      : null;
+  const mine = myReviewLabel(review);
 
   return (
     <div className={`review-card${isWaiting ? " review-card--waiting" : ""}`}>
@@ -156,12 +168,10 @@ function ReviewCard({
         )}
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
-        {isWaiting && !status.terminal ? (
-          <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
-        ) : status.label && (
-          <span className={`pr-status-badge${status.className}`}>
-            {status.needsReReview && <RotateCcw size={11} className="pr-status-icon" />}
-            {status.label}
+        {badge && (
+          <span className={`pr-status-badge${badge.className}`}>
+            {stage === "re_review" && <RotateCcw size={11} className="pr-status-icon" />}
+            {badge.label}
           </span>
         )}
         {!status.terminal && review.mergeable === "CONFLICTING" && (
@@ -190,6 +200,13 @@ function ReviewCard({
               {rv.state === "approved" ? "✓" : rv.state === "changes_requested" ? "✗" : "💬"} <span>{rv.login}</span>
             </span>
           ))}
+        </div>
+      )}
+      {mine && (
+        <div style={{ marginTop: 2 }}>
+          <span className="pr-status-badge pr-status-badge--mine" style={{ fontSize: 10 }} title="Your own review on this PR">
+            {mine}
+          </span>
         </div>
       )}
       <div className="review-card-bottom">
@@ -225,7 +242,7 @@ function ReviewCard({
               Open <ExternalLink size={11} />
             </button>
           )}
-          {isWaiting && onDismiss && (
+          {onDismiss && (
             <button className="review-open-btn review-dismiss-btn" onClick={() => onDismiss(review.id)} title="Dismiss">
               <X size={11} />
             </button>
@@ -415,10 +432,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     [contexts, matchedIDs],
   );
 
-  const needsAttentionContexts = useMemo(
-    () => contexts.filter((c) => effectiveStatus(c) === "needs_attention"),
-    [contexts],
-  );
+  const needsAttentionContexts = useMemo(() => needsAttentionTiles(contexts), [contexts]);
 
   // ── Load contexts ──
   const load = useCallback(async () => {
@@ -448,7 +462,11 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         repo,
         reviews: safeReviews.filter((r) => r.repoId === repo.id),
       })));
-      setTotalReviews(safeReviews.filter((r) => !r.reviewedAt).length);
+      // The tab badge counts PRs that are my move: never reviewed, or bounced back to me.
+      setTotalReviews(safeReviews.filter((r) => {
+        const s = reviewStage(r);
+        return s === "awaiting_first" || s === "re_review";
+      }).length);
       // Fetch local paths for each repo
       const pathResults = await Promise.allSettled(
         safeRepos.map((repo) =>
@@ -1394,13 +1412,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const url = repoUrl(repo);
                 const q = reviewFilter.trim().toLowerCase();
                 const match = (r: ReviewRequest) => !q || r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q);
-                const requested = reviews.filter((r) => (r.kind ?? "requested") === "requested");
+                const requested = reviews.filter((r) => (r.kind ?? "requested") === "requested" && match(r));
                 const authored = reviews.filter((r) => r.kind === "authored" && match(r));
-                const pending = requested.filter((r) => !r.reviewedAt && match(r));
-                const isTerminal = (r: ReviewRequest) => reviewStatusMeta(r.reviewStatus).terminal;
-                const waiting = requested.filter((r) => !!r.reviewedAt && !isTerminal(r) && match(r));
-                const done = requested.filter((r) => !!r.reviewedAt && isTerminal(r) && match(r));
-                if (pending.length === 0 && waiting.length === 0 && done.length === 0 && authored.length === 0) return null;
+                const buckets = new Map<ReviewStage, ReviewRequest[]>();
+                for (const r of requested) {
+                  const s = reviewStage(r);
+                  buckets.set(s, [...(buckets.get(s) ?? []), r]);
+                }
+                const sections = REQUESTED_STAGE_ORDER
+                  .map((stage) => ({ stage, items: buckets.get(stage) ?? [] }))
+                  .filter((s) => s.items.length > 0);
+                // The header count is "how many are my move", not "how many rows".
+                const actionable = (buckets.get("awaiting_first") ?? []).length + (buckets.get("re_review") ?? []).length;
+                if (sections.length === 0 && authored.length === 0) return null;
                 return (
                   <section key={repo.id} className="detail-section review-repo-section">
                     <div className="review-repo-header">
@@ -1411,73 +1435,34 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                           <ExternalLink size={12} />
                         </button>
                       )}
-                      {pending.length > 0 && <span className="detail-section-count">{pending.length}</span>}
+                      {actionable > 0 && <span className="detail-section-count">{actionable}</span>}
                     </div>
                     <div className="review-repo-body">
-                    {pending.length === 0 ? (
+                    {sections.length === 0 ? (
                       <div className="detail-section-empty">No pending reviews in this repo.</div>
-                    ) : (
-                      <div className="pr-list">
-                        {pending.map((review) => (
-                          <ReviewCard
-                            key={review.id}
-                            review={review}
-                            checkoutLoading={reviewCheckoutLoading}
-                            onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
-                            onReview={() => void handleReviewWithAI(review)}
-                            reviewing={reviewingId === review.id}
-                            isUnviewed={!review.viewedAt}
-                            onMarkViewed={() => handleMarkReviewViewed(review.id)}
-                          />
-                        ))}
+                    ) : sections.map(({ stage, items }) => (
+                      <div key={stage}>
+                        <div className="review-waiting-header" data-testid={`review-section-${stage}`}>
+                          {stageMeta(stage).title}
+                          <span className="detail-section-count" style={{ marginLeft: 6 }}>{items.length}</span>
+                        </div>
+                        <div className="pr-list">
+                          {items.map((review) => (
+                            <ReviewCard
+                              key={review.id}
+                              review={review}
+                              onDismiss={stage === "awaiting_first" || stage === "re_review" ? undefined : handleDismissReview}
+                              checkoutLoading={reviewCheckoutLoading}
+                              onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
+                              onReview={() => void handleReviewWithAI(review)}
+                              reviewing={reviewingId === review.id}
+                              isUnviewed={!review.viewedAt}
+                              onMarkViewed={() => handleMarkReviewViewed(review.id)}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    )}
-                    {waiting.length > 0 && (
-                      <>
-                        <div className="review-waiting-header">
-                          Waiting for author
-                          <span className="detail-section-count" style={{ marginLeft: 6 }}>{waiting.length}</span>
-                        </div>
-                        <div className="pr-list">
-                          {waiting.map((review) => (
-                            <ReviewCard
-                              key={review.id}
-                              review={review}
-                              onDismiss={handleDismissReview}
-                              checkoutLoading={reviewCheckoutLoading}
-                              onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
-                              onReview={() => void handleReviewWithAI(review)}
-                              reviewing={reviewingId === review.id}
-                              isUnviewed={!review.viewedAt}
-                              onMarkViewed={() => handleMarkReviewViewed(review.id)}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {done.length > 0 && (
-                      <>
-                        <div className="review-waiting-header">
-                          Merged / Closed
-                          <span className="detail-section-count" style={{ marginLeft: 6 }}>{done.length}</span>
-                        </div>
-                        <div className="pr-list">
-                          {done.map((review) => (
-                            <ReviewCard
-                              key={review.id}
-                              review={review}
-                              onDismiss={handleDismissReview}
-                              checkoutLoading={reviewCheckoutLoading}
-                              onCheckout={() => void handleReviewCheckout(review.headBranch ?? "", review.repoId)}
-                              onReview={() => void handleReviewWithAI(review)}
-                              reviewing={reviewingId === review.id}
-                              isUnviewed={!review.viewedAt}
-                              onMarkViewed={() => handleMarkReviewViewed(review.id)}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
+                    ))}
                     {authored.length > 0 && (
                       <>
                         <div className="review-waiting-header">

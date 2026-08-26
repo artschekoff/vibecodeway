@@ -66,10 +66,15 @@ export const COMMANDS: Command[] = [
     description: "Open a terminal at the selected path", scope: "global", defaultChord: "mod+shift+t" },
   { id: "terminal.insert", object: "terminal", action: "insert", label: "Insert command",
     description: "Open the insert-command menu", scope: "global", defaultChord: "mod+i" },
+  // "global", not "terminal": scoping these to DOM focus made them dead whenever
+  // focus sat anywhere but inside xterm — including right after clicking a
+  // terminal tab, which is not focusable. Same bug ⌘T had. ⌘]/⌘[ are bound to
+  // nothing else (context tabs moved to ⌘⇧]/⌘⇧[ in migration 107), so there is
+  // no chord to lose by widening the scope.
   { id: "terminal.next", object: "terminal", action: "next", label: "Next terminal",
-    description: "Switch to the next terminal", scope: "terminal", defaultChord: "mod+]" },
+    description: "Switch to the next terminal", scope: "global", defaultChord: "mod+]" },
   { id: "terminal.prev", object: "terminal", action: "prev", label: "Previous terminal",
-    description: "Switch to the previous terminal", scope: "terminal", defaultChord: "mod+[" },
+    description: "Switch to the previous terminal", scope: "global", defaultChord: "mod+[" },
 ].map((c) => ({ ...c })) as Command[];
 
 export function commandById(id: string): Command | undefined {

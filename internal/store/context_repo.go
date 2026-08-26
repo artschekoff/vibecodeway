@@ -156,7 +156,8 @@ func (s *Store) ListContexts(ctx context.Context, includeArchived bool) ([]Conte
 func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 	var c Context
 	var isStaleInt int
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
 		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0),
 		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
@@ -187,7 +188,8 @@ func (s *Store) GetContext(ctx context.Context, id string) (*Context, error) {
 func (s *Store) GetContextByKey(ctx context.Context, key string) (*Context, error) {
 	var c Context
 	var isStaleInt int
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT c.id, c.key, c.status, c.org_id, c.created_at, c.updated_at,
 		       COALESCE(sn.status, 'not_started'), COALESCE(sn.is_stale, 0),
 		       COALESCE(latest_log.comment, '') AS snapshot_status_comment
@@ -269,7 +271,8 @@ func (s *Store) SetContextsOrder(ctx context.Context, ids []string) error {
 // UpdateContext updates mutable fields of an existing context.
 func (s *Store) UpdateContext(ctx context.Context, id, key, status string) (*Context, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		"UPDATE contexts SET key = ?, status = ?, updated_at = ? WHERE id = ?",
 		key, status, now, id,
 	)

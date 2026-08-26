@@ -27,7 +27,8 @@ func TestManager_StartStreamsOutputAndExits(t *testing.T) {
 	var out string
 	exited := make(chan error, 1)
 
-	id, err := m.Start(t.TempDir(), "/bin/sh", []string{"-c", "printf hello_pty && exit 0"},
+	id, err := m.Start(
+		t.TempDir(), "/bin/sh", []string{"-c", "printf hello_pty && exit 0"},
 		func(_, chunk string) { mu.Lock(); out += chunk; mu.Unlock() },
 		func(_ string, err error) { exited <- err },
 	)
@@ -53,7 +54,8 @@ func TestManager_WriteAndClose(t *testing.T) {
 
 	var mu sync.Mutex
 	var out string
-	id, err := m.Start(t.TempDir(), "/bin/sh", []string{"-i"},
+	id, err := m.Start(
+		t.TempDir(), "/bin/sh", []string{"-i"},
 		func(_, chunk string) { mu.Lock(); out += chunk; mu.Unlock() },
 		func(string, error) {},
 	)
@@ -74,6 +76,7 @@ func TestManager_WriteAndClose(t *testing.T) {
 func containsMarker(s, marker string) bool {
 	return len(s) >= len(marker) && (indexOf(s, marker) >= 0)
 }
+
 func indexOf(s, sub string) int {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

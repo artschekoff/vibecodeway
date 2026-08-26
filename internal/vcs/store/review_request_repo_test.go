@@ -169,3 +169,52 @@ func TestSetReviewStatusPreservesReviewedAt(t *testing.T) {
 	assert.Equal(t, "merged", items[0].ReviewStatus)
 	require.NotNil(t, items[0].ReviewedAt) // still "waiting" (reviewed) — only the label changed
 }
+
+func TestUpdateMyReviewStateRoundTrips(t *testing.T) {
+	_, vcsStore := openTestDB(t)
+	ctx := context.Background()
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 11, "PR", "carol",
+		"https://x/11", "changes_requested", "feat/x", "2026-08-01T00:00:00Z",
+		"[]", "MERGEABLE", "requested", "SUCCESS")
+	require.NoError(t, err)
+
+	// A fresh row has no standing decision.
+	list, err := vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "", list[0].MyReviewState)
+
+	require.NoError(t, vcsStore.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, 11, "changes_requested"))
+
+	list, err = vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "changes_requested", list[0].MyReviewState)
+}
+
+func TestUpsertKeepsMyReviewState(t *testing.T) {
+	_, vcsStore := openTestDB(t)
+	ctx := context.Background()
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 12, "PR", "carol",
+		"https://x/12", "review_required", "feat/y", "2026-08-01T00:00:00Z",
+		"[]", "MERGEABLE", "requested", "")
+	require.NoError(t, err)
+	require.NoError(t, vcsStore.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, 12, "approved"))
+
+	// Re-upsert (the PR re-appeared in a GitHub search) must not wipe the decision.
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 12, "PR", "carol",
+		"https://x/12", "review_required", "feat/y", "2026-08-01T00:00:00Z",
+		"[]", "MERGEABLE", "requested", "")
+	require.NoError(t, err)
+
+	list, err := vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].MyReviewState)
+}

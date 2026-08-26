@@ -36,7 +36,8 @@ func newContextListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&includeArchived, "include-archived", false, "Include archived contexts")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List contexts with UUID, key, status, and item counts. By default only active contexts are returned.",
 		"--include-archived bool (optional; default false)",
 		`[{"id":"uuid","key":"string","status":"active|archived","orgId":"string","issueCount":"int",...}]`,
@@ -74,7 +75,8 @@ func newContextCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID the context belongs to")
 	_ = cmd.MarkFlagRequired("key")
 	_ = cmd.MarkFlagRequired("org-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Create a new context with a unique key tied to an organization.",
 		"--key STRING (required)\n--org-id STRING (required)",
 		`{"id":"uuid","key":"string","orgId":"string","status":"active","createdAt":"RFC3339","updatedAt":"RFC3339"}`,
@@ -109,7 +111,8 @@ func newContextUpdateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&key, "key", "", "New context key")
 	cmd.Flags().StringVar(&status, "status", "", "New status (active|archived)")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Update the key or status of a context.",
 		"--id UUID (required)\n--key STRING (optional)\n--status active|archived (optional)",
 		`{"id":"uuid","key":"string","status":"active|archived",...}`,
@@ -141,7 +144,8 @@ func newContextDeleteCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Permanently delete a context and all associated data (Jira, Slack, text, files). Cannot be undone.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
@@ -174,7 +178,8 @@ func newContextToggleStatusCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle a context between active and archived status.",
 		"--id UUID (required)",
 		`{"id":"uuid","key":"string","status":"active|archived",...}`,
@@ -208,7 +213,8 @@ func newContextGetCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	cmd.Flags().StringVar(&contextKey, "context-key", "", "Context key")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Get full context detail including Jira config, Slack config, issues, and item counts.",
 		"--context-id UUID | --context-key STRING (one required)",
 		`{"id":"uuid","key":"string","jiraConfig":{...},"slackConfig":{...},"issues":[...],...}`,
@@ -242,7 +248,8 @@ func newSetJiraConfigCmd() *cobra.Command {
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	cmd.Flags().StringVar(&searchQuery, "search-query", "", "JQL query")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Set the JQL search query used by jira-search to discover new issues for a context. Omit --search-query to clear.",
 		"--context-id UUID (required)\n--search-query STRING (optional JQL; omit to clear)",
 		`{"id":"uuid","key":"string","jiraConfig":{"searchQuery":"string"},...}`,
@@ -277,7 +284,8 @@ func newSetSlackConfigCmd() *cobra.Command {
 	cmd.Flags().StringVar(&workspace, "workspace", "", "Slack workspace name")
 	cmd.Flags().StringVar(&searchQuery, "search-query", "", "Slack search query")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Set the Slack workspace and default search query for a context.",
 		"--context-id UUID (required)\n--workspace STRING (optional)\n--search-query STRING (optional)",
 		`{"id":"uuid","key":"string","slackConfig":{"workspace":"string","searchQuery":"string"},...}`,
@@ -307,7 +315,8 @@ func newOrgListCmd() *cobra.Command {
 			return writeJSON(orgs)
 		},
 	}
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List organizations with their UUID and name. Read-only. Use to pick the --org-id required by context-create.",
 		"(no flags)",
 		`[{"id":"uuid","name":"string","sortOrder":"int","createdAt":"RFC3339","updatedAt":"RFC3339"}]`,

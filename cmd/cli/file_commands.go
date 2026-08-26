@@ -32,7 +32,8 @@ func newFileListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&contextID, "context-id", "", "Context UUID")
 	_ = cmd.MarkFlagRequired("context-id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"List uploaded document files stored for a context.",
 		"--context-id UUID (required)",
 		`[{"id":"uuid","name":"string","fileType":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}]`,
@@ -64,7 +65,8 @@ func newFileDeleteCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "File record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Permanently delete an uploaded file from a context.",
 		"--id UUID (required)",
 		`{"deleted":"uuid"}`,
@@ -97,7 +99,8 @@ func newFileToggleCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&id, "id", "", "File record UUID")
 	_ = cmd.MarkFlagRequired("id")
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Toggle is_active for an uploaded file. Inactive files are excluded from context loads.",
 		"--id UUID (required)",
 		`{"id":"uuid","name":"string","fileType":"string","isActive":"bool",...}`,

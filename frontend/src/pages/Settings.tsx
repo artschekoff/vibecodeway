@@ -8,6 +8,7 @@ import { useTabContext } from "../contexts/TabContext";
 import WorkflowStatusManager from "../components/WorkflowStatusManager";
 import KeybindingRow from "../components/KeybindingRow";
 import GlobalEventHooks from "../components/GlobalEventHooks";
+import { readVimMode, setVimMode } from "../lib/vimMode";
 
 // Group bindings by their `object` field, preserving first-seen order.
 function groupKeybindings(kbs: Keybinding[]): [string, Keybinding[]][] {
@@ -81,6 +82,7 @@ export default function SettingsPage() {
 
   // Background refresh settings
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [vimEnabled, setVimEnabled] = useState(readVimMode);
   const [contextRefetchEnabled, setContextRefetchEnabled] = useState(false);
   const [contextRefetchInterval, setContextRefetchInterval] = useState(30);
   const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
@@ -408,6 +410,25 @@ export default function SettingsPage() {
             </div>
           </section>
         )}
+
+        <section className="detail-section">
+          <div className="detail-section-header">
+            <span className="detail-section-title">Text Editing</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 14px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={vimEnabled}
+                onChange={(e) => { setVimMode(e.target.checked); setVimEnabled(e.target.checked); }}
+              />
+              Vim mode in text boxes
+            </label>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Applies to every note, prompt and description box in the app, and to the code editor. Takes effect immediately.
+            </div>
+          </div>
+        </section>
 
         <section className="detail-section">
           <div className="detail-section-header">

@@ -33,7 +33,8 @@ func newAgentTaskTestService(t *testing.T) (*Service, string) {
 	jiraRepo := jirastore.NewRepo(s.DB())
 	jiraSvc := jiraservice.NewContextService(s, nil, jiraRepo, nil, nil, zap.NewNop())
 
-	_, err = jiraRepo.UpsertIssue(ctx, ctxRow.ID,
+	_, err = jiraRepo.UpsertIssue(
+		ctx, ctxRow.ID,
 		"JH-1",
 		"slow sql",
 		"In Progress",
@@ -89,8 +90,8 @@ func TestBuildAgentTask_includesRepoInfo(t *testing.T) {
 
 	out, err := svc.BuildAgentTask(context.Background(), contextID, "реализовать")
 	require.NoError(t, err)
-	assert.Contains(t, out, "acme/repoA")                  // repo identity
-	assert.Contains(t, out, "backend")                     // repo label hint
+	assert.Contains(t, out, "acme/repoA")                    // repo identity
+	assert.Contains(t, out, "backend")                       // repo label hint
 	assert.Contains(t, out, "Billing service for practices") // repo description hint
 }
 

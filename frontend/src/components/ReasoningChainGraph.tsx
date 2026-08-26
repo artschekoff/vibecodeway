@@ -5,6 +5,7 @@ import {
   SetCurrentAssignmentStep,
 } from "../../wailsjs/go/main/App";
 import type { PersonAssignment, ReasoningChainStep } from "../types/index";
+import { ProseEditor } from "./ProseEditor";
 
 interface Props {
   personAssignment: PersonAssignment;
@@ -307,8 +308,8 @@ export function ReasoningChainGraph({ personAssignment, steps, onClose, onStepsC
 
                   {isEditing ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <textarea
-                        style={{ width: "100%", minHeight: 180, resize: "vertical", fontFamily: "inherit", fontSize: 11, textAlign: "left", padding: "8px", boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", lineHeight: 1.5 }}
+                      <ProseEditor
+                        style={{ width: "100%", minHeight: 180, resize: "vertical", padding: "8px", boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", lineHeight: 1.5 }}
                         value={state.draftOutput}
                         onChange={e => setState(s => s.phase === "editing" ? { ...s, draftOutput: e.target.value } : s)}
                       />

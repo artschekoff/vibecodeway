@@ -142,7 +142,8 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 				platform := vcs.Platform(branch.Repo.Platform)
 				runner, ok := p.runners[platform]
 				if !ok {
-					p.logger.Warn("vcs sync: no runner for platform",
+					p.logger.Warn(
+						"vcs sync: no runner for platform",
 						zap.String("platform", string(platform)),
 						zap.String("repo", branch.Repo.FullName()),
 					)
@@ -151,7 +152,8 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 
 				prs, err := runner.ListPRsForBranch(ctx, branch.Repo.Owner, branch.Repo.Name, branch.Branch)
 				if err != nil {
-					p.logger.Warn("vcs sync: list PRs failed",
+					p.logger.Warn(
+						"vcs sync: list PRs failed",
 						zap.String("repo", branch.Repo.FullName()),
 						zap.String("branch", branch.Branch),
 						zap.Error(err),
@@ -160,7 +162,8 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 				}
 
 				for _, pr := range prs {
-					res, err := p.store.PullRequests.UpsertPR(ctx,
+					res, err := p.store.PullRequests.UpsertPR(
+						ctx,
 						branch.RepoID, branch.ID, pr.Number,
 						pr.Title, pr.Author, pr.State, pr.ReviewStatus, pr.URL, pr.HeadBranch,
 						pr.Mergeable, pr.MergeStateStatus, pr.CIStatus, pr.IsDraft,
@@ -266,7 +269,8 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 					}
 
 					for _, c := range comments {
-						cID, isNew, err := p.store.PullRequests.UpsertComment(ctx,
+						cID, isNew, err := p.store.PullRequests.UpsertComment(
+							ctx,
 							prID, c.ExternalID, nil, c.CommentType, c.Author, c.Body,
 							c.Path, c.Line, c.IsResolved, c.InReplyToID,
 							c.CreatedAt, c.UpdatedAt,
@@ -386,6 +390,15 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		return fmt.Errorf("list repos: %w", err)
 	}
 
+	// Resolved once per sync: the reconcile pass needs it to spot the user's own
+	// decision inside a PR's reviewer list. Best-effort — an empty login just skips
+	// the my-review-state refresh rather than failing the whole sync.
+	myLogin, err := runner.GetAuthUser(ctx)
+	if err != nil {
+		p.logger.Warn("vcs: resolve auth user failed", zap.Error(err))
+		myLogin = ""
+	}
+
 	for _, repo := range repos {
 		requested, err := runner.ListReviewRequests(ctx, repo.Owner, repo.Name)
 		if err != nil {
@@ -410,6 +423,11 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		}
 		for _, pr := range changesRequested {
 			if _, exists := merged[pr.Number]; !exists {
+				// This search is `reviewed-by:@me review:changes_requested`, so the
+				// user's own standing decision is changes-requested by construction —
+				// no reviews fetch needed to know it.
+				state := "changes_requested"
+				pr.MyReviewState = &state
 				merged[pr.Number] = pr
 			}
 		}
@@ -419,7 +437,8 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		for _, pr := range merged {
 			activeNumbers = append(activeNumbers, pr.Number)
 			reviewersJSON := marshalReviewers(pr.Reviewers)
-			insertedRR, err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
+			insertedRR, err := p.store.ReviewRequests.UpsertReviewRequest(
+				ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
 				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, reviewersJSON, pr.Mergeable,
 				"requested", pr.CIStatus,
@@ -427,6 +446,12 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 			if err != nil {
 				p.logger.Warn("vcs: upsert review request failed",
 					zap.Int("pr", pr.Number), zap.Error(err))
+			}
+			if pr.MyReviewState != nil {
+				if err := p.store.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, pr.Number, *pr.MyReviewState); err != nil {
+					p.logger.Warn("vcs: update my review state failed",
+						zap.Int("pr", pr.Number), zap.Error(err))
+				}
 			}
 			if insertedRR && p.reviewNotify != nil {
 				p.reviewNotify(ctx, repo.ID, repo.Name, pr.Number, pr.Title, pr.Author)
@@ -444,7 +469,7 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		// "Merged"/"Closed" instead of "Waiting for Author".
 		// ponytail: one `gh pr view` per newly-dropped PR; PRs already labeled
 		// terminal are skipped, so each PR is fetched at most once.
-		reconcileTerminalStates(ctx, p, runner, repo, activeNumbers)
+		reconcileTerminalStates(ctx, p, runner, repo, activeNumbers, myLogin)
 	}
 	return nil
 }
@@ -472,7 +497,8 @@ func (p *VCSProvider) SyncAuthoredPRs(ctx context.Context, platform vcs.Platform
 		activeNumbers := make([]int, 0, len(authored))
 		for _, pr := range authored {
 			activeNumbers = append(activeNumbers, pr.Number)
-			if _, err := p.store.ReviewRequests.UpsertReviewRequest(ctx,
+			if _, err := p.store.ReviewRequests.UpsertReviewRequest(
+				ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
 				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, marshalReviewers(pr.Reviewers), pr.Mergeable,
 				"authored", pr.CIStatus,
@@ -484,7 +510,7 @@ func (p *VCSProvider) SyncAuthoredPRs(ctx context.Context, platform vcs.Platform
 		// ponytail: reconcile scans all stored rows for the repo (both kinds), so it
 		// may re-fetch still-open requested PRs here too — harmless (snapshot refresh),
 		// only an extra `gh pr view` each. Scope by kind if this gets hot.
-		reconcileTerminalStates(ctx, p, runner, repo, activeNumbers)
+		reconcileTerminalStates(ctx, p, runner, repo, activeNumbers, "")
 	}
 	return nil
 }
@@ -492,7 +518,7 @@ func (p *VCSProvider) SyncAuthoredPRs(ctx context.Context, platform vcs.Platform
 // reconcileTerminalStates fetches the real lifecycle state of review requests that
 // dropped off the open review lists and records "merged"/"closed" in review_status.
 // Best-effort: any failure leaves a PR labeled as-is.
-func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCSRunner, repo vcsstore.VCSRepo, activeNumbers []int) {
+func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCSRunner, repo vcsstore.VCSRepo, activeNumbers []int, myLogin string) {
 	stored, err := p.store.ReviewRequests.ListReviewRequests(ctx, repo.ID)
 	if err != nil {
 		p.logger.Warn("vcs: list stored review requests failed",
@@ -534,7 +560,28 @@ func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCS
 			p.logger.Warn("vcs: update mergeable failed",
 				zap.Int("pr", rr.PRNumber), zap.Error(err))
 		}
+		// The same snapshot also reveals the user's own decision — typically the
+		// approval that removed this PR from the review-requested search in the
+		// first place. Authored PRs are skipped: "my review" is meaningless there.
+		if myLogin != "" && rr.Kind != "authored" {
+			if err := p.store.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, rr.PRNumber,
+				myStateFromReviewers(pr.Reviewers, myLogin)); err != nil {
+				p.logger.Warn("vcs: update my review state failed",
+					zap.Int("pr", rr.PRNumber), zap.Error(err))
+			}
+		}
 	}
+}
+
+// myStateFromReviewers picks `login`'s own entry out of a PR's collapsed reviewer
+// decisions, returning "" when they hold no standing review on it.
+func myStateFromReviewers(ds []vcs.ReviewerDecision, login string) string {
+	for _, d := range ds {
+		if d.Login == login {
+			return d.State
+		}
+	}
+	return ""
 }
 
 // marshalReviewers serializes reviewer decisions to the JSON stored on a review

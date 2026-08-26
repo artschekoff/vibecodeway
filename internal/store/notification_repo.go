@@ -14,7 +14,8 @@ import (
 // same event_type already exists for the entity, it is a no-op returning false.
 func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) (bool, error) {
 	var existing string
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT id FROM notifications WHERE entity_id = ? AND event_type = ? AND read_at IS NULL LIMIT 1`,
 		entityID, eventType,
 	).Scan(&existing)
@@ -39,7 +40,8 @@ func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, e
 // CountUnreadNotifications returns the number of unread notifications for a context.
 func (s *Store) CountUnreadNotifications(ctx context.Context, contextID string) (int, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT COUNT(*) FROM notifications WHERE context_id = ? AND read_at IS NULL`,
 		contextID,
 	).Scan(&n)
@@ -48,7 +50,8 @@ func (s *Store) CountUnreadNotifications(ctx context.Context, contextID string) 
 
 // MarkNotificationsRead marks all unread notifications for a context as read.
 func (s *Store) MarkNotificationsRead(ctx context.Context, contextID string) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE notifications SET read_at = datetime('now') WHERE context_id = ? AND read_at IS NULL`,
 		contextID,
 	)

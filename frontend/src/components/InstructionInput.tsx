@@ -175,9 +175,12 @@ export function InstructionInput({
       )}
 
       <div style={{ position: "relative" }}>
+        {/* Stays a real textarea (not ProseEditor): the @-mention dropdown reads
+            selectionStart off this ref, which Monaco does not expose. Typography
+            comes from the global `textarea` rule so it matches the other boxes. */}
         <textarea
           ref={textareaRef}
-          style={{ width: "100%", minHeight: 72, resize: "vertical", fontFamily: "inherit", fontSize: 12, textAlign: "left", padding: "8px 10px", lineHeight: 1.5, boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", outline: "none" }}
+          style={{ width: "100%", minHeight: 72, resize: "vertical", padding: "8px 10px", boxSizing: "border-box", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", outline: "none" }}
           placeholder="Your instruction… (type @ to reference a context item)"
           value={value} onChange={handleChange} onKeyDown={handleKeyDown}
           disabled={disabled || isApplying} autoFocus

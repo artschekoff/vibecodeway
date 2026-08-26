@@ -69,6 +69,7 @@ char* recognizeTextInImage(const char* imagePath) {
 }
 */
 import "C"
+
 import (
 	"fmt"
 	"unsafe"

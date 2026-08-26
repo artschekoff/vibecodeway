@@ -13,7 +13,8 @@ import (
 // UpsertSlackThread inserts or updates a Slack thread (dedup on context_id + channel_id + thread_ts).
 func (r *Repo) UpsertSlackThread(ctx context.Context, contextID string, args UpsertSlackThreadArgs) (*SlackThread, error) {
 	var existing string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		"SELECT id FROM slack_threads WHERE context_id = ? AND channel_id = ? AND thread_ts = ?",
 		contextID, args.ChannelID, args.ThreadTS,
 	).Scan(&existing)
@@ -153,7 +154,8 @@ func (r *Repo) MarkSlackChannelAllViewed(ctx context.Context, channelID string) 
 // channel. Called during Refresh after per-message records have been successfully upserted
 // so stale blobs from the old single-record format do not accumulate.
 func (r *Repo) DeleteChannelBlobs(ctx context.Context, contextID, channelID string) error {
-	_, err := r.db.ExecContext(ctx,
+	_, err := r.db.ExecContext(
+		ctx,
 		"DELETE FROM slack_threads WHERE context_id = ? AND channel_id = ? AND thread_ts = ''",
 		contextID, channelID,
 	)

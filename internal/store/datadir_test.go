@@ -70,7 +70,8 @@ func TestMigrateDataDirFreshInstall(t *testing.T) {
 	require.NoError(t, migrateDataDir(
 		filepath.Join(tmp, ".context-consolidator"),
 		filepath.Join(tmp, ".vibecodeway"),
-		"context_consolidator.db", "vibecodeway.db"))
+		"context_consolidator.db", "vibecodeway.db",
+	))
 	_, err := os.Stat(filepath.Join(tmp, ".vibecodeway"))
 	require.True(t, os.IsNotExist(err))
 }

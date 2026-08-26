@@ -37,21 +37,24 @@ func TestListBoardBlockers_withData(t *testing.T) {
 
 	// Seed org + context
 	orgID := "org-blocker-1"
-	_, err := db.db.ExecContext(ctx,
+	_, err := db.db.ExecContext(
+		ctx,
 		`INSERT INTO organizations (id, name, sort_order, created_at, updated_at) VALUES (?, 'Test Org', 0, datetime('now'), datetime('now'))`,
 		orgID,
 	)
 	require.NoError(t, err)
 
 	ctxID := "ctx-blocker-1"
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO contexts (id, key, status, org_id, created_at, updated_at) VALUES (?, 'blocker-ctx', 'active', ?, datetime('now'), datetime('now'))`,
 		ctxID, orgID,
 	)
 	require.NoError(t, err)
 
 	// Seed a blocker_identified event
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO event_log (id, context_id, type, timestamp, source_type, author, summary, created_at)
 		 VALUES ('evt-1', ?, 'blocker_identified', datetime('now'), 'jira', 'alice', 'Pipeline is broken', datetime('now'))`,
 		ctxID,
@@ -74,21 +77,24 @@ func TestListBoardAssignments_withData(t *testing.T) {
 
 	// Seed org + context
 	orgID := "org-assign-1"
-	_, err := db.db.ExecContext(ctx,
+	_, err := db.db.ExecContext(
+		ctx,
 		`INSERT INTO organizations (id, name, sort_order, created_at, updated_at) VALUES (?, 'Test Org', 0, datetime('now'), datetime('now'))`,
 		orgID,
 	)
 	require.NoError(t, err)
 
 	ctxID := "ctx-assign-1"
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO contexts (id, key, status, org_id, created_at, updated_at) VALUES (?, 'assign-ctx', 'active', ?, datetime('now'), datetime('now'))`,
 		ctxID, orgID,
 	)
 	require.NoError(t, err)
 
 	// Seed a person assignment for "bob"
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO context_person_assignments (id, context_id, name, body, updated_at) VALUES ('pa-1', ?, 'bob', '- [ ] finish PR', datetime('now'))`,
 		ctxID,
 	)
@@ -120,34 +126,39 @@ func TestListBoardPRsByAuthor_withData(t *testing.T) {
 
 	// Seed org + context
 	orgID := "org-pr-1"
-	_, err := db.db.ExecContext(ctx,
+	_, err := db.db.ExecContext(
+		ctx,
 		`INSERT INTO organizations (id, name, sort_order, created_at, updated_at) VALUES (?, 'Test Org', 0, datetime('now'), datetime('now'))`,
 		orgID,
 	)
 	require.NoError(t, err)
 
 	ctxID := "ctx-pr-1"
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO contexts (id, key, status, org_id, created_at, updated_at) VALUES (?, 'pr-ctx', 'active', ?, datetime('now'), datetime('now'))`,
 		ctxID, orgID,
 	)
 	require.NoError(t, err)
 
 	// Seed a vcs_repo
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO vcs_repos (id, platform, owner, name, created_at) VALUES ('repo-1', 'github', 'acme', 'api', datetime('now'))`,
 	)
 	require.NoError(t, err)
 
 	// Seed a context_vcs_branch
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO context_vcs_branches (id, context_id, repo_id, branch, created_at) VALUES ('branch-1', ?, 'repo-1', 'feat/thing', datetime('now'))`,
 		ctxID,
 	)
 	require.NoError(t, err)
 
 	// Seed a pull request authored by "carol"
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO vcs_pull_requests (id, repo_id, branch_id, pr_number, title, author, state, fetched_at, pr_updated_at)
 		 VALUES ('pr-1', 'repo-1', 'branch-1', 42, 'Add feature', 'carol', 'open', datetime('now'), datetime('now'))`,
 	)
@@ -155,7 +166,8 @@ func TestListBoardPRsByAuthor_withData(t *testing.T) {
 
 	// Two comments on the PR: one unresolved, one resolved. Only the unresolved
 	// one counts toward UnresolvedCount.
-	_, err = db.db.ExecContext(ctx,
+	_, err = db.db.ExecContext(
+		ctx,
 		`INSERT INTO vcs_pr_comments (id, pr_id, external_id, is_resolved) VALUES
 		 ('cm-1', 'pr-1', 'e1', 0), ('cm-2', 'pr-1', 'e2', 1)`,
 	)

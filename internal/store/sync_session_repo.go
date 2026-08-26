@@ -18,7 +18,8 @@ func (s *Store) CreateSyncSession(ctx context.Context, contextID string, sources
 	if len(sources) == 0 {
 		sourcesJSON = "[]"
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO sync_sessions (id, context_id, started_at, sources) VALUES (?, ?, ?, ?)`,
 		id, contextID, now, sourcesJSON,
 	)
@@ -31,7 +32,8 @@ func (s *Store) CreateSyncSession(ctx context.Context, contextID string, sources
 // CompleteSyncSession marks a session as finished and records item count.
 func (s *Store) CompleteSyncSession(ctx context.Context, id string, itemsFetched int) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE sync_sessions SET finished_at = ?, items_fetched = ? WHERE id = ?`,
 		now, itemsFetched, id,
 	)
@@ -44,7 +46,8 @@ func (s *Store) CompleteSyncSession(ctx context.Context, id string, itemsFetched
 // GetSyncSession returns a sync session by ID.
 func (s *Store) GetSyncSession(ctx context.Context, id string) (*SyncSession, error) {
 	var ss SyncSession
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT id, context_id, started_at, finished_at, sources, items_fetched FROM sync_sessions WHERE id = ?`, id,
 	).Scan(&ss.ID, &ss.ContextID, &ss.StartedAt, &ss.FinishedAt, &ss.Sources, &ss.ItemsFetched)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -58,7 +61,8 @@ func (s *Store) GetSyncSession(ctx context.Context, id string) (*SyncSession, er
 
 // ListSyncSessions returns all finished sessions for a context, newest first.
 func (s *Store) ListSyncSessions(ctx context.Context, contextID string) ([]SyncSession, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.db.QueryContext(
+		ctx,
 		`SELECT id, context_id, started_at, finished_at, sources, items_fetched
 		 FROM sync_sessions WHERE context_id = ? AND finished_at IS NOT NULL
 		 ORDER BY started_at DESC`,

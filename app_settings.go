@@ -213,7 +213,8 @@ func (a *App) backgroundRefreshLoop(ctx context.Context, settings appstore.AppSe
 		defer reviewsTicker.Stop()
 	}
 
-	a.logger.Info("background refresh started",
+	a.logger.Info(
+		"background refresh started",
 		zap.Bool("contexts", settings.ContextRefetchEnabled),
 		zap.Int("contexts_interval_min", settings.ContextRefetchIntervalMin),
 		zap.Bool("reviews", settings.ReviewsRefetchEnabled),

@@ -184,7 +184,8 @@ func newAddTextCmd() *cobra.Command {
 	cmd.Flags().StringVar(&filePath, "file-path", "", "Path to a file on disk (.md, .txt, etc.)")
 	cmd.Flags().StringVar(&content, "content", "", "Inline text content")
 
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Add a plain-text entry to a context. Provide either --file-path (reads the file) or --content (inline). For .md files, raw Markdown is stored as-is.",
 		"--context-id UUID | --context-key STRING (one required)\n--file-path PATH | --content STRING (one required)\n--name STRING (optional; defaults to filename when --file-path is used)",
 		`{"id":"uuid","name":"string","content":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}`,
@@ -257,7 +258,8 @@ func newAddFileCmd() *cobra.Command {
 	cmd.Flags().StringVar(&filePath, "file-path", "", "Absolute path to the file on disk")
 	_ = cmd.MarkFlagRequired("file-path")
 
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Upload a document file to a context. Text is extracted and stored with the original binary. Supports: pdf, docx, rtf, odt, txt, md.",
 		"--context-id UUID | --context-key STRING (one required)\n--file-path PATH (required)",
 		`{"id":"uuid","name":"string","fileType":"string","isActive":"bool","createdAt":"RFC3339","updatedAt":"RFC3339"}`,

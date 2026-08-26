@@ -16,7 +16,8 @@ func createTestPA(t *testing.T, s *Store, paID string) {
 
 	// Create an org first (contexts.org_id is NOT NULL)
 	orgID := "org-" + paID
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO organizations (id, name, sort_order, created_at, updated_at) VALUES (?, 'Test Org', 0, datetime('now'), datetime('now'))`,
 		orgID,
 	)
@@ -24,14 +25,16 @@ func createTestPA(t *testing.T, s *Store, paID string) {
 
 	// Create a minimal context
 	ctxID := "ctx-" + paID
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.db.ExecContext(
+		ctx,
 		`INSERT INTO contexts (id, key, status, org_id, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))`,
 		ctxID, "key-"+paID, orgID,
 	)
 	require.NoError(t, err)
 
 	// Create a minimal person_assignment
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.db.ExecContext(
+		ctx,
 		`INSERT INTO context_person_assignments (id, context_id, name, body, updated_at) VALUES (?, ?, 'Test Person', '', datetime('now'))`,
 		paID, ctxID,
 	)

@@ -25,7 +25,7 @@ func initTestRepo(t *testing.T) string {
 		}
 	}
 	f := filepath.Join(dir, "README.md")
-	if err := os.WriteFile(f, []byte("hello"), 0644); err != nil {
+	if err := os.WriteFile(f, []byte("hello"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 	for _, args := range [][]string{

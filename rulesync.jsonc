@@ -27,8 +27,8 @@
   "simulateSkills": false,
   "ca_rules": {
     "artschekoff/ca-rules": {
-      "base": "cb2352e794f7e826a414cad463dddf37e9778183",
-      "projects/juna": "d833dee2d13d44e514b2f02c8eb5cfbf0e34772c",
+      "base": "9f83129fc0dcbbfd8590475162bf7454edfc7486",
+      "projects/juna": "93532b60deec42d9d39fc0c1d28f98f26f2d0def",
       "stacks/tauri-react-rust": "9afa3b045fbda01769a7bc45203fcc5d2c36888e"
     }
   }

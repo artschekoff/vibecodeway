@@ -90,7 +90,8 @@ func newEventAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&reference, "reference", "", "Original text or URL this event came from")
 	_ = cmd.MarkFlagRequired("summary")
 
-	return setAgentDocs(cmd,
+	return setAgentDocs(
+		cmd,
 		"Add a user-authored event to a context's event log and mark the AI snapshot stale. "+
 			"Events appear in the Activity Timeline. Use for notes, decisions, blockers and status updates; "+
 			"use add-text instead for long-form material such as a task assignment.",

@@ -45,15 +45,19 @@ func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, branch string) ([
 	m.branchPRCalls = append(m.branchPRCalls, branch)
 	return nil, nil
 }
+
 func (m *mockRunner) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs.CommentData, error) {
 	return nil, nil
 }
+
 func (m *mockRunner) ListRepoBranches(_ context.Context, _, _ string) ([]string, error) {
 	return nil, nil
 }
+
 func (m *mockRunner) StartDeviceAuth(_ context.Context) (*vcs.DeviceCodeInfo, error) {
 	return nil, nil
 }
+
 func (m *mockRunner) CompleteDeviceAuth(_ context.Context, _ string, _ int) (vcs.AuthResult, error) {
 	return vcs.AuthResult{}, nil
 }
@@ -122,6 +126,7 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			mergeable     TEXT NOT NULL DEFAULT '',
 			kind          TEXT NOT NULL DEFAULT 'requested',
 			ci_status     TEXT NOT NULL DEFAULT '',
+			my_review_state TEXT NOT NULL DEFAULT '',
 			UNIQUE (repo_id, pr_number)
 		);
 	`)
@@ -141,10 +146,12 @@ func newTestProvider(t *testing.T, runner vcs.VCSRunner) (*VCSProvider, *vcsstor
 func TestSyncAuthoredPRsUpsertsAuthoredKind(t *testing.T) {
 	runner := &mockRunner{
 		platform: vcs.PlatformGitHub,
-		authored: []vcs.PRData{{Number: 5, Title: "mine", Author: "me", State: "open",
+		authored: []vcs.PRData{{
+			Number: 5, Title: "mine", Author: "me", State: "open",
 			ReviewStatus: "changes_requested", URL: "u", HeadBranch: "b", CreatedAt: "2026-01-01T00:00:00Z",
 			Mergeable: "CONFLICTING", CIStatus: "FAILURE",
-			Reviewers: []vcs.ReviewerDecision{{Login: "bob", State: "changes_requested"}}}},
+			Reviewers: []vcs.ReviewerDecision{{Login: "bob", State: "changes_requested"}},
+		}},
 	}
 	p, vs := newTestProvider(t, runner)
 	ctx := context.Background()
@@ -394,4 +401,121 @@ func TestSyncSkipsPRLookupWhenAutodetectPROff(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"feat/x"}, runner.branchPRCalls)
+}
+
+func TestSyncReviewRequestsPersistsMyReviewState(t *testing.T) {
+	approved := "approved"
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		reviewRequests: []vcs.PRData{{
+			Number: 7, Title: "t", Author: "carol", State: "open",
+			ReviewStatus: "review_required", URL: "u", HeadBranch: "b",
+			CreatedAt: "2026-08-01T00:00:00Z", Mergeable: "MERGEABLE",
+			MyReviewState: &approved,
+		}},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].MyReviewState)
+}
+
+func TestSyncReviewRequestsTagsChangesRequestedSearchHits(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		// PR 8 appears only in the changes-requested search, with no MyReviewState set.
+		changesRequested: []vcs.PRData{{
+			Number: 8, Title: "t", Author: "carol", State: "open",
+			ReviewStatus: "changes_requested", URL: "u", HeadBranch: "b",
+			CreatedAt: "2026-08-01T00:00:00Z", Mergeable: "MERGEABLE",
+		}},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "changes_requested", list[0].MyReviewState)
+}
+
+func TestReconcileRecordsMyApprovalAfterPRDropsOffTheList(t *testing.T) {
+	runner := &mockRunner{platform: vcs.PlatformGitHub}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	// A stored PR from a previous sync, with no standing decision yet.
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 9, "t", "carol",
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+	require.NoError(t, err)
+
+	// It is gone from both searches, but `gh pr view` shows it open and approved by me.
+	runner.prByNumber = map[int]*vcs.PRData{9: {
+		Number: 9, State: "open", Mergeable: "MERGEABLE",
+		Reviewers: []vcs.ReviewerDecision{{Login: "me", State: "approved"}},
+	}}
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].MyReviewState)
+}
+
+func TestMyStateFromReviewers(t *testing.T) {
+	ds := []vcs.ReviewerDecision{
+		{Login: "alice", State: "approved"},
+		{Login: "me", State: "changes_requested"},
+	}
+	assert.Equal(t, "changes_requested", myStateFromReviewers(ds, "me"))
+	assert.Equal(t, "", myStateFromReviewers(ds, "nobody"))
+	assert.Equal(t, "", myStateFromReviewers(nil, "me"))
+}
+
+// The nil-vs-empty distinction is the load-bearing invariant of this feature: a PR
+// whose reviews were not resolved this sync (MyReviewState == nil) must not overwrite
+// a previously recorded decision with "". This pins that guard against regression.
+func TestSyncReviewRequestsPreservesStoredMyReviewStateWhenUnresolved(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		// PR 11 reappears in review-requested, but the runner did not resolve
+		// reviews for it this time (MyReviewState left nil).
+		reviewRequests: []vcs.PRData{{
+			Number: 11, Title: "t", Author: "carol", State: "open",
+			ReviewStatus: "review_required", URL: "u", HeadBranch: "b",
+			CreatedAt: "2026-08-01T00:00:00Z", Mergeable: "MERGEABLE",
+		}},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	// A prior sync already recorded a standing approval for this PR.
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 11, "t", "carol",
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+	require.NoError(t, err)
+	require.NoError(t, vs.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, 11, "approved"))
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].MyReviewState,
+		"a PR whose reviews were not resolved this sync must keep its stored decision")
 }

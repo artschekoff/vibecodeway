@@ -18,7 +18,8 @@ func runScriptHook(command, contextKey, contextID, eventCategory string) error {
 		shell = "sh"
 	}
 	cmd := exec.Command(shell, "-c", command, "hook", contextKey)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"CONTEXT_KEY="+contextKey,
 		"CONTEXT_ID="+contextID,
 		"EVENT_CATEGORY="+eventCategory,

@@ -5,7 +5,7 @@ import { TerminalWrite } from "../../../wailsjs/go/main/App";
 import { useTerminalCommands } from "../../hooks/useTerminalCommands";
 import { applyPlaceholders } from "../../lib/terminalPlaceholders";
 import { matchTerminalHotkey } from "../../lib/terminalHotkeys";
-import { useHotkey, useHotkeyScope } from "../../hotkeys/HotkeyProvider";
+import { useHotkey } from "../../hotkeys/HotkeyProvider";
 
 // Stable local ids, independent of cwd, so two terminals in the same folder are
 // distinct and neither remounts when the list changes.
@@ -66,7 +66,6 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   const [insertActive, setInsertActive] = useState(0);
   const insertActiveRef = useRef(0);
   insertActiveRef.current = insertActive;
-  const [focused, setFocused] = useState(false);
   const lastInsertId = useRef(0);
   const { commands } = useTerminalCommands();
 
@@ -167,21 +166,19 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
     switchTo(terminals[(idx + dir + n) % n].key);
   };
 
-  // Rebindable terminal commands via the hotkey layer — active only while the
-  // terminal zone holds DOM focus. ⌘T (new / H here / I insert), ⌘⇧] / ⌘⇧[
-  // (next / prev). The residual capture listener below still owns ⌘W and ⌃1-9.
-  useHotkeyScope("terminal", focused);
-  // Registered as "global" (not "terminal") so ⌘T / ⌘T H / ⌘T I fire regardless
-  // of whether the terminal panel holds DOM focus — matching registry.ts. The
-  // panel just needs to be mounted for these handlers to be live.
+  // Rebindable terminal commands via the hotkey layer: ⌘T new, ⌘⇧T here, ⌘I
+  // insert, ⌘] / ⌘[ next / prev. All "global" — scoping them to terminal DOM
+  // focus made them dead unless the cursor was already inside xterm. The panel
+  // just needs to be mounted. The residual capture listener below still owns
+  // ⌘W and ⌃1-9.
   useHotkey("terminal.new", () => addTerminal(), { scope: "global" });
   useHotkey("terminal.here", () => openTerminalAt(spawnCwd), { scope: "global" });
   // A native <select> can't be opened programmatically in WebKit (Wails' macOS
   // webview): showPicker() is Chromium-only. So the picker is a React
   // state-driven popover the hotkey just flips open.
   useHotkey("terminal.insert", () => setInsertOpen(true), { scope: "global" });
-  useHotkey("terminal.next", () => cycleTerminal(1), { scope: "terminal" });
-  useHotkey("terminal.prev", () => cycleTerminal(-1), { scope: "terminal" });
+  useHotkey("terminal.next", () => cycleTerminal(1), { scope: "global" });
+  useHotkey("terminal.prev", () => cycleTerminal(-1), { scope: "global" });
 
   // The toolbar row is `overflow-x: auto`, which per CSS also clips vertically —
   // an absolutely-positioned popover inside it would be cut to the row's height.
@@ -248,8 +245,6 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
 
   return (
     <div ref={rootRef}
-      onFocus={() => setFocused(true)}
-      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false); }}
       style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 4px", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
         {terminals.map((t) => (

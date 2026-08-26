@@ -18,12 +18,14 @@ func (r *Repo) UpsertJiraProvider(ctx context.Context, contextID, searchQuery st
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		"SELECT id FROM jira_provider WHERE context_id = ?", contextID,
 	).Scan(&existing)
 
 	if err == nil {
-		_, err = r.db.ExecContext(ctx,
+		_, err = r.db.ExecContext(
+			ctx,
 			"UPDATE jira_provider SET search_query = ?, updated_at = ? WHERE id = ?",
 			searchQuery, now, existing,
 		)

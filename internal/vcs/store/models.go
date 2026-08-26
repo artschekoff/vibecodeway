@@ -127,6 +127,12 @@ type ReviewRequest struct {
 	Kind string `json:"kind"`
 	// CIStatus is the aggregated status-check rollup: "", PENDING, SUCCESS, FAILURE.
 	CIStatus string `json:"ciStatus"`
+	// MyReviewState is the authenticated user's own latest standing review decision
+	// on this PR: "" (never reviewed, or their review was dismissed), "approved",
+	// "changes_requested" or "commented". Only meaningful for Kind == "requested".
+	// It answers "have I already looked at this?", which ReviewStatus (a PR-wide
+	// decision) and ReviewedAt (a disappeared-from-search heuristic) cannot.
+	MyReviewState string `json:"myReviewState"`
 }
 
 // ReviewerDecision is one reviewer's latest decision on a PR.

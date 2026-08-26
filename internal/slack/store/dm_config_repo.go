@@ -36,7 +36,8 @@ func (r *Repo) UpsertSlackDMConfig(ctx context.Context, contextID, workspace, st
 // UpdateSlackDMConfigContent stores the fetched DM content for a given config ID.
 func (r *Repo) UpdateSlackDMConfigContent(ctx context.Context, id, content string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	res, err := r.db.ExecContext(ctx,
+	res, err := r.db.ExecContext(
+		ctx,
 		"UPDATE slack_dm_configs SET content = ?, updated_at = ? WHERE id = ?",
 		content, now, id,
 	)
@@ -94,7 +95,8 @@ func (r *Repo) DeleteSlackDMConfig(ctx context.Context, id string) error {
 
 // ToggleSlackDMConfigActive flips the is_active flag for the given DM config and returns the updated record.
 func (r *Repo) ToggleSlackDMConfigActive(ctx context.Context, id string) (*SlackDMConfig, error) {
-	res, err := r.db.ExecContext(ctx,
+	res, err := r.db.ExecContext(
+		ctx,
 		"UPDATE slack_dm_configs SET is_active = NOT is_active, updated_at = ? WHERE id = ?",
 		time.Now().UTC().Format(time.RFC3339), id,
 	)

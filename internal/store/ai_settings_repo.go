@@ -41,7 +41,8 @@ func (s *Store) GetAISettings(ctx context.Context) (*AISettings, error) {
 		baseURL     string
 		updatedAt   string
 	)
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT openai_key, anthropic_key,
 		        openai_key_enc, openai_key_nonce,
 		        anthropic_key_enc, anthropic_key_nonce,
@@ -77,7 +78,8 @@ func (s *Store) GetAISettings(ctx context.Context) (*AISettings, error) {
 // Returns ErrAIKeyNotSet when no key has been stored yet.
 func (s *Store) GetAIOpenAIKey(ctx context.Context) (string, error) {
 	var key sql.NullString
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		"SELECT openai_key FROM ai_settings WHERE id = ?",
 		aiSettingsSingletonID,
 	).Scan(&key)
@@ -97,7 +99,8 @@ func (s *Store) GetAIOpenAIKey(ctx context.Context) (string, error) {
 // Returns ErrAIKeyNotSet when no key has been stored yet.
 func (s *Store) GetAIAnthropicKey(ctx context.Context) (string, error) {
 	var key sql.NullString
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		"SELECT anthropic_key FROM ai_settings WHERE id = ?",
 		aiSettingsSingletonID,
 	).Scan(&key)
@@ -142,7 +145,8 @@ func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) 
 		if opts.AnthropicKey != "" {
 			antKey = &opts.AnthropicKey
 		}
-		_, err = tx.ExecContext(ctx,
+		_, err = tx.ExecContext(
+			ctx,
 			`INSERT INTO ai_settings
 			 (id, openai_key, anthropic_key,
 			  openai_key_enc, openai_key_nonce, anthropic_key_enc, anthropic_key_nonce,
@@ -191,7 +195,8 @@ func (s *Store) SetAISettings(ctx context.Context, opts SetAISettingsStoreOpts) 
 
 // ClearAIOpenAIKey removes the stored OpenAI key, preserving model/baseURL.
 func (s *Store) ClearAIOpenAIKey(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		"UPDATE ai_settings SET openai_key = NULL, openai_key_enc = NULL, openai_key_nonce = NULL, updated_at = ? WHERE id = ?",
 		time.Now().UTC().Format(time.RFC3339), aiSettingsSingletonID,
 	)

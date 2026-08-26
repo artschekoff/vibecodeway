@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import { ListAIPrompts, UpdateAIPrompt, ResetAIPrompt } from "../../wailsjs/go/main/App";
 import type { store } from "../../wailsjs/go/models";
+import { ProseEditor } from "../components/ProseEditor";
 
 interface PromptState {
   body: string;
@@ -130,7 +131,7 @@ export default function PromptsPage() {
                   </div>
                 </div>
 
-                <textarea
+                <ProseEditor
                   className="ai-prompt-card__textarea"
                   value={st.body}
                   onChange={(e) => handleBodyChange(prompt.id, e.target.value)}

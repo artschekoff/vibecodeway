@@ -133,11 +133,16 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* ponytail: one rule styles every textarea in the app — prose, not code, so a
+   proportional face reads better than the mono default. Verdana's large x-height
+   means 13px here sits visually near 14px of a system sans. */
 textarea {
   resize: vertical;
   min-height: 72px;
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-family: Verdana, Geneva, "DejaVu Sans", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
 }
 
 select {
@@ -4319,11 +4324,6 @@ select {
   color: #e5534b;
 }
 
-.pr-status--re-review {
-  background: rgba(187, 128, 9, 0.18);
-  color: #d29922;
-}
-
 .pr-status-icon {
   vertical-align: -1px;
   margin-right: 3px;
@@ -4733,6 +4733,19 @@ select {
   background: rgba(139, 92, 246, 0.15);
   border-color: rgba(139, 92, 246, 0.4);
   color: #a78bfa;
+}
+
+/* Never looked at by me — the default, most actionable state. */
+.pr-status--awaiting-first {
+  background: rgba(88, 130, 246, 0.14);
+  color: #7aa2f7;
+}
+
+/* My own standing decision on a PR, shown alongside the other reviewers' chips. */
+.pr-status-badge--mine {
+  background: rgba(139, 148, 158, 0.16);
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .review-dismiss-btn {

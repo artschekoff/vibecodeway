@@ -40,11 +40,11 @@ func (s *Store) UpsertMessage(ctx context.Context, args UpsertMessageArgs) (stri
 	}
 
 	var id string
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		`SELECT id FROM messages WHERE source_id = ? AND external_id = ? AND context_id IS ?`,
 		args.SourceID, args.ExternalID, contextIDPtr,
 	).Scan(&id)
-
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("lookup message: %w", err)

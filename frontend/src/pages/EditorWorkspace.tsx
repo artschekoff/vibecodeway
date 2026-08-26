@@ -7,6 +7,7 @@ import { FileTreePanel } from "../components/editor/FileTreePanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { EditorPRInfo } from "../components/editor/EditorPRInfo";
+import { NotesPanel } from "../components/editor/NotesPanel";
 import { nextPaneSize, readStoredPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
 import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
@@ -19,6 +20,8 @@ const SIDEBAR_KEY = "vibecodeway:editor:sidebarWidth";
 const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 640;
 const SIDEBAR_DEFAULT = 300;
+
+const NOTES_HEIGHT = 260;
 
 const TERMINAL_KEY = "vibecodeway:editor:terminalHeight";
 const TERMINAL_MIN = 90;
@@ -190,6 +193,12 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
             </div>
           </div>
         )}
+        {/* Scratch log pinned to the top of the sidebar: what you did here, for when
+            you come back to this context. Height-bounded so it never crowds out the
+            file tree — the note list scrolls inside. */}
+        <div style={{ maxHeight: NOTES_HEIGHT, display: "flex", flexDirection: "column", minHeight: 0, borderBottom: "1px solid var(--border)" }}>
+          <NotesPanel contextId={contextId} />
+        </div>
         {/* Repo selector sits above the Files/Git tabs — it scopes both. */}
         {repoPaths.length > 1 && (
           <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>

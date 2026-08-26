@@ -626,7 +626,8 @@ func (svc *ContextService) AddIssuesToContext(ctx context.Context, contextID str
 			svc.logger.Warn("failed to view issue", zap.String("key", key), zap.Error(err))
 			return nil
 		}
-		if _, err = svc.jiraRepo.UpsertIssue(ctx, contextID,
+		if _, err = svc.jiraRepo.UpsertIssue(
+			ctx, contextID,
 			detail.Key, detail.Summary, detail.Status, detail.Assignee,
 			detail.IssueType, detail.Description, detail.Updated, detail.ParentKey,
 			detail.Priority,

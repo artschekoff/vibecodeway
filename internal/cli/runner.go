@@ -118,7 +118,8 @@ func (r *Runner) run(ctx context.Context, args []string) ([]byte, error) {
 		if errMsg == "" {
 			errMsg = err.Error()
 		}
-		r.logger.Error("cli exec failed",
+		r.logger.Error(
+			"cli exec failed",
 			zap.String("subcmd", subcmd),
 			zap.String("stderr", errMsg),
 			zap.Error(err),
@@ -177,7 +178,8 @@ type AddTextOpts struct {
 
 // AddText calls `add-text` and returns the created ContextText record.
 func (r *Runner) AddText(ctx context.Context, opts AddTextOpts) (*appstore.ContextText, error) {
-	args := buildArgs("add-text",
+	args := buildArgs(
+		"add-text",
 		"--context-id", opts.ContextID,
 		"--context-key", opts.ContextKey,
 		"--name", opts.Name,
@@ -200,7 +202,8 @@ type AddFileOpts struct {
 
 // AddFile calls `add-file` and returns the created ContextUploadedFile record.
 func (r *Runner) AddFile(ctx context.Context, opts AddFileOpts) (*appstore.ContextUploadedFile, error) {
-	args := buildArgs("add-file",
+	args := buildArgs(
+		"add-file",
 		"--context-id", opts.ContextID,
 		"--context-key", opts.ContextKey,
 		"--file-path", opts.FilePath,
@@ -367,7 +370,8 @@ func (r *Runner) SearchNewIssues(ctx context.Context, contextID string) (*jirase
 
 // AddIssuesToContext adds Jira keys to a context and syncs comments.
 func (r *Runner) AddIssuesToContext(ctx context.Context, contextID string, jiraKeys []string) (int, int, error) {
-	args := []string{"jira-add",
+	args := []string{
+		"jira-add",
 		"--context-id", contextID,
 		"--jira-keys", strings.Join(jiraKeys, ","),
 	}
@@ -454,8 +458,10 @@ func (r *Runner) ListSlackWorkspaces(ctx context.Context) ([]jiraservice.SlackWo
 
 // SearchSlackChannels searches channels by pattern.
 func (r *Runner) SearchSlackChannels(ctx context.Context, workspace, pattern string) ([]jiraservice.SlackChannelResult, error) { //nolint:unparam
-	out, err := r.run(ctx, []string{"slack-search-channels",
-		"--workspace", workspace, "--pattern", pattern})
+	out, err := r.run(ctx, []string{
+		"slack-search-channels",
+		"--workspace", workspace, "--pattern", pattern,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +482,8 @@ func (r *Runner) AddSlackChannels(ctx context.Context, opts AddSlackChannelsOpts
 	if len(opts.ChannelIDs) == 0 {
 		return nil
 	}
-	args := []string{"slack-add-channels",
+	args := []string{
+		"slack-add-channels",
 		"--context-id", opts.ContextID,
 		"--workspace", opts.Workspace,
 		"--channel-ids", strings.Join(opts.ChannelIDs, ","),
@@ -526,7 +533,8 @@ type LoadSlackContextOpts struct {
 
 // LoadSlackContext loads a Slack thread into a context.
 func (r *Runner) LoadSlackContext(ctx context.Context, opts LoadSlackContextOpts) error {
-	args := []string{"slack-load-thread",
+	args := []string{
+		"slack-load-thread",
 		"--context-id", opts.ContextID,
 		"--workspace", opts.Workspace,
 		"--channel-id", opts.ChannelID,
@@ -605,8 +613,10 @@ func (r *Runner) ToggleSlackDMConfigActive(ctx context.Context, id string) (*sla
 
 // RemoveSlackDMEntry removes a DM entry from a config.
 func (r *Runner) RemoveSlackDMEntry(ctx context.Context, dmConfigID, entryID string) error {
-	return r.runNoOutput(ctx, []string{"slack-remove-dm-entry",
-		"--dm-config-id", dmConfigID, "--entry-id", entryID})
+	return r.runNoOutput(ctx, []string{
+		"slack-remove-dm-entry",
+		"--dm-config-id", dmConfigID, "--entry-id", entryID,
+	})
 }
 
 // PreviewSlackDMs previews DMs without persisting.
@@ -680,7 +690,8 @@ type SetAISettingsOpts struct {
 
 // SetAISettings saves AI configuration.
 func (r *Runner) SetAISettings(ctx context.Context, opts SetAISettingsOpts) (*appstore.AISettings, error) {
-	args := buildArgs("ai-settings-set",
+	args := buildArgs(
+		"ai-settings-set",
 		"--provider", opts.Provider,
 		"--api-key", opts.APIKey,
 		"--anthropic-key", opts.AnthropicKey,

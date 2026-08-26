@@ -8,6 +8,7 @@ import { EditorSettingsMenu } from "./EditorSettingsMenu";
 import { FileHistoryModal } from "./FileHistoryModal";
 import { computeHunkRevert, type LineChange } from "../../lib/hunkRevert";
 import { languageFor } from "../../lib/languageFor";
+import { useMonacoVim } from "../../lib/useMonacoVim";
 
 type ContentWidget = {
   getId: () => string;
@@ -176,6 +177,9 @@ export function DiffEditorTab({
 
   useEffect(() => { setupMonaco(); }, []);
 
+  // Same vim layer and same on/off switch as the app's prose boxes.
+  const { attach: attachVim, VimStatusBar } = useMonacoVim();
+
   // Esc exits fullscreen — but let the history modal consume Esc first.
   useEffect(() => {
     if (!fullscreen) return;
@@ -343,6 +347,7 @@ export function DiffEditorTab({
               editorRef.current = editor as unknown as DiffEditorInstance;
               monacoRef.current = monaco as unknown as MonacoNs;
               const me = editorRef.current.getModifiedEditor();
+              attachVim(me);
               // Rebuild the accept/reject widgets whenever the modified text changes
               // (Monaco recomputes the diff), plus once now for the initial diff.
               me.onDidChangeModelContent?.(() => setTimeout(() => buildHunkWidgetsRef.current(), 0));
@@ -351,6 +356,7 @@ export function DiffEditorTab({
           />
         )}
       </div>
+      <VimStatusBar />
       {historyOpen && <FileHistoryModal repoPath={repoPath} path={path} onClose={() => setHistoryOpen(false)} />}
     </div>
   );

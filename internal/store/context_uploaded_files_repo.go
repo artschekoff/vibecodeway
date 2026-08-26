@@ -48,7 +48,8 @@ func (s *Store) ListUploadedFiles(ctx context.Context, contextID string, activeO
 // Returns ErrNotFound if no record with that ID exists.
 func (s *Store) GetUploadedFileContent(ctx context.Context, id string) ([]byte, error) {
 	var content []byte
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		"SELECT file_content FROM context_uploaded_files WHERE id = ?", id,
 	).Scan(&content)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -76,7 +77,8 @@ func (s *Store) InsertUploadedFile(ctx context.Context, contextID, originalName,
 		UpdatedAt:     now,
 		IsActive:      true,
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO context_uploaded_files
 		 (id, context_id, original_name, file_type, extracted_text, file_content, file_size, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -137,7 +139,8 @@ func (s *Store) ToggleUploadedFileActive(ctx context.Context, id string) (*Conte
 	}
 
 	var f ContextUploadedFile
-	err = s.db.QueryRowContext(ctx,
+	err = s.db.QueryRowContext(
+		ctx,
 		`SELECT id, context_id, original_name, file_type, extracted_text, file_size,
 		        created_at, updated_at, is_active
 		 FROM context_uploaded_files WHERE id = ?`, id,

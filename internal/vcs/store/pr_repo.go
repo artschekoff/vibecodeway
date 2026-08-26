@@ -39,7 +39,8 @@ func (r *PRRepo) UpsertPR(ctx context.Context, repoID, branchID string, prNumber
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existing, oldState, oldMergeable, oldReviewStatus, oldCIStatus string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id, state, mergeable, review_status, ci_status FROM vcs_pull_requests WHERE repo_id = ? AND pr_number = ?`,
 		repoID, prNumber,
 	).Scan(&existing, &oldState, &oldMergeable, &oldReviewStatus, &oldCIStatus)
@@ -250,7 +251,8 @@ func (r *PRRepo) scanPRs(rows *sql.Rows) ([]PullRequest, error) {
 // an existing one updated (false), and any error.
 func (r *PRRepo) UpsertComment(ctx context.Context, prID, externalID string, parentID *string, commentType, author, body string, path *string, line *int, isResolved bool, inReplyToID *string, createdAt, updatedAt string) (string, bool, error) {
 	var existing string
-	err := r.db.QueryRowContext(ctx,
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id FROM vcs_pr_comments WHERE pr_id = ? AND external_id = ?`,
 		prID, externalID,
 	).Scan(&existing)

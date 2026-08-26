@@ -20,7 +20,8 @@ func (s *Store) CreateContextPlan(ctx context.Context, contextID, personAssignme
 		Body:               body,
 		CreatedAt:          time.Now().UTC().Format(time.RFC3339),
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		"INSERT INTO context_plans (id, context_id, person_assignment_id, body, created_at) VALUES (?, ?, ?, ?, ?)",
 		p.ID, p.ContextID, p.PersonAssignmentID, p.Body, p.CreatedAt,
 	)
@@ -34,7 +35,8 @@ func (s *Store) CreateContextPlan(ctx context.Context, contextID, personAssignme
 // Returns ErrNotFound if no record with that ID exists.
 func (s *Store) GetContextPlan(ctx context.Context, id string) (*ContextPlan, error) {
 	var p ContextPlan
-	err := s.db.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(
+		ctx,
 		"SELECT id, context_id, person_assignment_id, body, created_at FROM context_plans WHERE id = ?", id,
 	).Scan(&p.ID, &p.ContextID, &p.PersonAssignmentID, &p.Body, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -49,7 +51,8 @@ func (s *Store) GetContextPlan(ctx context.Context, id string) (*ContextPlan, er
 // ListContextPlansByAssignment returns all plans generated for the given person
 // assignment, ordered by created_at descending (most recent first).
 func (s *Store) ListContextPlansByAssignment(ctx context.Context, personAssignmentID string) ([]ContextPlan, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.db.QueryContext(
+		ctx,
 		"SELECT id, context_id, person_assignment_id, body, created_at FROM context_plans WHERE person_assignment_id = ? ORDER BY created_at DESC",
 		personAssignmentID,
 	)

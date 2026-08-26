@@ -145,7 +145,6 @@ func TestKeybindings_SwitchRemap_107(t *testing.T) {
 	assert.Equal(t, "g", g.Sequence)
 }
 
-
 // Migration 110 takes "here" and "insert" off the ⌘T lead so ⌘T is a lone bare
 // chord and a new terminal opens on the keypress instead of after the 600ms
 // leader window.

@@ -226,3 +226,37 @@ func TestApplyReReviewStatus(t *testing.T) {
 	assert.Equal(t, "re_review_required", prs[3].ReviewStatus)
 	assert.Equal(t, "review_required", prs[4].ReviewStatus) // comment-only isn't a decisive prior review
 }
+
+func TestNormalizeMyReviewState(t *testing.T) {
+	assert.Equal(t, "approved", normalizeMyReviewState("APPROVED"))
+	assert.Equal(t, "changes_requested", normalizeMyReviewState("CHANGES_REQUESTED"))
+	assert.Equal(t, "commented", normalizeMyReviewState("COMMENTED"))
+	// A dismissed or still-pending review leaves no standing decision.
+	assert.Equal(t, "", normalizeMyReviewState("DISMISSED"))
+	assert.Equal(t, "", normalizeMyReviewState("PENDING"))
+	assert.Equal(t, "", normalizeMyReviewState(""))
+}
+
+func TestApplyMyReviewStateUsesLatestOwnReview(t *testing.T) {
+	reviews := []byte(`[
+		{"user":{"login":"me"},"state":"CHANGES_REQUESTED","submitted_at":"2026-08-01T00:00:00Z"},
+		{"user":{"login":"bob"},"state":"APPROVED","submitted_at":"2026-08-02T00:00:00Z"},
+		{"user":{"login":"me"},"state":"APPROVED","submitted_at":"2026-08-03T00:00:00Z"}
+	]`)
+	prs := []vcs.PRData{{Number: 1}, {Number: 2}}
+	applyMyReviewState(prs, map[int][]byte{1: reviews}, "me")
+
+	require.NotNil(t, prs[0].MyReviewState)
+	assert.Equal(t, "approved", *prs[0].MyReviewState)
+	// PR 2 had no reviews payload fetched — left nil so callers do not overwrite.
+	assert.Nil(t, prs[1].MyReviewState)
+}
+
+func TestApplyMyReviewStateEmptyWhenUserNeverReviewed(t *testing.T) {
+	reviews := []byte(`[{"user":{"login":"bob"},"state":"APPROVED","submitted_at":"2026-08-02T00:00:00Z"}]`)
+	prs := []vcs.PRData{{Number: 1}}
+	applyMyReviewState(prs, map[int][]byte{1: reviews}, "me")
+
+	require.NotNil(t, prs[0].MyReviewState)
+	assert.Equal(t, "", *prs[0].MyReviewState)
+}
