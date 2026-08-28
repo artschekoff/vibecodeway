@@ -35,6 +35,8 @@ export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg
 
 export function AdjustTodoNext(arg1:string):Promise<Array<store.AITodoItem>>;
 
+export function AgentResumeCommand(arg1:string,arg2:number):Promise<string>;
+
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
 
 export function ApplyContextUpdateActions(arg1:string,arg2:Array<store.ContextUpdateAction>):Promise<Array<main.ApplyActionResult>>;
@@ -456,8 +458,6 @@ export function SyncAllComments(arg1:string):Promise<number>;
 export function TerminalClose(arg1:string):Promise<void>;
 
 export function TerminalResize(arg1:string,arg2:number,arg3:number):Promise<void>;
-
-export function AgentResumeCommand(arg1:string,arg2:number):Promise<string>;
 
 export function TerminalStart(arg1:string):Promise<string>;
 

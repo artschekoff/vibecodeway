@@ -50,6 +50,10 @@ export function AdjustTodoNext(arg1) {
   return window['go']['main']['App']['AdjustTodoNext'](arg1);
 }
 
+export function AgentResumeCommand(arg1, arg2) {
+  return window['go']['main']['App']['AgentResumeCommand'](arg1, arg2);
+}
+
 export function AnalyzeContext(arg1) {
   return window['go']['main']['App']['AnalyzeContext'](arg1);
 }
@@ -892,10 +896,6 @@ export function TerminalClose(arg1) {
 
 export function TerminalResize(arg1, arg2, arg3) {
   return window['go']['main']['App']['TerminalResize'](arg1, arg2, arg3);
-}
-
-export function AgentResumeCommand(arg1, arg2) {
-  return window['go']['main']['App']['AgentResumeCommand'](arg1, arg2);
 }
 
 export function TerminalStart(arg1) {
