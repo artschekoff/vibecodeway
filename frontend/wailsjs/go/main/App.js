@@ -894,6 +894,10 @@ export function TerminalResize(arg1, arg2, arg3) {
   return window['go']['main']['App']['TerminalResize'](arg1, arg2, arg3);
 }
 
+export function AgentResumeCommand(arg1, arg2) {
+  return window['go']['main']['App']['AgentResumeCommand'](arg1, arg2);
+}
+
 export function TerminalStart(arg1) {
   return window['go']['main']['App']['TerminalStart'](arg1);
 }
