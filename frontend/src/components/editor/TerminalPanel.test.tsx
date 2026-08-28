@@ -7,6 +7,7 @@ vi.mock("./Terminal", () => ({ Terminal: ({ cwd }: { cwd: string }) => <div data
 vi.mock("../../../wailsjs/go/main/App", () => ({
   TerminalWrite: vi.fn(),
   ListTerminalCommands: vi.fn().mockResolvedValue([]),
+  AgentResumeCommand: vi.fn().mockResolvedValue(""),
 }));
 
 import { TerminalPanel } from "./TerminalPanel";

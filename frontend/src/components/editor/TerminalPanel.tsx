@@ -6,6 +6,7 @@ import { useTerminalCommands } from "../../hooks/useTerminalCommands";
 import { applyPlaceholders } from "../../lib/terminalPlaceholders";
 import { matchTerminalHotkey } from "../../lib/terminalHotkeys";
 import { useHotkey } from "../../hotkeys/HotkeyProvider";
+import { loadTerminals, saveTerminals } from "../../lib/terminalSession";
 
 // Stable local ids, independent of cwd, so two terminals in the same folder are
 // distinct and neither remounts when the list changes.
@@ -49,8 +50,8 @@ export function tabLabel(cwd: string): string {
  * switches. A terminal's PTY is closed only when it is removed via its × button.
  * New terminals open in the active terminal's folder.
  */
-export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpen }: { spawnCwd: string; contextName?: string; pendingInsert?: { text: string; id: number }; pendingOpen?: { cwd: string; id: number } }) {
-  const [terminals, setTerminals] = useState<{ key: string; cwd: string }[]>([]);
+export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpen, persistKey }: { spawnCwd: string; contextName?: string; pendingInsert?: { text: string; id: number }; pendingOpen?: { cwd: string; id: number }; persistKey?: string }) {
+  const [terminals, setTerminals] = useState<{ key: string; cwd: string; openedAt: number; resume?: string }[]>([]);
   const [activeKey, setActiveKey] = useState<string>("");
   const seededRef = useRef(false);
   const sessionByKey = useRef<Map<string, string>>(new Map());
@@ -111,19 +112,30 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
     focusActiveTerminal();
   };
 
-  // Auto-create the first terminal once a repo path is known (once).
+  // Bring back the tabs this editor had last time; otherwise seed one at the
+  // repo root. Runs once, as soon as a repo path is known.
   useEffect(() => {
     if (seededRef.current || !spawnCwd) return;
     seededRef.current = true;
-    const key = nextKey();
-    setTerminals([{ key, cwd: spawnCwd }]);
-    setActiveKey(key);
-  }, [spawnCwd]);
+    const saved = persistKey ? loadTerminals(persistKey) : [];
+    const restored = saved.length
+      ? saved.map((t) => ({ key: nextKey(), cwd: t.cwd, openedAt: t.openedAt, resume: t.resume }))
+      : [{ key: nextKey(), cwd: spawnCwd, openedAt: Date.now() }];
+    setTerminals(restored);
+    setActiveKey(restored[0].key);
+  }, [spawnCwd, persistKey]);
+
+  // Mirror the tab list into storage on every change, so a crash or a force-quit
+  // still leaves the last known layout behind.
+  useEffect(() => {
+    if (!persistKey || !seededRef.current) return;
+    saveTerminals(persistKey, terminals.map(({ cwd, openedAt, resume }) => ({ cwd, openedAt, resume })));
+  }, [persistKey, terminals]);
 
   const openTerminalAt = (cwd: string) => {
     if (!cwd) return;
     const key = nextKey();
-    setTerminals((ts) => [...ts, { key, cwd }]);
+    setTerminals((ts) => [...ts, { key, cwd, openedAt: Date.now() }]);
     setActiveKey(key);
     setTimeout(() => focusTerminal(key), 0); // focus once the new terminal mounts
   };
