@@ -19,7 +19,7 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
   ),
 }));
 
-const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, ListEvents, AddUserEvent, DeleteUserEvent } = vi.hoisted(() => ({
+const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   RefreshContext: vi.fn(),
   RefreshContextPRs: vi.fn(),
@@ -27,11 +27,12 @@ const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings,
   SetEditorSettings: vi.fn(),
   ListTerminalCommands: vi.fn().mockResolvedValue([]),
   TerminalWrite: vi.fn(),
+  AgentResumeCommand: vi.fn().mockResolvedValue(""),
   ListEvents: vi.fn().mockResolvedValue([]),
   AddUserEvent: vi.fn(),
   DeleteUserEvent: vi.fn(),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, ListEvents, AddUserEvent, DeleteUserEvent }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";
@@ -39,6 +40,10 @@ import { HotkeyProvider } from "../hotkeys/HotkeyProvider";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // TerminalPanel persists tabs under persistKey={contextId}, and every test here
+  // uses contextId="c1" — without clearing, an earlier test's saved layout leaks
+  // into the next one (e.g. masking initialCwd).
+  localStorage.clear();
   GetContextChanges.mockResolvedValue([{ repoName: "acme/api", repoPath: "/r/api", files: [] }]);
   RefreshContext.mockResolvedValue({});
   GetEditorSettings.mockResolvedValue("");

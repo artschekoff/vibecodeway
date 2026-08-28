@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { Terminal } from "./Terminal";
-import { TerminalWrite } from "../../../wailsjs/go/main/App";
+import { TerminalWrite, AgentResumeCommand } from "../../../wailsjs/go/main/App";
 import { useTerminalCommands } from "../../hooks/useTerminalCommands";
 import { applyPlaceholders } from "../../lib/terminalPlaceholders";
 import { matchTerminalHotkey } from "../../lib/terminalHotkeys";
@@ -55,6 +55,10 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   const [activeKey, setActiveKey] = useState<string>("");
   const seededRef = useRef(false);
   const sessionByKey = useRef<Map<string, string>>(new Map());
+  // Resume commands owed to restored tabs, drained as each tab's PTY comes up.
+  // A ref rather than state: it must fire exactly once per tab, and re-renders
+  // must not replay it.
+  const pendingResume = useRef<Map<string, string>>(new Map());
   const wrapperByKey = useRef<Map<string, HTMLDivElement>>(new Map());
   const rootRef = useRef<HTMLDivElement>(null);
   const insertMenuRef = useRef<HTMLDivElement>(null);
@@ -77,8 +81,19 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   };
 
   const setSession = (key: string, sessionId: string) => {
-    if (sessionId) sessionByKey.current.set(key, sessionId);
-    else sessionByKey.current.delete(key);
+    if (!sessionId) {
+      sessionByKey.current.delete(key);
+      return;
+    }
+    sessionByKey.current.set(key, sessionId);
+    // A restored agent tab types its resume command as soon as its shell exists.
+    // Writing immediately is safe: the tty buffers the line until the shell has
+    // finished sourcing its rc files and starts reading input.
+    const resume = pendingResume.current.get(key);
+    if (resume) {
+      pendingResume.current.delete(key);
+      void TerminalWrite(sessionId, resume + "\r");
+    }
   };
 
   // Move keyboard focus into the active xterm so the user can immediately edit /
@@ -118,11 +133,14 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
     if (seededRef.current || !spawnCwd) return;
     seededRef.current = true;
     const saved = persistKey ? loadTerminals(persistKey) : [];
-    const restored = saved.length
+    const restored: { key: string; cwd: string; openedAt: number; resume?: string }[] = saved.length
       ? saved.map((t) => ({ key: nextKey(), cwd: t.cwd, openedAt: t.openedAt, resume: t.resume }))
       : [{ key: nextKey(), cwd: spawnCwd, openedAt: Date.now() }];
     setTerminals(restored);
     setActiveKey(restored[0].key);
+    for (const t of restored) {
+      if (t.resume) pendingResume.current.set(t.key, t.resume);
+    }
   }, [spawnCwd, persistKey]);
 
   // Mirror the tab list into storage on every change, so a crash or a force-quit
@@ -130,6 +148,34 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   useEffect(() => {
     if (!persistKey || !seededRef.current) return;
     saveTerminals(persistKey, terminals.map(({ cwd, openedAt, resume }) => ({ cwd, openedAt, resume })));
+  }, [persistKey, terminals]);
+
+  // Ask the backend which tabs have a coding-agent conversation on disk, and
+  // remember the command that resumes it. Polled instead of computed on close,
+  // because a force-quit never runs an unmount handler.
+  useEffect(() => {
+    if (!persistKey || terminals.length === 0) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const found = await Promise.all(
+        terminals.map((t) => AgentResumeCommand(t.cwd, t.openedAt).catch(() => "")),
+      );
+      if (cancelled) return;
+      setTerminals((ts) => {
+        // Bail out by identity when nothing changed, so this effect's own
+        // updates cannot retrigger it forever. A falsy poll result never
+        // counts as a change (mirrors the truthy-guard below) — otherwise a
+        // tab whose resume is already known would flip-flop against a "" result
+        // forever, rebuilding the array every tick without ever converging.
+        if (ts.length !== found.length) return ts;
+        const changed = ts.some((t, i) => found[i] && found[i] !== (t.resume ?? ""));
+        if (!changed) return ts;
+        return ts.map((t, i) => (found[i] ? { ...t, resume: found[i] } : t));
+      });
+    };
+    void refresh();
+    const h = setInterval(() => void refresh(), 15000);
+    return () => { cancelled = true; clearInterval(h); };
   }, [persistKey, terminals]);
 
   const openTerminalAt = (cwd: string) => {
