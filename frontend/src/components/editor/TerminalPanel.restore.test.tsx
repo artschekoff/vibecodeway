@@ -18,7 +18,7 @@ const H = vi.hoisted(() => ({
 }));
 vi.mock("../../../wailsjs/go/main/App", () => H);
 
-import { TerminalPanel } from "./TerminalPanel";
+import { TerminalPanel, assignResumePerFolder } from "./TerminalPanel";
 import { HotkeyProvider } from "../../hotkeys/HotkeyProvider";
 import { loadTerminals, saveTerminals } from "../../lib/terminalSession";
 
@@ -100,5 +100,55 @@ describe("TerminalPanel — agent resume", () => {
       ]));
     // A freshly opened tab is not itself resumed — only future restores use this.
     expect(H.TerminalWrite).not.toHaveBeenCalled();
+  });
+
+  it("only one of two same-folder tabs picks up the poll's resume command", async () => {
+    saveTerminals("ctx6", [
+      { cwd: "/r/api", openedAt: 1 },
+      { cwd: "/r/api", openedAt: 2 },
+    ]);
+    H.AgentResumeCommand.mockResolvedValue("claude --resume s9");
+
+    render(<TerminalPanel spawnCwd="/r/api" persistKey="ctx6" />, { wrapper: Wrap });
+
+    await waitFor(() =>
+      expect(loadTerminals("ctx6").filter((t) => t.resume === "claude --resume s9")).toHaveLength(1));
+  });
+});
+
+describe("assignResumePerFolder", () => {
+  it("two tabs same cwd, neither owns it: only the first (earliest) gets it", () => {
+    const tabs = [
+      { key: "a", cwd: "/r/api" },
+      { key: "b", cwd: "/r/api" },
+    ];
+    expect(assignResumePerFolder(tabs, ["claude --resume s1", "claude --resume s1"]))
+      .toEqual(["claude --resume s1", ""]);
+  });
+
+  it("two tabs same cwd, the second already owns it: it keeps it, the first gets nothing", () => {
+    const tabs = [
+      { key: "a", cwd: "/r/api" },
+      { key: "b", cwd: "/r/api", resume: "claude --resume s1" },
+    ];
+    expect(assignResumePerFolder(tabs, ["claude --resume s1", "claude --resume s1"]))
+      .toEqual(["", "claude --resume s1"]);
+  });
+
+  it("two tabs different cwds: both get their own", () => {
+    const tabs = [
+      { key: "a", cwd: "/r/api" },
+      { key: "b", cwd: "/r/web" },
+    ];
+    expect(assignResumePerFolder(tabs, ["claude --resume s1", "claude --resume s2"]))
+      .toEqual(["claude --resume s1", "claude --resume s2"]);
+  });
+
+  it("an empty poll result never clears an existing value", () => {
+    const tabs = [{ key: "a", cwd: "/r/api", resume: "claude --resume s1" }];
+    // "" from a poll is "nothing new to report", not "clear it" — the caller's
+    // truthy guard is what actually preserves the existing resume, but the
+    // reduction itself must not manufacture a value out of an empty result.
+    expect(assignResumePerFolder(tabs, [""])).toEqual([""]);
   });
 });

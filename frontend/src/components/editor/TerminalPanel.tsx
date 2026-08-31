@@ -33,6 +33,58 @@ const insertItem: React.CSSProperties = {
   cursor: "pointer", padding: "3px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap",
 };
 
+// A tab candidate for the per-poll resume-command reduction below. Only the
+// fields the reduction needs, so it stays testable without the rest of a
+// terminal's state.
+export interface ResumeCandidate {
+  key: string;
+  cwd: string;
+  resume?: string;
+}
+
+// Reduces one poll's raw AgentResumeCommand results so that within any single
+// cwd, at most one tab ends up holding a given resume command — otherwise two
+// tabs opened in the same folder (one running an agent, one a plain shell for
+// git/tests) both receive the same command and both auto-launch it on the next
+// restore.
+//
+// Ownership is sticky: a tab that already holds a command keeps it forever, so
+// a tab opened later in the same folder can never inherit a session another
+// tab is already resuming. Only when nobody at that cwd owns the command yet
+// is it handed to exactly one tab — the earliest in `tabs` order.
+//
+// Returns one entry per input tab: the command that tab should be assigned
+// from this poll, or "" for "nothing from this poll" (never clears an
+// existing `resume` — the caller's truthy guard handles that).
+//
+// ponytail: this cannot tell two tabs at the *same* cwd apart when both
+// genuinely ran their own agent conversation — only one gets restored, the
+// other comes back a plain shell. Exact per-terminal attribution needs a
+// Claude Code SessionStart hook keyed by a per-PTY env var (what cmux
+// installs, and the plan's documented upgrade path), not a heuristic here.
+export function assignResumePerFolder(tabs: ResumeCandidate[], found: string[]): string[] {
+  const result = tabs.map((_, i) => found[i] || "");
+
+  const indicesByCwd = new Map<string, number[]>();
+  tabs.forEach((t, i) => {
+    const arr = indicesByCwd.get(t.cwd);
+    if (arr) arr.push(i);
+    else indicesByCwd.set(t.cwd, [i]);
+  });
+
+  for (const indices of indicesByCwd.values()) {
+    const commands = new Set(indices.map((i) => result[i]).filter(Boolean));
+    for (const cmd of commands) {
+      const owner = indices.find((i) => (tabs[i].resume ?? "") === cmd);
+      const winner = owner ?? indices.find((i) => result[i] === cmd);
+      for (const i of indices) {
+        if (result[i] === cmd && i !== winner) result[i] = "";
+      }
+    }
+  }
+  return result;
+}
+
 // Tab title: repo name first, then the folder name (usually the branch/worktree).
 // A worktree lives at `<repo>/.worktrees/<branch>`, so the repo is the segment
 // before ".worktrees". For a plain checkout the two coincide — show it once.
@@ -168,9 +220,12 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
         // tab whose resume is already known would flip-flop against a "" result
         // forever, rebuilding the array every tick without ever converging.
         if (ts.length !== found.length) return ts;
-        const changed = ts.some((t, i) => found[i] && found[i] !== (t.resume ?? ""));
+        // Scope assignments per folder first, so two tabs sharing a cwd never
+        // both end up auto-launching the same agent conversation.
+        const assigned = assignResumePerFolder(ts, found);
+        const changed = ts.some((t, i) => assigned[i] && assigned[i] !== (t.resume ?? ""));
         if (!changed) return ts;
-        return ts.map((t, i) => (found[i] ? { ...t, resume: found[i] } : t));
+        return ts.map((t, i) => (assigned[i] ? { ...t, resume: assigned[i] } : t));
       });
     };
     void refresh();

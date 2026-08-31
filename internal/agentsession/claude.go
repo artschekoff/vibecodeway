@@ -68,13 +68,38 @@ func LastClaudeSession(claudeHome, cwd string, since time.Time) string {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
 			continue
 		}
+		id := strings.TrimSuffix(e.Name(), ".jsonl")
+		if !isSafeSessionID(id) {
+			// The id ends up typed verbatim into a shell as `claude --resume
+			// <id>`. A real session id is always a UUID; anything else is an
+			// untrusted filename (possibly planted by a prompt-injected
+			// agent) and must never reach a shell.
+			continue
+		}
 		info, err := e.Info()
 		if err != nil || info.ModTime().Before(since) {
 			continue
 		}
 		if info.ModTime().After(bestMod) {
-			best, bestMod = strings.TrimSuffix(e.Name(), ".jsonl"), info.ModTime()
+			best, bestMod = id, info.ModTime()
 		}
 	}
 	return best
+}
+
+// isSafeSessionID reports whether id is safe to interpolate into a shell
+// command. Real Claude Code session ids are UUIDs, so restricting to
+// alphanumerics, dashes and underscores costs nothing legitimate.
+func isSafeSessionID(id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
