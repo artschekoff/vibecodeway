@@ -1163,6 +1163,7 @@ export namespace store {
 	    eventType: string;
 	    oldValue: string;
 	    newValue: string;
+	    note: string;
 	    createdAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1178,6 +1179,7 @@ export namespace store {
 	        this.eventType = source["eventType"];
 	        this.oldValue = source["oldValue"];
 	        this.newValue = source["newValue"];
+	        this.note = source["note"];
 	        this.createdAt = source["createdAt"];
 	    }
 	}

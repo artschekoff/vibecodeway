@@ -118,3 +118,44 @@ func TestOnJiraNotifyDispatchesHooksOnlyOnInsert(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "x", string(got), "hook must fire exactly once, only on the insert that de-dupe allows")
 }
+
+// TestOnJiraNotifyDoesNotSwallowANoteCarryingTransition is the end-to-end
+// regression test for the finding that the de-dupe swallowed the note in the
+// feature's headline scenario: PROJ-1 goes To Do -> In Review with no rule
+// matching (an unread notification is inserted for the entity), then a rule
+// is created matching "Done", then PROJ-1 goes In Review -> Done. Before
+// new_value joined CreateNotification's de-dupe predicate, the second call
+// found the still-unread first row and returned false, discarding the note,
+// skipping the hook dispatch, and leaving the Activity Feed showing the stale
+// "To Do -> In Review" line. Both notifications must exist, and the Done one
+// must carry the note.
+func TestOnJiraNotifyDoesNotSwallowANoteCarryingTransition(t *testing.T) {
+	a, s, contextID := newNotifyTestApp(t)
+	ctx := context.Background()
+
+	// Step 1: PROJ-1 goes To Do -> In Review. No rule exists yet.
+	require.NoError(t, a.onJiraNotify(ctx, contextID, "jira_issue", "j-1",
+		"jira_status_changed", "To Do", "In Review"))
+
+	// Step 2: the user creates a rule: status becomes Done -> note.
+	_, err := s.CreateNotificationRule(ctx, contextID, "jira_status_changed", "Done", "tell QA we are ready")
+	require.NoError(t, err)
+
+	// Step 3: PROJ-1 goes In Review -> Done.
+	require.NoError(t, a.onJiraNotify(ctx, contextID, "jira_issue", "j-1",
+		"jira_status_changed", "In Review", "Done"))
+
+	unread, err := s.ListUnreadNotifications(ctx, contextID)
+	require.NoError(t, err)
+	require.Len(t, unread, 2, "both the To Do->In Review and In Review->Done transitions must have inserted a row")
+
+	var doneNote, doneNewValue string
+	for _, n := range unread {
+		if n.NewValue == "Done" {
+			doneNote = n.Note
+			doneNewValue = n.NewValue
+		}
+	}
+	assert.Equal(t, "Done", doneNewValue, "expected an unread notification for the Done transition")
+	assert.Equal(t, "tell QA we are ready", doneNote, "the Done notification must carry the matched rule's note")
+}

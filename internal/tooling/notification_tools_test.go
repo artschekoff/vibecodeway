@@ -51,6 +51,48 @@ func TestAddNotificationRuleTool(t *testing.T) {
 	if len(rules) != 1 || rules[0].Note != "tell QA we are ready" || rules[0].MatchValue != "Done" {
 		t.Fatalf("rule not stored as asked: %+v", rules)
 	}
+
+	// No os_notification hook exists anywhere (context or global) for
+	// jira_update, so the tool must say so — a rule that can never produce a
+	// popup must not leave the user finding out the hard way.
+	if m["osNotificationConfigured"] != false {
+		t.Fatalf("expected osNotificationConfigured=false with no hooks configured, got %v", m["osNotificationConfigured"])
+	}
+	hint, _ := m["hint"].(string)
+	if hint == "" {
+		t.Fatalf("expected a hint explaining the missing desktop popup, got %v", m["hint"])
+	}
+}
+
+// TestAddNotificationRuleToolReportsConfiguredWhenHookExists proves the flip
+// side: once the context has an enabled os_notification hook for jira_update,
+// the tool reports osNotificationConfigured=true and adds no hint.
+func TestAddNotificationRuleToolReportsConfiguredWhenHookExists(t *testing.T) {
+	r, s, contextID := newNotificationRegistry(t)
+	ctx := context.Background()
+
+	if _, err := s.CreateContextEventHook(ctx, contextID, "jira_update", "os_notification", ""); err != nil {
+		t.Fatalf("seed hook: %v", err)
+	}
+
+	out, err := r.Call(ctx, "add_notification_rule", map[string]any{
+		"contextId":  contextID,
+		"matchValue": "Done",
+		"note":       "tell QA we are ready",
+	}, Ctx{})
+	if err != nil {
+		t.Fatalf("call add_notification_rule: %v", err)
+	}
+	m, ok := out.(map[string]any)
+	if !ok {
+		t.Fatalf("expected a map result, got %T", out)
+	}
+	if m["osNotificationConfigured"] != true {
+		t.Fatalf("expected osNotificationConfigured=true with an enabled hook, got %v", m["osNotificationConfigured"])
+	}
+	if _, present := m["hint"]; present {
+		t.Fatalf("expected no hint when a desktop popup will actually fire, got %v", m["hint"])
+	}
 }
 
 func TestAddNotificationRuleToolValidates(t *testing.T) {

@@ -11,7 +11,11 @@ import (
 
 // CreateNotification inserts a new notification for a state-change event and
 // reports whether a row was actually inserted. If an unread notification of the
-// same event_type already exists for the entity, it is a no-op returning false.
+// same event_type AND new_value already exists for the entity, it is a no-op
+// returning false — that is the same change re-detected on a later sync. A
+// different new_value on the same still-unread entity+event_type is a genuinely
+// different change and must insert, or its note (and hook dispatch) would be
+// silently swallowed by an older, unrelated unread row.
 // note is the matched notification rule's text, or "" when no rule matched.
 //
 // ponytail: eight positional strings is this signature's limit — a ninth turns
@@ -20,11 +24,11 @@ func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, e
 	var existing string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id FROM notifications WHERE entity_id = ? AND event_type = ? AND read_at IS NULL LIMIT 1`,
-		entityID, eventType,
+		`SELECT id FROM notifications WHERE entity_id = ? AND event_type = ? AND new_value = ? AND read_at IS NULL LIMIT 1`,
+		entityID, eventType, newValue,
 	).Scan(&existing)
 	if err == nil {
-		return false, nil // already an unread notification of this type — skip
+		return false, nil // already an unread notification of this exact change — skip
 	}
 	if err != sql.ErrNoRows {
 		return false, fmt.Errorf("check existing notification: %w", err)
