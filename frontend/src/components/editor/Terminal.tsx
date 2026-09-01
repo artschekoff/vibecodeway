@@ -5,10 +5,19 @@ import "@xterm/xterm/css/xterm.css";
 import { TerminalStart, TerminalWrite, TerminalResize, TerminalClose } from "../../../wailsjs/go/main/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 
-export function Terminal({ cwd, onSession }: { cwd: string; onSession?: (sessionId: string) => void }) {
+export function Terminal({ cwd, onSession, onExit }: {
+  cwd: string;
+  onSession?: (sessionId: string) => void;
+  // Fires when the shell itself ends (the user typed `exit`, or it was killed).
+  // Kept in a ref so a changing callback never re-runs the effect and restarts
+  // the PTY.
+  onExit?: () => void;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
   const onSessionRef = useRef(onSession);
   onSessionRef.current = onSession;
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -33,7 +42,10 @@ export function Terminal({ cwd, onSession }: { cwd: string; onSession?: (session
       sessionID = id;
       onSessionRef.current?.(id);
       offData = EventsOn(`term:data:${id}`, (chunk: string) => term.write(chunk));
-      offExit = EventsOn(`term:exit:${id}`, () => term.write("\r\n[process exited]\r\n"));
+      offExit = EventsOn(`term:exit:${id}`, () => {
+        term.write("\r\n[process exited]\r\n");
+        onExitRef.current?.();
+      });
       onResize(); // guarded fit + PTY resize (skips if the tab is hidden)
     });
 

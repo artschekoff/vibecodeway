@@ -323,7 +323,9 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
           <div key={t.key}
             ref={(el) => { if (el) wrapperByKey.current.set(t.key, el); else wrapperByKey.current.delete(t.key); }}
             style={{ position: "absolute", inset: 0, display: t.key === activeKey ? "block" : "none" }}>
-            <Terminal cwd={t.cwd} onSession={(id) => setSession(t.key, id)} />
+            {/* `exit` in the shell retires the tab with it — a dead terminal is
+                nothing to keep a tab for. */}
+            <Terminal cwd={t.cwd} onSession={(id) => setSession(t.key, id)} onExit={() => closeTerminal(t.key)} />
           </div>
         ))}
         {terminals.length === 0 && (
