@@ -167,7 +167,16 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         <ResizeHandle
           orientation="horizontal"
           ariaLabel="resize terminal"
-          onResize={(dy) => setTerminalHeight(nextPaneSize(visibleTerminalHeight, -dy, TERMINAL_MIN, TERMINAL_MAX))}
+          // Functional update, because ResizeHandle registers its mousemove
+          // listener once on mousedown and emits INCREMENTAL deltas: a height
+          // captured at render time stays frozen for the whole drag, so only
+          // the last step would ever apply. Clamping `h` first means a drag
+          // that starts from an over-tall stored value moves from where the
+          // handle actually is. columnHeight is closed over, but it cannot
+          // change mid-drag — the window is not being resized at the same time.
+          onResize={(dy) =>
+            setTerminalHeight((h) =>
+              nextPaneSize(fitPaneSize(h, columnHeight, EDITOR_MIN, TERMINAL_MIN), -dy, TERMINAL_MIN, TERMINAL_MAX))}
         />
         <div ref={(el) => registerZone("terminal", el)} tabIndex={-1}
           className={activeZone === "terminal" ? "zone--active" : undefined}

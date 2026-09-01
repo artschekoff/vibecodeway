@@ -245,3 +245,61 @@ describe("EditorWorkspace", () => {
     expect(screen.getByRole("button", { name: /new terminal/i })).toBeInTheDocument();
   });
 });
+
+// Walks up from the mocked terminal to the pane that actually carries the
+// height, without depending on how deeply TerminalPanel nests its own markup.
+function terminalPane(): HTMLElement {
+  let el: HTMLElement | null = screen.getByTestId("terminal");
+  while (el && !/^\d+px$/.test(el.style.height)) el = el.parentElement;
+  if (!el) throw new Error("no ancestor of the terminal carries a px height");
+  return el;
+}
+
+describe("EditorWorkspace terminal resize", () => {
+  // The handle registers its mousemove listener once on mousedown and emits
+  // INCREMENTAL deltas, so each step must accumulate onto the previous height.
+  // Computing from a value captured at render time freezes it for the whole
+  // drag: the panel jitters by one step and never actually moves.
+  it("accumulates incremental drag steps instead of restarting from the same height", async () => {
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
+
+    const pane = terminalPane();
+    const startHeight = Number.parseInt(pane.style.height, 10);
+    expect(startHeight).toBe(260); // TERMINAL_DEFAULT
+
+    // Drag the handle DOWN in four 20px steps — the terminal should shrink 80px.
+    const handle = screen.getByRole("separator", { name: "resize terminal" });
+    fireEvent.mouseDown(handle, { clientY: 400 });
+    fireEvent.mouseMove(window, { clientY: 420 });
+    fireEvent.mouseMove(window, { clientY: 440 });
+    fireEvent.mouseMove(window, { clientY: 460 });
+    fireEvent.mouseMove(window, { clientY: 480 });
+    fireEvent.mouseUp(window);
+
+    expect(Number.parseInt(pane.style.height, 10)).toBe(startHeight - 80);
+  });
+
+  it("grows the terminal when dragged up, accumulating the same way", async () => {
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
+
+    const pane = terminalPane();
+    const handle = screen.getByRole("separator", { name: "resize terminal" });
+
+    fireEvent.mouseDown(handle, { clientY: 400 });
+    fireEvent.mouseMove(window, { clientY: 370 });
+    fireEvent.mouseMove(window, { clientY: 340 });
+    fireEvent.mouseUp(window);
+
+    expect(Number.parseInt(pane.style.height, 10)).toBe(320); // 260 + 30 + 30
+  });
+});
