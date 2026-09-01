@@ -6,6 +6,9 @@ import { EditorFilesProvider } from "./contexts/EditorFilesContext";
 import { EditorFileTabBar } from "./components/editor/EditorFileTabBar";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ResizeHandle } from "./components/editor/ResizeHandle";
+import { nextPaneSize, readStoredPaneSize } from "./lib/paneSize";
 import { ListAllContexts, ListOrganizations, GetKeybindings } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
@@ -22,6 +25,13 @@ import { EditorOpenPicker } from "./components/EditorOpenPicker";
 import type { Platform } from "./hotkeys/chord";
 import type { Keybinding } from "./types";
 import "./style.css";
+
+// The context rail starts as an icon-only strip; dragging it wide enough gives
+// context names room to render in full instead of truncating to "juna-healt…".
+export const SIDEBAR_RAIL_KEY = "vibecodeway:app:sidebarRailWidth";
+export const RAIL_MIN = 72;   // the icon-only width the rail shipped with
+export const RAIL_MAX = 320;
+const RAIL_EXPANDED = 200; // what the toggle opens to before the user drags their own width
 
 const isWailsContext = () =>
   typeof (window as unknown as Record<string, unknown>)["go"] !== "undefined";
@@ -40,6 +50,18 @@ interface PickerState { visible: boolean; text: string }
 
 function AppShell() {
   const [picker, setPicker] = useState<PickerState>({ visible: false, text: "" });
+  const [railWidth, setRailWidth] = useState(() =>
+    readStoredPaneSize(localStorage.getItem(SIDEBAR_RAIL_KEY), RAIL_MIN, RAIL_MIN, RAIL_MAX)
+  );
+  useEffect(() => { localStorage.setItem(SIDEBAR_RAIL_KEY, String(railWidth)); }, [railWidth]);
+  // ponytail: remembered in a ref, not persisted — a restart re-opens at
+  // RAIL_EXPANDED. Give it its own storage key if that starts to grate.
+  const lastExpanded = useRef(RAIL_EXPANDED);
+  const toggleRail = () =>
+    setRailWidth((w) => {
+      if (w > RAIL_MIN) { lastExpanded.current = w; return RAIL_MIN; }
+      return lastExpanded.current;
+    });
   const [showA11yBanner, setShowA11yBanner] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,10 +149,28 @@ function AppShell() {
     <ProgressProvider>
       <ProgressModal />
       <div className="app-shell">
-        <div className="app-sidebar">
+        <div
+          className="app-sidebar"
+          // --rail-w drives .tab-item__title's max-width so context names get
+          // wider as the rail does, instead of always ellipsising at 62px.
+          style={{ width: railWidth, "--rail-w": `${railWidth}px` } as React.CSSProperties}
+        >
           <HamburgerMenu />
           <TabBar />
+          <button
+            className="app-sidebar__toggle"
+            onClick={toggleRail}
+            aria-label={railWidth > RAIL_MIN ? "Collapse sidebar" : "Expand sidebar"}
+            title={railWidth > RAIL_MIN ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {railWidth > RAIL_MIN ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </button>
         </div>
+        <ResizeHandle
+          orientation="vertical"
+          ariaLabel="resize sidebar rail"
+          onResize={(dx) => setRailWidth((w) => nextPaneSize(w, dx, RAIL_MIN, RAIL_MAX))}
+        />
         <div className="app-content">
           {activeTab?.type === "editor" && activeTab.contextId && (
             <EditorFileTabBar contextId={activeTab.contextId} />
