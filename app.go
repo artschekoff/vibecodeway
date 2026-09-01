@@ -505,12 +505,31 @@ func notifyReason(entityType, eventType, oldValue, newValue string) string {
 // onJiraNotify records a detected Jira change: de-duped notification, needs-attention
 // flag, hook dispatch, and (on a newly-inserted notification) a timeline event.
 func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue, "")
+	// Resolved before the insert so the note can be stored on the row: the
+	// notification is a historical record, and editing the rule later must not
+	// rewrite what the user was already told. Best-effort — a failed lookup
+	// costs the note, not the notification.
+	note := ""
+	if rules, rulesErr := a.db.ListNotificationRules(ctx, contextID); rulesErr != nil {
+		a.logger.Warn("jira notify: list notification rules failed",
+			zap.String("contextID", contextID), zap.Error(rulesErr))
+	} else {
+		note = appstore.NoteForEvent(rules, eventType, newValue)
+	}
+
+	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue, note)
 	if err != nil {
 		return err
 	}
 	if inserted {
-		a.dispatchContextHooks(contextID, "jira_update")
+		var detail hookDetail
+		if note != "" {
+			detail = hookDetail{
+				ConditionText: appstore.ConditionMetText(eventType, oldValue, newValue),
+				Note:          note,
+			}
+		}
+		a.dispatchContextHooks(contextID, "jira_update", detail)
 		// Prefix with the issue key so two different issues with the same transition
 		// (e.g. a parent and its dev sub-task both → Ready for QA) don't render as
 		// identical timeline summaries. entityID is the jira_issues row id.
@@ -539,7 +558,9 @@ func (a *App) onVCSNotify(ctx context.Context, contextID, entityType, entityID, 
 		return err
 	}
 	if inserted {
-		a.dispatchContextHooks(contextID, "pr_update")
+		// ponytail: PR events carry no rule note yet. Wiring them is the same
+		// three lines as the Jira path above, once someone wants PR rules.
+		a.dispatchContextHooks(contextID, "pr_update", hookDetail{})
 		a.emitDomainEvent(contextID, eventType, appstore.EventSourceGitHub, entityID, "", notifyReason(entityType, eventType, oldValue, newValue))
 	}
 	if err := a.db.FlagNeedsAttention(ctx, contextID, notifyReason(entityType, eventType, oldValue, newValue)); err != nil {
@@ -555,7 +576,7 @@ func (a *App) onVCSNotify(ctx context.Context, contextID, entityType, entityID, 
 func (a *App) onReviewNotify(ctx context.Context, repoID, repoName string, prNumber int, prTitle, prAuthor string) {
 	if ctxIDs, err := a.db.ContextIDsForRepo(ctx, repoID); err == nil {
 		for _, cid := range ctxIDs {
-			a.dispatchContextHooks(cid, "code_review")
+			a.dispatchContextHooks(cid, "code_review", hookDetail{})
 		}
 	} else {
 		a.logger.Warn("review notify: contexts for repo failed", zap.String("repoID", repoID), zap.Error(err))

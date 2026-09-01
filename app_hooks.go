@@ -27,14 +27,25 @@ func runScriptHook(command, contextKey, contextID, eventCategory string) error {
 	return cmd.Run()
 }
 
-// runHook executes a single resolved hook action for context c.
-func (a *App) runHook(c *appstore.Context, eventCategory, actionType, scriptCommand string) {
+// hookDetail carries the user-authored half of a notification-rule match into
+// the hook payload: the generated "your condition fired" line and the note the
+// user wrote. The zero value means no rule matched, which is the normal case.
+type hookDetail struct {
+	ConditionText string
+	Note          string
+}
+
+// runHook executes a single resolved hook action for context c. detail is empty
+// unless a notification rule matched the event that triggered this dispatch.
+func (a *App) runHook(c *appstore.Context, eventCategory, actionType, scriptCommand string, detail hookDetail) {
 	switch actionType {
 	case "os_notification":
 		runtime.EventsEmit(a.ctx, "hook:notify", map[string]interface{}{
 			"contextId":     c.ID,
 			"contextKey":    c.Key,
 			"eventCategory": eventCategory,
+			"conditionText": detail.ConditionText,
+			"note":          detail.Note,
 		})
 	case "run_script":
 		if err := runScriptHook(scriptCommand, c.Key, c.ID, eventCategory); err != nil {
@@ -47,7 +58,7 @@ func (a *App) runHook(c *appstore.Context, eventCategory, actionType, scriptComm
 // dispatchContextHooks runs the resolved hooks for (contextID, eventCategory):
 // the context's own hooks if any, otherwise the global hooks for the category.
 // Best-effort: never returns an error, never blocks on failure.
-func (a *App) dispatchContextHooks(contextID, eventCategory string) {
+func (a *App) dispatchContextHooks(contextID, eventCategory string, detail hookDetail) {
 	ctxHooks, err := a.db.ListEnabledHooks(a.ctx, contextID, eventCategory)
 	if err != nil {
 		a.logger.Warn("hooks: list enabled failed",
@@ -84,6 +95,6 @@ func (a *App) dispatchContextHooks(contextID, eventCategory string) {
 		return
 	}
 	for _, act := range actions {
-		a.runHook(c, eventCategory, act.actionType, act.scriptCommand)
+		a.runHook(c, eventCategory, act.actionType, act.scriptCommand, detail)
 	}
 }
