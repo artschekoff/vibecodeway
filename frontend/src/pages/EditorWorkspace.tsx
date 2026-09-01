@@ -227,7 +227,12 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         {/* Scratch log pinned to the top of the sidebar: what you did here, for when
             you come back to this context. Height-bounded so it never crowds out the
             file tree — the note list scrolls inside. */}
-        <div style={{ maxHeight: NOTES_HEIGHT, display: "flex", flexDirection: "column", minHeight: 0, borderBottom: "1px solid var(--border)" }}>
+        {/* overflow:hidden is load-bearing twice over. maxHeight caps this box but
+            not the paint, so without it tall notes render straight over the repo
+            selector and the Files/Git tabs below. It also gives NotesPanel's inner
+            overflowY:auto list a bounded height — flex:1 against an auto-height
+            parent resolves to content size, so the list could never scroll. */}
+        <div style={{ maxHeight: NOTES_HEIGHT, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, borderBottom: "1px solid var(--border)" }}>
           <NotesPanel contextId={contextId} />
         </div>
         {/* Repo selector sits above the Files/Git tabs — it scopes both. */}

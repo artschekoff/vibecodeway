@@ -303,3 +303,25 @@ describe("EditorWorkspace terminal resize", () => {
     expect(Number.parseInt(pane.style.height, 10)).toBe(320); // 260 + 30 + 30
   });
 });
+
+describe("EditorWorkspace sidebar notes", () => {
+  // maxHeight caps the BOX but not the paint: without a clip, tall note content
+  // renders straight over the repo selector and the Files/Git tabs below it.
+  // Clipping also gives NotesPanel's inner overflowY:auto list a bounded height,
+  // which is the only reason it can scroll at all.
+  it("clips the notes pane so its content cannot paint over the controls below", async () => {
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" contextKey="JH-3940" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("terminal")).toBeInTheDocument());
+
+    // Find the pane by the cap itself rather than by its content: the notes list
+    // is the only thing in the sidebar with a max-height.
+    const capped = Array.from(document.querySelectorAll<HTMLElement>("div"))
+      .filter((d) => d.style.maxHeight);
+    expect(capped).toHaveLength(1);
+    expect(capped[0].style.overflow).toBe("hidden");
+  });
+});
