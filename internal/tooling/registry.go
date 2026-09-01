@@ -36,6 +36,7 @@ type Deps struct {
 func NewRegistry(d Deps) *Registry {
 	r := &Registry{}
 	registerContextTools(r, d)
+	registerNotificationTools(r, d)
 	if d.VCS != nil {
 		registerPRTools(r, d)
 	}
