@@ -638,6 +638,8 @@ export interface ActivityFeedItem {
   eventType: string;
   oldValue: string;
   newValue: string;
+  // The notification-rule note the user attached to this event, or "".
+  note?: string;
   createdAt: string;
 }
 

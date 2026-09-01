@@ -139,7 +139,9 @@ type ActivityFeedItem struct {
 	EventType  string `json:"eventType"`
 	OldValue   string `json:"oldValue"`
 	NewValue   string `json:"newValue"`
-	CreatedAt  string `json:"createdAt"`
+	// Note is the notification-rule text the user attached to this event, or "".
+	Note      string `json:"note"`
+	CreatedAt string `json:"createdAt"`
 }
 
 // ContextEventHook is a per-context automation: when an event of EventCategory

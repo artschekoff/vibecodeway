@@ -95,7 +95,7 @@ func (s *Store) ListRecentActivity(ctx context.Context, limit int) ([]ActivityFe
 		limit = 100
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT n.id, n.context_id, c.key, n.entity_type, n.event_type, n.old_value, n.new_value, n.created_at
+		SELECT n.id, n.context_id, c.key, n.entity_type, n.event_type, n.old_value, n.new_value, n.note, n.created_at
 		FROM notifications n
 		JOIN contexts c ON c.id = n.context_id
 		ORDER BY n.created_at DESC
@@ -110,7 +110,7 @@ func (s *Store) ListRecentActivity(ctx context.Context, limit int) ([]ActivityFe
 	for rows.Next() {
 		var it ActivityFeedItem
 		if err := rows.Scan(&it.ID, &it.ContextID, &it.ContextKey, &it.EntityType,
-			&it.EventType, &it.OldValue, &it.NewValue, &it.CreatedAt); err != nil {
+			&it.EventType, &it.OldValue, &it.NewValue, &it.Note, &it.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan activity item: %w", err)
 		}
 		items = append(items, it)
