@@ -12,7 +12,11 @@ import (
 // CreateNotification inserts a new notification for a state-change event and
 // reports whether a row was actually inserted. If an unread notification of the
 // same event_type already exists for the entity, it is a no-op returning false.
-func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) (bool, error) {
+// note is the matched notification rule's text, or "" when no rule matched.
+//
+// ponytail: eight positional strings is this signature's limit — a ninth turns
+// it into a struct argument.
+func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue, note string) (bool, error) {
 	var existing string
 	err := s.db.QueryRowContext(
 		ctx,
@@ -27,9 +31,9 @@ func (s *Store) CreateNotification(ctx context.Context, contextID, entityType, e
 	}
 
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO notifications (id, context_id, entity_type, entity_id, event_type, old_value, new_value, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, uuid.New().String(), contextID, entityType, entityID, eventType, oldValue, newValue,
+		INSERT INTO notifications (id, context_id, entity_type, entity_id, event_type, old_value, new_value, note, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, uuid.New().String(), contextID, entityType, entityID, eventType, oldValue, newValue, note,
 		time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return false, fmt.Errorf("insert notification: %w", err)
@@ -61,7 +65,7 @@ func (s *Store) MarkNotificationsRead(ctx context.Context, contextID string) err
 // ListUnreadNotifications returns all unread notifications for a context, newest first.
 func (s *Store) ListUnreadNotifications(ctx context.Context, contextID string) ([]Notification, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, context_id, entity_type, entity_id, event_type, old_value, new_value, created_at, read_at
+		SELECT id, context_id, entity_type, entity_id, event_type, old_value, new_value, note, created_at, read_at
 		FROM notifications
 		WHERE context_id = ? AND read_at IS NULL
 		ORDER BY created_at DESC
@@ -75,7 +79,7 @@ func (s *Store) ListUnreadNotifications(ctx context.Context, contextID string) (
 	for rows.Next() {
 		var n Notification
 		if err := rows.Scan(&n.ID, &n.ContextID, &n.EntityType, &n.EntityID, &n.EventType,
-			&n.OldValue, &n.NewValue, &n.CreatedAt, &n.ReadAt); err != nil {
+			&n.OldValue, &n.NewValue, &n.Note, &n.CreatedAt, &n.ReadAt); err != nil {
 			return nil, fmt.Errorf("scan notification: %w", err)
 		}
 		result = append(result, n)

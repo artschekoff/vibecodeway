@@ -505,7 +505,7 @@ func notifyReason(entityType, eventType, oldValue, newValue string) string {
 // onJiraNotify records a detected Jira change: de-duped notification, needs-attention
 // flag, hook dispatch, and (on a newly-inserted notification) a timeline event.
 func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue, "")
 	if err != nil {
 		return err
 	}
@@ -534,7 +534,7 @@ func (a *App) onJiraNotify(ctx context.Context, contextID, entityType, entityID,
 // onVCSNotify records a detected PR change: de-duped notification, needs-attention
 // flag, hook dispatch, and (on a newly-inserted notification) a timeline event.
 func (a *App) onVCSNotify(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error {
-	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue)
+	inserted, err := a.db.CreateNotification(ctx, contextID, entityType, entityID, eventType, oldValue, newValue, "")
 	if err != nil {
 		return err
 	}

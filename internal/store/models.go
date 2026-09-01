@@ -102,15 +102,31 @@ type UnviewedBreakdown struct {
 
 // Notification is a system-generated event for a state change on a tracked entity.
 type Notification struct {
-	ID         string  `json:"id"`
-	ContextID  string  `json:"contextId"`
-	EntityType string  `json:"entityType"`
-	EntityID   string  `json:"entityId"`
-	EventType  string  `json:"eventType"`
-	OldValue   string  `json:"oldValue"`
-	NewValue   string  `json:"newValue"`
-	CreatedAt  string  `json:"createdAt"`
-	ReadAt     *string `json:"readAt,omitempty"`
+	ID         string `json:"id"`
+	ContextID  string `json:"contextId"`
+	EntityType string `json:"entityType"`
+	EntityID   string `json:"entityId"`
+	EventType  string `json:"eventType"`
+	OldValue   string `json:"oldValue"`
+	NewValue   string `json:"newValue"`
+	// Note is the matched rule's text, copied at fire time. "" when no rule matched.
+	Note      string  `json:"note"`
+	CreatedAt string  `json:"createdAt"`
+	ReadAt    *string `json:"readAt,omitempty"`
+}
+
+// NotificationRule is a user-defined watch on a context: when an event of
+// EventType arrives whose new value matches MatchValue, the notification it
+// produces carries Note. Created by the Ask-AI companion, not by a settings
+// screen — the companion is the interface.
+type NotificationRule struct {
+	ID         string `json:"id"`
+	ContextID  string `json:"contextId"`
+	EventType  string `json:"eventType"`
+	MatchValue string `json:"matchValue"` // "" matches any new value
+	Note       string `json:"note"`
+	Enabled    bool   `json:"enabled"`
+	CreatedAt  string `json:"createdAt"`
 }
 
 // ActivityFeedItem is a notification joined with its context key, for the
