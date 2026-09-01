@@ -22,3 +22,16 @@ if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'func
 if (typeof document.queryCommandSupported !== 'function') {
   document.queryCommandSupported = () => false;
 }
+
+// jsdom does not implement ResizeObserver, which the editor uses to keep panes
+// inside their container. jsdom also does no layout, so a real implementation
+// would have nothing to report — a stub that never fires is the honest double:
+// components fall back to their unmeasured behaviour, which is what these tests
+// assert against.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}

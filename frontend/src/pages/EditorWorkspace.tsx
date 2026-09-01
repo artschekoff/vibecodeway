@@ -8,7 +8,7 @@ import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { NotesPanel } from "../components/editor/NotesPanel";
-import { nextPaneSize, readStoredPaneSize } from "../lib/paneSize";
+import { nextPaneSize, readStoredPaneSize, fitPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
 import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
 import { EditorFocusProvider, useEditorFocus } from "../contexts/EditorFocusContext";
@@ -27,6 +27,10 @@ const TERMINAL_KEY = "vibecodeway:editor:terminalHeight";
 const TERMINAL_MIN = 90;
 const TERMINAL_MAX = 900;
 const TERMINAL_DEFAULT = 260;
+// Editor rows that must survive however far the terminal is dragged. Without
+// a floor the editor collapses to zero, the terminal overflows its column,
+// and the resize handle is pushed off the top where it cannot be grabbed.
+const EDITOR_MIN = 120;
 
 export function EditorWorkspace(props: { contextId: string; contextKey?: string; initialCwd?: string }) {
   return (
@@ -65,6 +69,24 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   );
   useEffect(() => { localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth)); }, [sidebarWidth]);
   useEffect(() => { localStorage.setItem(TERMINAL_KEY, String(terminalHeight)); }, [terminalHeight]);
+
+  // The editor column's live height. TERMINAL_MAX alone is a fixed 900px that
+  // knows nothing about the window, so a height stored on a big screen (or a
+  // hard drag) used to exceed the column entirely.
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [columnHeight, setColumnHeight] = useState(0);
+  useEffect(() => {
+    const el = columnRef.current;
+    if (!el) return;
+    const measure = () => setColumnHeight(el.clientHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Persist what the user chose, render what fits: their size comes back
+  // untouched when the window grows again.
+  const visibleTerminalHeight = fitPaneSize(terminalHeight, columnHeight, EDITOR_MIN, TERMINAL_MIN);
 
   // Sidebar FILES/GIT via the ⌘B leader: ⌘B F -> FILES, ⌘B G -> GIT. Scope
   // "editor" so it's active only while the editor/sidebar zone is focused.
@@ -130,7 +152,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
 
   return (
     <div style={{ display: "flex", height: "100%", flex: 1, minWidth: 0, width: "100%" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div ref={columnRef} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div ref={(el) => registerZone("editor", el)} tabIndex={-1}
           className={activeZone === "editor" ? "zone--active" : undefined}
           style={{ flex: 1, minHeight: 0 }}>
@@ -145,11 +167,11 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         <ResizeHandle
           orientation="horizontal"
           ariaLabel="resize terminal"
-          onResize={(dy) => setTerminalHeight((h) => nextPaneSize(h, -dy, TERMINAL_MIN, TERMINAL_MAX))}
+          onResize={(dy) => setTerminalHeight(nextPaneSize(visibleTerminalHeight, -dy, TERMINAL_MIN, TERMINAL_MAX))}
         />
         <div ref={(el) => registerZone("terminal", el)} tabIndex={-1}
           className={activeZone === "terminal" ? "zone--active" : undefined}
-          style={{ height: terminalHeight, borderTop: "1px solid var(--border)" }}>
+          style={{ height: visibleTerminalHeight, flexShrink: 0, minHeight: 0, borderTop: "1px solid var(--border)" }}>
           {/* Mounted unconditionally: TerminalPanel owns the ⌘T hotkey handlers, so
               gating it on `cwd` made ⌘T a silent no-op until GetContextChanges
               resolved (and forever for a context with no repo on disk). The panel
