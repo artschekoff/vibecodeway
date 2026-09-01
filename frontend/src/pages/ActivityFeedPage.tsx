@@ -126,8 +126,17 @@ export default function ActivityFeedPage() {
                 >
                   {source === "jira" ? "Jira" : "GitHub"}
                 </span>
-                <span data-testid="activity-desc" style={{ flex: 1 }}>
-                  {describeActivity(item)}
+                <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                  <span data-testid="activity-desc">{describeActivity(item)}</span>
+                  {item.note && (
+                    <span
+                      data-testid="activity-note"
+                      style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}
+                      title={item.note}
+                    >
+                      {item.note}
+                    </span>
+                  )}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{item.contextKey}</span>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>

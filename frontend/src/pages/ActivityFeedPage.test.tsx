@@ -80,4 +80,33 @@ describe("ActivityFeedPage", () => {
     expect(screen.getByText("PR merged")).toBeInTheDocument();
     expect(SearchContextIDs).toHaveBeenCalledWith("referral");
   });
+
+  it("shows the note attached by a notification rule", async () => {
+    GetActivityFeed.mockResolvedValue([
+      {
+        id: "n1", contextId: "c1", contextKey: "PROJ-1", entityType: "jira_issue",
+        eventType: "jira_status_changed", oldValue: "In Review", newValue: "Done",
+        note: "tell QA we are ready", createdAt: "2026-08-31T10:00:00Z",
+      },
+    ]);
+
+    render(<ActivityFeedPage />);
+
+    expect(await screen.findByTestId("activity-note")).toHaveTextContent("tell QA we are ready");
+  });
+
+  it("renders no note element when the event carried none", async () => {
+    GetActivityFeed.mockResolvedValue([
+      {
+        id: "n2", contextId: "c1", contextKey: "PROJ-1", entityType: "jira_issue",
+        eventType: "jira_status_changed", oldValue: "To Do", newValue: "In Review",
+        note: "", createdAt: "2026-08-31T10:00:00Z",
+      },
+    ]);
+
+    render(<ActivityFeedPage />);
+
+    await screen.findByTestId("activity-desc");
+    expect(screen.queryByTestId("activity-note")).toBeNull();
+  });
 });

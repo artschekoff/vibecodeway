@@ -38,13 +38,13 @@ func TestDispatch_GlobalFallbackAndOverride(t *testing.T) {
 	a := &App{db: s, ctx: ctx, logger: newTestLogger()}
 
 	// jira_update: no context hook → global fires.
-	a.dispatchContextHooks(c.ID, "jira_update")
+	a.dispatchContextHooks(c.ID, "jira_update", hookDetail{})
 	_, err = os.Stat(globalMarker)
 	assert.NoError(t, err, "global jira_update hook should have run")
 
 	// pr_update: context hook exists → context fires, global does NOT.
 	_ = os.Remove(globalMarker)
-	a.dispatchContextHooks(c.ID, "pr_update")
+	a.dispatchContextHooks(c.ID, "pr_update", hookDetail{})
 	_, ctxErr := os.Stat(ctxMarker)
 	assert.NoError(t, ctxErr, "context pr_update hook should have run")
 	_, gErr := os.Stat(globalMarker)

@@ -44,12 +44,12 @@ func TestDispatchContextHooks_RunsEnabledScript(t *testing.T) {
 	require.NoError(t, err)
 
 	a := &App{db: s, ctx: ctx, logger: newTestLogger()}
-	a.dispatchContextHooks(c.ID, "pr_update")
+	a.dispatchContextHooks(c.ID, "pr_update", hookDetail{})
 
 	// dispatchContextHooks runs scripts synchronously for run_script hooks.
 	_, statErr := os.Stat(marker)
 	assert.NoError(t, statErr, "enabled pr_update script hook should have run")
 
 	// A category with no hook is a no-op (must not panic).
-	a.dispatchContextHooks(c.ID, "jira_update")
+	a.dispatchContextHooks(c.ID, "jira_update", hookDetail{})
 }

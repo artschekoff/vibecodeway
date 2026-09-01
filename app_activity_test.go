@@ -20,9 +20,9 @@ func TestGetActivityFeed(t *testing.T) {
 	require.NoError(t, err)
 	c1, err := s.CreateContext(ctx, "PROJ-1", org.ID)
 	require.NoError(t, err)
-	_, err = s.CreateNotification(ctx, c1.ID, "pull_request", "pr-1", "pr_merged", "", "merged")
+	_, err = s.CreateNotification(ctx, c1.ID, "pull_request", "pr-1", "pr_merged", "", "merged", "")
 	require.NoError(t, err)
-	_, err = s.CreateNotification(ctx, c1.ID, "jira_issue", "j-1", "jira_status_changed", "To Do", "Done")
+	_, err = s.CreateNotification(ctx, c1.ID, "jira_issue", "j-1", "jira_status_changed", "To Do", "Done", "")
 	require.NoError(t, err)
 
 	a := &App{db: s, ctx: ctx}

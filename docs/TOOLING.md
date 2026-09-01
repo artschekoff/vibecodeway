@@ -157,6 +157,37 @@ Archive (deactivate) multiple contexts at once by id. Skips any that are already
 vibecodeway-cli agent-tool call --name archive_contexts --args '{}'
 ```
 
+## add_notification_rule
+
+Create a notification rule on a context: when a Jira issue's status changes to matchValue, notify the user and show them `note` verbatim. Example: matchValue "Done" with note "tell QA we are ready". Leave matchValue empty to fire on any status change.
+
+**Write:** yes
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `contextId` | string | yes | the context id the rule watches |
+| `eventType` | string | no | which event to watch; only jira_status_changed is supported (the default) |
+| `matchValue` | string | no | the new status that fires the rule, e.g. Done; empty means any status change |
+| `note` | string | yes | the user's own text, shown verbatim in the notification (required) |
+
+```sh
+vibecodeway-cli agent-tool call --name add_notification_rule --args '{}'
+```
+
+## list_notification_rules
+
+List the notification rules on a context, so the user can see what they will be notified about.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `contextId` | string | yes | the context id |
+
+```sh
+vibecodeway-cli agent-tool call --name list_notification_rules --args '{}'
+```
+
 ## list_review_requests
 
 List open pull requests in a repo that are awaiting review from a user. Defaults to the authenticated user (@me); pass a login to see another user's requested reviews.

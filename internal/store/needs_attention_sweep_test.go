@@ -39,13 +39,13 @@ func TestClearStaleNeedsAttention(t *testing.T) {
 
 	// Active with every notification read: the user has seen it all.
 	read := newFlagged("READ-1")
-	_, err = s.CreateNotification(ctx, read.ID, "jira_issue", "j-read", "jira_status_changed", "To Do", "Done")
+	_, err = s.CreateNotification(ctx, read.ID, "jira_issue", "j-read", "jira_status_changed", "To Do", "Done", "")
 	require.NoError(t, err)
 	require.NoError(t, s.MarkNotificationsRead(ctx, read.ID))
 
 	// Active with an unread notification: still the user's move, must survive.
 	unread := newFlagged("LIVE-1")
-	_, err = s.CreateNotification(ctx, unread.ID, "jira_issue", "j-live", "jira_status_changed", "To Do", "In Review")
+	_, err = s.CreateNotification(ctx, unread.ID, "jira_issue", "j-live", "jira_status_changed", "To Do", "In Review", "")
 	require.NoError(t, err)
 
 	n, err := s.ClearStaleNeedsAttention(ctx)
