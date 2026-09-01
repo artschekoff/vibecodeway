@@ -2,6 +2,7 @@ package tooling
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
@@ -58,21 +59,24 @@ func TestAddNotificationRuleToolValidates(t *testing.T) {
 
 	if _, err := r.Call(ctx, "add_notification_rule", map[string]any{
 		"contextId": contextID, "matchValue": "Done", "note": "   ",
-	}, Ctx{}); err == nil {
-		t.Fatal("expected a blank note to be rejected")
+	}, Ctx{}); err == nil || !strings.Contains(err.Error(), "note is required") {
+		t.Fatalf("expected a blank note to be rejected by the tool's own guard, got: %v", err)
 	}
 
+	// contextId must be caught by the tool's own guard, not by the FK constraint
+	// on notification_rules.context_id — a wrong error here (e.g. a foreign key
+	// violation) would mean the guard was removed and the DB caught it instead.
 	if _, err := r.Call(ctx, "add_notification_rule", map[string]any{
 		"contextId": "", "matchValue": "Done", "note": "n",
-	}, Ctx{}); err == nil {
-		t.Fatal("expected a missing contextId to be rejected")
+	}, Ctx{}); err == nil || !strings.Contains(err.Error(), "contextId is required") {
+		t.Fatalf("expected a missing contextId to be rejected by the tool's own guard, got: %v", err)
 	}
 
 	// A rule on an unwired event would be stored and never fire.
 	if _, err := r.Call(ctx, "add_notification_rule", map[string]any{
 		"contextId": contextID, "eventType": "pr_merged", "matchValue": "merged", "note": "n",
-	}, Ctx{}); err == nil {
-		t.Fatal("expected an unsupported eventType to be rejected")
+	}, Ctx{}); err == nil || !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("expected an unsupported eventType to be rejected by the tool's own guard, got: %v", err)
 	}
 }
 
