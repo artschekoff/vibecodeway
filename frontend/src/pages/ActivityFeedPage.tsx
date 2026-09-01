@@ -131,7 +131,7 @@ export default function ActivityFeedPage() {
                   {item.note && (
                     <span
                       data-testid="activity-note"
-                      style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}
+                      style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                       title={item.note}
                     >
                       {item.note}

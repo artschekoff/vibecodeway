@@ -19,7 +19,7 @@ export function loadTerminals(persistKey: string): SavedTerminal[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((t): t is SavedTerminal => typeof t?.cwd === "string" && t.cwd.length > 0)
-      .map((t) => ({ cwd: t.cwd, openedAt: typeof t.openedAt === "number" ? t.openedAt : 0, ...(t.resume ? { resume: t.resume } : {}) }));
+      .map((t) => ({ cwd: t.cwd, openedAt: typeof t.openedAt === "number" ? t.openedAt : 0, ...(typeof t.resume === "string" && t.resume ? { resume: t.resume } : {}) }));
   } catch {
     return []; // corrupt storage just means "no layout to restore"
   }

@@ -34,7 +34,20 @@ export function Terminal({ cwd, onSession, onExit }: {
     let offData: (() => void) | undefined;
     let offExit: (() => void) | undefined;
 
-    void TerminalStart(cwd).then((id) => {
+    void TerminalStart(cwd).catch((err: unknown) => {
+      // Attached BEFORE .then so it only ever sees a failed start, never a
+      // throw from the success path. A restored tab whose folder no longer
+      // exists (a deleted worktree) rejects here: pty.Manager.Start's chdir
+      // fails before a session exists, so there is no onSession and no exit
+      // event to react to. Leave the tab visible with a message rather than a
+      // silent blank rectangle — no onExit, since retiring the tab would erase
+      // the message before the user could read which folder vanished.
+      if (cancelled) return undefined;
+      const message = err instanceof Error ? err.message : String(err);
+      term.write(`\r\n[cannot open a terminal in ${cwd}: ${message}]\r\n`);
+      return undefined;
+    }).then((id) => {
+      if (id === undefined) return; // start failed; the catch above reported it
       if (cancelled) {
         void TerminalClose(id);
         return;
@@ -47,17 +60,6 @@ export function Terminal({ cwd, onSession, onExit }: {
         onExitRef.current?.();
       });
       onResize(); // guarded fit + PTY resize (skips if the tab is hidden)
-    }).catch((err: unknown) => {
-      // A restored tab whose folder no longer exists (e.g. a deleted worktree)
-      // rejects here — pty.Manager.Start's chdir fails before a session ever
-      // exists, so there is no onSession, no exit event, nothing else to react
-      // to. Leave the tab visible with a message instead of a silent blank
-      // rectangle: no onExit, since retiring the tab would erase the message
-      // before the user could read it — they close it themselves once they've
-      // seen which folder vanished.
-      if (cancelled) return;
-      const message = err instanceof Error ? err.message : String(err);
-      term.write(`\r\n[cannot open a terminal in ${cwd}: ${message}]\r\n`);
     });
 
     const disposeInput = term.onData((data) => {
