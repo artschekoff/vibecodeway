@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { Terminal } from "./Terminal";
-import { TerminalWrite } from "../../../wailsjs/go/main/App";
+import { TerminalWrite, AgentResumeCommand } from "../../../wailsjs/go/main/App";
 import { useTerminalCommands } from "../../hooks/useTerminalCommands";
 import { applyPlaceholders } from "../../lib/terminalPlaceholders";
 import { matchTerminalHotkey } from "../../lib/terminalHotkeys";
 import { useHotkey } from "../../hotkeys/HotkeyProvider";
+import { loadTerminals, saveTerminals } from "../../lib/terminalSession";
 
 // Stable local ids, independent of cwd, so two terminals in the same folder are
 // distinct and neither remounts when the list changes.
@@ -32,6 +33,58 @@ const insertItem: React.CSSProperties = {
   cursor: "pointer", padding: "3px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap",
 };
 
+// A tab candidate for the per-poll resume-command reduction below. Only the
+// fields the reduction needs, so it stays testable without the rest of a
+// terminal's state.
+export interface ResumeCandidate {
+  key: string;
+  cwd: string;
+  resume?: string;
+}
+
+// Reduces one poll's raw AgentResumeCommand results so that within any single
+// cwd, at most one tab ends up holding a given resume command — otherwise two
+// tabs opened in the same folder (one running an agent, one a plain shell for
+// git/tests) both receive the same command and both auto-launch it on the next
+// restore.
+//
+// Ownership is sticky: a tab that already holds a command keeps it forever, so
+// a tab opened later in the same folder can never inherit a session another
+// tab is already resuming. Only when nobody at that cwd owns the command yet
+// is it handed to exactly one tab — the earliest in `tabs` order.
+//
+// Returns one entry per input tab: the command that tab should be assigned
+// from this poll, or "" for "nothing from this poll" (never clears an
+// existing `resume` — the caller's truthy guard handles that).
+//
+// ponytail: this cannot tell two tabs at the *same* cwd apart when both
+// genuinely ran their own agent conversation — only one gets restored, the
+// other comes back a plain shell. Exact per-terminal attribution needs a
+// Claude Code SessionStart hook keyed by a per-PTY env var (what cmux
+// installs, and the plan's documented upgrade path), not a heuristic here.
+export function assignResumePerFolder(tabs: ResumeCandidate[], found: string[]): string[] {
+  const result = tabs.map((_, i) => found[i] || "");
+
+  const indicesByCwd = new Map<string, number[]>();
+  tabs.forEach((t, i) => {
+    const arr = indicesByCwd.get(t.cwd);
+    if (arr) arr.push(i);
+    else indicesByCwd.set(t.cwd, [i]);
+  });
+
+  for (const indices of indicesByCwd.values()) {
+    const commands = new Set(indices.map((i) => result[i]).filter(Boolean));
+    for (const cmd of commands) {
+      const owner = indices.find((i) => (tabs[i].resume ?? "") === cmd);
+      const winner = owner ?? indices.find((i) => result[i] === cmd);
+      for (const i of indices) {
+        if (result[i] === cmd && i !== winner) result[i] = "";
+      }
+    }
+  }
+  return result;
+}
+
 // Tab title: repo name first, then the folder name (usually the branch/worktree).
 // A worktree lives at `<repo>/.worktrees/<branch>`, so the repo is the segment
 // before ".worktrees". For a plain checkout the two coincide — show it once.
@@ -49,11 +102,15 @@ export function tabLabel(cwd: string): string {
  * switches. A terminal's PTY is closed only when it is removed via its × button.
  * New terminals open in the active terminal's folder.
  */
-export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpen }: { spawnCwd: string; contextName?: string; pendingInsert?: { text: string; id: number }; pendingOpen?: { cwd: string; id: number } }) {
-  const [terminals, setTerminals] = useState<{ key: string; cwd: string }[]>([]);
+export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpen, persistKey }: { spawnCwd: string; contextName?: string; pendingInsert?: { text: string; id: number }; pendingOpen?: { cwd: string; id: number }; persistKey?: string }) {
+  const [terminals, setTerminals] = useState<{ key: string; cwd: string; openedAt: number; resume?: string }[]>([]);
   const [activeKey, setActiveKey] = useState<string>("");
   const seededRef = useRef(false);
   const sessionByKey = useRef<Map<string, string>>(new Map());
+  // Resume commands owed to restored tabs, drained as each tab's PTY comes up.
+  // A ref rather than state: it must fire exactly once per tab, and re-renders
+  // must not replay it.
+  const pendingResume = useRef<Map<string, string>>(new Map());
   const wrapperByKey = useRef<Map<string, HTMLDivElement>>(new Map());
   const rootRef = useRef<HTMLDivElement>(null);
   const insertMenuRef = useRef<HTMLDivElement>(null);
@@ -76,8 +133,19 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   };
 
   const setSession = (key: string, sessionId: string) => {
-    if (sessionId) sessionByKey.current.set(key, sessionId);
-    else sessionByKey.current.delete(key);
+    if (!sessionId) {
+      sessionByKey.current.delete(key);
+      return;
+    }
+    sessionByKey.current.set(key, sessionId);
+    // A restored agent tab types its resume command as soon as its shell exists.
+    // Writing immediately is safe: the tty buffers the line until the shell has
+    // finished sourcing its rc files and starts reading input.
+    const resume = pendingResume.current.get(key);
+    if (resume) {
+      pendingResume.current.delete(key);
+      void TerminalWrite(sessionId, resume + "\r");
+    }
   };
 
   // Move keyboard focus into the active xterm so the user can immediately edit /
@@ -111,19 +179,64 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
     focusActiveTerminal();
   };
 
-  // Auto-create the first terminal once a repo path is known (once).
+  // Bring back the tabs this editor had last time; otherwise seed one at the
+  // repo root. Runs once, as soon as a repo path is known.
   useEffect(() => {
     if (seededRef.current || !spawnCwd) return;
     seededRef.current = true;
-    const key = nextKey();
-    setTerminals([{ key, cwd: spawnCwd }]);
-    setActiveKey(key);
-  }, [spawnCwd]);
+    const saved = persistKey ? loadTerminals(persistKey) : [];
+    const restored: { key: string; cwd: string; openedAt: number; resume?: string }[] = saved.length
+      ? saved.map((t) => ({ key: nextKey(), cwd: t.cwd, openedAt: t.openedAt, resume: t.resume }))
+      : [{ key: nextKey(), cwd: spawnCwd, openedAt: Date.now() }];
+    setTerminals(restored);
+    setActiveKey(restored[0].key);
+    for (const t of restored) {
+      if (t.resume) pendingResume.current.set(t.key, t.resume);
+    }
+  }, [spawnCwd, persistKey]);
+
+  // Mirror the tab list into storage on every change, so a crash or a force-quit
+  // still leaves the last known layout behind.
+  useEffect(() => {
+    if (!persistKey || !seededRef.current) return;
+    saveTerminals(persistKey, terminals.map(({ cwd, openedAt, resume }) => ({ cwd, openedAt, resume })));
+  }, [persistKey, terminals]);
+
+  // Ask the backend which tabs have a coding-agent conversation on disk, and
+  // remember the command that resumes it. Polled instead of computed on close,
+  // because a force-quit never runs an unmount handler.
+  useEffect(() => {
+    if (!persistKey || terminals.length === 0) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const found = await Promise.all(
+        terminals.map((t) => AgentResumeCommand(t.cwd, t.openedAt).catch(() => "")),
+      );
+      if (cancelled) return;
+      setTerminals((ts) => {
+        // Bail out by identity when nothing changed, so this effect's own
+        // updates cannot retrigger it forever. A falsy poll result never
+        // counts as a change (mirrors the truthy-guard below) — otherwise a
+        // tab whose resume is already known would flip-flop against a "" result
+        // forever, rebuilding the array every tick without ever converging.
+        if (ts.length !== found.length) return ts;
+        // Scope assignments per folder first, so two tabs sharing a cwd never
+        // both end up auto-launching the same agent conversation.
+        const assigned = assignResumePerFolder(ts, found);
+        const changed = ts.some((t, i) => assigned[i] && assigned[i] !== (t.resume ?? ""));
+        if (!changed) return ts;
+        return ts.map((t, i) => (assigned[i] ? { ...t, resume: assigned[i] } : t));
+      });
+    };
+    void refresh();
+    const h = setInterval(() => void refresh(), 15000);
+    return () => { cancelled = true; clearInterval(h); };
+  }, [persistKey, terminals]);
 
   const openTerminalAt = (cwd: string) => {
     if (!cwd) return;
     const key = nextKey();
-    setTerminals((ts) => [...ts, { key, cwd }]);
+    setTerminals((ts) => [...ts, { key, cwd, openedAt: Date.now() }]);
     setActiveKey(key);
     setTimeout(() => focusTerminal(key), 0); // focus once the new terminal mounts
   };

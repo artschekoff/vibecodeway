@@ -50,6 +50,10 @@ export function AdjustTodoNext(arg1) {
   return window['go']['main']['App']['AdjustTodoNext'](arg1);
 }
 
+export function AgentResumeCommand(arg1, arg2) {
+  return window['go']['main']['App']['AgentResumeCommand'](arg1, arg2);
+}
+
 export function AnalyzeContext(arg1) {
   return window['go']['main']['App']['AnalyzeContext'](arg1);
 }

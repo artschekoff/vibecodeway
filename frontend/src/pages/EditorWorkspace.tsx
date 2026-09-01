@@ -177,7 +177,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               resolved (and forever for a context with no repo on disk). The panel
               handles an empty spawnCwd itself and seeds its first terminal once
               a path arrives. */}
-          <TerminalPanel spawnCwd={cwd} contextName={contextKey} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined} />
+          <TerminalPanel spawnCwd={cwd} contextName={contextKey} persistKey={contextId} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined} />
         </div>
       </div>
       <ResizeHandle

@@ -47,6 +47,17 @@ export function Terminal({ cwd, onSession, onExit }: {
         onExitRef.current?.();
       });
       onResize(); // guarded fit + PTY resize (skips if the tab is hidden)
+    }).catch((err: unknown) => {
+      // A restored tab whose folder no longer exists (e.g. a deleted worktree)
+      // rejects here — pty.Manager.Start's chdir fails before a session ever
+      // exists, so there is no onSession, no exit event, nothing else to react
+      // to. Leave the tab visible with a message instead of a silent blank
+      // rectangle: no onExit, since retiring the tab would erase the message
+      // before the user could read it — they close it themselves once they've
+      // seen which folder vanished.
+      if (cancelled) return;
+      const message = err instanceof Error ? err.message : String(err);
+      term.write(`\r\n[cannot open a terminal in ${cwd}: ${message}]\r\n`);
     });
 
     const disposeInput = term.onData((data) => {
