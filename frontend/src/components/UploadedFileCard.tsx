@@ -1,7 +1,36 @@
-import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Download } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { UploadedFile } from "../types";
 import ConfirmModal from "./ConfirmModal";
+import { GetUploadedFileContent } from "../../wailsjs/go/main/App";
+
+// The original bytes are kept next to the extracted text, so a picture stays a
+// picture and a document stays downloadable.
+const MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  webp: "image/webp", gif: "image/gif",
+  pdf: "application/pdf",
+};
+
+function mimeFor(fileType: string): string {
+  return MIME[fileType.toLowerCase()] ?? "application/octet-stream";
+}
+
+function isImage(fileType: string): boolean {
+  return mimeFor(fileType).startsWith("image/");
+}
+
+function saveOriginal(base64: string, name: string, fileType: string): void {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: mimeFor(fileType) }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function FileIcon({ fileType }: { fileType: string }) {
   const t = fileType.toLowerCase();
@@ -87,8 +116,24 @@ interface Props {
 export default function UploadedFileCard({ file, onDelete, onToggle }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [original, setOriginal] = useState<string | null>(null);
+  const [originalFailed, setOriginalFailed] = useState(false);
   const isInactive = !file.isActive;
-  const hasContent = (file.extractedText ?? "").length > 0;
+  const hasText = (file.extractedText ?? "").length > 0;
+  // Expandable even with no extracted text: an image the OCR made nothing of is
+  // still worth opening.
+  const hasContent = hasText || file.fileSize > 0;
+
+  // Fetched on first expand and kept — the blob is megabytes, so re-fetching it
+  // every time the card opens would be wasteful.
+  useEffect(() => {
+    if (!expanded || original !== null || originalFailed) return;
+    let live = true;
+    GetUploadedFileContent(file.id)
+      .then((b64) => { if (live) setOriginal(b64); })
+      .catch(() => { if (live) setOriginalFailed(true); });
+    return () => { live = false; };
+  }, [expanded, original, originalFailed, file.id]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -125,7 +170,28 @@ export default function UploadedFileCard({ file, onDelete, onToggle }: Props) {
 
       {expanded && (
         <div className="uploaded-file-body">
-          {hasContent ? (
+          {originalFailed ? (
+            <div className="uploaded-file-empty">The original file is unavailable.</div>
+          ) : isImage(file.fileType) ? (
+            original && (
+              <img
+                className="uploaded-file-preview"
+                src={`data:${mimeFor(file.fileType)};base64,${original}`}
+                alt={file.originalName}
+              />
+            )
+          ) : (
+            original && (
+              <button
+                className="uploaded-file-save"
+                onClick={() => saveOriginal(original, file.originalName, file.fileType)}
+                title={`Save ${file.originalName}`}
+              >
+                <Download size={12} /> Save original
+              </button>
+            )
+          )}
+          {hasText ? (
             <pre className="uploaded-file-content">{file.extractedText}</pre>
           ) : (
             <div className="uploaded-file-empty">

@@ -210,6 +210,10 @@ export function DeleteUploadedFile(arg1) {
   return window['go']['main']['App']['DeleteUploadedFile'](arg1);
 }
 
+export function GetUploadedFileContent(arg1) {
+  return window['go']['main']['App']['GetUploadedFileContent'](arg1);
+}
+
 export function DeleteUserEvent(arg1, arg2) {
   return window['go']['main']['App']['DeleteUserEvent'](arg1, arg2);
 }
@@ -224,6 +228,10 @@ export function DeleteWorkspace(arg1) {
 
 export function DiscardFile(arg1, arg2) {
   return window['go']['main']['App']['DiscardFile'](arg1, arg2);
+}
+
+export function ResolveConflict(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ResolveConflict'](arg1, arg2, arg3);
 }
 
 export function DiscardPendingUpload(arg1) {

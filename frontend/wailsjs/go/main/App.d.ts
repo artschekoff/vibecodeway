@@ -115,6 +115,8 @@ export function DeleteTodoNextItem(arg1:string):Promise<Array<store.AITodoItem>>
 
 export function DeleteUploadedFile(arg1:string):Promise<void>;
 
+export function GetUploadedFileContent(arg1:string):Promise<string>;
+
 export function DeleteUserEvent(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteWorkflowStatus(arg1:string):Promise<void>;
@@ -122,6 +124,8 @@ export function DeleteWorkflowStatus(arg1:string):Promise<void>;
 export function DeleteWorkspace(arg1:string):Promise<void>;
 
 export function DiscardFile(arg1:string,arg2:string):Promise<void>;
+
+export function ResolveConflict(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function DiscardPendingUpload(arg1:string):Promise<void>;
 

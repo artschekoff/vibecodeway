@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -982,6 +983,24 @@ func (a *App) ListUploadedFiles(contextID string) ([]appstore.ContextUploadedFil
 // DeleteUploadedFile removes a single uploaded file by its internal ID.
 func (a *App) DeleteUploadedFile(id string) error {
 	return a.cliRunner.DeleteUploadedFile(a.ctx, id)
+}
+
+// GetUploadedFileContent returns the original bytes of an uploaded file as
+// base64, so the UI can show the picture or hand back the document the user
+// attached — the extracted text is a companion to the original, not a
+// replacement for it.
+//
+// base64 rather than []byte: Wails types a Go byte slice as number[] in the
+// generated .d.ts while marshalling it as a base64 string at runtime, so the
+// declared type would lie. Reads the store directly rather than going through
+// cliRunner like its neighbours, which shell out to the CLI — piping a
+// multi-megabyte blob through a subprocess buys nothing here.
+func (a *App) GetUploadedFileContent(id string) (string, error) {
+	content, err := a.db.GetUploadedFileContent(a.ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(content), nil
 }
 
 // ToggleUploadedFileActive flips the is_active flag for an uploaded file.

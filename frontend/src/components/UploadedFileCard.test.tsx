@@ -1,6 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
+
+// The card fetches the original bytes on expand; without this the real generated
+// binding runs and blows up on the missing window.go.
+vi.mock("../../wailsjs/go/main/App", () => ({
+  GetUploadedFileContent: vi.fn().mockResolvedValue(""),
+}));
+
 import UploadedFileCard from "./UploadedFileCard";
 import type { UploadedFile } from "../types";
 
@@ -73,9 +80,9 @@ describe("UploadedFileCard", () => {
     expect(document.querySelector(".uploaded-file-body")).not.toBeInTheDocument();
   });
 
-  it("does not expand when extractedText is empty", async () => {
+  it("does not expand when there is neither text nor an original", async () => {
     const user = userEvent.setup();
-    const file = makeFile({ extractedText: "" });
+    const file = makeFile({ extractedText: "", fileSize: 0 });
     render(<UploadedFileCard file={file} onDelete={vi.fn()} onToggle={vi.fn()} />);
 
     const header = screen.getByText("report.pdf").closest("[class*='uploaded-file-header']")!;
@@ -138,10 +145,17 @@ describe("UploadedFileCard", () => {
     expect(icon).toBeInTheDocument();
   });
 
-  it("does not show expand chevron when extractedText is empty", () => {
-    const file = makeFile({ extractedText: "" });
+  it("does not show expand chevron when there is neither text nor an original", () => {
+    const file = makeFile({ extractedText: "", fileSize: 0 });
     render(<UploadedFileCard file={file} onDelete={vi.fn()} onToggle={vi.fn()} />);
     expect(document.querySelector(".expand-icon")).not.toBeInTheDocument();
+  });
+
+  it("still expands with no extracted text when the original is there", () => {
+    // An image the OCR made nothing of is still worth opening.
+    const file = makeFile({ extractedText: "", fileSize: 4096 });
+    render(<UploadedFileCard file={file} onDelete={vi.fn()} onToggle={vi.fn()} />);
+    expect(document.querySelector(".expand-icon")).toBeInTheDocument();
   });
 
   it("shows expand chevron when extractedText is present", () => {
