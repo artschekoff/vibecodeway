@@ -12,10 +12,16 @@ type FileChange struct {
 	IndexStatus  string `json:"indexStatus"`  // staged-side status word; "" when not staged
 	WorkStatus   string `json:"workStatus"`   // worktree-side status word; "" when clean in worktree
 	CommitStatus string `json:"commitStatus"` // status vs the base branch (branch commits); "" when only a working-tree change
+	// Conflicted marks a file git left unmerged. It gets its own flag rather than
+	// riding on IndexStatus/WorkStatus because an unmerged code (e.g. "UU") sets
+	// BOTH sides, which listed the file under staged AND local at once.
+	Conflicted bool `json:"conflicted"`
 }
 
 func statusWord(code string) string {
 	switch {
+	case isConflictCode(code):
+		return "conflict"
 	case strings.HasPrefix(code, "??"):
 		return "untracked"
 	case strings.ContainsAny(code, "A"):
@@ -93,7 +99,13 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 			path = path[i+4:]
 		}
 		status := statusWord(code)
+		conflicted := isConflictCode(code)
 		indexStatus, workStatus := splitStatus(code)
+		// A conflict belongs to the conflicts group alone; leaving the unmerged
+		// word on both sides double-listed it under staged and local.
+		if conflicted {
+			indexStatus, workStatus = "", ""
+		}
 		var diff string
 		if status == "untracked" {
 			// Show the new file's content as an add-diff (no-index; non-zero exit is expected on diff).
@@ -105,7 +117,7 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 				diff = string(d)
 			}
 		}
-		changes = append(changes, FileChange{Path: path, Status: status, Diff: diff, IndexStatus: indexStatus, WorkStatus: workStatus})
+		changes = append(changes, FileChange{Path: path, Status: status, Diff: diff, IndexStatus: indexStatus, WorkStatus: workStatus, Conflicted: conflicted})
 	}
 
 	// Append the branch's committed changes vs its base branch.

@@ -1291,6 +1291,18 @@ func (a *App) UnstageFile(repoPath, path string) error {
 	return vcs.GitUnstageFile(repoPath, path)
 }
 
+// ResolveConflict settles a merge conflict on repo-relative path by taking one
+// whole side: "ours" (this branch) or "theirs" (the branch being merged in).
+// Editing the conflict markers and staging the file is the finer-grained route;
+// this is the shortcut for files nobody wants to merge by hand (lockfiles,
+// generated output).
+func (a *App) ResolveConflict(repoPath, path, side string) error {
+	if _, err := safeJoin(repoPath, path); err != nil {
+		return err
+	}
+	return vcs.ResolveConflict(repoPath, path, side)
+}
+
 // DiscardFile discards working-tree (and staged) changes for repo-relative
 // path: tracked files are restored to HEAD; untracked files are deleted. The
 // path is containment-checked before any filesystem deletion.

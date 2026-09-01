@@ -2429,6 +2429,7 @@ export namespace vcs {
 	    indexStatus: string;
 	    workStatus: string;
 	    commitStatus: string;
+	    conflicted: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileChange(source);
@@ -2442,6 +2443,7 @@ export namespace vcs {
 	        this.indexStatus = source["indexStatus"];
 	        this.workStatus = source["workStatus"];
 	        this.commitStatus = source["commitStatus"];
+        this.conflicted = source["conflicted"];
 	    }
 	}
 	export class LocalBranch {

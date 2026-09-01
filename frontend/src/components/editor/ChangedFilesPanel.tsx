@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Terminal, ChevronsDownUp, ChevronsUpDown, RefreshCw } from "lucide-react";
-import { GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
+import { GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction, ResolveConflict } from "../../../wailsjs/go/main/App";
 import { main } from "../../../wailsjs/go/models";
 
 type Props = {
@@ -168,6 +168,9 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
         const branch = files.filter((f) => f.commitStatus);
         // Local uncommitted changes (independent of the branch list — a file in
         // the PR that's also edited locally appears in both).
+        // Files git left unmerged. They carry no index/work status precisely so
+        // they land here alone instead of being double-listed below.
+        const conflicts = files.filter((f) => f.conflicted);
         const staged = files.filter((f) => f.indexStatus);
         const unstaged = files.filter((f) => f.workStatus);
         // Keep the repo header (and its refresh/copy/terminal actions) visible even
@@ -176,6 +179,7 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
         const bKey = `${repo.repoName}:branch`;
         const sKey = `${repo.repoName}:staged`;
         const lKey = `${repo.repoName}:local`;
+        const cKey = `${repo.repoName}:conflicts`;
         return (
           <div key={repo.repoName} style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
@@ -188,6 +192,28 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
                 </button>
               )}
             </div>
+
+            {conflicts.length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                <button style={headerBtnStyle} onClick={() => toggleSection(cKey)}>
+                  <span style={chevronStyle}>{sectionOpen(cKey) ? "▾" : "▸"}</span>Merge Conflicts
+                </button>
+                {sectionOpen(cKey) && conflicts.map((f) => (
+                  <div key={`c:${f.path}`} style={rowStyle}>
+                    <span style={{ width: 14, color: "#f85149" }} title="Unmerged">!</span>
+                    {/* Opens the working-tree file with its conflict markers, so the
+                        finer-grained resolution is editing it and marking it resolved. */}
+                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, "conflict", "head")}>{f.path}</button>
+                    <button aria-label={`keep ours for ${f.path}`} title="Keep ours (this branch)" style={actionBtnStyle}
+                      onClick={() => void act((rp, p) => ResolveConflict(rp, p, "ours"), repo.repoPath, f.path)}>ours</button>
+                    <button aria-label={`keep theirs for ${f.path}`} title="Keep theirs (branch being merged in)" style={actionBtnStyle}
+                      onClick={() => void act((rp, p) => ResolveConflict(rp, p, "theirs"), repo.repoPath, f.path)}>theirs</button>
+                    <button aria-label={`mark ${f.path} resolved`} title="Mark resolved (stage it)" style={actionBtnStyle}
+                      onClick={() => void act(StageFile, repo.repoPath, f.path)}>✓</button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {branch.length > 0 && (
               <div style={{ marginBottom: 6 }}>
