@@ -2796,6 +2796,36 @@ select {
   overflow-y: auto;
 }
 
+/* The original file, shown next to its extracted text. */
+.uploaded-file-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: var(--surface);
+}
+
+.uploaded-file-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.uploaded-file-save:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
 .uploaded-file-empty {
   padding: 14px;
   font-size: 12px;
@@ -5554,7 +5584,9 @@ select {
 }
 
 .tab-item__title {
-  max-width: 62px;
+  /* Follows the resizable rail (--rail-w, set inline by App). The fallback keeps
+     the original 62px at the 72px icon-rail default. */
+  max-width: calc(var(--rail-w, 72px) - 10px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5684,6 +5716,26 @@ select {
   overflow: visible;
   position: relative;
   z-index: 100;
+}
+
+/* Collapse/expand the context rail. Sits under the tab list, which is flex:1. */
+.app-sidebar__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 28px;
+  margin: 4px 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.app-sidebar__toggle:hover {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .app-topbar {

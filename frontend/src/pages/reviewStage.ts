@@ -1,5 +1,14 @@
-import type { ReviewRequest } from "../types";
 import { reviewStatusMeta } from "./reviewStatus";
+
+// The four fields the classifier reads, typed loosely enough to accept both the
+// hand-written ReviewRequest and the Wails-generated vcsstore.ReviewRequest
+// (whose `kind` is a plain string).
+export interface ReviewStageInput {
+  reviewStatus: string;
+  kind?: string;
+  reviewedAt?: string;
+  myReviewState?: string;
+}
 
 // ReviewStage is the single answer to "where does this PR stand for me right now?".
 // It folds the PR-wide decision (reviewStatus), my own standing decision
@@ -27,7 +36,7 @@ export const REQUESTED_STAGE_ORDER: ReviewStage[] = [
 // reviewStage classifies one review item. Rule order is load-bearing: a PR that
 // others already approved but that still awaits MY first look belongs in
 // awaiting_first, not approved — it is still my turn.
-export function reviewStage(r: ReviewRequest): ReviewStage {
+export function reviewStage(r: ReviewStageInput): ReviewStage {
   if (reviewStatusMeta(r.reviewStatus).terminal) return "terminal";
   if (r.kind === "authored") return "authored";
   if (r.reviewStatus === "re_review_required") return "re_review";
@@ -66,7 +75,7 @@ export function stageMeta(stage: ReviewStage): StageMeta {
 // myReviewLabel renders my own standing decision as a short chip, or null when I
 // hold none. It is what makes "approved by me" visible even though the Approved
 // bucket keys off the PR-wide decision.
-export function myReviewLabel(r: ReviewRequest): string | null {
+export function myReviewLabel(r: Pick<ReviewStageInput, "myReviewState">): string | null {
   switch (r.myReviewState) {
     case "approved":
       return "You: approved";

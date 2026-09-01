@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Copy, ExternalLink, Folder, FolderOpen, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, ExternalLink, Folder, FolderOpen, RefreshCw, RotateCcw, X } from "lucide-react";
 import {
   GetPendingCodeReviews,
   RefreshPendingReviews,
@@ -19,6 +19,7 @@ import { useCheckout } from "../lib/useCheckout";
 import CheckoutLogModal from "../components/CheckoutLogModal";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { VCSRepo, ReviewRequest, VCSPlatform, VCSPlatformInfo, VCSWorkspace } from "../types";
+import { reviewStage, stageMeta, myReviewLabel, REQUESTED_STAGE_ORDER, type ReviewStage } from "./reviewStage";
 import Spinner from "../components/Spinner";
 
 function repoUrl(repo: VCSRepo): string {
@@ -45,7 +46,10 @@ function ReviewCard({
   checkoutLoading?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const isWaiting = !!review.reviewedAt;
+  const stage = reviewStage(review);
+  const isWaiting = stage === "reviewed_waiting" || stage === "terminal";
+  const meta = stageMeta(stage);
+  const mine = myReviewLabel(review);
 
   const handleCopy = () => {
     if (!review.prUrl) return;
@@ -60,10 +64,20 @@ function ReviewCard({
       <div className="review-card-top">
         <span className="review-card-number">#{review.prNumber}</span>
         <span className="review-card-title">{review.prTitle || "(no title)"}</span>
-        {isWaiting && (
-          <span className="pr-status-badge pr-status--waiting">Waiting for Author</span>
+        {meta.badge && (
+          <span className={`pr-status-badge${meta.className}`}>
+            {stage === "re_review" && <RotateCcw size={11} className="pr-status-icon" />}
+            {meta.badge}
+          </span>
         )}
       </div>
+      {mine && (
+        <div style={{ marginTop: 2 }}>
+          <span className="pr-status-badge pr-status-badge--mine" style={{ fontSize: 10 }} title="Your own review on this PR">
+            {mine}
+          </span>
+        </div>
+      )}
       <div className="review-card-bottom">
         <span className="review-card-author">by {review.prAuthor || "unknown"}</span>
         <div className="review-card-btns">
@@ -114,7 +128,7 @@ function ReviewCard({
               )}
             </>
           )}
-          {isWaiting && onDismiss && (
+          {onDismiss && (
             <button className="review-open-btn review-dismiss-btn" onClick={() => onDismiss(review.id)} title="Dismiss">
               <X size={11} />
             </button>
@@ -290,13 +304,15 @@ export default function PendingCodeReviews() {
 
   if (loading) return <div className="loading"><Spinner /> Loading…</div>;
 
-  const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => !r.reviewedAt && matchesFilter(r)).length, 0);
+  // "My move" = never looked at, or bounced back to me. Everything else still
+  // renders, it just does not inflate the counts.
+  const isActionable = (r: ReviewRequest) => {
+    const s = reviewStage(r);
+    return s === "awaiting_first" || s === "re_review";
+  };
+  const totalReviews = repoGroups.reduce((n, g) => n + g.reviews.filter((r) => isActionable(r) && matchesFilter(r)).length, 0);
 
-  const hasVisibleGroups = repoGroups.some(({ reviews }) => {
-    const pending = reviews.filter((r) => !r.reviewedAt && matchesFilter(r));
-    const waiting = reviews.filter((r) => !!r.reviewedAt && matchesFilter(r));
-    return pending.length > 0 || waiting.length > 0;
-  });
+  const hasVisibleGroups = repoGroups.some(({ reviews }) => reviews.some((r) => matchesFilter(r)));
 
   return (
     <div className="page">
@@ -421,9 +437,18 @@ export default function PendingCodeReviews() {
         ) : (
           repoGroups.map(({ repo, reviews }) => {
             const url = repoUrl(repo);
-            const pending = reviews.filter((r) => !r.reviewedAt && matchesFilter(r));
-            const waiting = reviews.filter((r) => !!r.reviewedAt && matchesFilter(r));
-            if (pending.length === 0 && waiting.length === 0) return null;
+            const visible = reviews.filter((r) => matchesFilter(r));
+            const buckets = new Map<ReviewStage, ReviewRequest[]>();
+            for (const r of visible) {
+              const s = reviewStage(r);
+              if (s === "authored") continue; // this page shows review requests only
+              buckets.set(s, [...(buckets.get(s) ?? []), r]);
+            }
+            const sections = REQUESTED_STAGE_ORDER
+              .map((stage) => ({ stage, items: buckets.get(stage) ?? [] }))
+              .filter((s) => s.items.length > 0);
+            const actionable = (buckets.get("awaiting_first") ?? []).length + (buckets.get("re_review") ?? []).length;
+            if (sections.length === 0) return null;
             return (
               <section key={repo.id} className="detail-section review-repo-section">
                 <div className="review-repo-header">
@@ -438,34 +463,33 @@ export default function PendingCodeReviews() {
                       <ExternalLink size={12} />
                     </button>
                   )}
-                  {pending.length > 0 && (
-                    <span className="detail-section-count">{pending.length}</span>
+                  {actionable > 0 && (
+                    <span className="detail-section-count">{actionable}</span>
                   )}
                 </div>
 
-                {pending.length === 0 ? (
-                  <div className="detail-section-empty">No pending reviews in this repo.</div>
-                ) : (
-                  <div className="pr-list">
-                    {pending.map((review) => (
-                      <ReviewCard key={review.id} review={review} workspace={workspaces.find((w) => w.branch === review.headBranch && w.repoId === review.repoId)} onCheckout={handleCheckout} onDeleteWorkspace={handleDeleteWorkspace} onMarkWorkspaceDone={handleMarkWorkspaceDone} checkoutLoading={checkoutLoading} />
-                    ))}
-                  </div>
-                )}
-
-                {waiting.length > 0 && (
-                  <>
-                    <div className="review-waiting-header">
-                      Waiting for author
-                      <span className="detail-section-count" style={{ marginLeft: 6 }}>{waiting.length}</span>
+                {sections.map(({ stage, items }) => (
+                  <div key={stage}>
+                    <div className="review-waiting-header" data-testid={`review-section-${stage}`}>
+                      {stageMeta(stage).title}
+                      <span className="detail-section-count" style={{ marginLeft: 6 }}>{items.length}</span>
                     </div>
                     <div className="pr-list">
-                      {waiting.map((review) => (
-                        <ReviewCard key={review.id} review={review} workspace={workspaces.find((w) => w.branch === review.headBranch && w.repoId === review.repoId)} onDismiss={handleDismiss} onCheckout={handleCheckout} onDeleteWorkspace={handleDeleteWorkspace} onMarkWorkspaceDone={handleMarkWorkspaceDone} checkoutLoading={checkoutLoading} />
+                      {items.map((review) => (
+                        <ReviewCard
+                          key={review.id}
+                          review={review}
+                          workspace={workspaces.find((w) => w.branch === review.headBranch && w.repoId === review.repoId)}
+                          onDismiss={stage === "awaiting_first" || stage === "re_review" ? undefined : handleDismiss}
+                          onCheckout={handleCheckout}
+                          onDeleteWorkspace={handleDeleteWorkspace}
+                          onMarkWorkspaceDone={handleMarkWorkspaceDone}
+                          checkoutLoading={checkoutLoading}
+                        />
                       ))}
                     </div>
-                  </>
-                )}
+                  </div>
+                ))}
               </section>
             );
           })

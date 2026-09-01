@@ -7,6 +7,7 @@ import { useTabContext } from "../contexts/TabContext";
 import { TodoActionModal } from "../components/TodoActionModal";
 import type { store, vcsstore } from "../../wailsjs/go/models";
 import { ProseEditor } from "../components/ProseEditor";
+import { reviewStage, stageMeta, REQUESTED_STAGE_ORDER } from "./reviewStage";
 
 const PERSON_NAME_KEY = "cc:board-person-name";
 const PRIORITY_RANK: Record<string, number> = { Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1 };
@@ -47,6 +48,7 @@ export default function MyBoardPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [orgFilter, setOrgFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [todos, setTodos] = useState<store.AITodoItem[]>([]);
   const [todoBusy, setTodoBusy] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -58,6 +60,9 @@ export default function MyBoardPage() {
   const statusOptions = useMemo(() => [...new Set(jiraIssues.map((i) => i.status).filter(Boolean))].sort(), [jiraIssues]);
   // Distinct Jira scope/"org" values (from customfield), used to split the board.
   const orgOptions = useMemo(() => [...new Set(jiraIssues.map((i) => i.org).filter(Boolean))].sort(), [jiraIssues]);
+  // Derived from the issues on the board, not a fixed Bug/Feature list — the
+  // types Jira actually hands back vary per project (Subtask, Issue, Story…).
+  const typeOptions = useMemo(() => [...new Set(jiraIssues.map((i) => i.issueType).filter(Boolean))].sort(), [jiraIssues]);
   const priorityOptions = useMemo(() => {
     const present = new Set(jiraIssues.map((i) => i.priority).filter(Boolean));
     return ["Highest", "High", "Medium", "Low", "Lowest"].filter((p) => present.has(p));
@@ -82,8 +87,9 @@ export default function MyBoardPage() {
     () => sortedJira.filter((i) =>
       (!statusFilter || i.status === statusFilter) &&
       (!priorityFilter || i.priority === priorityFilter) &&
-      (!orgFilter || i.org === orgFilter)),
-    [sortedJira, statusFilter, priorityFilter, orgFilter],
+      (!orgFilter || i.org === orgFilter) &&
+      (!typeFilter || i.issueType === typeFilter)),
+    [sortedJira, statusFilter, priorityFilter, orgFilter, typeFilter],
   );
 
   const load = useCallback(async (name: string) => {
@@ -248,6 +254,16 @@ export default function MyBoardPage() {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
+
+  // Reviews someone asked me for, ordered so the ones that are my move come first.
+  // Terminal (merged/closed) items are dropped — the board is a to-do list, not history.
+  const boardReviews = reviews
+    .filter((r) => !r.dismissedAt && (r.kind ?? "requested") === "requested" && reviewStage(r) !== "terminal")
+    .sort((a, b) => REQUESTED_STAGE_ORDER.indexOf(reviewStage(a)) - REQUESTED_STAGE_ORDER.indexOf(reviewStage(b)));
+  const actionableReviews = boardReviews.filter((r) => {
+    const s = reviewStage(r);
+    return s === "awaiting_first" || s === "re_review";
+  }).length;
 
   return (
     <div className="board-page">
@@ -444,6 +460,13 @@ export default function MyBoardPage() {
               {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           )}
+          {typeOptions.length > 0 && (
+            <select aria-label="filter by type" style={{ fontSize: 11 }} value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)} title="Filter by issue type">
+              <option value="">All types</option>
+              {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
           {orgOptions.length > 0 && (
             <select aria-label="filter by organization" style={{ fontSize: 11 }} value={orgFilter}
               onChange={(e) => setOrgFilter(e.target.value)} title="Filter by organization (Jira scope)">
@@ -474,6 +497,7 @@ export default function MyBoardPage() {
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={it.summary}>{it.summary}</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                   {it.org && <span className="board-chip" title="Organization (Jira scope)">{it.org}</span>}
+                  {it.issueType && <span className="board-chip" title="Issue type">{it.issueType}</span>}
                   {it.status && <span className="board-chip" title="Status">{it.status}</span>}
                   {it.priority && <span className="board-chip" title="Priority">{it.priority}</span>}
                   {!it.seen && <span className="board-badge-new" style={{ fontSize: 10, color: "var(--accent)" }}>new</span>}
@@ -539,36 +563,50 @@ export default function MyBoardPage() {
       <BoardSection
         icon={<Eye size={14} />}
         title="PR Reviews"
-        count={reviews.filter((r) => !r.reviewedAt && !r.dismissedAt).length}
+        // The badge counts what is my move; the list still shows reviewed ones below.
+        count={actionableReviews}
+        itemCount={boardReviews.length}
         empty="No pending reviews."
       >
-        {reviews.filter((r) => !r.reviewedAt && !r.dismissedAt).map((r) => (
-          <div key={r.id} className="board-item" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="board-pr-number">#{r.prNumber}</span>
-            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }} title={r.prTitle}>{r.prTitle}</span>
-            <span className="board-card-meta" style={{ flexShrink: 0 }}>by {r.prAuthor}</span>
-            {r.prUrl && (
-              <button className="board-open-btn" style={{ flexShrink: 0 }} title="Open PR" onClick={() => BrowserOpenURL(r.prUrl)}>
-                <ExternalLink size={11} />
-              </button>
-            )}
-            <button className="board-dismiss-btn" style={{ flexShrink: 0 }} onClick={() => handleDismissReview(r.id)}>Dismiss</button>
-          </div>
-        ))}
+        {boardReviews.map((r) => {
+          const meta = stageMeta(reviewStage(r));
+          return (
+            <div key={r.id} className="board-item" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="board-pr-number">#{r.prNumber}</span>
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }} title={r.prTitle}>{r.prTitle}</span>
+              {meta.badge && (
+                <span className={`pr-status-badge${meta.className}`} style={{ flexShrink: 0, fontSize: 10 }} title={meta.title}>
+                  {meta.badge}
+                </span>
+              )}
+              <span className="board-card-meta" style={{ flexShrink: 0 }}>by {r.prAuthor}</span>
+              {r.prUrl && (
+                <button className="board-open-btn" style={{ flexShrink: 0 }} title="Open PR" onClick={() => BrowserOpenURL(r.prUrl)}>
+                  <ExternalLink size={11} />
+                </button>
+              )}
+              <button className="board-dismiss-btn" style={{ flexShrink: 0 }} onClick={() => handleDismissReview(r.id)}>Dismiss</button>
+            </div>
+          );
+        })}
       </BoardSection>
     </div>
   );
 }
 
 function BoardSection({
-  icon, title, count, empty, children,
+  icon, title, count, itemCount, empty, children,
 }: {
   icon: React.ReactNode;
   title: string;
   count: number;
+  // How many rows exist, when that differs from the header count (PR Reviews
+  // badges only the actionable ones but still lists the rest). Defaults to count.
+  itemCount?: number;
   empty: string;
   children?: React.ReactNode;
 }) {
+  const rows = itemCount ?? count;
   return (
     <div className="board-section">
       <div className="board-section-header">
@@ -576,7 +614,7 @@ function BoardSection({
         <span className="board-section-title">{title}</span>
         {count > 0 && <span className="board-section-count">{count}</span>}
       </div>
-      {count === 0 ? (
+      {rows === 0 ? (
         <div className="board-section-empty">{empty}</div>
       ) : (
         <div className="board-section-items">{children}</div>
