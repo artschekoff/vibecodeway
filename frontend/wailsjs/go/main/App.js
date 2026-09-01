@@ -214,10 +214,6 @@ export function DeleteUploadedFile(arg1) {
   return window['go']['main']['App']['DeleteUploadedFile'](arg1);
 }
 
-export function GetUploadedFileContent(arg1) {
-  return window['go']['main']['App']['GetUploadedFileContent'](arg1);
-}
-
 export function DeleteUserEvent(arg1, arg2) {
   return window['go']['main']['App']['DeleteUserEvent'](arg1, arg2);
 }
@@ -232,10 +228,6 @@ export function DeleteWorkspace(arg1) {
 
 export function DiscardFile(arg1, arg2) {
   return window['go']['main']['App']['DiscardFile'](arg1, arg2);
-}
-
-export function ResolveConflict(arg1, arg2, arg3) {
-  return window['go']['main']['App']['ResolveConflict'](arg1, arg2, arg3);
 }
 
 export function DiscardPendingUpload(arg1) {
@@ -404,6 +396,10 @@ export function GetUnresolvedAuthors(arg1) {
 
 export function GetUnviewedBreakdown(arg1) {
   return window['go']['main']['App']['GetUnviewedBreakdown'](arg1);
+}
+
+export function GetUploadedFileContent(arg1) {
+  return window['go']['main']['App']['GetUploadedFileContent'](arg1);
 }
 
 export function GetVCSAuth(arg1) {
@@ -756,6 +752,10 @@ export function ResetAIPrompt(arg1) {
 
 export function ResetKeybinding(arg1) {
   return window['go']['main']['App']['ResetKeybinding'](arg1);
+}
+
+export function ResolveConflict(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ResolveConflict'](arg1, arg2, arg3);
 }
 
 export function ResolveToolConfirmation(arg1, arg2) {

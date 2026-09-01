@@ -117,8 +117,6 @@ export function DeleteTodoNextItem(arg1:string):Promise<Array<store.AITodoItem>>
 
 export function DeleteUploadedFile(arg1:string):Promise<void>;
 
-export function GetUploadedFileContent(arg1:string):Promise<string>;
-
 export function DeleteUserEvent(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteWorkflowStatus(arg1:string):Promise<void>;
@@ -126,8 +124,6 @@ export function DeleteWorkflowStatus(arg1:string):Promise<void>;
 export function DeleteWorkspace(arg1:string):Promise<void>;
 
 export function DiscardFile(arg1:string,arg2:string):Promise<void>;
-
-export function ResolveConflict(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function DiscardPendingUpload(arg1:string):Promise<void>;
 
@@ -212,6 +208,8 @@ export function GetSupportedPlatforms():Promise<Array<vcsstore.VCSPlatformInfo>>
 export function GetUnresolvedAuthors(arg1:string):Promise<Array<store.UnresolvedAuthor>>;
 
 export function GetUnviewedBreakdown(arg1:string):Promise<store.UnviewedBreakdown>;
+
+export function GetUploadedFileContent(arg1:string):Promise<string>;
 
 export function GetVCSAuth(arg1:string):Promise<vcsstore.VCSAuth>;
 
@@ -388,6 +386,8 @@ export function ReorderTodoNext(arg1:Array<string>):Promise<Array<store.AITodoIt
 export function ResetAIPrompt(arg1:string):Promise<void>;
 
 export function ResetKeybinding(arg1:string):Promise<void>;
+
+export function ResolveConflict(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResolveToolConfirmation(arg1:string,arg2:boolean):Promise<void>;
 

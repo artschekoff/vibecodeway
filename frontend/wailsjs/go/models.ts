@@ -2445,7 +2445,7 @@ export namespace vcs {
 	        this.indexStatus = source["indexStatus"];
 	        this.workStatus = source["workStatus"];
 	        this.commitStatus = source["commitStatus"];
-        this.conflicted = source["conflicted"];
+	        this.conflicted = source["conflicted"];
 	    }
 	}
 	export class LocalBranch {
