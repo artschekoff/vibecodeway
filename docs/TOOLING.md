@@ -298,13 +298,13 @@ vibecodeway-cli agent-tool call --name comment_pr --args '{}'
 
 ## list_commits
 
-Read git history from the tracked repositories' local checkouts, filtered by date. Use this for any question about what work happened on a day or in a period ("what did I do last Friday", "what changed this week"). Resolve relative dates to absolute YYYY-MM-DD first — never pass a weekday name as a query.
+Read git history from the tracked repositories' local checkouts, filtered by date. Use this for any question about what work happened on a day or in a period ("what did I do last Friday"). Resolve relative dates to absolute YYYY-MM-DD first — never pass a weekday name as a query.
 
 **Write:** no
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `author` | string | no | substring matched against commit author name and email (optional; defaults to each repository's configured git user.email) |
+| `author` | string | no | substring matched against commit author name and email (optional; if omitted, results are restricted to your own commits, using each repository's configured git user.email) |
 | `repo` | string | no | limit to one repository, as 'owner/name' (optional; default is every tracked repository) |
 | `since` | string | yes | start of the range, YYYY-MM-DD (inclusive) |
 | `until` | string | no | end of the range, YYYY-MM-DD (inclusive; optional, defaults to now) |

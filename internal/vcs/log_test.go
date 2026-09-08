@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,11 @@ func initLogRepo(t *testing.T) string {
 	run := func(env []string, args ...string) {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = append(os.Environ(), env...)
+		// Isolate from the developer's ambient git config: a global
+		// commit.gpgsign=true or core.hooksPath must not make this fixture fail
+		// for reasons unrelated to the code under test.
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+		cmd.Env = append(cmd.Env, env...)
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, out)
 	}
@@ -113,6 +118,46 @@ func TestGitLogErrorsOutsideARepository(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// --all walks refs/stash too, so a single `git stash` produces two commits
+// ("WIP on ..." and "index on ...") carrying the user's own identity — they pass
+// the author and date filters and get reported as real work. They must be
+// excluded.
+func TestGitLogExcludesStashEntries(t *testing.T) {
+	dir := initLogRepo(t)
+	run := func(env []string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+		cmd.Env = append(cmd.Env, env...)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, out)
+	}
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.txt"), []byte("dirty"), 0o644))
+	run([]string{"GIT_AUTHOR_DATE=2026-09-04T13:00:00+00:00", "GIT_COMMITTER_DATE=2026-09-04T13:00:00+00:00"},
+		"stash", "push", "-m", "friday stash")
+
+	got, err := GitLog(dir, LogOptions{Since: "2026-09-04", Until: "2026-09-04"})
+	require.NoError(t, err)
+
+	for _, s := range subjects(got) {
+		assert.False(t, strings.HasPrefix(s, "WIP on"), "stash WIP entry leaked into history: %q", s)
+		assert.False(t, strings.HasPrefix(s, "index on"), "stash index entry leaked into history: %q", s)
+	}
+}
+
+// git treats --author as a regex by default, so a metacharacter in the pattern
+// either matches the wrong thing (e.g. "." matching any character) or, for an
+// unbalanced bracket, makes git exit 128 — which the caller could only read as
+// "unreadable path". -F must be in effect so Author is a literal substring.
+func TestGitLogAuthorMetacharacterIsLiteral(t *testing.T) {
+	dir := initLogRepo(t)
+
+	got, err := GitLog(dir, LogOptions{Since: "2026-09-01", Author: "["})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
 func TestPinTimeOnlyExpandsBareDates(t *testing.T) {
 	assert.Equal(t, "2026-09-04T00:00:00", pinTime("2026-09-04", "T00:00:00"))
 	assert.Equal(t, "2026-09-04T23:59:59", pinTime("2026-09-04", "T23:59:59"))
@@ -121,6 +166,11 @@ func TestPinTimeOnlyExpandsBareDates(t *testing.T) {
 	assert.Equal(t, "2026-09-04T10:00:00", pinTime("2026-09-04T10:00:00", "T23:59:59"))
 	assert.Equal(t, "yesterday", pinTime("yesterday", "T00:00:00"))
 	assert.Equal(t, "", pinTime("", "T00:00:00"))
+	// Non-zero-padded month/day: time.Parse("2006-01-02", ...) rejects this, so
+	// without normalisation it passes straight through to git UNPINNED,
+	// reintroducing the approxidate trap.
+	assert.Equal(t, "2026-09-04T00:00:00", pinTime("2026-9-4", "T00:00:00"))
+	assert.Equal(t, "2026-09-04T23:59:59", pinTime("2026-9-04", "T23:59:59"))
 }
 
 func TestGitAuthorEmail(t *testing.T) {

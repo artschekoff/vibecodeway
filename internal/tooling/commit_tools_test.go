@@ -32,7 +32,11 @@ func initToolRepo(t *testing.T) string {
 	run := func(env []string, args ...string) {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = append(os.Environ(), env...)
+		// Isolate from the developer's ambient git config: a global
+		// commit.gpgsign=true or core.hooksPath must not make this fixture fail
+		// for reasons unrelated to the code under test.
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+		cmd.Env = append(cmd.Env, env...)
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, out)
 	}
@@ -214,6 +218,25 @@ func TestListCommitsSkipsBrokenPaths(t *testing.T) {
 
 	res := callListCommits(t, d, map[string]any{"since": "2026-09-01"})
 	assert.Equal(t, 2, res["count"])
+}
+
+// Regression test: a git log failure (moved/deleted path, bad author pattern,
+// dubious ownership, ...) must be distinguishable from "you did no work" — the
+// same reason reposWithoutLocalPath and reposWithoutGitIdentity exist. An
+// explicit author is passed so the path fails inside vcs.GitLog itself, rather
+// than being screened out earlier by identity resolution (GitAuthorEmail also
+// fails to read a nonexistent path, which would otherwise mask this case as
+// reposWithoutGitIdentity instead).
+func TestListCommitsSurfacesPathReadErrors(t *testing.T) {
+	d := Deps{Logger: zap.NewNop(), Repos: fakeRepos{repos: []vcsstore.RepoWithLocations{{
+		VCSRepo: vcsstore.VCSRepo{ID: "r1", Platform: "github", Owner: "acme", Name: "broken"},
+		Paths:   []vcsstore.VCSRepoPath{{ID: "p0", RepoID: "r1", Path: filepath.Join(t.TempDir(), "gone")}},
+	}}}}
+
+	res := callListCommits(t, d, map[string]any{"since": "2026-09-01", "author": "dev@example.com"})
+
+	assert.Equal(t, 0, res["count"])
+	assert.Equal(t, []string{"acme/broken"}, res["reposWithPathErrors"])
 }
 
 // Mirrors the existing `if d.VCS != nil` guard: no repo source, no tool, no panic.

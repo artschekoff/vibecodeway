@@ -22,14 +22,14 @@ func registerCommitTools(r *Registry, d Deps) {
 		Name: "list_commits",
 		Description: "Read git history from the tracked repositories' local checkouts, filtered by date. " +
 			"Use this for any question about what work happened on a day or in a period " +
-			"(\"what did I do last Friday\", \"what changed this week\"). " +
+			"(\"what did I do last Friday\"). " +
 			"Resolve relative dates to absolute YYYY-MM-DD first — never pass a weekday name as a query.",
 		Params: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"since":  strProp("start of the range, YYYY-MM-DD (inclusive)"),
 				"until":  strProp("end of the range, YYYY-MM-DD (inclusive; optional, defaults to now)"),
-				"author": strProp("substring matched against commit author name and email (optional; defaults to each repository's configured git user.email)"),
+				"author": strProp("substring matched against commit author name and email (optional; if omitted, results are restricted to your own commits, using each repository's configured git user.email)"),
 				"repo":   strProp("limit to one repository, as 'owner/name' (optional; default is every tracked repository)"),
 			},
 			"required": []string{"since"},
@@ -53,6 +53,7 @@ func registerCommitTools(r *Registry, d Deps) {
 			commits := make([]map[string]any, 0, 32)
 			noLocal := make([]string, 0)
 			noIdentity := make([]string, 0)
+			pathErrors := make([]string, 0)
 			scanned := 0
 
 			for _, repo := range repos {
@@ -70,6 +71,7 @@ func registerCommitTools(r *Registry, d Deps) {
 				// the same repository and would otherwise report every commit twice.
 				seen := map[string]bool{}
 				identityMissing := false
+				pathErrored := false
 				for _, p := range repo.Paths {
 					who := author
 					if who == "" {
@@ -91,9 +93,13 @@ func registerCommitTools(r *Registry, d Deps) {
 					if err != nil {
 						// A path that has been moved or deleted must not fail the
 						// whole query — the other repositories still hold answers.
+						// But the cause must reach the model: without it, a moved
+						// directory, dubious ownership, or a bad author pattern all
+						// look identical to "you did no work".
 						if d.Logger != nil {
-							d.Logger.Warn("list_commits: skipping unreadable repo path", zap.String("repo", full))
+							d.Logger.Warn("list_commits: skipping unreadable repo path", zap.String("repo", full), zap.Error(err))
 						}
+						pathErrored = true
 						continue
 					}
 					scanned++
@@ -116,6 +122,9 @@ func registerCommitTools(r *Registry, d Deps) {
 				if identityMissing {
 					noIdentity = append(noIdentity, full)
 				}
+				if pathErrored {
+					pathErrors = append(pathErrors, full)
+				}
 			}
 
 			return map[string]any{
@@ -124,6 +133,7 @@ func registerCommitTools(r *Registry, d Deps) {
 				"scannedPaths":            scanned,
 				"reposWithoutLocalPath":   noLocal,
 				"reposWithoutGitIdentity": noIdentity,
+				"reposWithPathErrors":     pathErrors,
 			}, nil
 		},
 	})
