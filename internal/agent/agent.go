@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/artschekoff/vibecodeway/internal/openai"
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
@@ -34,6 +35,7 @@ type Agent struct {
 	reg    *tooling.Registry
 	store  *appstore.Store // retained only for loadPrompt
 	logger *zap.Logger
+	now    func() time.Time // injectable so prompt-content tests are deterministic
 
 	mu      sync.Mutex
 	pending map[string]chan bool // write confirmations keyed by tool-call ID
@@ -41,7 +43,7 @@ type Agent struct {
 
 // New builds an Agent from the shared LLM client, tool registry, and store.
 func New(ai *openai.Client, reg *tooling.Registry, store *appstore.Store, logger *zap.Logger) *Agent {
-	return &Agent{ai: ai, reg: reg, store: store, logger: logger, pending: map[string]chan bool{}}
+	return &Agent{ai: ai, reg: reg, store: store, logger: logger, now: time.Now, pending: map[string]chan bool{}}
 }
 
 // registerConfirm creates and stores a pending-confirmation channel for a write
@@ -120,6 +122,7 @@ func (a *Agent) Ask(ctx context.Context, question, orgID string, onProgress func
 	}
 	messages := []openai.Message{
 		{Role: "system", Content: a.loadPrompt(ctx, "ask_ai", defaultAskAIPrompt)},
+		{Role: "system", Content: dateSystemMessage(a.clock())},
 		{Role: "user", Content: question},
 	}
 	tools := a.toolDefs()
@@ -183,6 +186,37 @@ func (a *Agent) loadPrompt(ctx context.Context, id, fallback string) string {
 		return fallback
 	}
 	return p.Body
+}
+
+
+// clock is the agent's time source. It tolerates a nil now, because several
+// existing tests build &Agent{...} as a struct literal instead of calling New;
+// without this guard Ask panics on them with a nil-pointer dereference.
+func (a *Agent) clock() time.Time {
+	if a.now == nil {
+		return time.Now()
+	}
+	return a.now()
+}
+
+// dateSystemMessage tells the model what "today" is. Without it a question like
+// "what did I do last Friday" has no anchor, and the model's only remaining move
+// is to treat the weekday as a search keyword — which is exactly the bug this
+// fixes.
+//
+// It is a separate system message rather than part of defaultAskAIPrompt because
+// that prompt is user-editable and loaded from the DB: an install that has saved
+// its own copy would never pick up a change to the constant.
+func dateSystemMessage(now time.Time) string {
+	return fmt.Sprintf(
+		"Today is %s (%s), local time zone %s.\n"+
+			"Resolve every relative date in the question against this date BEFORE calling a tool, "+
+			"and pass absolute YYYY-MM-DD values. \"Last Friday\", \"yesterday\" and \"this week\" are date "+
+			"ranges, never search keywords — never pass a word like \"Friday\" or \"пятница\" as a query.",
+		now.Format("Monday, 2006-01-02"),
+		now.Format(time.RFC3339),
+		now.Format("MST-07:00"),
+	)
 }
 
 const defaultAskAIPrompt = `You are an analyst embedded in a tool that stores work "contexts". ` +
