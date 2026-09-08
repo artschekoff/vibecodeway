@@ -52,6 +52,7 @@ func registerCommitTools(r *Registry, d Deps) {
 
 			commits := make([]map[string]any, 0, 32)
 			noLocal := make([]string, 0)
+			noIdentity := make([]string, 0)
 			scanned := 0
 
 			for _, repo := range repos {
@@ -68,12 +69,21 @@ func registerCommitTools(r *Registry, d Deps) {
 				// Dedupe by hash: two registered paths are usually two clones of
 				// the same repository and would otherwise report every commit twice.
 				seen := map[string]bool{}
+				identityMissing := false
 				for _, p := range repo.Paths {
 					who := author
 					if who == "" {
 						// Per repository, because a work checkout and a personal one
 						// can legitimately carry different identities.
 						who = vcs.GitAuthorEmail(p.Path)
+						if who == "" {
+							// No explicit author and no resolvable git identity: querying
+							// unfiltered would silently widen "what did I do" to everyone's
+							// commits on this path (vcs.GitLog omits --author when empty).
+							// Skip the path and say so, rather than guess wrong.
+							identityMissing = true
+							continue
+						}
 					}
 					found, err := vcs.GitLog(p.Path, vcs.LogOptions{
 						Since: since, Until: until, Author: who, Limit: maxCommitHits,
@@ -103,13 +113,17 @@ func registerCommitTools(r *Registry, d Deps) {
 						})
 					}
 				}
+				if identityMissing {
+					noIdentity = append(noIdentity, full)
+				}
 			}
 
 			return map[string]any{
-				"count":                 len(commits),
-				"commits":               commits,
-				"scannedPaths":          scanned,
-				"reposWithoutLocalPath": noLocal,
+				"count":                   len(commits),
+				"commits":                 commits,
+				"scannedPaths":            scanned,
+				"reposWithoutLocalPath":   noLocal,
+				"reposWithoutGitIdentity": noIdentity,
 			}, nil
 		},
 	})

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/artschekoff/vibecodeway/internal/vcs"
 	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -128,6 +129,47 @@ func TestListCommitsDefaultsToTheRepositoryIdentity(t *testing.T) {
 
 	res = callListCommits(t, d, map[string]any{"since": "2026-09-01", "author": "nobody@example.com"})
 	assert.Equal(t, 0, res["count"])
+}
+
+// Regression test: when no explicit author is given and the path's git
+// identity cannot be resolved at all (no local or global user.email), the
+// tool must not silently widen the query to every author on that path —
+// vcs.GitLog omits --author entirely when Author is "". The path must be
+// skipped and the repo surfaced in reposWithoutGitIdentity instead.
+func TestListCommitsSkipsPathsWithNoResolvableIdentity(t *testing.T) {
+	// git config user.email falls back to the global config, so merely
+	// unsetting the local value is not enough to make a repo identity-less on
+	// a machine that has a global identity configured. Point HOME and the git
+	// config lookup itself at nowhere for the duration of this test.
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("XDG_CONFIG_HOME", fakeHome)
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, out)
+	}
+	run("init", "--initial-branch=main")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o644))
+	run("add", ".")
+	// -c sets the identity for this one commit only, without writing it to
+	// any config file, so the repository itself stays identity-less.
+	run("-c", "user.email=someone@example.com", "-c", "user.name=Someone",
+		"commit", "-m", "JH-4 someone else's work")
+
+	// Sanity-check the fixture actually produces an unresolvable identity;
+	// otherwise this test would pass for the wrong reason.
+	require.Empty(t, vcs.GitAuthorEmail(dir), "fixture must have no resolvable git identity")
+
+	d := Deps{Repos: reposAt(dir), Logger: zap.NewNop()}
+	res := callListCommits(t, d, map[string]any{"since": "2026-09-01"})
+
+	assert.Equal(t, 0, res["count"], "must not silently fall back to unfiltered history")
+	assert.Equal(t, []string{"acme/app"}, res["reposWithoutGitIdentity"])
 }
 
 func TestListCommitsFiltersByRepo(t *testing.T) {
