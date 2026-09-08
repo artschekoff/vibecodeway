@@ -6,6 +6,7 @@ import (
 	jiraservice "github.com/artschekoff/vibecodeway/internal/jira/service"
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/artschekoff/vibecodeway/internal/vcs"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"go.uber.org/zap"
 )
 
@@ -23,11 +24,18 @@ type PRActions interface {
 	CommentPR(ctx context.Context, owner, repo string, number int, body string) error
 }
 
+// RepoLocations lists tracked repositories together with their local checkout
+// paths. *vcsstore.Store satisfies it structurally; tests supply a fake.
+type RepoLocations interface {
+	ListReposWithLocations(ctx context.Context) ([]vcsstore.RepoWithLocations, error)
+}
+
 // Deps are the dependencies every tool handler may close over.
 type Deps struct {
 	Store  *appstore.Store
 	Svc    *jiraservice.ContextService
 	VCS    PRActions
+	Repos  RepoLocations
 	Logger *zap.Logger
 }
 
@@ -39,6 +47,9 @@ func NewRegistry(d Deps) *Registry {
 	registerNotificationTools(r, d)
 	if d.VCS != nil {
 		registerPRTools(r, d)
+	}
+	if d.Repos != nil {
+		registerCommitTools(r, d)
 	}
 	return r
 }

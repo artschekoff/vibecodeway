@@ -188,7 +188,6 @@ func (a *Agent) loadPrompt(ctx context.Context, id, fallback string) string {
 	return p.Body
 }
 
-
 // clock is the agent's time source. It tolerates a nil now, because several
 // existing tests build &Agent{...} as a struct literal instead of calling New;
 // without this guard Ask panics on them with a nil-pointer dereference.
@@ -230,6 +229,7 @@ Typical flow:
 3. search_within_context to locate specific elements inside a context.
 4. get_item to read the full text of a specific element.
 5. list_related_contexts to follow dependencies between contexts.
+6. list_commits to read git history by date — use this for "what did I do on <date>" questions instead of searching contexts for a date word.
 
 Cite the concrete items you relied on (e.g. Jira keys, text names). Be concise and factual.
 If you cannot find something, say so plainly.`
