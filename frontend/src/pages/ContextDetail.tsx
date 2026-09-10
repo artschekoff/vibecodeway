@@ -1713,9 +1713,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
               className="btn-secondary"
               onClick={() => void handleMarkAllViewed()}
               disabled={markingAllViewed}
-              title="Mark all items as viewed"
+              // The count is in the tooltip too, because the label (and with it
+              // the count) is hidden once the topbar collapses to icons.
+              title={`Mark all ${breakdown.total} items as viewed`}
             >
-              {markingAllViewed ? "Marking…" : <><CheckCheck size={16} /> Mark all viewed ({breakdown.total})</>}
+              {markingAllViewed
+                ? <span className="btn-label">Marking…</span>
+                : <><CheckCheck size={16} /> <span className="btn-label">Mark all viewed ({breakdown.total})</span></>}
             </button>
           )}
           <button
@@ -1730,14 +1734,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             onClick={() => void openEditForm()}
             title="Edit context"
           >
-            <Pencil size={16} /> Edit
+            <Pencil size={16} /> <span className="btn-label">Edit</span>
           </button>
           <button
             className="btn-secondary"
             onClick={() => setSolveOpen(true)}
             title="Solve with AI"
           >
-            <Bot size={16} /> Solve with AI
+            <Bot size={16} /> <span className="btn-label">Solve with AI</span>
           </button>
           <button
             className="btn-secondary"
@@ -1745,20 +1749,21 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             disabled={editorOpener.loading}
             title="Open the context's workspace in the editor"
           >
-            <Code size={16} /> Open Editor<ChordHint id="editor.open" />
+            <Code size={16} /> <span className="btn-label">Open Editor<ChordHint id="editor.open" /></span>
           </button>
           <button
             className="btn-primary"
             onClick={() => void handleRefresh()}
             disabled={refreshing}
+            title="Refresh this context"
           >
             {refreshing ? (
               <span className="btn-with-spinner">
                 <Spinner size={14} color="#fff" />
-                Refreshing…
+                <span className="btn-label">Refreshing…</span>
               </span>
             ) : (
-              <><RefreshCw size={16} /> Refresh</>
+              <><RefreshCw size={16} /> <span className="btn-label">Refresh</span></>
             )}
           </button>
         </div>

@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"unicode/utf8"
 
 	gopty "github.com/aymanbagabas/go-pty"
 	"github.com/google/uuid"
@@ -67,10 +68,15 @@ func (m *Manager) Start(cwd, name string, args []string, onData func(id, chunk s
 
 	go func() {
 		buf := make([]byte, 4096)
+		var partial []byte // head of a rune whose tail has not been read yet
 		for {
 			n, rerr := p.Read(buf)
 			if n > 0 && onData != nil {
-				onData(id, string(buf[:n]))
+				var chunk []byte
+				chunk, partial = splitTrailingRune(append(partial, buf[:n]...))
+				if len(chunk) > 0 {
+					onData(id, string(chunk))
+				}
 			}
 			if rerr != nil {
 				break
@@ -144,4 +150,30 @@ func (m *Manager) CloseAll() {
 	for _, id := range ids {
 		_ = m.Close(id)
 	}
+}
+
+// splitTrailingRune splits b after its last complete UTF-8 rune, returning any
+// truncated head as partial so the caller can prepend it to the next read.
+//
+// A PTY read ends wherever the tty queue happened to break (macOS hands out
+// 1024-byte chunks once the reader falls behind), so a multi-byte rune —
+// Cyrillic, an em dash, a box-drawing border — straddles two reads. Emitting
+// the halves separately makes the Wails event bridge JSON-encode stray bytes
+// as U+FFFD: the text shows replacement chars AND gains a column, shifting
+// every character after it on the line.
+func splitTrailingRune(b []byte) (complete, partial []byte) {
+	// Only the last UTFMax-1 bytes can be the head of an unfinished rune.
+	for i := len(b) - 1; i >= 0 && len(b)-i < utf8.UTFMax; i-- {
+		if !utf8.RuneStart(b[i]) {
+			continue
+		}
+		// FullRune is true for complete-but-invalid encodings too, so genuine
+		// garbage is emitted rather than held back waiting for bytes that
+		// would never make it valid.
+		if utf8.FullRune(b[i:]) {
+			break
+		}
+		return b[:i], append([]byte(nil), b[i:]...)
+	}
+	return b, nil
 }

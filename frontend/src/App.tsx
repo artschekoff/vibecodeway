@@ -24,6 +24,7 @@ import { GlobalHotkeys } from "./components/GlobalHotkeys";
 import { EditorOpenPicker } from "./components/EditorOpenPicker";
 import type { Platform } from "./hotkeys/chord";
 import type { Keybinding } from "./types";
+import logo from "./assets/images/logo.png";
 import "./style.css";
 
 // The context rail starts as an icon-only strip; dragging it wide enough gives
@@ -156,6 +157,7 @@ function AppShell() {
           style={{ width: railWidth, "--rail-w": `${railWidth}px` } as React.CSSProperties}
         >
           <HamburgerMenu />
+          <img className="app-logo" src={logo} alt="VibeCodeWay" title="VibeCodeWay" />
           <TabBar />
           <button
             className="app-sidebar__toggle"

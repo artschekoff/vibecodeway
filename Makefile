@@ -5,7 +5,7 @@ BUNDLE_NAME := VibeCodeWay
 
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: setup dev build build-desktop build-cli tooling-doc install-cli install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
+.PHONY: setup dev build build-desktop build-cli dmg tooling-doc install-cli install-app install-all test lint vet fmt validate clean clean-frontend build-all package-desktop release db-truncate db-reinit
 
 setup:
 	cd frontend && npm install
@@ -13,13 +13,27 @@ setup:
 dev: install-cli
 	wails dev
 
-build: build-desktop build-cli
+build: build-desktop build-cli dmg
 
 build-desktop:
 	wails build
 
 build-cli:
 	go build -o bin/vibecodeway-cli ./cmd/cli
+
+# Готовый к установке образ: перетащил .app на Applications — и всё.
+# hdiutil входит в macOS, никаких create-dmg и прочих зависимостей.
+dmg: build-desktop
+	@mkdir -p $(DIST_DIR)
+	@rm -rf build/dmg && mkdir -p build/dmg
+	@cp -R build/bin/$(APP_NAME).app build/dmg/$(BUNDLE_NAME).app
+	@ln -s /Applications build/dmg/Applications
+	@arch=$$(uname -m); \
+	out="$(DIST_DIR)/$(BUNDLE_NAME)_$(VERSION)_$${arch}.dmg"; \
+	rm -f "$$out"; \
+	hdiutil create -volname "$(BUNDLE_NAME)" -srcfolder build/dmg -ov -format UDZO "$$out" >/dev/null; \
+	rm -rf build/dmg; \
+	echo "DMG → $$out"
 
 tooling-doc: build-cli
 	./bin/vibecodeway-cli agent-tool doc > docs/TOOLING.md
@@ -89,6 +103,7 @@ package-desktop:
 	zip -qr "$$out" build/bin/$(BUNDLE_NAME).app && \
 	rm -rf build/bin/$(BUNDLE_NAME).app; \
 	echo "Desktop archive → $$out"
+	@$(MAKE) dmg
 
 build-all:
 	@rm -rf $(DIST_DIR)/
@@ -111,6 +126,6 @@ release:
 	git tag -a "v$$version" -m "Release v$$version"; \
 	git push origin main --tags; \
 	$(MAKE) build-all; \
-	gh release create "v$$version" $(DIST_DIR)/*.tar.gz $(DIST_DIR)/*.zip \
+	gh release create "v$$version" $(DIST_DIR)/*.tar.gz $(DIST_DIR)/*.zip $(DIST_DIR)/*.dmg \
 		--title "v$$version" \
 		--generate-notes

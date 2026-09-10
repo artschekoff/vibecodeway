@@ -280,3 +280,32 @@ describe("ContextDetail PR filtering", () => {
     await vi.waitFor(() => expect(screen.queryByText("Add signup flow")).not.toBeInTheDocument());
   });
 });
+
+describe("ContextDetail topbar", () => {
+  // The topbar is a fixed-height single row. Without a hideable wrapper around
+  // each label the buttons shrink and wrap their text onto two lines instead of
+  // collapsing, which pushes the row out of shape and squeezes the context key
+  // down to a single character.
+  it("keeps every action label in a .btn-label span and stays identifiable once collapsed", async () => {
+    renderDetail();
+    await screen.findByText("Fix login bug");
+
+    const actions = document.querySelector(".topbar-actions");
+    expect(actions).not.toBeNull();
+    const buttons = Array.from(actions!.querySelectorAll("button"));
+    expect(buttons.length).toBeGreaterThan(0);
+
+    for (const button of buttons) {
+      // Collapsed, the icon is all that survives — without a title the button
+      // is unidentifiable.
+      expect(button.getAttribute("title"), `button "${button.textContent}" needs a title`).toBeTruthy();
+
+      // A bare text node cannot be hidden by the container query, so any label
+      // has to be wrapped.
+      const bareText = Array.from(button.childNodes)
+        .filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim())
+        .map((n) => n.textContent?.trim());
+      expect(bareText, `button "${button.textContent}" has an unwrapped label`).toEqual([]);
+    }
+  });
+});

@@ -26,5 +26,16 @@ export default defineConfig({
     globals: true,
     setupFiles: [path.resolve(__dirname, 'src/test-setup.ts')],
     css: true,
+    // The userEvent-driven interaction tests are slow by nature: the heaviest
+    // (ContextForm — Autodetect PR) measures ~1.1s idle, and vitest runs 118
+    // files across workers that already saturate the CPU. Anything else running
+    // on the machine — a dev server, a browser, a second suite — starves them
+    // past the 5s default, and they fail with "Test timed out in 5000ms"
+    // rather than an assertion. Reproduced deterministically by running two
+    // suites at once: 8-11 timeouts spread across 5 files, zero assertion
+    // failures. 15s keeps ~14x headroom over the slowest test while still
+    // failing a genuinely hung test inside a normal run.
+    testTimeout: 15000,
+    hookTimeout: 15000,
   },
 });

@@ -1028,7 +1028,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   };
 
   return (
-    <div className="page">
+    <div className="page page--home">
       {authWarning && (
         <div className="auth-banner">
           ⚠ acli not authenticated — run <code style={{ margin: "0 4px", background: "#3a2a0a", padding: "1px 5px", borderRadius: 3 }}>acli jira auth login</code> in your terminal

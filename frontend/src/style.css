@@ -4,25 +4,27 @@
   padding: 0;
 }
 
+/* Construction-site theme: Caterpillar yellow, dark earth browns, machine green */
 :root {
-  --bg:           #0c0b27;
-  --surface:      #171639;
-  --surface2:     #201e4a;
-  --border:       rgba(255,255,255,0.08);
-  --text:         #ffffff;
-  --text-muted:   #8a88be;
-  --accent:       #e4408c;
-  --accent-hover: #cd3680;
+  --bg:           #17140e;
+  --surface:      #211d14;
+  --surface2:     #2b261a;
+  --border:       rgba(255, 205, 17, 0.14);
+  --text:         #f5f1e4;
+  --text-muted:   #a89e82;
+  --accent:       #ffcd11;
+  --accent-hover: #e6b70a;
+  --accent-text:  #1a1508;
   --danger:       #e05252;
   --danger-hover: #c94040;
-  --success:      #4caf7d;
+  --success:      #6a9a3f;
   --warning:      #f0a500;
   --radius:       14px;
   --radius-sm:    8px;
   --shadow:       0 4px 24px rgba(0,0,0,0.6);
-  --sidebar-bg:   #090820;
-  --bg-secondary: #0f0e2e;
-  --bg-tertiary:  #18174a;
+  --sidebar-bg:   #100d08;
+  --bg-secondary: #1c1810;
+  --bg-tertiary:  #262115;
 }
 
 html, body, #root {
@@ -60,7 +62,7 @@ button:disabled {
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   border-radius: 20px;
   padding: 6px 18px;
 }
@@ -187,16 +189,41 @@ select {
   overflow: hidden;
 }
 
+/* Faded mascot watermark behind the home (context list) page */
+.page--home {
+  position: relative;
+}
+
+.page--home::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("./assets/images/logo.png") center 55% / min(60vh, 520px) no-repeat;
+  opacity: 0.06;
+  pointer-events: none;
+}
+
 .topbar {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 0 20px 0 52px;
-  border-bottom: 1px solid var(--border);
+  /* Construction hazard stripe under the topbar */
+  border-bottom: 3px solid transparent;
+  border-image: repeating-linear-gradient(
+      -45deg,
+      var(--accent) 0 10px,
+      #1a1508 10px 20px
+    )
+    1;
   background: var(--surface);
   flex-shrink: 0;
   height: 48px;
   box-sizing: border-box;
+  /* Queried by the action-collapse rule below. A container query, not a media
+     query: the sidebar rail is user-resizable, so the topbar's width is the
+     window's minus a width the viewport knows nothing about. */
+  container-type: inline-size;
 }
 
 .topbar h1 {
@@ -304,7 +331,13 @@ select {
 }
 
 .context-search--topbar {
-  flex: 0 0 200px;
+  /* Shrinkable, not fixed: the window minimum is 900px and the sidebar rail can
+     take 320px of it, so the topbar can be as narrow as 580px — past the point
+     where even the collapsed icon row plus a full-width filter box fits. The
+     context key (flex:1, min-width:0) gives up its space first; this box only
+     starts shrinking once there is none left to give. */
+  flex: 0 1 200px;
+  min-width: 90px;
   max-width: 200px;
   margin-left: auto;
 }
@@ -353,12 +386,30 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Without this the action bar is a shrinkable flex item: it gets squeezed,
+     every label wraps onto a second line, and the fixed-height row loses its
+     shape. Collapsing (below) is what gives space back, not wrapping. */
+  flex-shrink: 0;
 }
 
 .topbar-actions button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Measured against the real stylesheet: the actions need 703px with labels and
+   322px without, so the row needs ~1212px total before the context key is
+   squeezed below a readable ~150px. Below that, drop to icons — every button
+   keeps a title, which is all that identifies it once collapsed.
+   The threshold is 1140 and not 1212 because a container query measures the
+   CONTENT box, and .topbar has 72px of horizontal padding (1212 - 72). */
+@container (max-width: 1140px) {
+  .topbar-actions .btn-label {
+    display: none;
+  }
 }
 
 .content {
@@ -1357,7 +1408,7 @@ select {
 .jql-chip:hover {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 /* Auth banner */
@@ -1874,7 +1925,7 @@ select {
   font-size: 10px;
   font-weight: 700;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   line-height: 1;
 }
 
@@ -2912,7 +2963,7 @@ select {
 .react-datepicker__day--selected,
 .react-datepicker__day--keyboard-selected {
   background: var(--accent) !important;
-  color: #fff !important;
+  color: var(--accent-text) !important;
 }
 
 .react-datepicker__day--today {
@@ -3718,6 +3769,18 @@ select {
 /* ── VCS / PR styles ─────────────────────────────────────── */
 
 /* Hamburger menu */
+/* Round mascot logo pinned at the top of the sidebar rail */
+.app-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  align-self: center;
+  margin: 4px 0 8px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
 .app-menu {
   position: relative;
   display: flex;
@@ -6202,7 +6265,7 @@ select {
 
 .btn--primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
 }
 .btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
 
