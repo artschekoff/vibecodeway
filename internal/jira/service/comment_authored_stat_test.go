@@ -74,6 +74,32 @@ func TestSyncCommentsRecordsStatEventWhenAuthorMatchesIdentity(t *testing.T) {
 	assert.Equal(t, "2026-08-15T10:00:00Z", recorded[0].OccurredAt)
 }
 
+// TestSyncCommentsNormalizesJiraTimestampToRFC3339UTC guards against a real
+// Jira REST timestamp ("...+0000", zone offset with no colon, millisecond
+// fraction) being stored verbatim as occurred_at instead of normalized —
+// that would break ListStatEventsSince's lexicographic RFC3339 comparison
+// against every other (properly normalized) stat event.
+func TestSyncCommentsNormalizesJiraTimestampToRFC3339UTC(t *testing.T) {
+	fj := &commentFakeJira{fakeJira: &fakeJira{}, comments: []jira.Comment{
+		{ID: "c5", Author: "Jane Doe", Body: "raw jira timestamp", Created: "2024-01-15T10:30:00.000+0000"},
+	}}
+	p, contextID, issues := setupCommentStatTest(t, fj)
+
+	var recorded []appstore.StatEvent
+	p.WithRecordStatFunc(func(_ context.Context, e appstore.StatEvent) error {
+		recorded = append(recorded, e)
+		return nil
+	})
+	p.WithStatsIdentityFunc(func(context.Context) (string, error) { return "Jane Doe", nil })
+
+	total, err := p.syncComments(context.Background(), contextID, issues)
+	require.NoError(t, err)
+	assert.Equal(t, 1, total)
+
+	require.Len(t, recorded, 1)
+	assert.Equal(t, "2024-01-15T10:30:00Z", recorded[0].OccurredAt)
+}
+
 func TestSyncCommentsSkipsStatEventWhenIdentityEmpty(t *testing.T) {
 	fj := &commentFakeJira{fakeJira: &fakeJira{}, comments: []jira.Comment{
 		{ID: "c2", Author: "Jane Doe", Body: "lgtm", Created: "2026-08-15T10:00:00Z"},
