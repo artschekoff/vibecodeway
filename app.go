@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -368,6 +369,45 @@ func (a *App) AskAI(question, orgID string) (*agent.Answer, error) {
 	return a.agent.Ask(a.ctx, question, orgID, func(ev agent.ProgressEvent) {
 		runtime.EventsEmit(a.ctx, "ask:progress", ev)
 	})
+}
+
+// AskAIChat is AskAI extended with session-scoped conversation memory.
+// historyJSON is a JSON array of {role, content} objects (roles "user",
+// "assistant", or "system") representing the prior turns of the conversation;
+// it is prepended to the agent's system/date preamble before the new question.
+// Nothing is persisted server-side — the frontend owns the transcript and
+// resends it on every call. Emits the same "ask:progress" events as AskAI.
+func (a *App) AskAIChat(historyJSON, question, orgID string) (*agent.Answer, error) {
+	prior, err := unmarshalChatHistory(historyJSON)
+	if err != nil {
+		return nil, err
+	}
+	return a.agent.AskChat(a.ctx, prior, question, orgID, func(ev agent.ProgressEvent) {
+		runtime.EventsEmit(a.ctx, "ask:progress", ev)
+	})
+}
+
+// SummarizeAskChat condenses a chat log (same historyJSON shape as AskAIChat)
+// into a single summary message via one plain, tool-free model call.
+func (a *App) SummarizeAskChat(historyJSON string) (string, error) {
+	prior, err := unmarshalChatHistory(historyJSON)
+	if err != nil {
+		return "", err
+	}
+	return a.agent.Summarize(a.ctx, prior)
+}
+
+// unmarshalChatHistory decodes the JSON array of {role, content} turns shared
+// by AskAIChat and SummarizeAskChat, wrapping any parse error for the caller.
+func unmarshalChatHistory(historyJSON string) ([]openaiclient.Message, error) {
+	if historyJSON == "" {
+		return nil, nil
+	}
+	var prior []openaiclient.Message
+	if err := json.Unmarshal([]byte(historyJSON), &prior); err != nil {
+		return nil, fmt.Errorf("invalid chat history: %w", err)
+	}
+	return prior, nil
 }
 
 // ListAgentTools returns the tools the Ask AI agent can call, for the on-page reference.

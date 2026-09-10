@@ -114,7 +114,18 @@ type ProgressEvent struct {
 // organisation; empty string searches across all organisations. onProgress, if
 // non-nil, is called before each model turn ("thinking") and after each tool
 // call ("tool") so the UI can render the work live.
+//
+// Ask is a thin wrapper around AskChat with no prior conversation.
 func (a *Agent) Ask(ctx context.Context, question, orgID string, onProgress func(ProgressEvent)) (*Answer, error) {
+	return a.AskChat(ctx, nil, question, orgID, onProgress)
+}
+
+// AskChat is Ask extended with session-scoped conversation memory: prior holds
+// the earlier turns of the conversation (as previously exchanged with the
+// model), inserted after the system/date preamble and before the new question.
+// Nothing is persisted — the caller (the frontend, or a test) is responsible
+// for carrying the transcript across calls.
+func (a *Agent) AskChat(ctx context.Context, prior []openai.Message, question, orgID string, onProgress func(ProgressEvent)) (*Answer, error) {
 	emit := func(ev ProgressEvent) {
 		if onProgress != nil {
 			onProgress(ev)
@@ -123,8 +134,9 @@ func (a *Agent) Ask(ctx context.Context, question, orgID string, onProgress func
 	messages := []openai.Message{
 		{Role: "system", Content: a.loadPrompt(ctx, "ask_ai", defaultAskAIPrompt)},
 		{Role: "system", Content: dateSystemMessage(a.clock())},
-		{Role: "user", Content: question},
 	}
+	messages = append(messages, prior...)
+	messages = append(messages, openai.Message{Role: "user", Content: question})
 	tools := a.toolDefs()
 	answer := &Answer{}
 
@@ -174,6 +186,21 @@ func (a *Agent) Ask(ctx context.Context, question, orgID string, onProgress func
 
 	answer.Content = "I couldn't complete the analysis within the allowed number of steps. Try narrowing the question."
 	return answer, nil
+}
+
+// Summarize condenses a conversation transcript into a single message with one
+// plain model call — no tools are advertised or invoked. Used by the "Ask AI"
+// UI to compact a long chat log into one system turn before continuing it.
+func (a *Agent) Summarize(ctx context.Context, prior []openai.Message) (string, error) {
+	messages := make([]openai.Message, 0, len(prior)+1)
+	messages = append(messages, openai.Message{Role: "system", Content: defaultSummarizePrompt})
+	messages = append(messages, prior...)
+
+	resp, err := a.ai.ChatWithTools(ctx, messages, nil)
+	if err != nil {
+		return "", err
+	}
+	return resp.Content, nil
 }
 
 // loadPrompt fetches the editable Ask AI system prompt from the store, falling
@@ -233,6 +260,9 @@ Typical flow:
 
 Cite the concrete items you relied on (e.g. Jira keys, text names). Be concise and factual.
 If you cannot find something, say so plainly.`
+
+const defaultSummarizePrompt = `Сожми этот диалог в одно сообщение: сохрани все факты, решения, ` +
+	`найденные данные и открытые вопросы. Отвечай на языке диалога.`
 
 // toolDefs is the tool catalogue advertised to the model, built from the shared
 // registry so the agent, CLI, and docs stay in sync.

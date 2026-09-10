@@ -44,6 +44,8 @@ export function ApplyContextUpdateActions(arg1:string,arg2:Array<store.ContextUp
 
 export function AskAI(arg1:string,arg2:string):Promise<agent.Answer>;
 
+export function AskAIChat(arg1:string,arg2:string,arg3:string):Promise<agent.Answer>;
+
 export function AssignAuthorBatch(arg1:Array<store.AuthorAssignment>):Promise<void>;
 
 export function AuthStatus():Promise<string>;
@@ -459,6 +461,8 @@ export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 export function SolveWithAI(arg1:string,arg2:string):Promise<string>;
 
 export function StageFile(arg1:string,arg2:string):Promise<void>;
+
+export function SummarizeAskChat(arg1:string):Promise<string>;
 
 export function SwitchMainWorkingTree(arg1:string,arg2:string):Promise<void>;
 

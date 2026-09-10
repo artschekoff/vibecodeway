@@ -66,6 +66,10 @@ export function AskAI(arg1, arg2) {
   return window['go']['main']['App']['AskAI'](arg1, arg2);
 }
 
+export function AskAIChat(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AskAIChat'](arg1, arg2, arg3);
+}
+
 export function AssignAuthorBatch(arg1) {
   return window['go']['main']['App']['AssignAuthorBatch'](arg1);
 }
@@ -896,6 +900,10 @@ export function SolveWithAI(arg1, arg2) {
 
 export function StageFile(arg1, arg2) {
   return window['go']['main']['App']['StageFile'](arg1, arg2);
+}
+
+export function SummarizeAskChat(arg1) {
+  return window['go']['main']['App']['SummarizeAskChat'](arg1);
 }
 
 export function SwitchMainWorkingTree(arg1, arg2) {
