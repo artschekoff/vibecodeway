@@ -558,10 +558,16 @@ func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCS
 			// theirs to count here.
 			if pr.State == "merged" && rr.Kind == "authored" && p.recordStat != nil {
 				extID := repo.Owner + "/" + repo.Name + "#" + fmt.Sprint(rr.PRNumber)
-				// ponytail: occurred_at is observed-at (when this sync noticed the
-				// merge), not the true merge time — the vcs PR struct has no
-				// MergedAt. Upgrade path: fetch mergedAt in the gh runner query.
-				p.recordStat(ctx, "pr_merged", extID, "", repo.FullName(), "", time.Now().UTC().Format(time.RFC3339))
+				// ponytail: prefer the real merge timestamp gh reports
+				// (pr.MergedAt, RFC3339); fall back to observed-at only when
+				// it's missing/unparseable so a merge is still recorded.
+				occurredAt := time.Now().UTC().Format(time.RFC3339)
+				if pr.MergedAt != "" {
+					if t, err := time.Parse(time.RFC3339, pr.MergedAt); err == nil {
+						occurredAt = t.UTC().Format(time.RFC3339)
+					}
+				}
+				p.recordStat(ctx, "pr_merged", extID, "", repo.FullName(), "", occurredAt)
 			}
 			continue
 		}

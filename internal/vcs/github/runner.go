@@ -349,7 +349,7 @@ func (r *Runner) GetPRByNumber(ctx context.Context, owner, repo string, prNumber
 	out, err := r.run(ctx, []string{
 		"pr", "view", strconv.Itoa(prNumber),
 		"--repo", owner + "/" + repo,
-		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,reviews",
+		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,reviews",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gh pr view %d: %w", prNumber, err)
@@ -390,6 +390,9 @@ type ghPR struct {
 	} `json:"statusCheckRollup"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+	// MergedAt is populated only by `gh pr view --json ...,mergedAt`
+	// (single-PR fetch, GetPRByNumber); list queries don't request it.
+	MergedAt string `json:"mergedAt"`
 	// Reviews is populated only by `gh pr view --json ...,reviews` (single-PR
 	// fetch); list queries don't request it, so it stays empty there.
 	Reviews []struct {
@@ -459,6 +462,7 @@ func parseGHPRSingle(data []byte) (vcs.PRData, error) {
 		CIStatus:         aggregateCIStatus(states),
 		CreatedAt:        p.CreatedAt,
 		UpdatedAt:        p.UpdatedAt,
+		MergedAt:         p.MergedAt,
 		Reviewers:        collapseReviewerDecisions(entries, p.Author.Login),
 	}, nil
 }

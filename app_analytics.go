@@ -30,7 +30,17 @@ func (a *App) GetAnalyticsDashboard(rangeDays int) (*analytics.Dashboard, error)
 	// same length, so we need 2*rangeDays of history, plus one extra day of
 	// slack so completions/events near a local-midnight boundary aren't cut
 	// off by the UTC comparison in SQL (same reasoning as app_productivity.go).
-	since := now.AddDate(0, 0, -(2*rangeDays + 1)).UTC().Format(time.RFC3339)
+	//
+	// The Month/Week/Yesterday cards are always rendered regardless of
+	// rangeDays (buildCards is not parameterized by it) and the Month card's
+	// preceding-period comparison reaches back 60 days (startAgo=31,
+	// length=30). A small rangeDays (e.g. 7) must not narrow the fetch below
+	// that floor, or the always-rendered Month card silently starves.
+	windowDays := rangeDays
+	if windowDays < 61 {
+		windowDays = 61
+	}
+	since := now.AddDate(0, 0, -(windowDays + 1)).UTC().Format(time.RFC3339)
 
 	completionRows, err := a.db.ListTaskCompletionsSince(a.ctx, since)
 	if err != nil {

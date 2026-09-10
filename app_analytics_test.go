@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/artschekoff/vibecodeway/internal/analytics"
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,4 +86,41 @@ func TestGetAnalyticsDashboardClampsNonPositiveRangeDays(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "expected day %s to be present in a 30-day Daily series", fiveDaysAgoKey)
+}
+
+// Regression test: at rangeDays=7 the fetch window must still be floored to
+// cover the Month card's preceding-period comparison (up to 60 days back),
+// not just 2*rangeDays+1 (=15). Otherwise the always-rendered Month card
+// silently undercounts while Daily correctly stays a 7-row series.
+func TestGetAnalyticsDashboardFloorsWindowForMonthCardAtSmallRangeDays(t *testing.T) {
+	s, err := appstore.Open(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	ctx := context.Background()
+	a := &App{db: s, ctx: ctx}
+
+	// A completion ~40 days back: with a buggy since = now-(2*7+1)=now-15days,
+	// this row would be excluded from ListTaskCompletionsSince and the Month
+	// card's "prev" period (days 31-60 ago) would silently undercount it.
+	fortyDaysAgo := time.Now().UTC().AddDate(0, 0, -40)
+	_, err = a.db.DB().ExecContext(ctx, `
+		INSERT INTO task_completions (jira_key, issue_type, org, status, completed_at)
+		VALUES ('JH-OLD40', 'Task', 'acme', 'Done', ?)`,
+		fortyDaysAgo.Format(time.RFC3339))
+	require.NoError(t, err)
+
+	dashboard, err := a.GetAnalyticsDashboard(7)
+	require.NoError(t, err)
+	assert.Equal(t, 7, dashboard.RangeDays)
+	assert.Len(t, dashboard.Daily, 7, "Daily should stay a 7-row series for rangeDays=7")
+
+	var monthCard *analytics.PeriodCard
+	for i := range dashboard.Cards {
+		c := &dashboard.Cards[i]
+		if c.Metric == analytics.MetricTasksClosed && c.Period == analytics.PeriodMonth {
+			monthCard = c
+		}
+	}
+	require.NotNil(t, monthCard, "expected a tasksClosed/month card")
+	assert.Equal(t, 1, monthCard.Prev, "month card's preceding period should count the ~40-day-old completion")
 }

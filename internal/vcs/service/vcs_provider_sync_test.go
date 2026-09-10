@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/artschekoff/vibecodeway/internal/vcs"
 	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
@@ -491,7 +492,9 @@ func TestReconcileRecordsStatEventForMergedAuthoredPR(t *testing.T) {
 		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "authored", "")
 	require.NoError(t, err)
 
-	runner.prByNumber = map[int]*vcs.PRData{42: {Number: 42, State: "merged"}}
+	// gh returns MergedAt in RFC3339, possibly with a non-UTC offset; the
+	// recorded occurredAt must be normalized to UTC.
+	runner.prByNumber = map[int]*vcs.PRData{42: {Number: 42, State: "merged", MergedAt: "2026-08-15T10:30:00-07:00"}}
 
 	var calls []struct{ kind, externalID, org, repo, jiraKey, occurredAt string }
 	p.WithRecordStatFunc(func(_ context.Context, kind, externalID, org, repoName, jiraKey, occurredAt string) {
@@ -508,13 +511,47 @@ func TestReconcileRecordsStatEventForMergedAuthoredPR(t *testing.T) {
 	assert.Equal(t, "", calls[0].org)
 	assert.Equal(t, "acme/widgets", calls[0].repo)
 	assert.Equal(t, "", calls[0].jiraKey)
-	assert.NotEmpty(t, calls[0].occurredAt)
+	assert.Equal(t, "2026-08-15T17:30:00Z", calls[0].occurredAt,
+		"occurredAt must be the real merge time (pr.MergedAt), normalized to RFC3339 UTC, not observed-at")
 
 	// Re-running the sync must not re-invoke the callback: the row is now stored as
 	// review_status "merged", so the "already terminal — do not re-fetch" guard in
 	// reconcileTerminalStates skips it before GetPRByNumber (and recordStat) run again.
 	require.NoError(t, p.SyncAuthoredPRs(ctx, vcs.PlatformGitHub))
 	require.Len(t, calls, 1, "re-running sync on an already-terminal row must not double-invoke")
+}
+
+// When gh doesn't report a MergedAt (empty/unparseable), recordStat must still fire,
+// falling back to observed-at rather than dropping the merge event.
+func TestReconcileRecordsStatEventWithObservedAtFallbackWhenMergedAtMissing(t *testing.T) {
+	runner := &mockRunner{platform: vcs.PlatformGitHub}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 43, "Ship it too", "me",
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "authored", "")
+	require.NoError(t, err)
+
+	runner.prByNumber = map[int]*vcs.PRData{43: {Number: 43, State: "merged"}} // MergedAt left empty
+
+	var calls []string
+	// RFC3339 formatting truncates to whole seconds, so give a 1s margin on
+	// both sides rather than comparing against sub-second bounds.
+	before := time.Now().UTC().Add(-time.Second)
+	p.WithRecordStatFunc(func(_ context.Context, _, _, _, _, _, occurredAt string) {
+		calls = append(calls, occurredAt)
+	})
+
+	require.NoError(t, p.SyncAuthoredPRs(ctx, vcs.PlatformGitHub))
+	after := time.Now().UTC().Add(time.Second)
+
+	require.Len(t, calls, 1)
+	occurredAt, err := time.Parse(time.RFC3339, calls[0])
+	require.NoError(t, err)
+	assert.False(t, occurredAt.Before(before) || occurredAt.After(after),
+		"fallback occurredAt should be an observed-at timestamp taken during this sync")
 }
 
 // Only kind "authored" PRs (the user's own) are merge observations; a PR the user

@@ -59,6 +59,11 @@ type PRData struct {
 	CIStatus  string
 	CreatedAt string
 	UpdatedAt string
+	// MergedAt is the real merge timestamp (RFC3339, gh's native format),
+	// only populated by GetPRByNumber's single-PR `gh pr view` fetch (list
+	// queries don't request it). Empty when the PR isn't merged or the field
+	// wasn't fetched.
+	MergedAt  string
 	Reviewers []ReviewerDecision `json:"reviewers,omitempty"`
 	// MyReviewState is the authenticated user's own standing review decision:
 	// "", "approved", "changes_requested" or "commented". nil means the PR's
