@@ -192,6 +192,18 @@ func (a *App) startup(ctx context.Context) {
 		}
 		a.emitDomainEvent(contextID, appstore.EventTypeCommentAdded, appstore.EventSourceGitHub, externalID, author, summary)
 	})
+	a.vcsSvc.WithRecordStatFunc(func(ctx context.Context, kind, externalID, org, repo, jiraKey, occurredAt string) {
+		if err := a.db.InsertStatEvent(ctx, appstore.StatEvent{
+			Kind:       kind,
+			ExternalID: externalID,
+			Org:        org,
+			Repo:       repo,
+			JiraKey:    jiraKey,
+			OccurredAt: occurredAt,
+		}); err != nil {
+			logger.Warn("vcs: record stat event failed", zap.Error(err))
+		}
+	})
 	vcsProvider := a.vcsSvc
 
 	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)

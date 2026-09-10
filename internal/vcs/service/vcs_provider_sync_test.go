@@ -476,6 +476,71 @@ func TestReconcileRecordsMyApprovalAfterPRDropsOffTheList(t *testing.T) {
 	assert.Equal(t, "approved", list[0].MyReviewState)
 }
 
+// A merged authored PR observed by the reconcile pass must fire the stat-event
+// callback exactly once, with kind pr_merged and the owner/name#number external_id
+// convention used elsewhere in this file (see prExtID in sync()).
+func TestReconcileRecordsStatEventForMergedAuthoredPR(t *testing.T) {
+	runner := &mockRunner{platform: vcs.PlatformGitHub}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	// A stored authored PR from a previous sync that just dropped off the open list.
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42, "Ship it", "me",
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "authored", "")
+	require.NoError(t, err)
+
+	runner.prByNumber = map[int]*vcs.PRData{42: {Number: 42, State: "merged"}}
+
+	var calls []struct{ kind, externalID, org, repo, jiraKey, occurredAt string }
+	p.WithRecordStatFunc(func(_ context.Context, kind, externalID, org, repoName, jiraKey, occurredAt string) {
+		calls = append(calls, struct{ kind, externalID, org, repo, jiraKey, occurredAt string }{
+			kind, externalID, org, repoName, jiraKey, occurredAt,
+		})
+	})
+
+	require.NoError(t, p.SyncAuthoredPRs(ctx, vcs.PlatformGitHub))
+
+	require.Len(t, calls, 1, "merged authored PR must record exactly one stat event")
+	assert.Equal(t, "pr_merged", calls[0].kind)
+	assert.Equal(t, "acme/widgets#42", calls[0].externalID)
+	assert.Equal(t, "", calls[0].org)
+	assert.Equal(t, "acme/widgets", calls[0].repo)
+	assert.Equal(t, "", calls[0].jiraKey)
+	assert.NotEmpty(t, calls[0].occurredAt)
+
+	// Re-running the sync must not re-invoke the callback: the row is now stored as
+	// review_status "merged", so the "already terminal — do not re-fetch" guard in
+	// reconcileTerminalStates skips it before GetPRByNumber (and recordStat) run again.
+	require.NoError(t, p.SyncAuthoredPRs(ctx, vcs.PlatformGitHub))
+	require.Len(t, calls, 1, "re-running sync on an already-terminal row must not double-invoke")
+}
+
+// Only kind "authored" PRs (the user's own) are merge observations; a PR the user
+// merely reviewed must not record a stat event even though it also goes terminal.
+func TestReconcileDoesNotRecordStatEventForReviewedPR(t *testing.T) {
+	runner := &mockRunner{platform: vcs.PlatformGitHub}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7, "Someone else's PR", "carol",
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+	require.NoError(t, err)
+
+	runner.prByNumber = map[int]*vcs.PRData{7: {Number: 7, State: "merged"}}
+
+	var callCount int
+	p.WithRecordStatFunc(func(context.Context, string, string, string, string, string, string) {
+		callCount++
+	})
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+	assert.Equal(t, 0, callCount, "a reviewed (non-authored) merged PR must not be recorded as the user's merge")
+}
+
 func TestMyStateFromReviewers(t *testing.T) {
 	ds := []vcs.ReviewerDecision{
 		{Login: "alice", State: "approved"},

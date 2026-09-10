@@ -48,6 +48,10 @@ type ReviewNotifyFunc func(ctx context.Context, repoID, repoName string, prNumbe
 // CommentNotifyFunc is invoked once when a brand-new PR comment is inserted.
 type CommentNotifyFunc func(ctx context.Context, contextID, prID, externalID, author, body string)
 
+// RecordStatFunc, when set, persists an analytics stat event. Best-effort:
+// callers must log and continue on error, never fail the sync.
+type RecordStatFunc func(ctx context.Context, kind, externalID, org, repo, jiraKey, occurredAt string)
+
 // VCSProvider implements provider.Provider for VCS platforms (GitHub, GitLab, Linear).
 // It dispatches to the appropriate VCSRunner based on the platform stored with each repo.
 type VCSProvider struct {
@@ -57,6 +61,7 @@ type VCSProvider struct {
 	notify        NotifyFunc        // nil = no-op
 	reviewNotify  ReviewNotifyFunc  // nil = no-op
 	commentNotify CommentNotifyFunc // nil = no-op
+	recordStat    RecordStatFunc    // nil = no-op
 	msgWriter     appstore.MessageWriter
 }
 
@@ -78,6 +83,9 @@ func (p *VCSProvider) WithReviewNotifyFunc(fn ReviewNotifyFunc) { p.reviewNotify
 
 // WithCommentNotifyFunc sets the callback invoked when a new PR comment appears.
 func (p *VCSProvider) WithCommentNotifyFunc(fn CommentNotifyFunc) { p.commentNotify = fn }
+
+// WithRecordStatFunc sets the callback used to persist analytics stat events.
+func (p *VCSProvider) WithRecordStatFunc(fn RecordStatFunc) { p.recordStat = fn }
 
 // Name implements provider.Provider.
 func (p *VCSProvider) Name() string { return "vcs" }
@@ -544,6 +552,16 @@ func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCS
 			if err := p.store.ReviewRequests.SetReviewStatus(ctx, repo.ID, rr.PRNumber, pr.State); err != nil {
 				p.logger.Warn("vcs: set review status failed",
 					zap.Int("pr", rr.PRNumber), zap.Error(err))
+			}
+			// The user's own PR (kind "authored") transitioning to merged is the
+			// merge observation for analytics. PRs the user only reviewed are not
+			// theirs to count here.
+			if pr.State == "merged" && rr.Kind == "authored" && p.recordStat != nil {
+				extID := repo.Owner + "/" + repo.Name + "#" + fmt.Sprint(rr.PRNumber)
+				// ponytail: occurred_at is observed-at (when this sync noticed the
+				// merge), not the true merge time — the vcs PR struct has no
+				// MergedAt. Upgrade path: fetch mergedAt in the gh runner query.
+				p.recordStat(ctx, "pr_merged", extID, "", repo.FullName(), "", time.Now().UTC().Format(time.RFC3339))
 			}
 			continue
 		}
