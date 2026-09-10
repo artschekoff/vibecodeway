@@ -61,3 +61,30 @@ func TestAppSettings_Terminal(t *testing.T) {
 		assert.Equal(t, "kitty", got.TerminalAppPath)
 	})
 }
+
+func TestAppSettings_StatsAuthorName(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	t.Run("default StatsAuthorName is empty", func(t *testing.T) {
+		settings, err := s.GetAppSettings(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "", settings.StatsAuthorName)
+	})
+
+	t.Run("SetAppSettings persists StatsAuthorName", func(t *testing.T) {
+		err := s.SetAppSettings(ctx, AppSettings{
+			ContextRefetchEnabled:     false,
+			ContextRefetchIntervalMin: 30,
+			ReviewsRefetchEnabled:     false,
+			ReviewsRefetchIntervalMin: 30,
+			CodingAgentApp:            "cursor",
+			StatsAuthorName:           "Jane Doe",
+		})
+		require.NoError(t, err)
+
+		got, err := s.GetAppSettings(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "Jane Doe", got.StatsAuthorName)
+	})
+}

@@ -158,6 +158,18 @@ describe("openProductivityTab", () => {
   });
 });
 
+describe("openAnalyticsTab", () => {
+  it("opens and focuses a single analytics tab", () => {
+    const { result } = renderHook(() => useTabContext(), { wrapper });
+    act(() => result.current.openAnalyticsTab());
+    expect(result.current.tabs.filter((t) => t.type === "analytics")).toHaveLength(1);
+    expect(result.current.tabs.find((t) => t.type === "analytics")?.title).toBe("Analytics");
+
+    act(() => result.current.openAnalyticsTab());
+    expect(result.current.tabs.filter((t) => t.type === "analytics")).toHaveLength(1);
+  });
+});
+
 describe("forceCloseTab", () => {
   it("closes a pinned tab that closeTab would ignore", () => {
     const { result } = renderHook(() => useTabContext(), { wrapper });

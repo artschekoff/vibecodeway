@@ -63,6 +63,49 @@ func TestBoardRefreshDoesNotDoubleCountRepeatedDone(t *testing.T) {
 	assert.Len(t, got, 1)
 }
 
+func TestBoardRefreshRecordsTaskStartedOnTransitionToInProgress(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{assignment("JH-10", "To Do")}))
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{assignment("JH-10", "In Progress")}))
+
+	got, err := s.ListStatEventsSince(ctx, "2000-01-01T00:00:00Z")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "task_started", got[0].Kind)
+	assert.Equal(t, "JH-10", got[0].ExternalID)
+	assert.Equal(t, "JH-10", got[0].JiraKey)
+	assert.Equal(t, "juna-api", got[0].Org)
+	assert.NotEmpty(t, got[0].OccurredAt)
+}
+
+func TestBoardRefreshDoesNotDuplicateTaskStartedOnRepeatedInProgress(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{assignment("JH-11", "To Do")}))
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{assignment("JH-11", "In Progress")}))
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{assignment("JH-11", "In Progress")}))
+
+	got, err := s.ListStatEventsSince(ctx, "2000-01-01T00:00:00Z")
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+}
+
+func TestBoardRefreshIgnoresFirstSeenInProgress(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	// An issue that is already In Progress the first time we ever see it has
+	// no observed start time — counting it would inflate the day it was imported.
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{assignment("JH-12", "In Progress")}))
+
+	got, err := s.ListStatEventsSince(ctx, "2000-01-01T00:00:00Z")
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
 func TestListTaskCompletionsSinceFiltersOlderRows(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

@@ -10,6 +10,7 @@ import AskAIPage from "../pages/AskAIPage";
 import ActivityTimeline from "../pages/ActivityTimeline";
 import ActivityFeedPage from "../pages/ActivityFeedPage";
 import ProductivityPage from "../pages/ProductivityPage";
+import AnalyticsPage from "../pages/AnalyticsPage";
 import { EditorWorkspace } from "../pages/EditorWorkspace";
 
 // Renders the non-editor tab types. Editor tabs are handled separately so they
@@ -24,6 +25,7 @@ function NonEditorContent({ tab }: { tab: Tab }) {
     case "timeline": return <ActivityTimeline />;
     case "activity-feed": return <ActivityFeedPage />;
     case "productivity": return <ProductivityPage />;
+    case "analytics": return <AnalyticsPage />;
     case "org": return <ContextList orgId={tab.orgId!} tabId={tab.id} />;
     case "context": return <ContextDetail contextId={tab.contextId!} tabId={tab.id} />;
     default: return null;

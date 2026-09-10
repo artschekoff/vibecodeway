@@ -172,6 +172,20 @@ func (a *App) startup(ctx context.Context) {
 
 	jiraProvider := jiraservice.NewJiraProvider(jiraRepo, jiraClient, logger, s)
 	jiraProvider.WithNotifyFunc(a.onJiraNotify)
+	// comment_authored capture: the acli-backed Jira client has no REST token
+	// and no /myself lookup, so identity comes from the statsAuthorName app
+	// setting instead (see task-3 brief). Resolved live on every sync so a
+	// settings change takes effect without restarting the provider.
+	jiraProvider.WithStatsIdentityFunc(func(ctx context.Context) (string, error) {
+		settings, err := a.db.GetAppSettings(ctx)
+		if err != nil {
+			return "", err
+		}
+		return settings.StatsAuthorName, nil
+	})
+	jiraProvider.WithRecordStatFunc(func(ctx context.Context, e appstore.StatEvent) error {
+		return a.db.InsertStatEvent(ctx, e)
+	})
 	slackProvider := jiraservice.NewSlackProvider(slackRepo, slackRunner, logger, s)
 	textProvider := jiraservice.NewTextProvider(s, logger)
 
@@ -191,6 +205,18 @@ func (a *App) startup(ctx context.Context) {
 			summary = "New comment from " + author
 		}
 		a.emitDomainEvent(contextID, appstore.EventTypeCommentAdded, appstore.EventSourceGitHub, externalID, author, summary)
+	})
+	a.vcsSvc.WithRecordStatFunc(func(ctx context.Context, kind, externalID, org, repo, jiraKey, occurredAt string) {
+		if err := a.db.InsertStatEvent(ctx, appstore.StatEvent{
+			Kind:       kind,
+			ExternalID: externalID,
+			Org:        org,
+			Repo:       repo,
+			JiraKey:    jiraKey,
+			OccurredAt: occurredAt,
+		}); err != nil {
+			logger.Warn("vcs: record stat event failed", zap.Error(err))
+		}
 	})
 	vcsProvider := a.vcsSvc
 

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, SetProductivitySettings, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, SetProductivitySettings, SetStatsAuthorName, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
 import type { store } from "../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
@@ -90,6 +90,7 @@ export default function SettingsPage() {
   const [prStaleThreshold, setPrStaleThreshold] = useState(7);
   const [workdayHours, setWorkdayHours] = useState(8);
   const [taskHours, setTaskHours] = useState(2);
+  const [statsAuthorName, setStatsAuthorName] = useState("");
   const [terminalAppPath, setTerminalAppPath] = useState("");
   const [codingAgentApp, setCodingAgentApp] = useState("cursor");
   const [autoLinkRepos, setAutoLinkRepos] = useState(true);
@@ -144,6 +145,7 @@ export default function SettingsPage() {
           setPrStaleThreshold(typedAppS.prStaleThresholdDays ?? 7);
           setWorkdayHours(typedAppS.workdayHours ?? 8);
           setTaskHours(typedAppS.taskHours ?? 2);
+          setStatsAuthorName(typedAppS.statsAuthorName ?? "");
           setTerminalAppPath(typedAppS.terminalAppPath ?? "");
           setCodingAgentApp(typedAppS.codingAgentApp ?? "cursor");
           setAutoLinkRepos(typedAppS.autoLinkReposOnContextCreate ?? true);
@@ -218,6 +220,7 @@ export default function SettingsPage() {
       // Clamping (including the upper bound) is enforced server-side in
       // SetProductivitySettings — the single authority for this policy.
       await SetProductivitySettings(workdayHours, taskHours);
+      await SetStatsAuthorName(statsAuthorName.trim());
       const updated = await GetAppSettings() as unknown as AppSettings;
       setAppSettings(updated);
       setTerminalAppPath(updated.terminalAppPath ?? "");
@@ -226,6 +229,7 @@ export default function SettingsPage() {
       setPrStaleThreshold(updated.prStaleThresholdDays ?? 7);
       setWorkdayHours(updated.workdayHours ?? 8);
       setTaskHours(updated.taskHours ?? 2);
+      setStatsAuthorName(updated.statsAuthorName ?? "");
       setRefetchMessage("Saved.");
     } catch (e) {
       setError(String(e));
@@ -556,6 +560,23 @@ export default function SettingsPage() {
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                 The Closed Tasks dashboard assumes every closed task costs this many hours and that a full day is this long.
+              </div>
+            </div>
+
+            {/* Jira display name (Analytics comment attribution) */}
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                Jira display name (for analytics)
+              </label>
+              <input
+                className="passphrase-input"
+                placeholder="Jane Doe"
+                value={statsAuthorName}
+                onChange={(e) => setStatsAuthorName(e.target.value)}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                Your exact Jira display name. Used to attribute authored comments to you in the Analytics dashboard. Leave empty to skip comment tracking.
               </div>
             </div>
 

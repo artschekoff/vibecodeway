@@ -20,13 +20,27 @@ import (
 // Same signature as vcsservice.NotifyFunc so app.go can share a factory.
 type JiraNotifyFunc func(ctx context.Context, contextID, entityType, entityID, eventType, oldValue, newValue string) error
 
+// JiraRecordStatFunc persists one analytics-dashboard stat event. App wiring
+// owns the actual store write, mirroring vcsservice.RecordStatFunc — see
+// WithRecordStatFunc.
+type JiraRecordStatFunc func(ctx context.Context, e appstore.StatEvent) error
+
+// JiraStatsIdentityFunc resolves "who am I" for comment_authored attribution.
+// It is called live on every sync (not cached at construction time) so a
+// change to the underlying app setting takes effect without restarting the
+// provider. An empty return means capture should be skipped — see
+// WithStatsIdentityFunc.
+type JiraStatsIdentityFunc func(ctx context.Context) (string, error)
+
 // JiraProvider implements provider.Provider for Atlassian Jira.
 type JiraProvider struct {
-	jiraRepo  *jirastore.Repo
-	jira      JiraAPI
-	logger    *zap.Logger
-	msgWriter appstore.MessageWriter
-	notify    JiraNotifyFunc
+	jiraRepo      *jirastore.Repo
+	jira          JiraAPI
+	logger        *zap.Logger
+	msgWriter     appstore.MessageWriter
+	notify        JiraNotifyFunc
+	recordStat    JiraRecordStatFunc
+	statsIdentity JiraStatsIdentityFunc
 }
 
 // NewJiraProvider constructs a JiraProvider.
@@ -36,6 +50,13 @@ func NewJiraProvider(jiraRepo *jirastore.Repo, jiraClient JiraAPI, logger *zap.L
 
 // WithNotifyFunc sets the callback invoked on Jira issue status changes.
 func (p *JiraProvider) WithNotifyFunc(fn JiraNotifyFunc) { p.notify = fn }
+
+// WithRecordStatFunc sets the callback invoked to persist a stat event.
+func (p *JiraProvider) WithRecordStatFunc(fn JiraRecordStatFunc) { p.recordStat = fn }
+
+// WithStatsIdentityFunc sets the callback used to resolve the current user's
+// Jira display name for comment_authored attribution.
+func (p *JiraProvider) WithStatsIdentityFunc(fn JiraStatsIdentityFunc) { p.statsIdentity = fn }
 
 // Name implements provider.Provider.
 func (p *JiraProvider) Name() string { return "jira" }
@@ -354,6 +375,7 @@ func (p *JiraProvider) syncComments(ctx context.Context, contextID string, issue
 					}
 					if commentID != "" {
 						total.Add(1)
+						p.recordCommentStat(ctx, issue.JiraKey, c)
 						if issueMsgID != "" {
 							cAuthorID := p.msgWriter.ResolveAuthor(ctx, "jira", c.Author)
 							cMsgID, _ := p.msgWriter.UpsertMessage(ctx, appstore.UpsertMessageArgs{
@@ -378,6 +400,39 @@ func (p *JiraProvider) syncComments(ctx context.Context, contextID string, issue
 	}
 	wg.Wait()
 	return int(total.Load()), nil
+}
+
+// recordCommentStat best-effort records a comment_authored stat event for a
+// newly-synced comment c, when both callbacks are wired and c.Author matches
+// the identity resolved by statsIdentity. Never returns an error and never
+// breaks comment sync — failures are warn-logged and swallowed, matching the
+// rest of syncComments' error handling.
+func (p *JiraProvider) recordCommentStat(ctx context.Context, jiraKey string, c jira.Comment) {
+	if p.recordStat == nil || p.statsIdentity == nil {
+		return
+	}
+	me, err := p.statsIdentity(ctx)
+	if err != nil {
+		p.logger.Warn("jira: resolve stats identity failed", zap.Error(err))
+		return
+	}
+	// Empty identity means the user never configured statsAuthorName: skip
+	// capture entirely, silently (see task-3 brief).
+	if me == "" || c.Author == "" || !strings.EqualFold(me, c.Author) {
+		return
+	}
+	occurredAt := c.Created
+	if t := ParseTime(c.Created); !t.IsZero() {
+		occurredAt = t.UTC().Format(time.RFC3339)
+	}
+	if err := p.recordStat(ctx, appstore.StatEvent{
+		Kind:       "comment_authored",
+		ExternalID: c.ID,
+		JiraKey:    jiraKey,
+		OccurredAt: occurredAt,
+	}); err != nil {
+		p.logger.Warn("jira: record stat event failed", zap.Error(err))
+	}
 }
 
 func buildJiraItems(issues []jirastore.Issue, startAt time.Time) []provider.Item {

@@ -118,6 +118,18 @@ func (a *App) SetAutoLinkRepos(enabled bool) error {
 	return a.db.SetAppSettings(a.ctx, *current)
 }
 
+// SetStatsAuthorName sets the user's own Jira display name, used to attribute
+// authored comments to them for the Analytics dashboard. Empty (the default)
+// silently disables comment_authored capture. Preserves all other fields.
+func (a *App) SetStatsAuthorName(name string) error {
+	current, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return err
+	}
+	current.StatsAuthorName = strings.TrimSpace(name)
+	return a.db.SetAppSettings(a.ctx, *current)
+}
+
 // --- Background refresh lifecycle ---
 
 // startBackgroundRefresh reads the persisted settings and starts the goroutine.

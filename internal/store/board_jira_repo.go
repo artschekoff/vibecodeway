@@ -117,6 +117,15 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 				return err
 			}
 		}
+
+		// Same idea for task_started: only a transition *into* In Progress counts,
+		// and only when we actually saw a prior status (an issue already In
+		// Progress the first time we see it has no observed start time).
+		if old, seen := prevStatus[it.Key]; seen && !strings.EqualFold(old, "In Progress") && strings.EqualFold(it.Status, "In Progress") {
+			if err := recordTaskStarted(ctx, tx, it, now); err != nil {
+				return err
+			}
+		}
 	}
 	return tx.Commit()
 }

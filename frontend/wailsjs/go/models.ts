@@ -68,6 +68,123 @@ export namespace agent {
 
 }
 
+export namespace analytics {
+	
+	export class AvgTask {
+	    medianHours: number;
+	    meanHours: number;
+	    samples: number;
+	    assumed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AvgTask(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.medianHours = source["medianHours"];
+	        this.meanHours = source["meanHours"];
+	        this.samples = source["samples"];
+	        this.assumed = source["assumed"];
+	    }
+	}
+	export class Slice {
+	    label: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Slice(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.count = source["count"];
+	    }
+	}
+	export class DayRow {
+	    day: string;
+	    tasks: number;
+	    prs: number;
+	    comments: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DayRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.day = source["day"];
+	        this.tasks = source["tasks"];
+	        this.prs = source["prs"];
+	        this.comments = source["comments"];
+	    }
+	}
+	export class PeriodCard {
+	    metric: string;
+	    period: string;
+	    count: number;
+	    prev: number;
+	    deltaPct: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PeriodCard(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.metric = source["metric"];
+	        this.period = source["period"];
+	        this.count = source["count"];
+	        this.prev = source["prev"];
+	        this.deltaPct = source["deltaPct"];
+	    }
+	}
+	export class Dashboard {
+	    rangeDays: number;
+	    cards: PeriodCard[];
+	    daily: DayRow[];
+	    byType: Slice[];
+	    byOrg: Slice[];
+	    avgTask: AvgTask;
+	
+	    static createFrom(source: any = {}) {
+	        return new Dashboard(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rangeDays = source["rangeDays"];
+	        this.cards = this.convertValues(source["cards"], PeriodCard);
+	        this.daily = this.convertValues(source["daily"], DayRow);
+	        this.byType = this.convertValues(source["byType"], Slice);
+	        this.byOrg = this.convertValues(source["byOrg"], Slice);
+	        this.avgTask = this.convertValues(source["avgTask"], AvgTask);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+
+}
+
 export namespace jira {
 	
 	export class SearchResult {
@@ -1195,6 +1312,7 @@ export namespace store {
 	    prStaleThresholdDays: number;
 	    workdayHours: number;
 	    taskHours: number;
+	    statsAuthorName: string;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1214,6 +1332,7 @@ export namespace store {
 	        this.prStaleThresholdDays = source["prStaleThresholdDays"];
 	        this.workdayHours = source["workdayHours"];
 	        this.taskHours = source["taskHours"];
+	        this.statsAuthorName = source["statsAuthorName"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}

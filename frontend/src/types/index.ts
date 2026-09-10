@@ -398,6 +398,7 @@ export interface AppSettings {
   prStaleThresholdDays: number;
   workdayHours: number;
   taskHours: number;
+  statsAuthorName: string;
   updatedAt: string;
 }
 
@@ -626,7 +627,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "productivity" | "editor";
+export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "productivity" | "analytics" | "editor";
 
 export type ActivitySource = "jira" | "github";
 
@@ -699,4 +700,42 @@ export interface ProductivityStats {
   tasksToBeatYesterday: number;
   tasksToBeatWeek: number;
   tasksToBeatMonth: number;
+}
+
+// --- Analytics dashboard ---
+
+export interface PeriodCard {
+  metric: string; // tasksClosed | prsMerged | comments
+  period: string; // yesterday | week | month
+  count: number;
+  prev: number;
+  deltaPct: number;
+}
+
+export interface DayRow {
+  day: string; // local YYYY-MM-DD
+  tasks: number;
+  prs: number;
+  comments: number;
+}
+
+export interface Slice {
+  label: string;
+  count: number;
+}
+
+export interface AvgTask {
+  medianHours: number;
+  meanHours: number;
+  samples: number;
+  assumed: boolean;
+}
+
+export interface AnalyticsDashboard {
+  rangeDays: number;
+  cards: PeriodCard[];
+  daily: DayRow[];
+  byType: Slice[];
+  byOrg: Slice[];
+  avgTask: AvgTask;
 }

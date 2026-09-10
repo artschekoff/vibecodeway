@@ -16,7 +16,7 @@ export default function HamburgerMenu() {
   const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<string | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, openBoardTab, openAskTab, openTimelineTab, openActivityFeedTab, openProductivityTab, tabs, closeTab } = useTabContext();
+  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, openBoardTab, openAskTab, openTimelineTab, openActivityFeedTab, openProductivityTab, openAnalyticsTab, tabs, closeTab } = useTabContext();
 
   const loadOrgs = useCallback(async () => {
     try {
@@ -113,6 +113,12 @@ export default function HamburgerMenu() {
               onClick={() => { openProductivityTab(); setOpen(false); }}
             >
               Closed Tasks
+            </button>
+            <button
+              className="app-menu-item"
+              onClick={() => { openAnalyticsTab(); setOpen(false); }}
+            >
+              Analytics
             </button>
             <div className="app-menu-divider" />
 

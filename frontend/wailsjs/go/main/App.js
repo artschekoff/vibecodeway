@@ -302,6 +302,10 @@ export function GetActivityFeed(arg1) {
   return window['go']['main']['App']['GetActivityFeed'](arg1);
 }
 
+export function GetAnalyticsDashboard(arg1) {
+  return window['go']['main']['App']['GetAnalyticsDashboard'](arg1);
+}
+
 export function GetAppLogs(arg1) {
   return window['go']['main']['App']['GetAppLogs'](arg1);
 }
@@ -876,6 +880,10 @@ export function SetSlackConfig(arg1, arg2, arg3) {
 
 export function SetSlackPassphrase(arg1) {
   return window['go']['main']['App']['SetSlackPassphrase'](arg1);
+}
+
+export function SetStatsAuthorName(arg1) {
+  return window['go']['main']['App']['SetStatsAuthorName'](arg1);
 }
 
 export function SetTrackedRepoPath(arg1, arg2) {
