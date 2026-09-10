@@ -302,6 +302,10 @@ export function GetActivityFeed(arg1) {
   return window['go']['main']['App']['GetActivityFeed'](arg1);
 }
 
+export function GetAnalyticsDashboard(arg1) {
+  return window['go']['main']['App']['GetAnalyticsDashboard'](arg1);
+}
+
 export function GetAppLogs(arg1) {
   return window['go']['main']['App']['GetAppLogs'](arg1);
 }

@@ -5,6 +5,7 @@ import {store} from '../models';
 import {vcsstore} from '../models';
 import {slackstore} from '../models';
 import {agent} from '../models';
+import {analytics} from '../models';
 import {service} from '../models';
 import {productivity} from '../models';
 import {vcs} from '../models';
@@ -160,6 +161,8 @@ export function GenerateTodoNext(arg1:string):Promise<Array<store.AITodoItem>>;
 export function GetAISettings():Promise<main.AISettingsResponse>;
 
 export function GetActivityFeed(arg1:number):Promise<Array<store.ActivityFeedItem>>;
+
+export function GetAnalyticsDashboard(arg1:number):Promise<analytics.Dashboard>;
 
 export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
