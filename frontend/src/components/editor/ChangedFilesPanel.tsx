@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, Terminal, ChevronsDownUp, ChevronsUpDown, RefreshCw } from "lucide-react";
+import { Copy, Terminal, ChevronsDownUp, ChevronsUpDown, RefreshCw, Folder, File as FileIcon } from "lucide-react";
 import { GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction, ResolveConflict } from "../../../wailsjs/go/main/App";
 import { main } from "../../../wailsjs/go/models";
 
@@ -21,24 +21,151 @@ type Props = {
 
 const POLL_MS = 2000;
 
+// Compact ~22px rows: minHeight + tight padding + box-sizing so a button's own
+// UA padding/border can't inflate the row past the target height.
+const ROW_HEIGHT = 22;
+// Per-level indent for nested folder/file rows, VS Code-style.
+const INDENT_PX = 12;
 const rowStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 6, width: "100%",
-  fontSize: 11, padding: "2px 4px", color: "var(--text)",
+  display: "flex", alignItems: "center", gap: 6, width: "100%", minWidth: 0, boxSizing: "border-box",
+  fontSize: 11, padding: "1px 4px", minHeight: ROW_HEIGHT, color: "var(--text)",
 };
 const nameBtnStyle: React.CSSProperties = {
-  flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer",
+  flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0,
   color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   fontSize: 11, fontFamily: "inherit", // buttons don't inherit font — keep names at row size
 };
 const actionBtnStyle: React.CSSProperties = {
   background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 2px",
 };
+const headerRowStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 2, marginBottom: 2,
+};
 const headerBtnStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 4, width: "100%", background: "none", border: "none",
-  cursor: "pointer", padding: 0, margin: "2px 0", textAlign: "left",
+  display: "flex", alignItems: "center", gap: 4, flex: 1, minWidth: 0, background: "none", border: "none",
+  cursor: "pointer", padding: 0, margin: 0, textAlign: "left",
   fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)",
 };
-const chevronStyle: React.CSSProperties = { width: 10, display: "inline-block", fontSize: 9 };
+// Compact icon buttons for the per-section "collapse all" / "expand all" folder controls.
+const treeToggleBtnStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer",
+  color: "var(--text-muted)", padding: "0 2px", flexShrink: 0,
+};
+const chevronStyle: React.CSSProperties = { width: 10, display: "inline-block", fontSize: 9, flexShrink: 0 };
+const folderBtnStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 6, width: "100%", minWidth: 0, boxSizing: "border-box",
+  background: "none", border: "none", cursor: "pointer", textAlign: "left",
+  fontSize: 11, padding: "1px 4px", minHeight: ROW_HEIGHT, color: "var(--text)",
+};
+const folderNameStyle: React.CSSProperties = {
+  flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+};
+
+// --- Folder-tree grouping ------------------------------------------------
+// Groups a section's flat file list into a folder tree, compacting single-child
+// folder chains VS Code-style (e.g. "src/functions/cf-metric" collapses onto one
+// row when every level in between has exactly one child).
+type TreeFile<T> = T & { path: string };
+type TreeNode<T> =
+  | { type: "file"; name: string; path: string; file: TreeFile<T> }
+  | { type: "folder"; name: string; path: string; children: TreeNode<T>[] };
+type FolderNode<T> = Extract<TreeNode<T>, { type: "folder" }>;
+
+function buildFileTree<T extends { path: string }>(files: T[]): TreeNode<T>[] {
+  type Building = { name: string; path: string; folders: Map<string, Building>; file?: T };
+  const root: Building = { name: "", path: "", folders: new Map() };
+  for (const f of files) {
+    const parts = f.path.split("/").filter(Boolean);
+    let cur = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const path = parts.slice(0, i + 1).join("/");
+      let next = cur.folders.get(part);
+      if (!next) {
+        next = { name: part, path, folders: new Map() };
+        cur.folders.set(part, next);
+      }
+      if (i === parts.length - 1) next.file = f;
+      cur = next;
+    }
+  }
+  const toNodes = (b: Building): TreeNode<T>[] => {
+    const entries = [...b.folders.values()];
+    entries.sort((a, bb) => {
+      const aIsFile = !!a.file, bIsFile = !!bb.file;
+      if (aIsFile !== bIsFile) return aIsFile ? 1 : -1; // folders before files
+      return a.name.localeCompare(bb.name);
+    });
+    return entries.map((e): TreeNode<T> => {
+      if (e.file) return { type: "file", name: e.name, path: e.path, file: e.file };
+      let node: FolderNode<T> = { type: "folder", name: e.name, path: e.path, children: toNodes(e) };
+      // Compact chains of single-child folders into one row.
+      while (node.children.length === 1 && node.children[0].type === "folder") {
+        const child = node.children[0] as FolderNode<T>;
+        node = { type: "folder", name: `${node.name}/${child.name}`, path: child.path, children: child.children };
+      }
+      return node;
+    });
+  };
+  return toNodes(root);
+}
+
+function collectFolderPaths<T>(nodes: TreeNode<T>[]): string[] {
+  const out: string[] = [];
+  for (const n of nodes) {
+    if (n.type === "folder") {
+      out.push(n.path);
+      out.push(...collectFolderPaths(n.children));
+    }
+  }
+  return out;
+}
+
+// `sectionKey` namespaces folder collapse-state keys (`${sectionKey}::${folderPath}`)
+// so the same folder path in two different sections/repos collapses independently.
+function TreeRows<T>({ nodes, depth, sectionKey, collapsed, onToggleFolder, renderFile }: {
+  nodes: TreeNode<T>[];
+  depth: number;
+  sectionKey: string;
+  collapsed: Set<string>;
+  onToggleFolder: (key: string) => void;
+  renderFile: (file: TreeFile<T>) => React.ReactNode;
+}) {
+  return (
+    <>
+      {nodes.map((n) => {
+        const indent = depth * INDENT_PX;
+        if (n.type === "folder") {
+          const fullKey = `${sectionKey}::${n.path}`;
+          const isCollapsed = collapsed.has(fullKey);
+          return (
+            <div key={`d:${n.path}`}>
+              <button
+                style={{ ...folderBtnStyle, paddingLeft: 4 + indent }}
+                onClick={() => onToggleFolder(fullKey)}
+                aria-label={`${isCollapsed ? "expand" : "collapse"} folder ${n.path}`}
+                title={n.path}
+              >
+                <span style={chevronStyle}>{isCollapsed ? "▸" : "▾"}</span>
+                <Folder size={12} style={{ flexShrink: 0, color: "var(--text-muted)" }} />
+                <span style={folderNameStyle}>{n.name}</span>
+              </button>
+              {!isCollapsed && (
+                <TreeRows nodes={n.children} depth={depth + 1} sectionKey={sectionKey} collapsed={collapsed} onToggleFolder={onToggleFolder} renderFile={renderFile} />
+              )}
+            </div>
+          );
+        }
+        return (
+          <div key={`f:${n.path}`} style={{ ...rowStyle, paddingLeft: 4 + indent }}>
+            <FileIcon size={12} style={{ flexShrink: 0, color: "var(--text-muted)" }} />
+            {renderFile(n.file)}
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 // Sections are collapsed by default; this stores which ones the user opened.
 const EXPAND_KEY = "vibecodeway:changedfiles:expanded";
@@ -52,6 +179,10 @@ function loadExpanded(): Set<string> {
   }
 }
 
+// Shared empty set — used in place of an active collapse set while a filter is
+// on, so every folder renders expanded (avoids allocating a new Set per render).
+const EMPTY_SET: Set<string> = new Set();
+
 const toggleAllBtnStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", background: "none", border: "1px solid var(--border)",
   borderRadius: 4, cursor: "pointer", color: "var(--text-muted)", padding: "3px 5px", flexShrink: 0,
@@ -61,6 +192,10 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
   const [filter, setFilter] = useState("");
+  // Folder-tree collapse state, keyed by `${sectionKey}::${folderPath}`. Component-local
+  // (no persistence needed) and separate from `expanded`, which shows/hides whole sections.
+  // Folders default to expanded.
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const mountedRef = useRef(true);
 
   const persistExpanded = (next: Set<string>) => {
@@ -72,6 +207,25 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
       if (next.has(key)) next.delete(key);
       else next.add(key);
       persistExpanded(next);
+      return next;
+    });
+  };
+
+  const toggleFolder = (key: string) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const collapseAllFolders = (keys: string[]) => {
+    setCollapsedFolders((prev) => new Set([...prev, ...keys]));
+  };
+  const expandAllFolders = (keys: string[]) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      keys.forEach((k) => next.delete(k));
       return next;
     });
   };
@@ -130,6 +284,32 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
   // A section is open when explicitly expanded, or while a filter is active
   // (so matches are visible even though sections default to collapsed).
   const sectionOpen = (key: string) => q !== "" || expanded.has(key);
+  // While filtering, force every folder open too so matches stay visible under
+  // their folders instead of being hidden by a stale collapse.
+  const treeCollapsed = q !== "" ? EMPTY_SET : collapsedFolders;
+
+  // Section header for a folder-tree section: the existing show/hide-section
+  // toggle, plus (when the tree has folders) compact collapse-all/expand-all
+  // icon buttons that operate on this section's folder-tree state only.
+  const renderTreeHeader = (key: string, label: string, folderKeys: string[]) => (
+    <div style={headerRowStyle}>
+      <button style={headerBtnStyle} onClick={() => toggleSection(key)}>
+        <span style={chevronStyle}>{sectionOpen(key) ? "▾" : "▸"}</span>{label}
+      </button>
+      {folderKeys.length > 0 && (
+        <>
+          <button aria-label={`collapse all folders in ${label}`} title="Collapse All" style={treeToggleBtnStyle}
+            onClick={() => collapseAllFolders(folderKeys)}>
+            <ChevronsDownUp size={11} />
+          </button>
+          <button aria-label={`expand all folders in ${label}`} title="Expand All" style={treeToggleBtnStyle}
+            onClick={() => expandAllFolders(folderKeys)}>
+            <ChevronsUpDown size={11} />
+          </button>
+        </>
+      )}
+    </div>
+  );
 
   // Keys of every section that currently has (matching) content — for expand-all.
   const allSectionKeys: string[] = [];
@@ -180,6 +360,16 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
         const sKey = `${repo.repoName}:staged`;
         const lKey = `${repo.repoName}:local`;
         const cKey = `${repo.repoName}:conflicts`;
+
+        const conflictsTree = buildFileTree(conflicts);
+        const branchTree = buildFileTree(branch);
+        const stagedTree = buildFileTree(staged);
+        const unstagedTree = buildFileTree(unstaged);
+        const conflictsFolderKeys = collectFolderPaths(conflictsTree).map((p) => `${cKey}::${p}`);
+        const branchFolderKeys = collectFolderPaths(branchTree).map((p) => `${bKey}::${p}`);
+        const stagedFolderKeys = collectFolderPaths(stagedTree).map((p) => `${sKey}::${p}`);
+        const unstagedFolderKeys = collectFolderPaths(unstagedTree).map((p) => `${lKey}::${p}`);
+
         return (
           <div key={repo.repoName} style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
@@ -195,68 +385,96 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
 
             {conflicts.length > 0 && (
               <div style={{ marginBottom: 6 }}>
-                <button style={headerBtnStyle} onClick={() => toggleSection(cKey)}>
-                  <span style={chevronStyle}>{sectionOpen(cKey) ? "▾" : "▸"}</span>Merge Conflicts
-                </button>
-                {sectionOpen(cKey) && conflicts.map((f) => (
-                  <div key={`c:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: "#f85149" }} title="Unmerged">!</span>
-                    {/* Opens the working-tree file with its conflict markers, so the
-                        finer-grained resolution is editing it and marking it resolved. */}
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, "conflict", "head")}>{f.path}</button>
-                    <button aria-label={`keep ours for ${f.path}`} title="Keep ours (this branch)" style={actionBtnStyle}
-                      onClick={() => void act((rp, p) => ResolveConflict(rp, p, "ours"), repo.repoPath, f.path)}>ours</button>
-                    <button aria-label={`keep theirs for ${f.path}`} title="Keep theirs (branch being merged in)" style={actionBtnStyle}
-                      onClick={() => void act((rp, p) => ResolveConflict(rp, p, "theirs"), repo.repoPath, f.path)}>theirs</button>
-                    <button aria-label={`mark ${f.path} resolved`} title="Mark resolved (stage it)" style={actionBtnStyle}
-                      onClick={() => void act(StageFile, repo.repoPath, f.path)}>✓</button>
-                  </div>
-                ))}
+                {renderTreeHeader(cKey, "Merge Conflicts", conflictsFolderKeys)}
+                {sectionOpen(cKey) && (
+                  <TreeRows
+                    nodes={conflictsTree}
+                    depth={0}
+                    sectionKey={cKey}
+                    collapsed={treeCollapsed}
+                    onToggleFolder={toggleFolder}
+                    renderFile={(f) => (
+                      <>
+                        <span style={{ width: 14, color: "#f85149" }} title="Unmerged">!</span>
+                        {/* Opens the working-tree file with its conflict markers, so the
+                            finer-grained resolution is editing it and marking it resolved. */}
+                        <button style={nameBtnStyle} title={f.path} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, "conflict", "head")}>{f.path.split("/").pop()}</button>
+                        <button aria-label={`keep ours for ${f.path}`} title="Keep ours (this branch)" style={actionBtnStyle}
+                          onClick={() => void act((rp, p) => ResolveConflict(rp, p, "ours"), repo.repoPath, f.path)}>ours</button>
+                        <button aria-label={`keep theirs for ${f.path}`} title="Keep theirs (branch being merged in)" style={actionBtnStyle}
+                          onClick={() => void act((rp, p) => ResolveConflict(rp, p, "theirs"), repo.repoPath, f.path)}>theirs</button>
+                        <button aria-label={`mark ${f.path} resolved`} title="Mark resolved (stage it)" style={actionBtnStyle}
+                          onClick={() => void act(StageFile, repo.repoPath, f.path)}>✓</button>
+                      </>
+                    )}
+                  />
+                )}
               </div>
             )}
 
             {branch.length > 0 && (
               <div style={{ marginBottom: 6 }}>
-                <button style={headerBtnStyle} onClick={() => toggleSection(bKey)}>
-                  <span style={chevronStyle}>{sectionOpen(bKey) ? "▾" : "▸"}</span>Branch Changes
-                </button>
-                {sectionOpen(bKey) && branch.map((f) => (
-                  <div key={`b:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: statusColor(f.commitStatus) }}>{statusLetter(f.commitStatus)}</span>
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus, "branch")}>{f.path}</button>
-                  </div>
-                ))}
+                {renderTreeHeader(bKey, "Branch Changes", branchFolderKeys)}
+                {sectionOpen(bKey) && (
+                  <TreeRows
+                    nodes={branchTree}
+                    depth={0}
+                    sectionKey={bKey}
+                    collapsed={treeCollapsed}
+                    onToggleFolder={toggleFolder}
+                    renderFile={(f) => (
+                      <>
+                        <span style={{ width: 14, color: statusColor(f.commitStatus) }}>{statusLetter(f.commitStatus)}</span>
+                        <button style={nameBtnStyle} title={f.path} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.commitStatus, "branch")}>{f.path.split("/").pop()}</button>
+                      </>
+                    )}
+                  />
+                )}
               </div>
             )}
 
             {staged.length > 0 && (
               <div style={{ marginBottom: 6 }}>
-                <button style={headerBtnStyle} onClick={() => toggleSection(sKey)}>
-                  <span style={chevronStyle}>{sectionOpen(sKey) ? "▾" : "▸"}</span>Staged Changes
-                </button>
-                {sectionOpen(sKey) && staged.map((f) => (
-                  <div key={`s:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: statusColor(f.indexStatus) }}>{statusLetter(f.indexStatus)}</span>
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.indexStatus, "head")}>{f.path}</button>
-                    <button aria-label={`unstage ${f.path}`} title="Unstage" style={actionBtnStyle} onClick={() => void act(UnstageFile, repo.repoPath, f.path)}>−</button>
-                  </div>
-                ))}
+                {renderTreeHeader(sKey, "Staged Changes", stagedFolderKeys)}
+                {sectionOpen(sKey) && (
+                  <TreeRows
+                    nodes={stagedTree}
+                    depth={0}
+                    sectionKey={sKey}
+                    collapsed={treeCollapsed}
+                    onToggleFolder={toggleFolder}
+                    renderFile={(f) => (
+                      <>
+                        <span style={{ width: 14, color: statusColor(f.indexStatus) }}>{statusLetter(f.indexStatus)}</span>
+                        <button style={nameBtnStyle} title={f.path} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.indexStatus, "head")}>{f.path.split("/").pop()}</button>
+                        <button aria-label={`unstage ${f.path}`} title="Unstage" style={actionBtnStyle} onClick={() => void act(UnstageFile, repo.repoPath, f.path)}>−</button>
+                      </>
+                    )}
+                  />
+                )}
               </div>
             )}
 
             {unstaged.length > 0 && (
               <div>
-                <button style={headerBtnStyle} onClick={() => toggleSection(lKey)}>
-                  <span style={chevronStyle}>{sectionOpen(lKey) ? "▾" : "▸"}</span>Local Changes
-                </button>
-                {sectionOpen(lKey) && unstaged.map((f) => (
-                  <div key={`w:${f.path}`} style={rowStyle}>
-                    <span style={{ width: 14, color: statusColor(f.workStatus) }}>{statusLetter(f.workStatus)}</span>
-                    <button style={nameBtnStyle} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus, "head")}>{f.path}</button>
-                    <button aria-label={`discard ${f.path}`} title="Discard" style={actionBtnStyle} onClick={() => void onDiscard(repo.repoPath, f.path)}>↺</button>
-                    <button aria-label={`stage ${f.path}`} title="Stage" style={actionBtnStyle} onClick={() => void act(StageFile, repo.repoPath, f.path)}>+</button>
-                  </div>
-                ))}
+                {renderTreeHeader(lKey, "Local Changes", unstagedFolderKeys)}
+                {sectionOpen(lKey) && (
+                  <TreeRows
+                    nodes={unstagedTree}
+                    depth={0}
+                    sectionKey={lKey}
+                    collapsed={treeCollapsed}
+                    onToggleFolder={toggleFolder}
+                    renderFile={(f) => (
+                      <>
+                        <span style={{ width: 14, color: statusColor(f.workStatus) }}>{statusLetter(f.workStatus)}</span>
+                        <button style={nameBtnStyle} title={f.path} onClick={() => onOpenFile(repo.repoPath, repo.repoName, f.path, f.workStatus, "head")}>{f.path.split("/").pop()}</button>
+                        <button aria-label={`discard ${f.path}`} title="Discard" style={actionBtnStyle} onClick={() => void onDiscard(repo.repoPath, f.path)}>↺</button>
+                        <button aria-label={`stage ${f.path}`} title="Stage" style={actionBtnStyle} onClick={() => void act(StageFile, repo.repoPath, f.path)}>+</button>
+                      </>
+                    )}
+                  />
+                )}
               </div>
             )}
 
