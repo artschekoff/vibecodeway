@@ -255,7 +255,11 @@ type AppSettings struct {
 	PRStaleThresholdDays         int     `json:"prStaleThresholdDays"` // PR considered stale after N days awaiting review
 	WorkdayHours                 float64 `json:"workdayHours"`         // theoretical workday length, hours
 	TaskHours                    float64 `json:"taskHours"`            // theoretical cost of one closed task, hours
-	UpdatedAt                    string  `json:"updatedAt"`
+	// StatsAuthorName is the user's own Jira display name, used to attribute
+	// synced comments to them for comment_authored stat-event capture.
+	// Empty (the default) means capture is skipped entirely.
+	StatsAuthorName string `json:"statsAuthorName"`
+	UpdatedAt       string `json:"updatedAt"`
 }
 
 // SyncSession tracks one refresh run (Refresh All or per-source).
