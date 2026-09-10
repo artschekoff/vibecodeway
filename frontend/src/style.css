@@ -644,7 +644,7 @@ select {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 8px 12px;
+  padding: 5px 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -729,7 +729,7 @@ select {
 }
 
 .context-row td {
-  padding: 12px;
+  padding: 5px 12px;
   vertical-align: middle;
 }
 
@@ -755,6 +755,8 @@ select {
 .context-meta {
   font-size: 12px;
   color: var(--text-muted);
+  /* Dates like "10 Sep 2026 at 13:19" must not wrap — wrapping doubles row height */
+  white-space: nowrap;
 }
 
 .context-last-item {
@@ -853,8 +855,12 @@ select {
 .issue-card-header {
   display: flex;
   align-items: center;
+  /* Wrap instead of squeezing the title into a one-word-per-line column:
+     on narrow panes status+actions drop to a second row. */
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   cursor: pointer;
   user-select: none;
 }
@@ -870,9 +876,10 @@ select {
 }
 
 .issue-key-col {
+  /* Key and @assignee on one line — the stacked column doubled row height */
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -894,8 +901,14 @@ select {
 
 .issue-summary {
   flex: 1;
+  min-width: 160px;
   font-size: 13px;
   font-weight: 500;
+  /* Clamp to 2 lines; the full text lives in the title attribute */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .issue-meta {
@@ -903,6 +916,7 @@ select {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .issue-assignee {
@@ -4082,11 +4096,10 @@ select {
 
 /* PR repo group (grouped by tracked branch) */
 .pr-repo-group {
-  border-bottom: 1px solid var(--border);
-}
-
-.pr-repo-group:last-child {
-  border-bottom: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 10px;
 }
 
 .pr-repo-group-header {
@@ -5595,7 +5608,7 @@ select {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px 4px 6px;
+  padding: 8px 8px 6px;
   height: 64px;
   border-radius: 10px;
   font-size: 10px;
@@ -5629,9 +5642,8 @@ select {
   position: relative;
 }
 
-.tab-item--active .tab-item__icon {
-  background: rgba(255,255,255,0.1);
-}
+/* No separate icon background on active — the tab highlight is enough,
+   an inner box read as a frame-in-frame. */
 
 .tab-item__org-dot {
   width: 32px;
@@ -5649,7 +5661,7 @@ select {
 .tab-item__title {
   /* Follows the resizable rail (--rail-w, set inline by App). The fallback keeps
      the original 62px at the 72px icon-rail default. */
-  max-width: calc(var(--rail-w, 72px) - 10px);
+  max-width: calc(var(--rail-w, 72px) - 20px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5660,6 +5672,52 @@ select {
 
 .tab-item__title--org {
   font-weight: 600;
+}
+
+/* Wide rail (>=120px): rows instead of columns — icon left, full title
+   left-aligned and vertically centered, badge pinned to the right edge. */
+.app-sidebar--wide .tab-item {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 40px;
+  padding: 4px 10px;
+}
+
+.app-sidebar--wide .tab-item__title {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  text-align: left;
+  font-size: 12px;
+}
+
+/* Static icon so the badge's absolute positioning anchors to the whole row */
+.app-sidebar--wide .tab-item__icon {
+  position: static;
+}
+
+.app-sidebar--wide .tab-item__badge {
+  top: 50%;
+  transform: translateY(-50%);
+  right: 8px;
+}
+
+/* Long titles fade out under the badge instead of colliding with it */
+.app-sidebar--wide .tab-item:has(.tab-item__badge) .tab-item__title {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 52px), transparent calc(100% - 20px));
+  mask-image: linear-gradient(to right, #000 calc(100% - 52px), transparent calc(100% - 20px));
+}
+
+/* The hover close button lands where the badge sits — swap them on hover */
+.app-sidebar--wide .tab-item:hover .tab-item__badge {
+  display: none;
+}
+
+.app-sidebar--wide .tab-item__close-zone {
+  top: 50%;
+  transform: translateY(-50%);
+  right: 6px;
 }
 
 .tab-item__close-zone {
@@ -6822,7 +6880,7 @@ select {
   padding: 0 3px;
   border-radius: 7px;
   background: var(--accent, #58a6ff);
-  color: #fff;
+  color: var(--accent-text, #1a1508);
   font-size: 9px;
   font-weight: 700;
   line-height: 14px;
@@ -7205,3 +7263,57 @@ select {
 .productivity-bar-col { flex: 1 1 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
 .productivity-bar { background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; }
 .productivity-bar-label { position: absolute; bottom: -16px; width: 100%; text-align: center; font-size: 9px; color: var(--text-muted); }
+
+/* === Analytics dashboard === */
+.analytics-page { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.analytics-toolbar { display: flex; align-items: center; gap: 12px; }
+.analytics-title { font-size: 15px; font-weight: 600; margin: 0; color: var(--text); }
+.analytics-range-switcher { display: flex; gap: 4px; }
+.analytics-range-btn-active { background: var(--surface); color: var(--accent); border-color: var(--accent); }
+.analytics-headline { font-size: 14px; color: var(--text); margin: 0; }
+
+.analytics-cards-grid { display: flex; gap: 20px; flex-wrap: wrap; }
+.analytics-metric-col { flex: 1 1 220px; display: flex; flex-direction: column; gap: 8px; }
+.analytics-metric-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.analytics-period-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px;
+}
+.analytics-period-label { font-size: 11px; color: var(--text-muted); flex: 1 1 auto; }
+.analytics-period-value { font-size: 18px; font-weight: 600; color: var(--text); }
+.analytics-delta-badge { font-size: 11px; font-weight: 600; min-width: 40px; text-align: right; }
+.analytics-delta-up { color: var(--success); }
+.analytics-delta-down { color: var(--danger); }
+.analytics-delta-flat { color: var(--text-muted); }
+
+.analytics-avg-task { font-size: 13px; color: var(--text-muted); }
+
+.analytics-trend { display: flex; flex-direction: column; gap: 8px; }
+.analytics-trend-legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); }
+.analytics-legend-item { display: flex; align-items: center; gap: 4px; }
+.analytics-legend-swatch { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.analytics-legend-tasks { background: var(--accent); }
+.analytics-legend-prs { background: var(--success); }
+.analytics-legend-comments { background: var(--text-muted); }
+.analytics-trend-bars {
+  display: flex; align-items: flex-end; gap: 4px; height: 160px;
+  border-bottom: 1px solid var(--border); padding-bottom: 18px;
+}
+.analytics-trend-col { flex: 1 1 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
+.analytics-trend-group { flex: 1 1 auto; display: flex; align-items: flex-end; gap: 1px; height: 100%; }
+.analytics-trend-bar { flex: 1 1 0; border-radius: 2px 2px 0 0; min-height: 2px; }
+.analytics-trend-bar-tasks { background: var(--accent); }
+.analytics-trend-bar-prs { background: var(--success); }
+.analytics-trend-bar-comments { background: var(--text-muted); }
+.analytics-trend-label { position: absolute; bottom: -16px; width: 100%; text-align: center; font-size: 9px; color: var(--text-muted); }
+
+.analytics-breakdowns { display: flex; gap: 20px; flex-wrap: wrap; }
+.analytics-breakdown { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; }
+.analytics-breakdown-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.analytics-breakdown-empty { font-size: 12px; color: var(--text-muted); }
+.analytics-breakdown-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.analytics-breakdown-label { flex: 0 0 120px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.analytics-breakdown-bar-track { flex: 1 1 auto; background: var(--surface); border-radius: 2px; height: 8px; overflow: hidden; }
+.analytics-breakdown-bar { background: var(--accent); height: 100%; border-radius: 2px; }
+.analytics-breakdown-count { flex: 0 0 30px; text-align: right; color: var(--text-muted); }
