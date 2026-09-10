@@ -882,6 +882,10 @@ export function SetSlackPassphrase(arg1) {
   return window['go']['main']['App']['SetSlackPassphrase'](arg1);
 }
 
+export function SetStatsAuthorName(arg1) {
+  return window['go']['main']['App']['SetStatsAuthorName'](arg1);
+}
+
 export function SetTrackedRepoPath(arg1, arg2) {
   return window['go']['main']['App']['SetTrackedRepoPath'](arg1, arg2);
 }

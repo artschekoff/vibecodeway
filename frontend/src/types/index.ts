@@ -398,6 +398,7 @@ export interface AppSettings {
   prStaleThresholdDays: number;
   workdayHours: number;
   taskHours: number;
+  statsAuthorName: string;
   updatedAt: string;
 }
 
@@ -626,7 +627,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "productivity" | "editor";
+export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "productivity" | "analytics" | "editor";
 
 export type ActivitySource = "jira" | "github";
 

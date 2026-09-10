@@ -452,6 +452,8 @@ export function SetSlackConfig(arg1:string,arg2:string,arg3:string):Promise<slac
 
 export function SetSlackPassphrase(arg1:string):Promise<void>;
 
+export function SetStatsAuthorName(arg1:string):Promise<void>;
+
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
 export function SolveWithAI(arg1:string,arg2:string):Promise<string>;

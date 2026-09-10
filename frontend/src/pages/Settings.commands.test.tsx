@@ -16,6 +16,7 @@ const H = vi.hoisted(() => ({
   VCSLoginStart: vi.fn(),
   VCSLoginComplete: vi.fn(),
   SetAutoLinkRepos: vi.fn(),
+  SetStatsAuthorName: vi.fn(),
   UpdateKeybinding: vi.fn(),
   ListGlobalEventHooks: vi.fn(),
   ListWorkflowStatuses: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("../../wailsjs/go/main/App", () => ({
   VCSLoginStart: H.VCSLoginStart,
   VCSLoginComplete: H.VCSLoginComplete,
   SetAutoLinkRepos: H.SetAutoLinkRepos,
+  SetStatsAuthorName: H.SetStatsAuthorName,
   UpdateKeybinding: H.UpdateKeybinding,
   ListGlobalEventHooks: H.ListGlobalEventHooks,
   ListWorkflowStatuses: H.ListWorkflowStatuses,
@@ -68,6 +70,7 @@ beforeEach(() => {
   H.VCSLoginStart.mockResolvedValue({});
   H.VCSLoginComplete.mockResolvedValue("");
   H.SetAutoLinkRepos.mockResolvedValue(undefined);
+  H.SetStatsAuthorName.mockResolvedValue(undefined);
   H.UpdateKeybinding.mockResolvedValue(undefined);
   H.ListGlobalEventHooks.mockResolvedValue([]);
   H.ListWorkflowStatuses.mockResolvedValue([]);

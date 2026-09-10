@@ -1312,6 +1312,7 @@ export namespace store {
 	    prStaleThresholdDays: number;
 	    workdayHours: number;
 	    taskHours: number;
+	    statsAuthorName: string;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1331,6 +1332,7 @@ export namespace store {
 	        this.prStaleThresholdDays = source["prStaleThresholdDays"];
 	        this.workdayHours = source["workdayHours"];
 	        this.taskHours = source["taskHours"];
+	        this.statsAuthorName = source["statsAuthorName"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
