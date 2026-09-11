@@ -16,7 +16,7 @@ type ProgressEvent = { phase: string; tool?: string; args?: string; result?: str
 type PendingConfirm = { tool: string; args: string; callId: string };
 
 // A turn in the persistent, session-scoped chat log. "summary" entries replace
-// the whole log after "Суммаризовать контекст" is used.
+// the whole log after "Summarize context" is used.
 type LogEntry =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; steps: agent.Step[] }
@@ -149,7 +149,7 @@ export default function AskAIPage() {
           disabled={loading || log.length === 0}
           style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}
         >
-          <Eraser size={13} /> Очистить контекст
+          <Eraser size={13} /> Clear context
         </button>
         <button
           className="btn btn-secondary"
@@ -157,7 +157,7 @@ export default function AskAIPage() {
           disabled={loading || log.length === 0}
           style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}
         >
-          <FileStack size={13} /> Суммаризовать контекст
+          <FileStack size={13} /> Summarize context
         </button>
       </div>
 
@@ -237,7 +237,7 @@ export default function AskAIPage() {
                   border: "1px dashed var(--border)", background: "var(--surface2)", color: "var(--text-muted)",
                 }}
               >
-                <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--text)" }}>Контекст сжат</div>
+                <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--text)" }}>Context summarized</div>
                 <div style={{ whiteSpace: "pre-wrap" }}>{entry.content}</div>
               </div>
             );

@@ -155,7 +155,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
       <div ref={columnRef} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div ref={(el) => registerZone("editor", el)} tabIndex={-1}
           className={activeZone === "editor" ? "zone--active" : undefined}
-          style={{ flex: 1, minHeight: 0 }}>
+          style={{ flex: 1, minHeight: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", margin: "6px 0 0 6px" }}>
           {active ? (
             <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} baseMode={active.baseMode} refreshSignal={refreshSignal}
               onSaved={() => { /* panel auto-polls */ }}
@@ -180,7 +180,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         />
         <div ref={(el) => registerZone("terminal", el)} tabIndex={-1}
           className={activeZone === "terminal" ? "zone--active" : undefined}
-          style={{ height: visibleTerminalHeight, flexShrink: 0, minHeight: 0, borderTop: "1px solid var(--border)" }}>
+          style={{ height: visibleTerminalHeight, flexShrink: 0, minHeight: 0, border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden", margin: "0 0 6px 6px" }}>
           {/* Mounted unconditionally: TerminalPanel owns the ⌘T hotkey handlers, so
               gating it on `cwd` made ⌘T a silent no-op until GetContextChanges
               resolved (and forever for a context with no repo on disk). The panel
@@ -232,7 +232,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
             selector and the Files/Git tabs below. It also gives NotesPanel's inner
             overflowY:auto list a bounded height — flex:1 against an auto-height
             parent resolves to content size, so the list could never scroll. */}
-        <div style={{ maxHeight: NOTES_HEIGHT, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, borderBottom: "1px solid var(--border)" }}>
+        <div style={{ maxHeight: NOTES_HEIGHT, overflow: "hidden", display: "flex", flexDirection: "column", flexShrink: 0, borderBottom: "1px solid var(--border)" }}>
           <NotesPanel contextId={contextId} />
         </div>
         {/* Repo selector sits above the Files/Git tabs — it scopes both. */}

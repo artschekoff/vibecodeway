@@ -6,7 +6,7 @@ import { EditorFilesProvider } from "./contexts/EditorFilesContext";
 import { EditorFileTabBar } from "./components/editor/EditorFileTabBar";
 import HamburgerMenu from "./components/HamburgerMenu";
 import TabBar from "./components/TabBar";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { ResizeHandle } from "./components/editor/ResizeHandle";
 import { nextPaneSize, readStoredPaneSize } from "./lib/paneSize";
 import { ListAllContexts, ListOrganizations, GetKeybindings } from "../wailsjs/go/main/App";
@@ -66,7 +66,7 @@ function AppShell() {
   const [showA11yBanner, setShowA11yBanner] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { openContextTab, tabs, activeTabId, forceCloseTab } = useTabContext();
+  const { openContextTab, openAskTab, tabs, activeTabId, forceCloseTab } = useTabContext();
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeOrgId = activeTab?.type === "org" ? activeTab.orgId : undefined;
 
@@ -151,13 +151,17 @@ function AppShell() {
       <ProgressModal />
       <div className="app-shell">
         <div
-          className="app-sidebar"
+          className={`app-sidebar${railWidth >= 120 ? " app-sidebar--wide" : ""}`}
           // --rail-w drives .tab-item__title's max-width so context names get
           // wider as the rail does, instead of always ellipsising at 62px.
           style={{ width: railWidth, "--rail-w": `${railWidth}px` } as React.CSSProperties}
         >
           <HamburgerMenu />
           <img className="app-logo" src={logo} alt="VibeCodeWay" title="VibeCodeWay" />
+          <button className="app-ask-ai" onClick={openAskTab} title="Ask AI" aria-label="Ask AI">
+            <Sparkles size={14} />
+            <span className="app-ask-ai__label">Ask AI</span>
+          </button>
           <TabBar />
           <button
             className="app-sidebar__toggle"

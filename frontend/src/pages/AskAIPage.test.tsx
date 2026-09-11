@@ -100,7 +100,7 @@ describe("AskAIPage multi-turn chat log", () => {
     await user.click(screen.getByRole("button", { name: /ask/i }));
     expect(await screen.findByText("an answer")).toBeInTheDocument();
 
-    const clearBtn = screen.getByRole("button", { name: /очистить контекст/i });
+    const clearBtn = screen.getByRole("button", { name: /clear context/i });
     expect(clearBtn).toBeEnabled();
     await user.click(clearBtn);
 
@@ -111,8 +111,8 @@ describe("AskAIPage multi-turn chat log", () => {
 
   it("disables clear and summarize when the log is empty", () => {
     render(<AskAIPage />);
-    expect(screen.getByRole("button", { name: /очистить контекст/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /суммаризовать контекст/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /clear context/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /summarize context/i })).toBeDisabled();
   });
 
   it("replaces the log with one summary entry", async () => {
@@ -125,10 +125,10 @@ describe("AskAIPage multi-turn chat log", () => {
     await user.click(screen.getByRole("button", { name: /ask/i }));
     expect(await screen.findByText("an answer")).toBeInTheDocument();
 
-    const summarizeBtn = screen.getByRole("button", { name: /суммаризовать контекст/i });
+    const summarizeBtn = screen.getByRole("button", { name: /summarize context/i });
     await user.click(summarizeBtn);
 
-    expect(await screen.findByText("Контекст сжат")).toBeInTheDocument();
+    expect(await screen.findByText("Context summarized")).toBeInTheDocument();
     expect(await screen.findByText("compressed summary text")).toBeInTheDocument();
     expect(screen.queryByText("a question")).not.toBeInTheDocument();
     expect(screen.queryByText("an answer")).not.toBeInTheDocument();

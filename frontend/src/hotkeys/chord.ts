@@ -10,13 +10,34 @@ function normKey(k: string): string {
   return low; // "arrowup", "enter", "t", "[", "]", etc.
 }
 
+// Physical-key fallback for non-Latin layouts: on Russian layout ⌘I arrives as
+// e.key="ш", so chords bound to letters never match. e.code names the physical
+// key regardless of layout.
+const CODE_KEYS: Record<string, string> = {
+  BracketLeft: "[", BracketRight: "]", Semicolon: ";", Quote: "'",
+  Comma: ",", Period: ".", Slash: "/", Backquote: "`",
+};
+
+function physicalKey(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  return CODE_KEYS[code] ?? null;
+}
+
 export function eventToToken(e: KeyboardEvent, platform: Platform): Chord | null {
   const raw = (e.key || "").toLowerCase();
   if (MODS_ONLY.has(raw)) return null;
   const modPressed = platform === "darwin" ? !!e.metaKey : !!e.ctrlKey;
   // On darwin, ctrlKey is a distinct raw modifier; on other, ctrl IS mod, so raw ctrl = false.
   const rawCtrl = platform === "darwin" ? !!e.ctrlKey : false;
-  return { mod: modPressed, ctrl: rawCtrl, shift: !!e.shiftKey, alt: !!e.altKey, key: normKey(e.key) };
+  let key = normKey(e.key);
+  // Only rewrite keys a Latin layout could never produce, so every existing
+  // ASCII binding keeps today's behavior exactly.
+  if (key.length === 1 && /[^\x20-\x7e]/.test(key)) {
+    const phys = physicalKey(e.code || "");
+    if (phys) key = phys;
+  }
+  return { mod: modPressed, ctrl: rawCtrl, shift: !!e.shiftKey, alt: !!e.altKey, key };
 }
 
 export function parseChord(s: string): Chord {

@@ -261,8 +261,8 @@ Typical flow:
 Cite the concrete items you relied on (e.g. Jira keys, text names). Be concise and factual.
 If you cannot find something, say so plainly.`
 
-const defaultSummarizePrompt = `Сожми этот диалог в одно сообщение: сохрани все факты, решения, ` +
-	`найденные данные и открытые вопросы. Отвечай на языке диалога.`
+const defaultSummarizePrompt = `Compress this conversation into a single message: keep every fact, ` +
+	`decision, retrieved data point, and open question. Reply in the language of the conversation.`
 
 // toolDefs is the tool catalogue advertised to the model, built from the shared
 // registry so the agent, CLI, and docs stay in sync.

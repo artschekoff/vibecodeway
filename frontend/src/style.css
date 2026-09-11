@@ -3795,6 +3795,30 @@ select {
   border: 1px solid var(--border);
 }
 
+/* Always-visible Ask AI button under the logo. Icon-only in the narrow rail,
+   icon+label once the rail is wide. */
+.app-ask-ai {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  align-self: center;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.app-ask-ai:hover { background: var(--accent-hover); }
+
+.app-ask-ai__label { display: none; }
+
+.app-sidebar--wide .app-ask-ai .app-ask-ai__label { display: inline; }
+
 .app-menu {
   position: relative;
   display: flex;

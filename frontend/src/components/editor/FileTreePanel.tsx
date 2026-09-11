@@ -165,7 +165,9 @@ export function FileTreePanel({ repoPath, repoName, onOpenFile, onOpenTerminal }
       onKeyDown={onTreeKeyDown}
       onFocus={() => setFocused(true)}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false); }}
-      style={{ overflowY: "auto", padding: "8px 10px", outline: "none" }}
+      // flex:1 + minHeight:0 — without them this flex child's min-height is its
+      // content, so a tall tree squeezes the notes block above instead of scrolling.
+      style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 10px", outline: "none" }}
     >
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         <input

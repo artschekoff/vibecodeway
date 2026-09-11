@@ -94,7 +94,7 @@ export default function IssueCard({ issue, isSubtask, onDeleteIssue, onDeleteCom
           <span className={`issue-key${isInactive ? " item--inactive" : ""}`}>{issue.jiraKey}</span>
           {issue.assignee && <span className="issue-assignee">@{issue.assignee}</span>}
         </div>
-        <span className={`issue-summary${isInactive ? " item--inactive" : ""}`}>{issue.summary}</span>
+        <span className={`issue-summary${isInactive ? " item--inactive" : ""}`} title={issue.summary}>{issue.summary}</span>
         <div className="issue-meta">
           {onChangeStatus ? (
             <select

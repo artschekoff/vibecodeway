@@ -14,9 +14,9 @@ export type EditorSettings = {
   diffSideBySide: boolean;
 };
 
-// Defaults preserve the editor's current look (light theme, size 12, side-by-side).
+// Dark by default — the app shell is dark; a light Monaco pane reads as a hole in it.
 export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
-  theme: "light",
+  theme: "dark",
   wordWrap: false,
   fontSize: 12,
   minimap: false,

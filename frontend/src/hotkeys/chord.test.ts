@@ -11,6 +11,16 @@ describe("chord", () => {
       { mod: true, ctrl: false, shift: false, alt: false, key: "t" });
   });
 
+  it("resolves non-Latin layout keys to the physical key (Russian ⌘I = ш)", () => {
+    expect(eventToToken(ev({ metaKey: true, key: "ш", code: "KeyI" }), "darwin")).toEqual(
+      { mod: true, ctrl: false, shift: false, alt: false, key: "i" });
+    expect(eventToToken(ev({ metaKey: true, key: "х", code: "BracketLeft" }), "darwin")).toEqual(
+      { mod: true, ctrl: false, shift: false, alt: false, key: "[" });
+    // ASCII keys keep their layout meaning even when code differs.
+    expect(eventToToken(ev({ metaKey: true, key: "t", code: "KeyY" }), "darwin")).toEqual(
+      { mod: true, ctrl: false, shift: false, alt: false, key: "t" });
+  });
+
   it("keeps raw ctrl separate from mod on darwin (for zone focus)", () => {
     expect(eventToToken(ev({ ctrlKey: true, key: "ArrowRight" }), "darwin")).toEqual(
       { mod: false, ctrl: true, shift: false, alt: false, key: "arrowright" });

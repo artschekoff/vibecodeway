@@ -18,7 +18,7 @@ const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 // Insert-command picker styles (a custom popover, since a native <select> can't
 // be opened programmatically in WebKit). Mirrors EditorSettingsMenu's popover.
 const insertTrigger: React.CSSProperties = {
-  fontSize: 11, marginLeft: 8, background: "none", border: "1px solid var(--border)",
+  fontSize: 11, background: "none", border: "1px solid var(--border)", whiteSpace: "nowrap",
   borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", padding: "1px 6px",
 };
 const insertPopover: React.CSSProperties = {
@@ -359,7 +359,10 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   return (
     <div ref={rootRef}
       style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 4px", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
+      {/* Insert and + are pinned via flex `order` (insert -1, tabs strip 1): they
+          keep one spot however many tabs open; only the tabs strip scrolls. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 4px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flex: 1, minWidth: 0, overflowX: "auto", order: 1 }}>
         {terminals.map((t) => (
           <div
             key={t.key}
@@ -382,15 +385,16 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
             </button>
           </div>
         ))}
+        </div>
         <button
           onClick={addTerminal}
           aria-label="new terminal"
           title="New terminal"
-          style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 4px" }}
+          style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 4px", flexShrink: 0 }}
         >
           <Plus size={13} />
         </button>
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", flexShrink: 0, order: -1 }}>
           <button
             ref={insertBtnRef}
             aria-label="Insert terminal command"
