@@ -1550,6 +1550,70 @@ export namespace store {
 	        this.global_confidence = source["global_confidence"];
 	    }
 	}
+	export class TourStep {
+	    file: string;
+	    anchor: string;
+	    what: string;
+	    why: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TourStep(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.anchor = source["anchor"];
+	        this.what = source["what"];
+	        this.why = source["why"];
+	    }
+	}
+	export class CodeTour {
+	    id: string;
+	    contextId: string;
+	    repoPath: string;
+	    source: string;
+	    title: string;
+	    steps: TourStep[];
+	    stepIndex: number;
+	    decisions: Record<number, string>;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodeTour(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.repoPath = source["repoPath"];
+	        this.source = source["source"];
+	        this.title = source["title"];
+	        this.steps = this.convertValues(source["steps"], TourStep);
+	        this.stepIndex = source["stepIndex"];
+	        this.decisions = source["decisions"];
+	        this.createdAt = source["createdAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Context {
 	    id: string;
 	    key: string;

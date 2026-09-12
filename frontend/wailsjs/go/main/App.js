@@ -70,6 +70,10 @@ export function AskAIChat(arg1, arg2, arg3) {
   return window['go']['main']['App']['AskAIChat'](arg1, arg2, arg3);
 }
 
+export function AskTourQuestion(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['AskTourQuestion'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function AssignAuthorBatch(arg1) {
   return window['go']['main']['App']['AssignAuthorBatch'](arg1);
 }
@@ -316,6 +320,10 @@ export function GetAppLogs(arg1) {
 
 export function GetAppSettings() {
   return window['go']['main']['App']['GetAppSettings']();
+}
+
+export function GetCodeTour(arg1, arg2) {
+  return window['go']['main']['App']['GetCodeTour'](arg1, arg2);
 }
 
 export function GetContextChanges(arg1) {
@@ -838,6 +846,14 @@ export function SetAutoLinkRepos(arg1) {
   return window['go']['main']['App']['SetAutoLinkRepos'](arg1);
 }
 
+export function SetCodeTourDecision(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetCodeTourDecision'](arg1, arg2, arg3);
+}
+
+export function SetCodeTourStep(arg1, arg2) {
+  return window['go']['main']['App']['SetCodeTourStep'](arg1, arg2);
+}
+
 export function SetContextOrg(arg1, arg2) {
   return window['go']['main']['App']['SetContextOrg'](arg1, arg2);
 }
@@ -900,6 +916,10 @@ export function SolveWithAI(arg1, arg2) {
 
 export function StageFile(arg1, arg2) {
   return window['go']['main']['App']['StageFile'](arg1, arg2);
+}
+
+export function StartCodeTour(arg1, arg2) {
+  return window['go']['main']['App']['StartCodeTour'](arg1, arg2);
 }
 
 export function SummarizeAskChat(arg1) {

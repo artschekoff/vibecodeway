@@ -46,6 +46,8 @@ export function AskAI(arg1:string,arg2:string):Promise<agent.Answer>;
 
 export function AskAIChat(arg1:string,arg2:string,arg3:string):Promise<agent.Answer>;
 
+export function AskTourQuestion(arg1:string,arg2:string,arg3:string,arg4:number,arg5:string):Promise<string>;
+
 export function AssignAuthorBatch(arg1:Array<store.AuthorAssignment>):Promise<void>;
 
 export function AuthStatus():Promise<string>;
@@ -169,6 +171,8 @@ export function GetAnalyticsDashboard(arg1:number):Promise<analytics.Dashboard>;
 export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
+
+export function GetCodeTour(arg1:string,arg2:string):Promise<store.CodeTour>;
 
 export function GetContextChanges(arg1:string):Promise<Array<main.RepoChange>>;
 
@@ -430,6 +434,10 @@ export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number
 
 export function SetAutoLinkRepos(arg1:boolean):Promise<void>;
 
+export function SetCodeTourDecision(arg1:string,arg2:number,arg3:string):Promise<void>;
+
+export function SetCodeTourStep(arg1:string,arg2:number):Promise<void>;
+
 export function SetContextOrg(arg1:string,arg2:string):Promise<void>;
 
 export function SetContextWorkflowStatus(arg1:string,arg2:string,arg3:string):Promise<store.ContextSnapshot>;
@@ -461,6 +469,8 @@ export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 export function SolveWithAI(arg1:string,arg2:string):Promise<string>;
 
 export function StageFile(arg1:string,arg2:string):Promise<void>;
+
+export function StartCodeTour(arg1:string,arg2:string):Promise<store.CodeTour>;
 
 export function SummarizeAskChat(arg1:string):Promise<string>;
 

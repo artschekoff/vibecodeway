@@ -739,3 +739,24 @@ export interface AnalyticsDashboard {
   byOrg: Slice[];
   avgTask: AvgTask;
 }
+
+// --- Code tour ---
+
+export interface TourStep {
+  file: string; // repo-relative path
+  anchor: string; // unique code snippet to position on
+  what: string;
+  why: string;
+}
+
+export interface CodeTour {
+  id: string;
+  contextId: string;
+  repoPath: string;
+  source: string; // "agent" | "generated"
+  title: string;
+  steps: TourStep[];
+  stepIndex: number;
+  decisions: Record<number, string>; // stepIdx -> "staged" | "discarded" | "edited" | "skipped"
+  createdAt: string;
+}
