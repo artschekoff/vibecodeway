@@ -225,6 +225,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               onClose={() => { setTourOpen(false); setTourAnchorTarget(null); }}
               onOpenFile={openFile}
               onLocateAnchor={(repoPath, path, anchor) => setTourAnchorTarget({ repoPath, path, anchor })}
+              onAskAuthorAgent={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))}
             />
           )}
         </div>

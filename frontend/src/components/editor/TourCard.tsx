@@ -1,7 +1,25 @@
 import { useEffect, useState } from "react";
-import { X, ChevronLeft, ChevronRight, Check, Undo2, Pencil } from "lucide-react";
-import { ReadRepoFile, SetCodeTourStep, SetCodeTourDecision, StageFile, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
+import { X, ChevronLeft, ChevronRight, Check, Undo2, Pencil, Send, Bot, Loader2, Copy } from "lucide-react";
+import { ReadRepoFile, SetCodeTourStep, SetCodeTourDecision, StageFile, DiscardFile, ConfirmAction, AskTourQuestion } from "../../../wailsjs/go/main/App";
 import type { CodeTour } from "../../types";
+
+// Copyable rule (spec §2) instructing an agent to write the file contract
+// instead of relying on app-side generation. Kept in sync with the schema
+// documented in docs/superpowers/specs/2026-09-11-code-tour-design.md §2.
+const AGENT_RULE_SNIPPET = `When you finish an implementation, write a code tour to .vibecodeway/tour.json with this schema; one step per meaningful change; "anchor" must be a unique snippet from the changed code; write "why" from your actual reasoning:
+
+{
+  "version": 1,
+  "title": "Add analytics dashboard",
+  "steps": [
+    {
+      "file": "src/x.ts",
+      "anchor": "func computeDashboard(",
+      "what": "Added the dashboard compute entry point",
+      "why": "Keeps aggregation out of the HTTP layer so it can be unit-tested"
+    }
+  ]
+}`;
 
 type Decision = "staged" | "discarded" | "edited" | "skipped";
 type AnchorStatus = "checking" | "ok" | "lost" | "missing";
@@ -17,6 +35,10 @@ type Props = {
   // editor for that file is mounted. Only called when the anchor was actually
   // found in the current file content.
   onLocateAnchor: (repoPath: string, path: string, anchor: string) => void;
+  // Inserts text into the context's terminal via the existing insert
+  // mechanism (EditorWorkspace's pendingTerminalInsert -> TerminalPanel),
+  // same flow DiffEditorTab's "Ask AI" uses. Does not auto-submit.
+  onAskAuthorAgent: (text: string) => void;
 };
 
 const cardStyle: React.CSSProperties = {
@@ -52,20 +74,28 @@ function decisionLabel(d: string): string {
   }
 }
 
-export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }: Props) {
+export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, onAskAuthorAgent }: Props) {
   const [stepIndex, setStepIndex] = useState(tour.stepIndex ?? 0);
   const [decisions, setDecisions] = useState<Record<number, string>>(tour.decisions ?? {});
   const [anchorStatus, setAnchorStatus] = useState<AnchorStatus>("checking");
   const [actionError, setActionError] = useState("");
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  // Per-tour, in-memory only (spec §Non-goals: Q&A history is NOT persisted).
+  const [qaHistory, setQaHistory] = useState<{ question: string; answer: string }[]>([]);
+  const [ruleCopied, setRuleCopied] = useState(false);
 
   const steps = tour.steps ?? [];
   const step = steps[stepIndex];
 
-  // Reset local position/decisions whenever the tour identity itself changes
-  // (a brand-new tour started, or GetCodeTour returned a fresh row on resume).
+  // Reset local position/decisions/Q&A history whenever the tour identity
+  // itself changes (a brand-new tour started, or GetCodeTour returned a
+  // fresh row on resume).
   useEffect(() => {
     setStepIndex(tour.stepIndex ?? 0);
     setDecisions(tour.decisions ?? {});
+    setQaHistory([]);
+    setQuestion("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour.id]);
 
@@ -147,6 +177,40 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
     recordDecision("edited");
   };
 
+  // Answered by the app's own LLM (spec §4): AskTourQuestion gets the tour
+  // and step context server-side. Errors surface via the card's existing
+  // inline error affordance (actionError) rather than a dedicated one.
+  const handleAskQuestion = async () => {
+    const q = question.trim();
+    if (!q || asking) return;
+    setAsking(true);
+    setActionError("");
+    try {
+      const answer = await AskTourQuestion(tour.id, tour.contextId, tour.repoPath, stepIndex, q);
+      setQaHistory((prev) => [...prev, { question: q, answer }]);
+      setQuestion("");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  // Escalation to the live author agent (spec §4): forwards the typed
+  // question (or, absent one, the current step's What as a fallback prefix)
+  // into the context's terminal via the existing insert mechanism. Does not
+  // auto-submit beyond that insert — the user reads the answer in the terminal.
+  const handleAskAuthorAgent = () => {
+    const q = question.trim() || step.what;
+    onAskAuthorAgent(`Question about ${step.file}: ${q}`);
+  };
+
+  const handleCopyRule = () => {
+    void navigator.clipboard?.writeText(AGENT_RULE_SNIPPET);
+    setRuleCopied(true);
+    window.setTimeout(() => setRuleCopied(false), 1200);
+  };
+
   return (
     <div style={cardStyle} role="dialog" aria-label="Code tour">
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderBottom: "1px solid var(--border)" }}>
@@ -183,8 +247,57 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
           <div>{step.why}</div>
         </div>
 
-        {/* Task 6 (Q&A): input + inline answer history slot goes here, at the
-            bottom of the scrollable content area, below What/Why. */}
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginBottom: 4 }}>
+            Ask a question
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            <input
+              aria-label="tour question"
+              type="text"
+              value={question}
+              placeholder="Ask about this step…"
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAskQuestion();
+                }
+              }}
+              style={{
+                flex: 1, minWidth: 0, fontSize: 11, padding: "3px 6px",
+                background: "var(--surface2, var(--surface))", border: "1px solid var(--border)",
+                borderRadius: 4, color: "var(--text)",
+              }}
+            />
+            <button
+              aria-label="submit question" title="Ask"
+              disabled={asking || !question.trim()}
+              onClick={() => void handleAskQuestion()}
+              style={actionBtnStyle}
+            >
+              {asking ? <Loader2 size={13} className="spinning" /> : <Send size={13} />}
+            </button>
+            <button
+              aria-label="ask the author agent" title="Ask the author agent in the terminal"
+              onClick={handleAskAuthorAgent}
+              style={actionBtnStyle}
+            >
+              <Bot size={13} />
+            </button>
+          </div>
+
+          {qaHistory.length > 0 && (
+            <div style={{ marginTop: 6, maxHeight: 120, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+              {qaHistory.map((qa, i) => (
+                <div key={i}>
+                  <div style={{ fontSize: 11, fontWeight: 600 }}>{qa.question}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{qa.answer}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", borderTop: "1px solid var(--border)" }}>
@@ -203,6 +316,12 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
         </button>
         <button aria-label="edit step" title="Edit in place" disabled={broken} onClick={handleEdit} style={actionBtnStyle}>
           <Pencil size={13} />
+        </button>
+        <button
+          aria-label="copy agent rule" title={ruleCopied ? "Copied" : "Copy agent rule for CLAUDE.md / .cursor/rules"}
+          onClick={handleCopyRule} style={iconBtnStyle}
+        >
+          {ruleCopied ? <Check size={13} /> : <Copy size={13} />}
         </button>
       </div>
     </div>

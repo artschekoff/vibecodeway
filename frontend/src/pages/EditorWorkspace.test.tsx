@@ -1,7 +1,16 @@
+import { useEffect } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../components/editor/Terminal", () => ({ Terminal: ({ cwd }: { cwd: string }) => <div data-testid="terminal">{cwd}</div> }));
+// Calls onSession with a stable fake id once mounted so TerminalPanel's
+// internal sessionByKey map is populated — needed for the "ask author agent"
+// terminal-insert test below, which asserts on TerminalWrite.
+vi.mock("../components/editor/Terminal", () => ({
+  Terminal: ({ cwd, onSession }: { cwd: string; onSession?: (id: string) => void }) => {
+    useEffect(() => { onSession?.(`sess:${cwd}`); }, [cwd, onSession]);
+    return <div data-testid="terminal">{cwd}</div>;
+  },
+}));
 vi.mock("../components/editor/DiffEditorTab", () => ({
   DiffEditorTab: ({ path, highlightAnchor }: { path: string; highlightAnchor?: string }) => (
     <div data-testid="diff">{path}{highlightAnchor ? `:${highlightAnchor}` : ""}</div>
@@ -24,15 +33,17 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
 // so EditorWorkspace tests only exercise the Start/Resume-tour wiring, not
 // TourCard's internals (which would pull in ReadRepoFile/Stage/Discard mocks).
 vi.mock("../components/editor/TourCard", () => ({
-  TourCard: ({ tour, onClose, onLocateAnchor }: {
+  TourCard: ({ tour, onClose, onLocateAnchor, onAskAuthorAgent }: {
     tour: { title: string };
     onClose: () => void;
     onLocateAnchor: (repoPath: string, path: string, anchor: string) => void;
+    onAskAuthorAgent: (text: string) => void;
   }) => (
     <div data-testid="tour-card">
       {tour.title}
       <button onClick={onClose}>close-tour</button>
       <button onClick={() => onLocateAnchor("/r/api", "src/a.ts", "anchor-x")}>locate-anchor</button>
+      <button onClick={() => onAskAuthorAgent("Question about src/a.ts: why here?")}>ask-author-agent</button>
     </div>
   ),
 }));
@@ -354,6 +365,28 @@ describe("EditorWorkspace", () => {
     expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument();
     fireEvent.click(resumeBtn);
     expect(await screen.findByTestId("tour-card")).toHaveTextContent("Existing tour");
+  });
+
+  it("wires TourCard's 'ask the author agent' escalation into the terminal insert mechanism", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockResolvedValue({ id: "t1", title: "Add feature", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    // Wait for the seeded terminal's fake session to register before the tour starts.
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
+    const startBtn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(startBtn).not.toBeDisabled());
+    fireEvent.click(startBtn);
+    await screen.findByTestId("tour-card");
+
+    fireEvent.click(screen.getByText("ask-author-agent"));
+    await waitFor(() =>
+      expect(TerminalWrite).toHaveBeenCalledWith(expect.any(String), "Question about src/a.ts: why here?"));
   });
 });
 
