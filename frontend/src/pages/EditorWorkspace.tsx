@@ -220,6 +220,12 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               on the next "Resume tour". */}
           {tourOpen && tour && (
             <TourCard
+              // Defense in depth alongside TourCard's own captured-tour-id
+              // guard on AskTourQuestion: remounts the card outright when the
+              // active tour's identity changes (new tour started, or the repo
+              // selector swaps to a different repo's tour) instead of reusing
+              // the instance with a swapped `tour` prop.
+              key={tour.id}
               tour={tour}
               repoName={activeRepo?.name ?? ""}
               onClose={() => { setTourOpen(false); setTourAnchorTarget(null); }}

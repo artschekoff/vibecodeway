@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { ReadRepoFile, SetCodeTourStep, SetCodeTourDecision, StageFile, DiscardFile, ConfirmAction, AskTourQuestion } = vi.hoisted(() => ({
@@ -228,6 +228,47 @@ describe("TourCard", () => {
       expect(screen.getByText("First answer")).toBeInTheDocument();
       expect(screen.getByText("Second question")).toBeInTheDocument();
       expect(screen.getByText("Second answer")).toBeInTheDocument();
+    });
+
+    it("does not leak a stale tour's answer into a different tour's history when the tour changes mid-flight", async () => {
+      // TourCard isn't guaranteed to remount on a tour swap (EditorWorkspace
+      // mounts it with key={tour.id} as defense in depth, but this exercises
+      // TourCard's own guard directly via rerender with the same instance).
+      let resolveAsk: (answer: string) => void = () => {};
+      AskTourQuestion.mockImplementation(
+        () => new Promise<string>((resolve) => { resolveAsk = resolve; })
+      );
+      const { rerender } = renderCard();
+      await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("tour question"), { target: { value: "Question for A" } });
+      fireEvent.click(screen.getByLabelText("submit question"));
+      await waitFor(() =>
+        expect(AskTourQuestion).toHaveBeenCalledWith("tour-1", "c1", "/r/api", 0, "Question for A"));
+
+      // Swap to a different tour on the same TourCard instance while the
+      // question for tour A is still in flight.
+      const tourB: CodeTour = { ...baseTour, id: "tour-2" };
+      rerender(
+        <TourCard tour={tourB} repoName="acme/api" onClose={vi.fn()} onOpenFile={vi.fn()}
+          onLocateAnchor={vi.fn()} onAskAuthorAgent={vi.fn()} />
+      );
+      await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
+
+      // Now the stale promise for tour A resolves.
+      await act(async () => {
+        resolveAsk("Answer for A (stale)");
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.queryByText("Question for A")).not.toBeInTheDocument();
+      expect(screen.queryByText("Answer for A (stale)")).not.toBeInTheDocument();
+
+      // The stale resolution must not leave tour B's "asking" spinner stuck
+      // on — typing a fresh question for B enables submit again.
+      fireEvent.change(screen.getByLabelText("tour question"), { target: { value: "Question for B" } });
+      expect(screen.getByLabelText("submit question")).not.toBeDisabled();
     });
 
     it("invokes onAskAuthorAgent with a message containing the typed question", async () => {

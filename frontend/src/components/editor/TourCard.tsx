@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, ChevronLeft, ChevronRight, Check, Undo2, Pencil, Send, Bot, Loader2, Copy } from "lucide-react";
 import { ReadRepoFile, SetCodeTourStep, SetCodeTourDecision, StageFile, DiscardFile, ConfirmAction, AskTourQuestion } from "../../../wailsjs/go/main/App";
 import type { CodeTour } from "../../types";
@@ -88,6 +88,11 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, 
   const steps = tour.steps ?? [];
   const step = steps[stepIndex];
 
+  // Tracks the *current* tour identity across renders, independent of any
+  // one async call's captured closure — see handleAskQuestion below.
+  const tourIdRef = useRef(tour.id);
+  tourIdRef.current = tour.id;
+
   // Reset local position/decisions/Q&A history whenever the tour identity
   // itself changes (a brand-new tour started, or GetCodeTour returned a
   // fresh row on resume).
@@ -96,6 +101,11 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, 
     setDecisions(tour.decisions ?? {});
     setQaHistory([]);
     setQuestion("");
+    // Force-clears a spinner left over from a question still in flight for
+    // the previous tour — handleAskQuestion's own guard skips writing that
+    // stale response's answer/error, but without this the button would stay
+    // disabled/spinning until that unrelated promise happens to settle.
+    setAsking(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour.id]);
 
@@ -180,18 +190,31 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, 
   // Answered by the app's own LLM (spec §4): AskTourQuestion gets the tour
   // and step context server-side. Errors surface via the card's existing
   // inline error affordance (actionError) rather than a dedicated one.
+  //
+  // TourCard isn't mounted with key={tour.id} (starting a new tour or
+  // switching the repo can swap `tour` on the same instance), so a question
+  // asked against tour A could otherwise resolve after B has replaced it and
+  // append A's answer into B's freshly-reset qaHistory. Guard by capturing
+  // tour.id at submit time and skipping the write if it no longer matches
+  // once the promise resolves — same active-guard pattern as the anchor
+  // effect above.
   const handleAskQuestion = async () => {
     const q = question.trim();
     if (!q || asking) return;
+    const askedTourId = tour.id;
     setAsking(true);
     setActionError("");
     try {
       const answer = await AskTourQuestion(tour.id, tour.contextId, tour.repoPath, stepIndex, q);
+      if (tourIdRef.current !== askedTourId) return;
       setQaHistory((prev) => [...prev, { question: q, answer }]);
       setQuestion("");
     } catch (e) {
+      if (tourIdRef.current !== askedTourId) return;
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
+      // Unconditional: `asking` also gets force-cleared by the tour-switch
+      // reset effect below, so this is a safe no-op for a stale tour.
       setAsking(false);
     }
   };
