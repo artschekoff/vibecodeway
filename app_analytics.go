@@ -70,9 +70,24 @@ func (a *App) GetAnalyticsDashboard(rangeDays int) (*analytics.Dashboard, error)
 		})
 	}
 
+	usageRows, err := a.db.ListAIUsageSince(a.ctx, since)
+	if err != nil {
+		return nil, fmt.Errorf("analytics dashboard: %w", err)
+	}
+	aiUsage := make([]analytics.TokenUsage, 0, len(usageRows))
+	for _, r := range usageRows {
+		aiUsage = append(aiUsage, analytics.TokenUsage{
+			PromptTokens:     r.PromptTokens,
+			CompletionTokens: r.CompletionTokens,
+			TotalTokens:      r.TotalTokens,
+			OccurredAt:       r.OccurredAt,
+		})
+	}
+
 	dashboard := analytics.Compute(analytics.Input{
 		Completions: completions,
 		Events:      events,
+		AIUsage:     aiUsage,
 		Now:         now,
 		RangeDays:   rangeDays,
 		TaskHours:   settings.TaskHours,

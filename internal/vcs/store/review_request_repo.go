@@ -22,7 +22,7 @@ func NewReviewRequestRepo(db *sql.DB) *ReviewRequestRepo { return &ReviewRequest
 // UpsertReviewRequest creates or updates a review request identified by (repoID, prNumber).
 // When an existing record is updated (PR re-appears in the review list), reviewed_at and
 // dismissed_at are cleared so it shows as a fresh pending review again.
-func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, reviewersJSON, mergeable, kind, ciStatus string) (bool, error) {
+func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID string, prNumber int, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, reviewersJSON, mergeable, kind, ciStatus, mergeStateStatus string) (bool, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if reviewersJSON == "" {
 		reviewersJSON = "[]"
@@ -44,10 +44,10 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 			UPDATE vcs_review_requests
 			SET pr_title = ?, pr_author = ?, pr_url = ?, review_status = ?,
 			    head_branch = ?, requested_at = ?, fetched_at = ?, reviewers = ?, mergeable = ?,
-			    kind = ?, ci_status = ?,
+			    kind = ?, ci_status = ?, merge_state_status = ?,
 			    reviewed_at = NULL, dismissed_at = NULL
 			WHERE id = ?
-		`, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable, kind, ciStatus, existing)
+		`, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable, kind, ciStatus, mergeStateStatus, existing)
 		return false, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -58,9 +58,9 @@ func (r *ReviewRequestRepo) UpsertReviewRequest(ctx context.Context, repoID stri
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO vcs_review_requests
 			(id, repo_id, pr_number, pr_title, pr_author, pr_url,
-			 review_status, head_branch, requested_at, fetched_at, reviewers, mergeable, kind, ci_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable, kind, ciStatus)
+			 review_status, head_branch, requested_at, fetched_at, reviewers, mergeable, kind, ci_status, merge_state_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, repoID, prNumber, prTitle, prAuthor, prURL, reviewStatus, headBranch, requestedAt, now, reviewersJSON, mergeable, kind, ciStatus, mergeStateStatus)
 	if err != nil {
 		return false, fmt.Errorf("insert review request: %w", err)
 	}
@@ -159,10 +159,10 @@ func (r *ReviewRequestRepo) UpdateReviewers(ctx context.Context, repoID string, 
 // leaving reviewed_at/dismissed_at/viewed_at untouched. Used by the reconcile pass
 // so a "waiting for author" PR (dropped from the review-requested list) still shows
 // a merge-conflict badge that develops after the user reviewed it.
-func (r *ReviewRequestRepo) UpdateMergeable(ctx context.Context, repoID string, prNumber int, mergeable string) error {
+func (r *ReviewRequestRepo) UpdateMergeable(ctx context.Context, repoID string, prNumber int, mergeable, mergeStateStatus string) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE vcs_review_requests SET mergeable = ? WHERE repo_id = ? AND pr_number = ?`,
-		mergeable, repoID, prNumber)
+		`UPDATE vcs_review_requests SET mergeable = ?, merge_state_status = ? WHERE repo_id = ? AND pr_number = ?`,
+		mergeable, mergeStateStatus, repoID, prNumber)
 	return err
 }
 
@@ -183,7 +183,7 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 	q := `
 		SELECT id, repo_id, pr_number, pr_title, pr_author, pr_url,
 		       review_status, head_branch, requested_at, fetched_at, reviewed_at, dismissed_at,
-		       viewed_at, reviewers, mergeable, kind, ci_status, my_review_state
+		       viewed_at, reviewers, mergeable, kind, ci_status, my_review_state, merge_state_status
 		FROM vcs_review_requests
 		WHERE dismissed_at IS NULL`
 	var args []any
@@ -207,7 +207,7 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 			&rr.ID, &rr.RepoID, &rr.PRNumber, &rr.PRTitle, &rr.PRAuthor,
 			&rr.PRURL, &rr.ReviewStatus, &rr.HeadBranch, &rr.RequestedAt, &rr.FetchedAt,
 			&rr.ReviewedAt, &rr.DismissedAt, &rr.ViewedAt, &reviewersJSON, &rr.Mergeable,
-			&rr.Kind, &rr.CIStatus, &rr.MyReviewState,
+			&rr.Kind, &rr.CIStatus, &rr.MyReviewState, &rr.MergeStateStatus,
 		); err != nil {
 			return nil, fmt.Errorf("scan review request: %w", err)
 		}

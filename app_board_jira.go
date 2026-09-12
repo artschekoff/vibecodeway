@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
 
@@ -83,6 +84,8 @@ func (a *App) backfillBoardOrgs() {
 	jobs := make(chan string)
 	var wg sync.WaitGroup
 	var updated atomic.Int64
+	var done atomic.Int64
+	total := len(keys)
 
 	for range min(orgBackfillWorkers, len(keys)) {
 		wg.Add(1)
@@ -90,6 +93,11 @@ func (a *App) backfillBoardOrgs() {
 			defer wg.Done()
 			for key := range jobs {
 				org, err := a.svc.IssueOrg(a.ctx, key)
+				// Progress counts attempts (success or not) so the bar always
+				// reaches total instead of stalling on transient acli failures.
+				runtime.EventsEmit(a.ctx, "board:backfill-progress", map[string]any{
+					"current": done.Add(1), "total": total, "key": key,
+				})
 				if err != nil {
 					// Leave the key queued: a transient acli failure should be
 					// retried on the next refresh, not cached as "no org".

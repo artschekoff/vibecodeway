@@ -10,7 +10,15 @@ const METRICS: { metric: string; label: string }[] = [
   { metric: "tasksClosed", label: "Tasks closed" },
   { metric: "prsMerged", label: "PRs merged" },
   { metric: "comments", label: "Comments" },
+  { metric: "aiTokens", label: "AI tokens" },
 ];
+
+// 1234 → "1.2k", 2500000 → "2.5M" — token counts get big fast.
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
 
 const PERIODS: { period: string; label: string }[] = [
   { period: "yesterday", label: "Yesterday" },
@@ -60,7 +68,7 @@ function MetricColumn({ metric, label, cards }: { metric: string; label: string;
             data-testid={`analytics-card-${metric}-${period}`}
           >
             <div className="analytics-period-label">{periodLabel}</div>
-            <div className="analytics-period-value">{count}</div>
+            <div className="analytics-period-value">{metric === "aiTokens" ? formatTokens(count) : count}</div>
             <span className={`analytics-delta-badge ${deltaClass(pct)}`}>{deltaLabel(pct)}</span>
           </div>
         );
@@ -219,6 +227,13 @@ export default function AnalyticsPage() {
               </div>
 
               <AvgTaskTile dashboard={dashboard} />
+              {dashboard.aiTokens && dashboard.aiTokens.calls > 0 && (
+                <div className="analytics-avg-task" data-testid="analytics-ai-tokens">
+                  AI usage over {dashboard.rangeDays}d: «{formatTokens(dashboard.aiTokens.totalTokens)} tokens» —{" "}
+                  {formatTokens(dashboard.aiTokens.promptTokens)} in / {formatTokens(dashboard.aiTokens.completionTokens)} out,{" "}
+                  {dashboard.aiTokens.calls} calls
+                </div>
+              )}
 
               <TrendChart daily={dashboard.daily} />
 

@@ -23,7 +23,7 @@ func TestReviewRequestKindAndCIRoundTrip(t *testing.T) {
 
 	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7, "My PR", "me",
 		"https://x/7", "changes_requested", "feat/x", "2026-08-01T00:00:00Z",
-		`[{"login":"bob","state":"approved","submittedAt":""}]`, "MERGEABLE", "authored", "FAILURE")
+		`[{"login":"bob","state":"approved","submittedAt":""}]`, "MERGEABLE", "authored", "FAILURE", "")
 	require.NoError(t, err)
 
 	list, err := vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
@@ -41,8 +41,8 @@ func TestMarkReviewedOnlyTouchesRequested(t *testing.T) {
 	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "octo", "hello2")
 	require.NoError(t, err)
 
-	_, _ = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 1, "req", "a", "u", "review_required", "b1", "", "[]", "MERGEABLE", "requested", "")
-	_, _ = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 2, "mine", "me", "u", "changes_requested", "b2", "", "[]", "MERGEABLE", "authored", "SUCCESS")
+	_, _ = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 1, "req", "a", "u", "review_required", "b1", "", "[]", "MERGEABLE", "requested", "", "")
+	_, _ = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 2, "mine", "me", "u", "changes_requested", "b2", "", "[]", "MERGEABLE", "authored", "SUCCESS", "")
 
 	// No active requested PRs → requested #1 becomes reviewed; authored #2 must stay pending.
 	require.NoError(t, vcsStore.ReviewRequests.MarkReviewedForRepo(ctx, repo.ID, nil))
@@ -70,7 +70,7 @@ func TestUpsertAndListHeadBranch(t *testing.T) {
 
 	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42,
 		"My PR", "alice", "https://example.com/pr/42",
-		"review_required", "feat/cool-thing", now, "", "", "requested", "")
+		"review_required", "feat/cool-thing", now, "", "", "requested", "", "")
 	require.NoError(t, err)
 
 	items, err := vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
@@ -87,12 +87,12 @@ func TestUpsertReviewRequest_InsertedFlag(t *testing.T) {
 	require.NoError(t, err)
 
 	inserted, err := vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42,
-		"Title", "author", "https://example/pr/42", "changes_requested", "feat/x", "2026-07-20T00:00:00Z", "", "", "requested", "")
+		"Title", "author", "https://example/pr/42", "changes_requested", "feat/x", "2026-07-20T00:00:00Z", "", "", "requested", "", "")
 	require.NoError(t, err)
 	assert.True(t, inserted, "first upsert should insert")
 
 	inserted, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42,
-		"Title v2", "author", "https://example/pr/42", "approved", "feat/x", "2026-07-20T00:00:00Z", "", "", "requested", "")
+		"Title v2", "author", "https://example/pr/42", "approved", "feat/x", "2026-07-20T00:00:00Z", "", "", "requested", "", "")
 	require.NoError(t, err)
 	assert.False(t, inserted, "second upsert of same (repo,pr) should update, not insert")
 }
@@ -105,7 +105,7 @@ func TestReviewRequests_ViewedAndReviewers(t *testing.T) {
 	require.NoError(t, err)
 
 	reviewers := `[{"login":"alice","state":"approved","submittedAt":"2026-07-20T10:00:00Z"},{"login":"bob","state":"changes_requested","submittedAt":"2026-07-21T10:00:00Z"}]`
-	inserted, err := vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 368, "Title", "carol", "https://x/368", "review_required", "feat/x", "2026-07-19T10:00:00Z", reviewers, "CONFLICTING", "requested", "")
+	inserted, err := vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 368, "Title", "carol", "https://x/368", "review_required", "feat/x", "2026-07-19T10:00:00Z", reviewers, "CONFLICTING", "requested", "", "")
 	require.NoError(t, err)
 	require.True(t, inserted)
 
@@ -126,7 +126,7 @@ func TestReviewRequests_ViewedAndReviewers(t *testing.T) {
 	require.NotNil(t, list[0].ViewedAt)
 
 	// Re-sync (UPSERT update branch) preserves viewed_at, refreshes reviewers + mergeable.
-	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 368, "Title2", "carol", "https://x/368", "changes_requested", "feat/x", "2026-07-19T10:00:00Z", `[{"login":"bob","state":"changes_requested","submittedAt":"2026-07-22T10:00:00Z"}]`, "MERGEABLE", "requested", "")
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 368, "Title2", "carol", "https://x/368", "changes_requested", "feat/x", "2026-07-19T10:00:00Z", `[{"login":"bob","state":"changes_requested","submittedAt":"2026-07-22T10:00:00Z"}]`, "MERGEABLE", "requested", "", "")
 	require.NoError(t, err)
 	list, _ = vcsStore.ReviewRequests.ListReviewRequests(ctx, "")
 	require.NotNil(t, list[0].ViewedAt)              // preserved
@@ -135,7 +135,7 @@ func TestReviewRequests_ViewedAndReviewers(t *testing.T) {
 	require.Equal(t, "MERGEABLE", list[0].Mergeable) // refreshed on update
 
 	// Mark all viewed clears any remaining unviewed.
-	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 369, "T", "d", "u", "review_required", "b", "t", "", "", "requested", "")
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 369, "T", "d", "u", "review_required", "b", "t", "", "", "requested", "", "")
 	require.NoError(t, err)
 	require.NoError(t, vcsStore.ReviewRequests.MarkAllReviewRequestsViewed(ctx))
 	list, _ = vcsStore.ReviewRequests.ListReviewRequests(ctx, "")
@@ -154,7 +154,7 @@ func TestSetReviewStatusPreservesReviewedAt(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7,
 		"Merged PR", "alice", "https://example.com/pr/7",
-		"approved", "feat/done", now, "", "", "requested", "")
+		"approved", "feat/done", now, "", "", "requested", "", "")
 	require.NoError(t, err)
 
 	// Simulate the PR dropping off the open lists → marked reviewed (waiting).
@@ -178,7 +178,7 @@ func TestUpdateMyReviewStateRoundTrips(t *testing.T) {
 
 	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 11, "PR", "carol",
 		"https://x/11", "changes_requested", "feat/x", "2026-08-01T00:00:00Z",
-		"[]", "MERGEABLE", "requested", "SUCCESS")
+		"[]", "MERGEABLE", "requested", "SUCCESS", "")
 	require.NoError(t, err)
 
 	// A fresh row has no standing decision.
@@ -203,14 +203,14 @@ func TestUpsertKeepsMyReviewState(t *testing.T) {
 
 	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 12, "PR", "carol",
 		"https://x/12", "review_required", "feat/y", "2026-08-01T00:00:00Z",
-		"[]", "MERGEABLE", "requested", "")
+		"[]", "MERGEABLE", "requested", "", "")
 	require.NoError(t, err)
 	require.NoError(t, vcsStore.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, 12, "approved"))
 
 	// Re-upsert (the PR re-appeared in a GitHub search) must not wipe the decision.
 	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 12, "PR", "carol",
 		"https://x/12", "review_required", "feat/y", "2026-08-01T00:00:00Z",
-		"[]", "MERGEABLE", "requested", "")
+		"[]", "MERGEABLE", "requested", "", "")
 	require.NoError(t, err)
 
 	list, err := vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)

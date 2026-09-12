@@ -133,6 +133,9 @@ type ReviewRequest struct {
 	// It answers "have I already looked at this?", which ReviewStatus (a PR-wide
 	// decision) and ReviewedAt (a disappeared-from-search heuristic) cannot.
 	MyReviewState string `json:"myReviewState"`
+	// MergeStateStatus is GitHub's merge-state for this PR; "BEHIND" means the
+	// head branch is out of date and the "Update branch" action is available.
+	MergeStateStatus string `json:"mergeStateStatus"`
 }
 
 // ReviewerDecision is one reviewer's latest decision on a PR.

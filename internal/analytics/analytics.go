@@ -27,6 +27,7 @@ const (
 	MetricTasksClosed = "tasksClosed"
 	MetricPRsMerged   = "prsMerged"
 	MetricComments    = "comments"
+	MetricAITokens    = "aiTokens"
 )
 
 // Period names used on PeriodCard.
@@ -65,11 +66,20 @@ type Event struct {
 	OccurredAt string // RFC3339
 }
 
+// TokenUsage is one LLM call's token bill (an ai_usage store row).
+type TokenUsage struct {
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	OccurredAt       string // RFC3339
+}
+
 // Input is everything Compute needs. Completions/Events are store rows the
 // binding fetches; this package never touches the store itself.
 type Input struct {
 	Completions []Completion
 	Events      []Event
+	AIUsage     []TokenUsage
 	Now         time.Time // local tz drives day bucketing, like productivity.Compute
 	RangeDays   int       // 7|30|90; <=0 defaults to DefaultRangeDays
 	TaskHours   float64   // fallback assumed hours per task (settings)
@@ -83,6 +93,15 @@ type Dashboard struct {
 	ByType    []Slice      `json:"byType"`
 	ByOrg     []Slice      `json:"byOrg"`
 	AvgTask   AvgTask      `json:"avgTask"`
+	AiTokens  AITokens     `json:"aiTokens"`
+}
+
+// AITokens sums the LLM token bill over the selected range.
+type AITokens struct {
+	PromptTokens     int `json:"promptTokens"`
+	CompletionTokens int `json:"completionTokens"`
+	TotalTokens      int `json:"totalTokens"`
+	Calls            int `json:"calls"`
 }
 
 // PeriodCard compares one metric over one trailing period against the
@@ -163,7 +182,27 @@ func Compute(in Input) Dashboard {
 
 	today := startOfDay(in.Now)
 
-	cards := buildCards(today, tasksByDay, prsByDay, commentsByDay)
+	// LLM token usage: daily buckets feed the cards; the range window feeds the
+	// aiTokens summary tile. Unparseable timestamps are skipped, as elsewhere.
+	tokensByDay := make(map[string]int)
+	var aiTotals AITokens
+	rangeStart := today.AddDate(0, 0, -(rangeDays - 1))
+	for _, u := range in.AIUsage {
+		t, err := time.Parse(time.RFC3339, u.OccurredAt)
+		if err != nil {
+			continue
+		}
+		local := t.Local()
+		tokensByDay[dayKey(local)] += u.TotalTokens
+		if !local.Before(rangeStart) {
+			aiTotals.PromptTokens += u.PromptTokens
+			aiTotals.CompletionTokens += u.CompletionTokens
+			aiTotals.TotalTokens += u.TotalTokens
+			aiTotals.Calls++
+		}
+	}
+
+	cards := buildCards(today, tasksByDay, prsByDay, commentsByDay, tokensByDay)
 	daily := buildDaily(today, rangeDays, tasksByDay, prsByDay, commentsByDay)
 	byType, byOrg := buildBreakdowns(completions, today, rangeDays)
 	avgTask := buildAvgTask(completions, events, in.TaskHours)
@@ -175,6 +214,7 @@ func Compute(in Input) Dashboard {
 		ByType:    byType,
 		ByOrg:     byOrg,
 		AvgTask:   avgTask,
+		AiTokens:  aiTotals,
 	}
 }
 
@@ -211,10 +251,10 @@ func parseEvents(in []Event) []parsedEvent {
 	return out
 }
 
-// buildCards produces the 9 period cards, ordered metric-major: tasksClosed
-// y/w/m, prsMerged y/w/m, comments y/w/m. Today is excluded — it's
-// incomplete.
-func buildCards(today time.Time, tasksByDay, prsByDay, commentsByDay map[string]int) []PeriodCard {
+// buildCards produces the 12 period cards, ordered metric-major: tasksClosed
+// y/w/m, prsMerged y/w/m, comments y/w/m, aiTokens y/w/m. Today is excluded —
+// it's incomplete.
+func buildCards(today time.Time, tasksByDay, prsByDay, commentsByDay, tokensByDay map[string]int) []PeriodCard {
 	type metric struct {
 		name   string
 		counts map[string]int
@@ -223,6 +263,7 @@ func buildCards(today time.Time, tasksByDay, prsByDay, commentsByDay map[string]
 		{MetricTasksClosed, tasksByDay},
 		{MetricPRsMerged, prsByDay},
 		{MetricComments, commentsByDay},
+		{MetricAITokens, tokensByDay},
 	}
 	type period struct {
 		name             string

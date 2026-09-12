@@ -1,9 +1,20 @@
+import { useEffect } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../components/editor/Terminal", () => ({ Terminal: ({ cwd }: { cwd: string }) => <div data-testid="terminal">{cwd}</div> }));
+// Calls onSession with a stable fake id once mounted so TerminalPanel's
+// internal sessionByKey map is populated — needed for the "ask author agent"
+// terminal-insert test below, which asserts on TerminalWrite.
+vi.mock("../components/editor/Terminal", () => ({
+  Terminal: ({ cwd, onSession }: { cwd: string; onSession?: (id: string) => void }) => {
+    useEffect(() => { onSession?.(`sess:${cwd}`); }, [cwd, onSession]);
+    return <div data-testid="terminal">{cwd}</div>;
+  },
+}));
 vi.mock("../components/editor/DiffEditorTab", () => ({
-  DiffEditorTab: ({ path }: { path: string }) => <div data-testid="diff">{path}</div>,
+  DiffEditorTab: ({ path, highlightAnchor }: { path: string; highlightAnchor?: string }) => (
+    <div data-testid="diff">{path}{highlightAnchor ? `:${highlightAnchor}` : ""}</div>
+  ),
 }));
 vi.mock("../components/editor/ChangedFilesPanel", () => ({
   ChangedFilesPanel: ({ onOpenFile, onRefresh }: { onOpenFile: (rp: string, rn: string, p: string, s: string) => void; onRefresh?: () => void }) => (
@@ -18,8 +29,26 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
     <div data-testid="pr-info">{contextId}:{activeRepoId ?? "none"}</div>
   ),
 }));
+// TourCard has its own dedicated test suite (TourCard.test.tsx) — stubbed here
+// so EditorWorkspace tests only exercise the Start/Resume-tour wiring, not
+// TourCard's internals (which would pull in ReadRepoFile/Stage/Discard mocks).
+vi.mock("../components/editor/TourCard", () => ({
+  TourCard: ({ tour, onClose, onLocateAnchor, onAskAuthorAgent }: {
+    tour: { title: string };
+    onClose: () => void;
+    onLocateAnchor: (repoPath: string, path: string, anchor: string) => void;
+    onAskAuthorAgent: (text: string) => void;
+  }) => (
+    <div data-testid="tour-card">
+      {tour.title}
+      <button onClick={onClose}>close-tour</button>
+      <button onClick={() => onLocateAnchor("/r/api", "src/a.ts", "anchor-x")}>locate-anchor</button>
+      <button onClick={() => onAskAuthorAgent("Question about src/a.ts: why here?")}>ask-author-agent</button>
+    </div>
+  ),
+}));
 
-const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent } = vi.hoisted(() => ({
+const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   RefreshContext: vi.fn(),
   RefreshContextPRs: vi.fn(),
@@ -31,8 +60,10 @@ const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings,
   ListEvents: vi.fn().mockResolvedValue([]),
   AddUserEvent: vi.fn(),
   DeleteUserEvent: vi.fn(),
+  StartCodeTour: vi.fn(),
+  GetCodeTour: vi.fn(),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";
@@ -48,6 +79,8 @@ beforeEach(() => {
   RefreshContext.mockResolvedValue({});
   GetEditorSettings.mockResolvedValue("");
   SetEditorSettings.mockResolvedValue(undefined);
+  GetCodeTour.mockResolvedValue(null);
+  StartCodeTour.mockResolvedValue(undefined);
 });
 
 describe("EditorWorkspace", () => {
@@ -243,6 +276,117 @@ describe("EditorWorkspace", () => {
     expect(await screen.findByText(/no repo path on disk/i)).toBeInTheDocument();
     // Panel still mounted, so the terminal hotkeys stay registered.
     expect(screen.getByRole("button", { name: /new terminal/i })).toBeInTheDocument();
+  });
+
+  it("disables Start tour with a tooltip when the repo has no changes", async () => {
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const btn = await screen.findByRole("button", { name: "Start tour" });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute("title", "No changes to tour");
+  });
+
+  it("starts a tour and opens the tour card on success", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockResolvedValue({ id: "t1", title: "Add feature", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const btn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    fireEvent.click(btn);
+    await waitFor(() => expect(StartCodeTour).toHaveBeenCalledWith("c1", "/r/api"));
+    expect(await screen.findByTestId("tour-card")).toHaveTextContent("Add feature");
+  });
+
+  it("shows a quiet inline note for the stable 'no changes to tour' error", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockRejectedValue(new Error("code tour: no changes to tour"));
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const btn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    fireEvent.click(btn);
+    await waitFor(() => expect(screen.getByText("No changes to tour")).toBeInTheDocument());
+    expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument();
+  });
+
+  it("clears the anchor highlight target when the tour card is closed", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockResolvedValue({ id: "t1", title: "Add feature", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    // Open the file the tour will highlight, then start the tour.
+    fireEvent.click(await screen.findByText("open-a"));
+    await waitFor(() => expect(screen.getByTestId("diff")).toHaveTextContent("src/a.ts"));
+    const startBtn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(startBtn).not.toBeDisabled());
+    fireEvent.click(startBtn);
+    await screen.findByTestId("tour-card");
+
+    // TourCard locates an anchor in the currently open file — DiffEditorTab
+    // should receive it as highlightAnchor.
+    fireEvent.click(screen.getByText("locate-anchor"));
+    await waitFor(() => expect(screen.getByTestId("diff")).toHaveTextContent("src/a.ts:anchor-x"));
+
+    // Closing the card must clear the highlight, not just hide the card —
+    // otherwise the decoration/scroll persists on the still-open file.
+    fireEvent.click(screen.getByText("close-tour"));
+    await waitFor(() => expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument());
+    expect(screen.getByTestId("diff")).toHaveTextContent("src/a.ts");
+    expect(screen.getByTestId("diff")).not.toHaveTextContent("anchor-x");
+  });
+
+  it("offers Resume tour when GetCodeTour finds an existing tour on mount", async () => {
+    GetCodeTour.mockResolvedValue({ id: "t1", title: "Existing tour", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const resumeBtn = await screen.findByRole("button", { name: "resume tour" });
+    expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument();
+    fireEvent.click(resumeBtn);
+    expect(await screen.findByTestId("tour-card")).toHaveTextContent("Existing tour");
+  });
+
+  it("wires TourCard's 'ask the author agent' escalation into the terminal insert mechanism", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockResolvedValue({ id: "t1", title: "Add feature", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    // Wait for the seeded terminal's fake session to register before the tour starts.
+    await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
+    const startBtn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(startBtn).not.toBeDisabled());
+    fireEvent.click(startBtn);
+    await screen.findByTestId("tour-card");
+
+    fireEvent.click(screen.getByText("ask-author-agent"));
+    await waitFor(() =>
+      expect(TerminalWrite).toHaveBeenCalledWith(expect.any(String), "Question about src/a.ts: why here?"));
   });
 });
 

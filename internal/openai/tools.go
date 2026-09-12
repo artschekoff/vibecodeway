@@ -70,12 +70,29 @@ func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []
 
 // dispatch routes a request to the right provider implementation with optional tools.
 func (c *Client) dispatch(ctx context.Context, s *appstore.AISettings, apiKey string, messages []Message, tools []ToolDef) (*Response, error) {
+	var resp *Response
+	var err error
 	switch s.Provider {
 	case appstore.ProviderAnthropic:
-		return callAnthropic(ctx, apiKey, s.Model, messages, tools)
+		resp, err = callAnthropic(ctx, apiKey, s.Model, messages, tools)
 	default: // openai, local
-		return c.callOpenAI(ctx, apiKey, s.Model, s.BaseURL, messages, tools)
+		resp, err = c.callOpenAI(ctx, apiKey, s.Model, s.BaseURL, messages, tools)
 	}
+	// Every chat call funnels through here — record its token bill for the
+	// analytics dashboard. Best-effort: a failed insert never fails the call.
+	if err == nil && resp != nil && resp.Usage.TotalTokens > 0 {
+		if insErr := c.store.InsertAIUsage(ctx, appstore.AIUsage{
+			Provider:         s.Provider,
+			Model:            resp.Model,
+			PromptTokens:     resp.Usage.PromptTokens,
+			CompletionTokens: resp.Usage.CompletionTokens,
+			TotalTokens:      resp.Usage.TotalTokens,
+			OccurredAt:       time.Now().UTC().Format(time.RFC3339),
+		}); insErr != nil {
+			c.logger.Warn("ai usage: insert failed", zap.Error(insErr))
+		}
+	}
+	return resp, err
 }
 
 // ── OpenAI conversions ───────────────────────────────────────────────────────

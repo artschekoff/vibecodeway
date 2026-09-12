@@ -140,6 +140,12 @@ export default function MyBoardPage() {
       .catch(() => { /* board keeps the rows it already has */ });
   }), []);
 
+  // Live progress of the background org backfill (one acli call per key).
+  const [backfillProgress, setBackfillProgress] = useState<{ current: number; total: number } | null>(null);
+  useEffect(() => EventsOn("board:backfill-progress", (p: { current: number; total: number }) => {
+    setBackfillProgress(p.current >= p.total ? null : p);
+  }), []);
+
   // Load orgs (for "Create context") + the Jira base URL (for per-ticket links) once.
   useEffect(() => {
     void ListOrganizations().then((rows) => {
@@ -482,6 +488,27 @@ export default function MyBoardPage() {
             </select>
           )}
         </div>
+        {/* Refresh = one atomic JQL search → indeterminate bar; the org backfill
+            that follows is per-key → a real counter bar. */}
+        {refreshingJira && (
+          <div data-testid="board-refresh-progress" style={{ margin: "2px 0 6px" }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Searching Jira…</div>
+            <div className="bg-refresh-toast__bar progress-indeterminate">
+              <div className="bg-refresh-toast__fill" />
+            </div>
+          </div>
+        )}
+        {!refreshingJira && backfillProgress && (
+          <div data-testid="board-backfill-progress" style={{ margin: "2px 0 6px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+              <span>Resolving orgs…</span>
+              <span>{backfillProgress.current}/{backfillProgress.total}</span>
+            </div>
+            <div className="bg-refresh-toast__bar">
+              <div className="bg-refresh-toast__fill" style={{ width: `${Math.round((backfillProgress.current / Math.max(1, backfillProgress.total)) * 100)}%` }} />
+            </div>
+          </div>
+        )}
         {jiraError && (
           <div className="board-section-empty" style={{ color: "var(--danger, #e5534b)" }}>{jiraError}</div>
         )}

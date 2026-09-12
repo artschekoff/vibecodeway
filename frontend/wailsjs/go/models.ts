@@ -70,6 +70,24 @@ export namespace agent {
 
 export namespace analytics {
 	
+	export class AITokens {
+	    promptTokens: number;
+	    completionTokens: number;
+	    totalTokens: number;
+	    calls: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AITokens(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.promptTokens = source["promptTokens"];
+	        this.completionTokens = source["completionTokens"];
+	        this.totalTokens = source["totalTokens"];
+	        this.calls = source["calls"];
+	    }
+	}
 	export class AvgTask {
 	    medianHours: number;
 	    meanHours: number;
@@ -147,6 +165,7 @@ export namespace analytics {
 	    byType: Slice[];
 	    byOrg: Slice[];
 	    avgTask: AvgTask;
+	    aiTokens: AITokens;
 	
 	    static createFrom(source: any = {}) {
 	        return new Dashboard(source);
@@ -160,6 +179,7 @@ export namespace analytics {
 	        this.byType = this.convertValues(source["byType"], Slice);
 	        this.byOrg = this.convertValues(source["byOrg"], Slice);
 	        this.avgTask = this.convertValues(source["avgTask"], AvgTask);
+	        this.aiTokens = this.convertValues(source["aiTokens"], AITokens);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1550,6 +1570,70 @@ export namespace store {
 	        this.global_confidence = source["global_confidence"];
 	    }
 	}
+	export class TourStep {
+	    file: string;
+	    anchor: string;
+	    what: string;
+	    why: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TourStep(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.anchor = source["anchor"];
+	        this.what = source["what"];
+	        this.why = source["why"];
+	    }
+	}
+	export class CodeTour {
+	    id: string;
+	    contextId: string;
+	    repoPath: string;
+	    source: string;
+	    title: string;
+	    steps: TourStep[];
+	    stepIndex: number;
+	    decisions: Record<number, string>;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodeTour(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.contextId = source["contextId"];
+	        this.repoPath = source["repoPath"];
+	        this.source = source["source"];
+	        this.title = source["title"];
+	        this.steps = this.convertValues(source["steps"], TourStep);
+	        this.stepIndex = source["stepIndex"];
+	        this.decisions = source["decisions"];
+	        this.createdAt = source["createdAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Context {
 	    id: string;
 	    key: string;
@@ -2426,6 +2510,7 @@ export namespace store {
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
+	
 	export class UnresolvedAuthor {
 	    sourceId: string;
 	    sourceLabel: string;
@@ -2827,6 +2912,7 @@ export namespace vcsstore {
 	    kind: string;
 	    ciStatus: string;
 	    myReviewState: string;
+	    mergeStateStatus: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ReviewRequest(source);
@@ -2852,6 +2938,7 @@ export namespace vcsstore {
 	        this.kind = source["kind"];
 	        this.ciStatus = source["ciStatus"];
 	        this.myReviewState = source["myReviewState"];
+	        this.mergeStateStatus = source["mergeStateStatus"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

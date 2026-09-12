@@ -62,7 +62,10 @@ type VCSProvider struct {
 	reviewNotify  ReviewNotifyFunc  // nil = no-op
 	commentNotify CommentNotifyFunc // nil = no-op
 	recordStat    RecordStatFunc    // nil = no-op
-	msgWriter     appstore.MessageWriter
+	// reviewProgress reports per-repo progress of a reviews refresh so the UI can
+	// draw a live progress bar. phase is "requested" or "authored". nil = no-op.
+	reviewProgress func(current, total int, repo, phase string)
+	msgWriter      appstore.MessageWriter
 }
 
 // NewVCSProvider constructs a VCSProvider with the given runner implementations.
@@ -86,6 +89,18 @@ func (p *VCSProvider) WithCommentNotifyFunc(fn CommentNotifyFunc) { p.commentNot
 
 // WithRecordStatFunc sets the callback used to persist analytics stat events.
 func (p *VCSProvider) WithRecordStatFunc(fn RecordStatFunc) { p.recordStat = fn }
+
+// WithReviewProgressFunc sets the callback that reports reviews-refresh progress.
+func (p *VCSProvider) WithReviewProgressFunc(fn func(current, total int, repo, phase string)) {
+	p.reviewProgress = fn
+}
+
+// emitReviewProgress is a nil-safe helper for the reviews-refresh progress callback.
+func (p *VCSProvider) emitReviewProgress(current, total int, repo, phase string) {
+	if p.reviewProgress != nil {
+		p.reviewProgress(current, total, repo, phase)
+	}
+}
 
 // Name implements provider.Provider.
 func (p *VCSProvider) Name() string { return "vcs" }
@@ -407,7 +422,8 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 		myLogin = ""
 	}
 
-	for _, repo := range repos {
+	for i, repo := range repos {
+		p.emitReviewProgress(i+1, len(repos), repo.FullName(), "requested")
 		requested, err := runner.ListReviewRequests(ctx, repo.Owner, repo.Name)
 		if err != nil {
 			p.logger.Warn("vcs: list review requests failed",
@@ -449,7 +465,7 @@ func (p *VCSProvider) SyncReviewRequests(ctx context.Context, platform vcs.Platf
 				ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
 				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, reviewersJSON, pr.Mergeable,
-				"requested", pr.CIStatus,
+				"requested", pr.CIStatus, pr.MergeStateStatus,
 			)
 			if err != nil {
 				p.logger.Warn("vcs: upsert review request failed",
@@ -495,7 +511,8 @@ func (p *VCSProvider) SyncAuthoredPRs(ctx context.Context, platform vcs.Platform
 	if err != nil {
 		return fmt.Errorf("list repos: %w", err)
 	}
-	for _, repo := range repos {
+	for i, repo := range repos {
+		p.emitReviewProgress(i+1, len(repos), repo.FullName(), "authored")
 		authored, err := runner.ListAuthoredPRs(ctx, repo.Owner, repo.Name, "")
 		if err != nil {
 			p.logger.Warn("vcs: list authored PRs failed",
@@ -509,7 +526,7 @@ func (p *VCSProvider) SyncAuthoredPRs(ctx context.Context, platform vcs.Platform
 				ctx,
 				repo.ID, pr.Number, pr.Title, pr.Author, pr.URL,
 				pr.ReviewStatus, pr.HeadBranch, pr.CreatedAt, marshalReviewers(pr.Reviewers), pr.Mergeable,
-				"authored", pr.CIStatus,
+				"authored", pr.CIStatus, pr.MergeStateStatus,
 			); err != nil {
 				p.logger.Warn("vcs: upsert authored PR failed", zap.Int("pr", pr.Number), zap.Error(err))
 			}
@@ -580,7 +597,7 @@ func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCS
 			p.logger.Warn("vcs: update reviewers failed",
 				zap.Int("pr", rr.PRNumber), zap.Error(err))
 		}
-		if err := p.store.ReviewRequests.UpdateMergeable(ctx, repo.ID, rr.PRNumber, pr.Mergeable); err != nil {
+		if err := p.store.ReviewRequests.UpdateMergeable(ctx, repo.ID, rr.PRNumber, pr.Mergeable, pr.MergeStateStatus); err != nil {
 			p.logger.Warn("vcs: update mergeable failed",
 				zap.Int("pr", rr.PRNumber), zap.Error(err))
 		}

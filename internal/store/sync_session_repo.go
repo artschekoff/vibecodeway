@@ -89,9 +89,12 @@ func (s *Store) TagSessionItems(ctx context.Context, contextID, sessionID, start
 	queries := []string{
 		`UPDATE jira_issues SET sync_session_id = ? WHERE context_id = ? AND sync_session_id IS NULL AND created_at >= ?`,
 		`UPDATE slack_threads SET sync_session_id = ? WHERE context_id = ? AND sync_session_id IS NULL AND created_at >= ?`,
+		// vcs_pull_requests has no created_at; fetched_at is the closest insert
+		// marker, and the sync_session_id IS NULL guard keeps re-fetched old rows
+		// from being re-tagged after their first session.
 		`UPDATE vcs_pull_requests SET sync_session_id = ?
 		 WHERE branch_id IN (SELECT id FROM context_vcs_branches WHERE context_id = ?)
-		   AND sync_session_id IS NULL AND created_at >= ?`,
+		   AND sync_session_id IS NULL AND fetched_at >= ?`,
 	}
 	for _, q := range queries {
 		if _, err := s.db.ExecContext(ctx, q, sessionID, contextID, startedAt); err != nil {

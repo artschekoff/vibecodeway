@@ -1,0 +1,352 @@
+import { useEffect, useRef, useState } from "react";
+import { X, ChevronLeft, ChevronRight, Check, Undo2, Pencil, Send, Bot, Loader2, Copy } from "lucide-react";
+import { ReadRepoFile, SetCodeTourStep, SetCodeTourDecision, StageFile, DiscardFile, ConfirmAction, AskTourQuestion } from "../../../wailsjs/go/main/App";
+import type { CodeTour } from "../../types";
+
+// Copyable rule (spec §2) instructing an agent to write the file contract
+// instead of relying on app-side generation. Kept in sync with the schema
+// documented in docs/superpowers/specs/2026-09-11-code-tour-design.md §2.
+const AGENT_RULE_SNIPPET = `When you finish an implementation, write a code tour to .vibecodeway/tour.json with this schema; one step per meaningful change; "anchor" must be a unique snippet from the changed code; write "why" from your actual reasoning:
+
+{
+  "version": 1,
+  "title": "Add analytics dashboard",
+  "steps": [
+    {
+      "file": "src/x.ts",
+      "anchor": "func computeDashboard(",
+      "what": "Added the dashboard compute entry point",
+      "why": "Keeps aggregation out of the HTTP layer so it can be unit-tested"
+    }
+  ]
+}`;
+
+type Decision = "staged" | "discarded" | "edited" | "skipped";
+type AnchorStatus = "checking" | "ok" | "lost" | "missing";
+
+type Props = {
+  tour: CodeTour;
+  repoName: string;
+  onClose: () => void;
+  // Same signature as EditorWorkspace's openFile — reused so the step's file
+  // opens in the existing DiffEditorTab flow.
+  onOpenFile: (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head") => void;
+  // Tells the parent which (repoPath, path, anchor) to highlight once the diff
+  // editor for that file is mounted. Only called when the anchor was actually
+  // found in the current file content.
+  onLocateAnchor: (repoPath: string, path: string, anchor: string) => void;
+  // Inserts text into the context's terminal via the existing insert
+  // mechanism (EditorWorkspace's pendingTerminalInsert -> TerminalPanel),
+  // same flow DiffEditorTab's "Ask AI" uses. Does not auto-submit.
+  onAskAuthorAgent: (text: string) => void;
+};
+
+const cardStyle: React.CSSProperties = {
+  position: "absolute", bottom: 12, right: 12, width: 320, maxHeight: "55%",
+  display: "flex", flexDirection: "column",
+  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.35)", zIndex: 20, fontSize: 12, color: "var(--text)", overflow: "hidden",
+};
+const iconBtnStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer",
+  color: "var(--text-muted)", padding: 2, flexShrink: 0,
+};
+const navBtnStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", background: "none", border: "1px solid var(--border)", borderRadius: 4,
+  cursor: "pointer", color: "var(--text)", padding: "2px 4px",
+};
+const actionBtnStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", background: "none", border: "1px solid var(--border)", borderRadius: 4,
+  cursor: "pointer", color: "var(--text)", padding: "2px 6px",
+};
+const badgeStyle = (color: string): React.CSSProperties => ({
+  display: "inline-block", fontSize: 10, fontWeight: 600, color, background: `${color}22`,
+  border: `1px solid ${color}`, borderRadius: 4, padding: "1px 6px", marginBottom: 6,
+});
+
+function decisionLabel(d: string): string {
+  switch (d) {
+    case "staged": return "Staged";
+    case "discarded": return "Discarded";
+    case "edited": return "Edited";
+    case "skipped": return "Skipped";
+    default: return d;
+  }
+}
+
+export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, onAskAuthorAgent }: Props) {
+  const [stepIndex, setStepIndex] = useState(tour.stepIndex ?? 0);
+  const [decisions, setDecisions] = useState<Record<number, string>>(tour.decisions ?? {});
+  const [anchorStatus, setAnchorStatus] = useState<AnchorStatus>("checking");
+  const [actionError, setActionError] = useState("");
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  // Per-tour, in-memory only (spec §Non-goals: Q&A history is NOT persisted).
+  const [qaHistory, setQaHistory] = useState<{ question: string; answer: string }[]>([]);
+  const [ruleCopied, setRuleCopied] = useState(false);
+
+  const steps = tour.steps ?? [];
+  const step = steps[stepIndex];
+
+  // Tracks the *current* tour identity across renders, independent of any
+  // one async call's captured closure — see handleAskQuestion below.
+  const tourIdRef = useRef(tour.id);
+  tourIdRef.current = tour.id;
+
+  // Reset local position/decisions/Q&A history whenever the tour identity
+  // itself changes (a brand-new tour started, or GetCodeTour returned a
+  // fresh row on resume).
+  useEffect(() => {
+    setStepIndex(tour.stepIndex ?? 0);
+    setDecisions(tour.decisions ?? {});
+    setQaHistory([]);
+    setQuestion("");
+    // Force-clears a spinner left over from a question still in flight for
+    // the previous tour — handleAskQuestion's own guard skips writing that
+    // stale response's answer/error, but without this the button would stay
+    // disabled/spinning until that unrelated promise happens to settle.
+    setAsking(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour.id]);
+
+  // On every step change: open the file, then check whether the anchor still
+  // exists in the current content. Found -> tell the parent to highlight it.
+  // Not found -> "anchor lost" badge, file still opens at the top. File itself
+  // unreadable (missing/renamed) -> step marked broken.
+  useEffect(() => {
+    if (!step) return;
+    let active = true;
+    setAnchorStatus("checking");
+    setActionError("");
+    void ReadRepoFile(tour.repoPath, step.file)
+      .then((content) => {
+        if (!active) return;
+        onOpenFile(tour.repoPath, repoName, step.file, "modified", "head");
+        const idx = content.indexOf(step.anchor);
+        if (idx === -1) {
+          setAnchorStatus("lost");
+        } else {
+          setAnchorStatus("ok");
+          onLocateAnchor(tour.repoPath, step.file, step.anchor);
+        }
+      })
+      .catch(() => {
+        if (active) setAnchorStatus("missing");
+      });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIndex, tour.id, tour.repoPath, step?.file, step?.anchor]);
+
+  if (!step) return null;
+
+  const broken = anchorStatus === "missing";
+  const decision = decisions[stepIndex];
+
+  const goto = (idx: number) => {
+    if (idx < 0 || idx >= steps.length) return;
+    setActionError("");
+    setStepIndex(idx);
+    void SetCodeTourStep(tour.id, idx);
+  };
+
+  const recordDecision = (d: Decision) => {
+    setDecisions((prev) => ({ ...prev, [stepIndex]: d }));
+    void SetCodeTourDecision(tour.id, stepIndex, d);
+  };
+
+  // No optimistic success (mirrors ChangedFilesPanel's act()): the decision is
+  // only recorded once the binding actually resolves. A rejection surfaces
+  // inline instead of silently persisting a false "Staged"/"Discarded" badge.
+  const handleStage = async () => {
+    if (broken) return;
+    setActionError("");
+    try {
+      await StageFile(tour.repoPath, step.file);
+      recordDecision("staged");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (broken) return;
+    if (!(await ConfirmAction("Discard changes", `Discard changes to ${step.file}? This cannot be undone.`))) return;
+    setActionError("");
+    try {
+      await DiscardFile(tour.repoPath, step.file);
+      recordDecision("discarded");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleEdit = () => {
+    if (broken) return;
+    onOpenFile(tour.repoPath, repoName, step.file, "modified", "head");
+    if (anchorStatus === "ok") onLocateAnchor(tour.repoPath, step.file, step.anchor);
+    recordDecision("edited");
+  };
+
+  // Answered by the app's own LLM (spec §4): AskTourQuestion gets the tour
+  // and step context server-side. Errors surface via the card's existing
+  // inline error affordance (actionError) rather than a dedicated one.
+  //
+  // TourCard isn't mounted with key={tour.id} (starting a new tour or
+  // switching the repo can swap `tour` on the same instance), so a question
+  // asked against tour A could otherwise resolve after B has replaced it and
+  // append A's answer into B's freshly-reset qaHistory. Guard by capturing
+  // tour.id at submit time and skipping the write if it no longer matches
+  // once the promise resolves — same active-guard pattern as the anchor
+  // effect above.
+  const handleAskQuestion = async () => {
+    const q = question.trim();
+    if (!q || asking) return;
+    const askedTourId = tour.id;
+    setAsking(true);
+    setActionError("");
+    try {
+      const answer = await AskTourQuestion(tour.id, tour.contextId, tour.repoPath, stepIndex, q);
+      if (tourIdRef.current !== askedTourId) return;
+      setQaHistory((prev) => [...prev, { question: q, answer }]);
+      setQuestion("");
+    } catch (e) {
+      if (tourIdRef.current !== askedTourId) return;
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      // Unconditional: `asking` also gets force-cleared by the tour-switch
+      // reset effect below, so this is a safe no-op for a stale tour.
+      setAsking(false);
+    }
+  };
+
+  // Escalation to the live author agent (spec §4): forwards the typed
+  // question (or, absent one, the current step's What as a fallback prefix)
+  // into the context's terminal via the existing insert mechanism. Does not
+  // auto-submit beyond that insert — the user reads the answer in the terminal.
+  const handleAskAuthorAgent = () => {
+    const q = question.trim() || step.what;
+    onAskAuthorAgent(`Question about ${step.file}: ${q}`);
+  };
+
+  const handleCopyRule = () => {
+    void navigator.clipboard?.writeText(AGENT_RULE_SNIPPET);
+    setRuleCopied(true);
+    window.setTimeout(() => setRuleCopied(false), 1200);
+  };
+
+  return (
+    <div style={cardStyle} role="dialog" aria-label="Code tour">
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={tour.title}>
+            {tour.title || "Code tour"}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Step {stepIndex + 1} of {steps.length}</div>
+        </div>
+        <button aria-label="close tour" title="Close tour" onClick={onClose} style={iconBtnStyle}>
+          <X size={13} />
+        </button>
+      </div>
+
+      <div style={{ padding: "8px 10px", overflowY: "auto", flex: 1, minHeight: 0 }}>
+        <div
+          style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-muted)", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          title={step.file}
+        >
+          {step.file}
+        </div>
+
+        {broken && <div role="status" style={badgeStyle("#f85149")}>File missing — step broken</div>}
+        {!broken && anchorStatus === "lost" && <div role="status" style={badgeStyle("#d29922")}>Anchor lost</div>}
+        {decision && <div role="status" style={badgeStyle("#3fb950")}>{decisionLabel(decision)}</div>}
+        {actionError && <div role="alert" style={{ fontSize: 11, color: "#f85149", marginBottom: 6 }}>{actionError}</div>}
+
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginBottom: 2 }}>What</div>
+          <div>{step.what}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginBottom: 2 }}>Why</div>
+          <div>{step.why}</div>
+        </div>
+
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginBottom: 4 }}>
+            Ask a question
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            <input
+              aria-label="tour question"
+              type="text"
+              value={question}
+              placeholder="Ask about this step…"
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAskQuestion();
+                }
+              }}
+              style={{
+                flex: 1, minWidth: 0, fontSize: 11, padding: "3px 6px",
+                background: "var(--surface2, var(--surface))", border: "1px solid var(--border)",
+                borderRadius: 4, color: "var(--text)",
+              }}
+            />
+            <button
+              aria-label="submit question" title="Ask"
+              disabled={asking || !question.trim()}
+              onClick={() => void handleAskQuestion()}
+              style={actionBtnStyle}
+            >
+              {asking ? <Loader2 size={13} className="spinning" /> : <Send size={13} />}
+            </button>
+            <button
+              aria-label="ask the author agent" title="Ask the author agent in the terminal"
+              onClick={handleAskAuthorAgent}
+              style={actionBtnStyle}
+            >
+              <Bot size={13} />
+            </button>
+          </div>
+
+          {qaHistory.length > 0 && (
+            <div style={{ marginTop: 6, maxHeight: 120, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+              {qaHistory.map((qa, i) => (
+                <div key={i}>
+                  <div style={{ fontSize: 11, fontWeight: 600 }}>{qa.question}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{qa.answer}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", borderTop: "1px solid var(--border)" }}>
+        <button aria-label="previous step" title="Previous step" disabled={stepIndex === 0} onClick={() => goto(stepIndex - 1)} style={navBtnStyle}>
+          <ChevronLeft size={14} />
+        </button>
+        <button aria-label="next step" title="Next step" disabled={stepIndex >= steps.length - 1} onClick={() => goto(stepIndex + 1)} style={navBtnStyle}>
+          <ChevronRight size={14} />
+        </button>
+        <div style={{ flex: 1 }} />
+        <button aria-label="stage step" title="Stage this change" disabled={broken} onClick={() => void handleStage()} style={actionBtnStyle}>
+          <Check size={13} />
+        </button>
+        <button aria-label="discard step" title="Discard this change" disabled={broken} onClick={() => void handleDiscard()} style={actionBtnStyle}>
+          <Undo2 size={13} />
+        </button>
+        <button aria-label="edit step" title="Edit in place" disabled={broken} onClick={handleEdit} style={actionBtnStyle}>
+          <Pencil size={13} />
+        </button>
+        <button
+          aria-label="copy agent rule" title={ruleCopied ? "Copied" : "Copy agent rule for CLAUDE.md / .cursor/rules"}
+          onClick={handleCopyRule} style={iconBtnStyle}
+        >
+          {ruleCopied ? <Check size={13} /> : <Copy size={13} />}
+        </button>
+      </div>
+    </div>
+  );
+}

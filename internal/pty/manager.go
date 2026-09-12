@@ -29,8 +29,10 @@ func DefaultShell() (string, []string) {
 }
 
 type session struct {
-	pty gopty.Pty
-	cmd *gopty.Cmd
+	pty  gopty.Pty
+	cmd  *gopty.Cmd
+	cwd  string
+	tail *tailBuffer
 }
 
 // Manager owns live PTY sessions keyed by an opaque session id.
@@ -62,8 +64,9 @@ func (m *Manager) Start(cwd, name string, args []string, onData func(id, chunk s
 	// id is generated before the goroutines launch, so both callbacks always
 	// receive the correct id (no capture race for callers).
 	id := uuid.New().String()
+	tail := newTailBuffer(sessionTailCapacity)
 	m.mu.Lock()
-	m.sessions[id] = &session{pty: p, cmd: c}
+	m.sessions[id] = &session{pty: p, cmd: c, cwd: cwd, tail: tail}
 	m.mu.Unlock()
 
 	go func() {
@@ -71,11 +74,14 @@ func (m *Manager) Start(cwd, name string, args []string, onData func(id, chunk s
 		var partial []byte // head of a rune whose tail has not been read yet
 		for {
 			n, rerr := p.Read(buf)
-			if n > 0 && onData != nil {
+			if n > 0 {
 				var chunk []byte
 				chunk, partial = splitTrailingRune(append(partial, buf[:n]...))
 				if len(chunk) > 0 {
-					onData(id, string(chunk))
+					tail.Write(chunk)
+					if onData != nil {
+						onData(id, string(chunk))
+					}
 				}
 			}
 			if rerr != nil {
@@ -138,6 +144,41 @@ func (m *Manager) Close(id string) error {
 		_ = s.cmd.Process.Kill()
 	}
 	return s.pty.Close()
+}
+
+// TailOutput returns up to the last ~32KB of output written to sessionID's
+// PTY. The frontend xterm owns the real scrollback; this exists only for
+// server-side consumers (e.g. fallback code-tour generation, spec §3, which
+// needs "the tail of the terminal transcript") that have no other way to see
+// recent terminal output. Returns "" for an unknown or already-closed
+// session.
+func (m *Manager) TailOutput(sessionID string) string {
+	m.mu.Lock()
+	s, ok := m.sessions[sessionID]
+	m.mu.Unlock()
+	if !ok {
+		return ""
+	}
+	return s.tail.String()
+}
+
+// TailForCwd is a convenience wrapper for callers that know a session's
+// working directory but not its session id (e.g. fallback tour generation,
+// which is keyed off repoPath). It returns TailOutput for the first live
+// session whose cwd matches. Map iteration order is randomized, so if more
+// than one session shares the same cwd (e.g. two terminals open on the same
+// repo) which one is returned is unspecified — acceptable here because the
+// generated tour only needs *a* recent transcript, not a specific one.
+// Returns "" when no session matches.
+func (m *Manager) TailForCwd(cwd string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.sessions {
+		if s.cwd == cwd {
+			return s.tail.String()
+		}
+	}
+	return ""
 }
 
 func (m *Manager) CloseAll() {
