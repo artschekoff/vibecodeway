@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,39 @@ func TestTailBuffer_KeepsOnlyLastCapacityBytes(t *testing.T) {
 
 	tb.Write([]byte("XYZXYZXYZXYZ")) // single write bigger than capacity
 	assert.Equal(t, "ZXYZXYZXYZ", tb.String())
+}
+
+// A single write larger than capacity must not evict mid-rune: the cut point
+// has to land on the next UTF-8 rune boundary, never inside a multi-byte
+// rune's continuation bytes.
+func TestTailBuffer_SingleWriteEvictionNeverSplitsARune(t *testing.T) {
+	const cyr = "\xd0\xb5" // 'е', 2 bytes; second byte is a UTF-8 continuation byte
+	p := []byte("ab" + cyr + "cd")
+
+	// cap=3 forces the naive cut (len(p)-cap = 3) to land on cyr's
+	// continuation byte; the fix must advance past it to the next full rune.
+	tb := newTailBuffer(3)
+	tb.Write(p)
+
+	out := tb.String()
+	require.True(t, utf8.ValidString(out), "tail must never contain a torn leading rune: %q", out)
+	assert.Equal(t, "cd", out)
+}
+
+// Front-eviction that happens while trimming previously-accumulated bytes
+// (the "append then trim excess" path, as opposed to a single oversized
+// write) must also respect rune boundaries.
+func TestTailBuffer_AppendEvictionNeverSplitsARune(t *testing.T) {
+	const cyr = "\xd0\xb5" // 'е', 2 bytes
+
+	tb := newTailBuffer(7)
+	tb.Write([]byte("ab"))            // buf: "ab" (2 bytes, under capacity)
+	tb.Write([]byte(cyr + cyr + cyr)) // buf: "ab" + cyr*3 = 8 bytes, excess=1, trims to "b"+cyr*3 (7 bytes)
+	tb.Write([]byte(cyr))             // buf: "b"+cyr*3+cyr = 9 bytes, excess=2 lands mid-rune
+
+	out := tb.String()
+	require.True(t, utf8.ValidString(out), "tail must never contain a torn leading rune: %q", out)
+	assert.Equal(t, cyr+cyr+cyr, out)
 }
 
 func TestTailBuffer_UnderCapacityReturnsEverythingWritten(t *testing.T) {

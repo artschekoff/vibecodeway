@@ -35,6 +35,16 @@ func (f *fakeAIClient) ChatCompletion(_ context.Context, messages []openai.Messa
 	return &openai.Response{Content: content}, nil
 }
 
+// repoWithChanges returns a temp git repo with a genuine uncommitted
+// working-tree diff, so Generate doesn't short-circuit on ErrNoChanges.
+func repoWithChanges(t *testing.T) string {
+	t.Helper()
+	repoPath := initGitRepo(t)
+	commitAt(t, repoPath, "2026-01-01T00:00:00+00:00") // commits a.txt
+	require.NoError(t, os.WriteFile(filepath.Join(repoPath, "a.txt"), []byte("modified for generate test"), 0o644))
+	return repoPath
+}
+
 const validTourJSON = `{
 	"version": 1,
 	"title": "Add analytics dashboard",
@@ -46,7 +56,7 @@ const validTourJSON = `{
 }`
 
 func TestGenerate_ValidJSONOnFirstTry(t *testing.T) {
-	repoPath := initGitRepo(t)
+	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{responses: []string{validTourJSON}}
 
 	f, err := Generate(context.Background(), fake, repoPath, "transcript tail here")
@@ -65,7 +75,7 @@ func TestGenerate_ValidJSONOnFirstTry(t *testing.T) {
 }
 
 func TestGenerate_RetriesOnceOnInvalidJSONThenSucceeds(t *testing.T) {
-	repoPath := initGitRepo(t)
+	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{responses: []string{"not json at all", validTourJSON}}
 
 	f, err := Generate(context.Background(), fake, repoPath, "transcript")
@@ -84,7 +94,7 @@ func TestGenerate_RetriesOnceOnInvalidJSONThenSucceeds(t *testing.T) {
 }
 
 func TestGenerate_BothAttemptsInvalid_ReturnsWrappedError(t *testing.T) {
-	repoPath := initGitRepo(t)
+	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{responses: []string{"still not json", "also not json"}}
 
 	f, err := Generate(context.Background(), fake, repoPath, "transcript")
@@ -95,7 +105,7 @@ func TestGenerate_BothAttemptsInvalid_ReturnsWrappedError(t *testing.T) {
 }
 
 func TestGenerate_ValidJSONButFailsSchemaValidation_RetriesThenFails(t *testing.T) {
-	repoPath := initGitRepo(t)
+	repoPath := repoWithChanges(t)
 	// Well-formed JSON, but missing required fields -> fails validate(), not
 	// json.Unmarshal. Both attempts fail this way.
 	invalidSchema := `{"version": 1, "title": "x", "steps": []}`
@@ -109,12 +119,25 @@ func TestGenerate_ValidJSONButFailsSchemaValidation_RetriesThenFails(t *testing.
 }
 
 func TestGenerate_LLMCallError_Propagates(t *testing.T) {
-	repoPath := initGitRepo(t)
+	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{errs: []error{errors.New("boom"), errors.New("boom again")}}
 
 	_, err := Generate(context.Background(), fake, repoPath, "transcript")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "boom again")
+}
+
+func TestGenerate_EmptyDiff_ReturnsErrNoChangesWithoutCallingTheLLM(t *testing.T) {
+	repoPath := initGitRepo(t)
+	commitAt(t, repoPath, "2026-01-01T00:00:00+00:00") // committed, clean tree: no diff
+
+	fake := &fakeAIClient{responses: []string{validTourJSON}}
+
+	f, err := Generate(context.Background(), fake, repoPath, "transcript")
+	require.Error(t, err)
+	assert.Nil(t, f)
+	assert.True(t, errors.Is(err, ErrNoChanges), "expected errors.Is(err, ErrNoChanges), got %v", err)
+	assert.Empty(t, fake.calls, "no LLM call should happen when there is nothing to tour")
 }
 
 func TestExtractJSON_StripsMarkdownFence(t *testing.T) {

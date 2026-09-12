@@ -27,6 +27,15 @@ type AIClient interface {
 	ChatCompletion(ctx context.Context, messages []openai.Message) (*openai.Response, error)
 }
 
+// ErrNoChanges is returned by Generate when repoPath's working tree has no
+// changes to build a tour from (spec §5: "Repo with no changes → Start tour
+// disabled with a tooltip"). Generate returns this before making any LLM
+// call — sending an empty diff to a prompt that demands 3-10 steps citing
+// only diff files would just invite the model to hallucinate steps.
+// Callers should surface this as a distinct "no changes to tour" state, not
+// the invalid-JSON/retry error path.
+var ErrNoChanges = errors.New("no changes to generate a tour from")
+
 // Prompt caps, per spec §3: the diff and transcript tail are each capped
 // before being sent to the LLM so a huge working tree or a chatty terminal
 // session can't blow the prompt budget.
@@ -73,6 +82,9 @@ func Generate(ctx context.Context, ai AIClient, repoPath, transcriptTail string)
 	diff, err := CollectDiff(repoPath)
 	if err != nil {
 		return nil, fmt.Errorf("collect diff: %w", err)
+	}
+	if strings.TrimSpace(diff) == "" {
+		return nil, fmt.Errorf("generate tour: %w", ErrNoChanges)
 	}
 
 	messages := []openai.Message{
