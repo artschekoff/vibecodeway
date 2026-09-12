@@ -38,9 +38,22 @@ const iconBtn = (active: boolean): React.CSSProperties => ({
   padding: 2, color: active ? "var(--accent, #2563eb)" : "var(--text-muted)",
 });
 
+// One-time <style> injection for the tour anchor highlight decoration. Kept out
+// of style.css (which carries unrelated uncommitted changes from other work) —
+// Monaco decorations need a real CSS class to exist somewhere, so this injects
+// it into <head> the first time it's needed.
+let anchorStyleInjected = false;
+function ensureAnchorStyle() {
+  if (anchorStyleInjected || typeof document === "undefined") return;
+  anchorStyleInjected = true;
+  const style = document.createElement("style");
+  style.textContent = ".tour-anchor-highlight { background: rgba(122,162,247,0.25); }";
+  document.head.appendChild(style);
+}
+
 export function DiffEditorTab({
-  repoPath, path, onSaved, refreshSignal, onAskAi, baseMode = "branch",
-}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void; baseMode?: "branch" | "head" }) {
+  repoPath, path, onSaved, refreshSignal, onAskAi, baseMode = "branch", highlightAnchor,
+}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void; baseMode?: "branch" | "head"; highlightAnchor?: string }) {
   const [original, setOriginal] = useState<string | null>(null);
   const [modified, setModified] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,9 +62,15 @@ export function DiffEditorTab({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [localReload, setLocalReload] = useState(0);
+  // Bumped once Monaco's onMount fires, so effects that need editorRef.current
+  // (e.g. the tour anchor highlight below) can re-run once the editor instance
+  // actually exists instead of only reacting to data-load changes that may
+  // have already happened before the async Monaco bundle finished mounting.
+  const [mountTick, setMountTick] = useState(0);
   const editorRef = useRef<DiffEditorInstance | null>(null);
   const monacoRef = useRef<MonacoNs | null>(null);
   const blameIdsRef = useRef<string[]>([]);
+  const anchorDecosRef = useRef<string[]>([]);
   const changeIdxRef = useRef(-1);
   const { settings } = useEditorSettings();
 
@@ -217,6 +236,31 @@ export function DiffEditorTab({
     return () => { active = false; };
   }, [blameOn, repoPath, path, refreshSignal, original, modified]);
 
+  // Tour anchor highlight: locate the anchor snippet in the modified content,
+  // reveal + highlight its line. Caller (TourCard, via EditorWorkspace) has
+  // already verified the anchor exists before setting this prop, but the
+  // lookup is repeated here defensively (content can change between checks).
+  useEffect(() => {
+    const me = editorRef.current?.getModifiedEditor();
+    const monaco = monacoRef.current;
+    if (!me || typeof me.deltaDecorations !== "function") return;
+    if (!highlightAnchor || modified === null) {
+      anchorDecosRef.current = me.deltaDecorations(anchorDecosRef.current, []);
+      return;
+    }
+    const idx = modified.indexOf(highlightAnchor);
+    if (idx === -1 || !monaco) {
+      anchorDecosRef.current = me.deltaDecorations(anchorDecosRef.current, []);
+      return;
+    }
+    ensureAnchorStyle();
+    const line = modified.slice(0, idx).split("\n").length;
+    anchorDecosRef.current = me.deltaDecorations(anchorDecosRef.current, [
+      { range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: "tour-anchor-highlight" } },
+    ]);
+    me.revealLineInCenter?.(line);
+  }, [highlightAnchor, modified, mountTick]);
+
   useEffect(() => {
     let active = true;
     // "head" (Staged/Local/file-tree) diffs against HEAD so only uncommitted
@@ -352,6 +396,7 @@ export function DiffEditorTab({
               // (Monaco recomputes the diff), plus once now for the initial diff.
               me.onDidChangeModelContent?.(() => setTimeout(() => buildHunkWidgetsRef.current(), 0));
               setTimeout(buildHunkWidgets, 0);
+              setMountTick((n) => n + 1);
             }}
           />
         )}

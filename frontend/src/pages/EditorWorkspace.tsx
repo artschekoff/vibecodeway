@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Copy, Check } from "lucide-react";
-import { GetContextChanges, RefreshContext, RefreshContextPRs } from "../../wailsjs/go/main/App";
+import { GetContextChanges, RefreshContext, RefreshContextPRs, StartCodeTour, GetCodeTour } from "../../wailsjs/go/main/App";
+import type { CodeTour } from "../types";
 import { TerminalPanel } from "../components/editor/TerminalPanel";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
 import { FileTreePanel } from "../components/editor/FileTreePanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
+import { TourCard } from "../components/editor/TourCard";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { NotesPanel } from "../components/editor/NotesPanel";
@@ -59,6 +61,16 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   const [prRefreshing, setPrRefreshing] = useState(false);
   const [prRefreshError, setPrRefreshError] = useState("");
   const [copied, setCopied] = useState(false);
+  // repoPath -> number of changed files, from the same GetContextChanges fetch
+  // that populates repoPaths — drives the Start-tour button's disabled state.
+  const [repoFileCounts, setRepoFileCounts] = useState<Record<string, number>>({});
+  const [tour, setTour] = useState<CodeTour | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStarting, setTourStarting] = useState(false);
+  const [tourError, setTourError] = useState("");
+  // Which (repoPath, path, anchor) the diff editor should highlight once that
+  // file's DiffEditorTab is mounted — set by TourCard as the user steps through.
+  const [tourAnchorTarget, setTourAnchorTarget] = useState<{ repoPath: string; path: string; anchor: string } | null>(null);
   const { getFiles, openEditorFile } = useEditorFiles();
   const { tabs, activeKey } = getFiles(contextId);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
@@ -101,6 +113,9 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         .filter((r) => r.repoPath)
         .map((r) => ({ id: r.repoId, name: r.repoName, path: r.repoPath }));
       setRepoPaths(paths);
+      const counts: Record<string, number> = {};
+      (repos ?? []).forEach((r) => { counts[r.repoPath] = (counts[r.repoPath] ?? 0) + (r.files?.length ?? 0); });
+      setRepoFileCounts(counts);
       if (paths.length > 0) {
         const preferred = initialCwd && paths.some((p) => p.path === initialCwd) ? initialCwd : paths[0].path;
         setCwd((prev) => prev || preferred);
@@ -108,6 +123,17 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     });
     return () => { active = false; };
   }, [contextId, refreshSignal]);
+
+  // Detect an already-running tour for this repo (e.g. after a tab switch or
+  // app restart) so the sidebar can offer "Resume tour" instead of nothing.
+  useEffect(() => {
+    if (!cwd) { setTour(null); return; }
+    let active = true;
+    void GetCodeTour(contextId, cwd)
+      .then((t) => { if (active) setTour(t ?? null); })
+      .catch(() => { if (active) setTour(null); });
+    return () => { active = false; };
+  }, [contextId, cwd]);
 
   const openFile = (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head" = "head") => {
     const tab: OpenTab = { repoPath, repoName, path, status, baseMode };
@@ -146,22 +172,60 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     }
   };
 
+  // StartCodeTour returns the stable "no changes to tour" error (spec §5) when
+  // the repo's working tree has nothing to import/generate from — surfaced as
+  // a quiet inline note instead of the generic error affordance.
+  const handleStartTour = async () => {
+    if (!cwd || tourStarting) return;
+    setTourStarting(true);
+    setTourError("");
+    try {
+      const t = await StartCodeTour(contextId, cwd);
+      setTour(t);
+      setTourOpen(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTourError(msg.includes("no changes to tour") ? "No changes to tour" : msg);
+    } finally {
+      setTourStarting(false);
+    }
+  };
+
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
   const activeRepo = useMemo(() => repoPaths.find((r) => r.path === cwd), [repoPaths, cwd]);
   const activeRepoId = activeRepo?.id;
+  const hasChangesForTour = (repoFileCounts[cwd] ?? 0) > 0;
+  const highlightAnchor =
+    active && tourAnchorTarget && active.repoPath === tourAnchorTarget.repoPath && active.path === tourAnchorTarget.path
+      ? tourAnchorTarget.anchor
+      : undefined;
 
   return (
     <div style={{ display: "flex", height: "100%", flex: 1, minWidth: 0, width: "100%" }}>
       <div ref={columnRef} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div ref={(el) => registerZone("editor", el)} tabIndex={-1}
           className={activeZone === "editor" ? "zone--active" : undefined}
-          style={{ flex: 1, minHeight: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", margin: "6px 0 0 6px" }}>
+          style={{ position: "relative", flex: 1, minHeight: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", margin: "6px 0 0 6px" }}>
           {active ? (
             <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} baseMode={active.baseMode} refreshSignal={refreshSignal}
+              highlightAnchor={highlightAnchor}
               onSaved={() => { /* panel auto-polls */ }}
               onAskAi={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))} />
           ) : (
             <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 16 }}>Select a changed file to view its diff.</div>
+          )}
+          {/* Docked bottom-right, inside the editor zone only — never covers the
+              whole diff. Position persists via SetCodeTourStep on every step
+              change (TourCard); closing here just hides it, GetCodeTour restores
+              on the next "Resume tour". */}
+          {tourOpen && tour && (
+            <TourCard
+              tour={tour}
+              repoName={activeRepo?.name ?? ""}
+              onClose={() => setTourOpen(false)}
+              onOpenFile={openFile}
+              onLocateAnchor={(repoPath, path, anchor) => setTourAnchorTarget({ repoPath, path, anchor })}
+            />
           )}
         </div>
         <ResizeHandle
@@ -254,6 +318,35 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
             </button>
           ))}
         </div>
+
+        {sidebarTab === "git" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
+            <button
+              className="btn-secondary"
+              style={{ fontSize: 11, padding: "2px 8px" }}
+              disabled={!hasChangesForTour || tourStarting}
+              title={!hasChangesForTour ? "No changes to tour" : "Start a guided tour of this repo's changes"}
+              onClick={() => void handleStartTour()}
+            >
+              {tourStarting ? "Starting…" : "Start tour"}
+            </button>
+            {tour && !tourOpen && (
+              <button
+                aria-label="resume tour"
+                title="Resume the active tour"
+                onClick={() => setTourOpen(true)}
+                style={{ fontSize: 11, background: "none", border: "none", color: "var(--accent, #7aa2f7)", cursor: "pointer", padding: 0 }}
+              >
+                Resume tour
+              </button>
+            )}
+            {tourError && (
+              <span style={{ fontSize: 11, color: tourError === "No changes to tour" ? "var(--text-muted)" : "var(--danger, #e5534b)", marginLeft: "auto" }}>
+                {tourError}
+              </span>
+            )}
+          </div>
+        )}
 
         {sidebarTab === "files" ? (
           cwd ? (

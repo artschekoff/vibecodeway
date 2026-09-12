@@ -18,8 +18,19 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
     <div data-testid="pr-info">{contextId}:{activeRepoId ?? "none"}</div>
   ),
 }));
+// TourCard has its own dedicated test suite (TourCard.test.tsx) — stubbed here
+// so EditorWorkspace tests only exercise the Start/Resume-tour wiring, not
+// TourCard's internals (which would pull in ReadRepoFile/Stage/Discard mocks).
+vi.mock("../components/editor/TourCard", () => ({
+  TourCard: ({ tour, onClose }: { tour: { title: string }; onClose: () => void }) => (
+    <div data-testid="tour-card">
+      {tour.title}
+      <button onClick={onClose}>close-tour</button>
+    </div>
+  ),
+}));
 
-const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent } = vi.hoisted(() => ({
+const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   RefreshContext: vi.fn(),
   RefreshContextPRs: vi.fn(),
@@ -31,8 +42,10 @@ const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings,
   ListEvents: vi.fn().mockResolvedValue([]),
   AddUserEvent: vi.fn(),
   DeleteUserEvent: vi.fn(),
+  StartCodeTour: vi.fn(),
+  GetCodeTour: vi.fn(),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";
@@ -48,6 +61,8 @@ beforeEach(() => {
   RefreshContext.mockResolvedValue({});
   GetEditorSettings.mockResolvedValue("");
   SetEditorSettings.mockResolvedValue(undefined);
+  GetCodeTour.mockResolvedValue(null);
+  StartCodeTour.mockResolvedValue(undefined);
 });
 
 describe("EditorWorkspace", () => {
@@ -243,6 +258,64 @@ describe("EditorWorkspace", () => {
     expect(await screen.findByText(/no repo path on disk/i)).toBeInTheDocument();
     // Panel still mounted, so the terminal hotkeys stay registered.
     expect(screen.getByRole("button", { name: /new terminal/i })).toBeInTheDocument();
+  });
+
+  it("disables Start tour with a tooltip when the repo has no changes", async () => {
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const btn = await screen.findByRole("button", { name: "Start tour" });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute("title", "No changes to tour");
+  });
+
+  it("starts a tour and opens the tour card on success", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockResolvedValue({ id: "t1", title: "Add feature", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const btn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    fireEvent.click(btn);
+    await waitFor(() => expect(StartCodeTour).toHaveBeenCalledWith("c1", "/r/api"));
+    expect(await screen.findByTestId("tour-card")).toHaveTextContent("Add feature");
+  });
+
+  it("shows a quiet inline note for the stable 'no changes to tour' error", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockRejectedValue(new Error("code tour: no changes to tour"));
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const btn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    fireEvent.click(btn);
+    await waitFor(() => expect(screen.getByText("No changes to tour")).toBeInTheDocument());
+    expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument();
+  });
+
+  it("offers Resume tour when GetCodeTour finds an existing tour on mount", async () => {
+    GetCodeTour.mockResolvedValue({ id: "t1", title: "Existing tour", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    const resumeBtn = await screen.findByRole("button", { name: "resume tour" });
+    expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument();
+    fireEvent.click(resumeBtn);
+    expect(await screen.findByTestId("tour-card")).toHaveTextContent("Existing tour");
   });
 });
 
