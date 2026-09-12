@@ -199,6 +199,14 @@ func TestFresh(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, fresh)
 	})
+
+	t.Run("not a git repository is a hard error, not fresh", func(t *testing.T) {
+		repoPath := t.TempDir() // no git init at all
+
+		fresh, err := Fresh(repoPath, time.Now())
+		require.Error(t, err)
+		assert.False(t, fresh)
+	})
 }
 
 func TestConsume(t *testing.T) {

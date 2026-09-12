@@ -110,18 +110,32 @@ func Fresh(repoPath string, fileModTime time.Time) (bool, error) {
 	return fileModTime.After(commitTime), nil
 }
 
+// emptyRepoStderrMarkers are substrings git's stderr contains when `git log`
+// fails specifically because the repository has no commits yet. Both a
+// checked-out branch with no commits ("does not have any commits yet") and a
+// detached/unborn HEAD some git versions report as "bad default revision"
+// land here. Any other stderr (e.g. "not a git repository") is a real
+// failure, not "zero commits", and must not be swallowed as fresh.
+var emptyRepoStderrMarkers = []string{
+	"does not have any commits yet",
+	"bad default revision",
+}
+
 // lastCommitTime runs `git log -1 --format=%cI` in repoPath and returns the
 // last commit's committer time. ok is false when the repository has no
-// commits yet (empty output, not an error).
+// commits yet (git's "empty repo" error, not just any non-zero exit).
 func lastCommitTime(repoPath string) (t time.Time, ok bool, err error) {
 	out, err := exec.Command("git", "-C", repoPath, "log", "-1", "--format=%cI").Output()
 	if err != nil {
-		// A brand-new repo with no commits exits non-zero here ("does not
-		// have any commits yet"); treat that as "no commits" rather than a
-		// hard error, matching the spec's "zero commits counts as fresh".
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return time.Time{}, false, nil
+			stderr := string(exitErr.Stderr)
+			for _, marker := range emptyRepoStderrMarkers {
+				if strings.Contains(stderr, marker) {
+					return time.Time{}, false, nil
+				}
+			}
+			return time.Time{}, false, fmt.Errorf("git log in %s: %w\n%s", repoPath, err, stderr)
 		}
 		return time.Time{}, false, fmt.Errorf("git log in %s: %w", repoPath, err)
 	}
