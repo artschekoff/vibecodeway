@@ -130,11 +130,12 @@ func TestComputeCardsOrderAndEventKinds(t *testing.T) {
 
 	got := Compute(in)
 
-	require.Len(t, got.Cards, 9)
+	require.Len(t, got.Cards, 12)
 	wantOrder := []struct{ metric, period string }{
 		{MetricTasksClosed, PeriodYesterday}, {MetricTasksClosed, PeriodWeek}, {MetricTasksClosed, PeriodMonth},
 		{MetricPRsMerged, PeriodYesterday}, {MetricPRsMerged, PeriodWeek}, {MetricPRsMerged, PeriodMonth},
 		{MetricComments, PeriodYesterday}, {MetricComments, PeriodWeek}, {MetricComments, PeriodMonth},
+		{MetricAITokens, PeriodYesterday}, {MetricAITokens, PeriodWeek}, {MetricAITokens, PeriodMonth},
 	}
 	for i, w := range wantOrder {
 		assert.Equal(t, w.metric, got.Cards[i].Metric, "card %d metric", i)

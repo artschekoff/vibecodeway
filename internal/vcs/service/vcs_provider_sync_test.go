@@ -128,6 +128,7 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			kind          TEXT NOT NULL DEFAULT 'requested',
 			ci_status     TEXT NOT NULL DEFAULT '',
 			my_review_state TEXT NOT NULL DEFAULT '',
+			merge_state_status TEXT NOT NULL DEFAULT '',
 			UNIQUE (repo_id, pr_number)
 		);
 	`)
@@ -460,7 +461,7 @@ func TestReconcileRecordsMyApprovalAfterPRDropsOffTheList(t *testing.T) {
 
 	// A stored PR from a previous sync, with no standing decision yet.
 	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 9, "t", "carol",
-		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "", "")
 	require.NoError(t, err)
 
 	// It is gone from both searches, but `gh pr view` shows it open and approved by me.
@@ -489,7 +490,7 @@ func TestReconcileRecordsStatEventForMergedAuthoredPR(t *testing.T) {
 
 	// A stored authored PR from a previous sync that just dropped off the open list.
 	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 42, "Ship it", "me",
-		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "authored", "")
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "authored", "", "")
 	require.NoError(t, err)
 
 	// gh returns MergedAt in RFC3339, possibly with a non-UTC offset; the
@@ -531,7 +532,7 @@ func TestReconcileRecordsStatEventWithObservedAtFallbackWhenMergedAtMissing(t *t
 	require.NoError(t, err)
 
 	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 43, "Ship it too", "me",
-		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "authored", "")
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "authored", "", "")
 	require.NoError(t, err)
 
 	runner.prByNumber = map[int]*vcs.PRData{43: {Number: 43, State: "merged"}} // MergedAt left empty
@@ -564,7 +565,7 @@ func TestReconcileDoesNotRecordStatEventForReviewedPR(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7, "Someone else's PR", "carol",
-		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "", "")
 	require.NoError(t, err)
 
 	runner.prByNumber = map[int]*vcs.PRData{7: {Number: 7, State: "merged"}}
@@ -609,7 +610,7 @@ func TestSyncReviewRequestsPreservesStoredMyReviewStateWhenUnresolved(t *testing
 
 	// A prior sync already recorded a standing approval for this PR.
 	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 11, "t", "carol",
-		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "")
+		"u", "review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "", "")
 	require.NoError(t, err)
 	require.NoError(t, vs.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, 11, "approved"))
 

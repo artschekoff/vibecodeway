@@ -179,6 +179,11 @@ function ReviewCard({
             Conflicts
           </span>
         )}
+        {!status.terminal && review.mergeStateStatus === "BEHIND" && (
+          <span className="pr-status-badge pr-status-badge--conflict" title="Head branch is behind base — Update branch needed">
+            Update branch
+          </span>
+        )}
         {review.ciStatus === "FAILURE" && (
           <span className="pr-status-badge pr-status--changes-requested" title="CI checks failed">
             CI failed
@@ -349,7 +354,20 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const [platforms, setPlatforms] = useState<VCSPlatformInfo[]>([]);
   const [totalReviews, setTotalReviews] = useState(0);
   const [refreshingReviews, setRefreshingReviews] = useState(false);
+  // Live per-repo progress of a reviews refresh, fed by "reviews-refresh:progress".
+  const [reviewsProgress, setReviewsProgress] = useState<{ current: number; total: number; repo: string; phase: string } | null>(null);
   const [reviewFilter, setReviewFilter] = useState("");
+  // "Needs my attention": show only PRs where an action is actively expected
+  // from me — awaiting my first review, or a re-review was requested.
+  const [attentionOnly, setAttentionOnly] = useState<boolean>(
+    () => localStorage.getItem("vibecodeway:reviews:attentionOnly") === "1"
+  );
+  const toggleAttentionOnly = () => {
+    setAttentionOnly((v) => {
+      localStorage.setItem("vibecodeway:reviews:attentionOnly", v ? "0" : "1");
+      return !v;
+    });
+  };
   const [showAddRepo, setShowAddRepo] = useState(false);
   const [addPlatform, setAddPlatform] = useState<VCSPlatform>("github");
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
@@ -528,11 +546,16 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   useEffect(() => {
     const offContexts = EventsOn("bg-refresh:contexts", () => { void load(); });
     const offReviews = EventsOn("bg-refresh:reviews", () => { void loadReviews(); });
+    const offReviewsProgress = EventsOn("reviews-refresh:progress", (p: { current: number; total: number; repo: string; phase: string }) => {
+      setReviewsProgress(p);
+    });
     return () => {
       offContexts();
       offReviews();
+      offReviewsProgress();
       EventsOff("bg-refresh:contexts");
       EventsOff("bg-refresh:reviews");
+      EventsOff("reviews-refresh:progress");
     };
   }, [load, loadReviews]);
 
@@ -803,9 +826,10 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   // ── Reviews handlers ──
   const handleRefreshReviews = async () => {
     setRefreshingReviews(true);
+    setReviewsProgress(null);
     try { await RefreshPendingReviews(); await loadReviews(); }
     catch (e) { setError(String(e)); }
-    finally { setRefreshingReviews(false); }
+    finally { setRefreshingReviews(false); setReviewsProgress(null); }
   };
 
   const handleDismissReview = async (id: string) => {
@@ -1364,6 +1388,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 .
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <label
+                  title="Show only PRs waiting on my action: my review is requested, a re-review was asked for, or my PR has merge conflicts"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: attentionOnly ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={attentionOnly}
+                    onChange={toggleAttentionOnly}
+                    aria-label="needs my attention only"
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  Needs my attention
+                </label>
                 {(() => {
                   const unviewed = repoGroups.flatMap((g) => g.reviews).filter((r) => !r.viewedAt && !r.dismissedAt).length;
                   return unviewed > 0 ? (
@@ -1395,6 +1432,24 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
               </div>
             </div>
 
+            {/* Live refresh progress: repo-by-repo bar with the current phase */}
+            {refreshingReviews && reviewsProgress && (
+              <div data-testid="reviews-refresh-progress" style={{ margin: "8px 0 4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                  <span>
+                    {reviewsProgress.phase === "authored" ? "My PRs" : "Requested reviews"} · {reviewsProgress.repo}
+                  </span>
+                  <span>{reviewsProgress.current}/{reviewsProgress.total}</span>
+                </div>
+                <div className="bg-refresh-toast__bar">
+                  <div
+                    className="bg-refresh-toast__fill"
+                    style={{ width: `${Math.round((reviewsProgress.current / Math.max(1, reviewsProgress.total)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Reviews grouped by repo */}
             {repoGroups.length === 0 ? (
               <div className="detail-empty" style={{ marginTop: 32 }}>
@@ -1412,8 +1467,18 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const url = repoUrl(repo);
                 const q = reviewFilter.trim().toLowerCase();
                 const match = (r: ReviewRequest) => !q || r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q);
-                const requested = reviews.filter((r) => (r.kind ?? "requested") === "requested" && match(r));
-                const authored = reviews.filter((r) => r.kind === "authored" && match(r));
+                const requested = reviews.filter((r) => (r.kind ?? "requested") === "requested" && match(r))
+                  .filter((r) => {
+                    if (!attentionOnly) return true;
+                    const s = reviewStage(r);
+                    return s === "awaiting_first" || s === "re_review";
+                  });
+                // In attention mode my own PRs surface only when they need MY fix:
+                // a merge conflict on a still-open PR.
+                const authored = reviews.filter((r) => r.kind === "authored" && match(r))
+                  .filter((r) => !attentionOnly ||
+                    ((r.mergeable === "CONFLICTING" || r.mergeStateStatus === "BEHIND") &&
+                      !reviewStatusMeta(r.reviewStatus).terminal));
                 const buckets = new Map<ReviewStage, ReviewRequest[]>();
                 for (const r of requested) {
                   const s = reviewStage(r);

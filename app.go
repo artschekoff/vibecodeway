@@ -219,6 +219,11 @@ func (a *App) startup(ctx context.Context) {
 			logger.Warn("vcs: record stat event failed", zap.Error(err))
 		}
 	})
+	a.vcsSvc.WithReviewProgressFunc(func(current, total int, repo, phase string) {
+		runtime.EventsEmit(a.ctx, "reviews-refresh:progress", map[string]any{
+			"current": current, "total": total, "repo": repo, "phase": phase,
+		})
+	})
 	vcsProvider := a.vcsSvc
 
 	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)

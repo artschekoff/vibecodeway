@@ -13,6 +13,9 @@ import type { Organization } from "../types";
 import { ProseEditor } from "../components/ProseEditor";
 
 type ProgressEvent = { phase: string; tool?: string; args?: string; result?: string; callId?: string };
+
+// Height of one line in the live-progress odometer ticker.
+const TICKER_LINE = 18;
 type PendingConfirm = { tool: string; args: string; callId: string };
 
 // A turn in the persistent, session-scoped chat log. "summary" entries replace
@@ -70,10 +73,12 @@ export default function AskAIPage() {
     };
   }, []);
 
-  // Auto-scroll to the bottom whenever the log grows or the live trace updates.
+  // Auto-scroll only when the log itself grows — progress ticks animate inside
+  // the fixed-height ticker, so they must not yank the user away from where
+  // they scrolled to.
   useEffect(() => {
     bottomRef.current?.scrollIntoView?.({ block: "end" });
-  }, [log, progress]);
+  }, [log]);
 
   const ask = async () => {
     const q = question.trim();
@@ -212,7 +217,9 @@ export default function AskAIPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* The log owns the scroll: the page never grows past the viewport, and both
+          ends of a long dialog stay reachable. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, paddingRight: 4 }}>
         {log.map((entry, i) => {
           if (entry.role === "user") {
             return (
@@ -272,12 +279,27 @@ export default function AskAIPage() {
         })}
 
         {loading && progress.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {progress.map((ev, i) => (
-              <div key={i} style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-muted)" }}>
-                {ev.phase === "tool" ? `→ ${ev.tool}(${ev.args ?? ""})` : "· thinking…"}
-              </div>
-            ))}
+          /* Odometer ticker: a fixed 3-line window; new status lines roll up
+             smoothly via a translateY transition instead of growing the page. */
+          <div
+            style={{
+              height: TICKER_LINE * 3, overflow: "hidden", flexShrink: 0,
+              WebkitMaskImage: "linear-gradient(to bottom, transparent 0, #000 30%)",
+              maskImage: "linear-gradient(to bottom, transparent 0, #000 30%)",
+            }}
+          >
+            <div
+              style={{
+                transform: `translateY(${-Math.max(0, progress.length - 3) * TICKER_LINE}px)`,
+                transition: "transform 0.25s ease",
+              }}
+            >
+              {progress.map((ev, i) => (
+                <div key={i} style={{ height: TICKER_LINE, lineHeight: `${TICKER_LINE}px`, fontSize: 12, fontFamily: "monospace", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {ev.phase === "tool" ? `→ ${ev.tool}(${ev.args ?? ""})` : "· thinking…"}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

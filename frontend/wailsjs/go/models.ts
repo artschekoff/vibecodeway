@@ -70,6 +70,24 @@ export namespace agent {
 
 export namespace analytics {
 	
+	export class AITokens {
+	    promptTokens: number;
+	    completionTokens: number;
+	    totalTokens: number;
+	    calls: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AITokens(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.promptTokens = source["promptTokens"];
+	        this.completionTokens = source["completionTokens"];
+	        this.totalTokens = source["totalTokens"];
+	        this.calls = source["calls"];
+	    }
+	}
 	export class AvgTask {
 	    medianHours: number;
 	    meanHours: number;
@@ -147,6 +165,7 @@ export namespace analytics {
 	    byType: Slice[];
 	    byOrg: Slice[];
 	    avgTask: AvgTask;
+	    aiTokens: AITokens;
 	
 	    static createFrom(source: any = {}) {
 	        return new Dashboard(source);
@@ -160,6 +179,7 @@ export namespace analytics {
 	        this.byType = this.convertValues(source["byType"], Slice);
 	        this.byOrg = this.convertValues(source["byOrg"], Slice);
 	        this.avgTask = this.convertValues(source["avgTask"], AvgTask);
+	        this.aiTokens = this.convertValues(source["aiTokens"], AITokens);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2490,6 +2510,7 @@ export namespace store {
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
+	
 	export class UnresolvedAuthor {
 	    sourceId: string;
 	    sourceLabel: string;
@@ -2891,6 +2912,7 @@ export namespace vcsstore {
 	    kind: string;
 	    ciStatus: string;
 	    myReviewState: string;
+	    mergeStateStatus: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ReviewRequest(source);
@@ -2916,6 +2938,7 @@ export namespace vcsstore {
 	        this.kind = source["kind"];
 	        this.ciStatus = source["ciStatus"];
 	        this.myReviewState = source["myReviewState"];
+	        this.mergeStateStatus = source["mergeStateStatus"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -548,6 +548,8 @@ export interface ReviewRequest {
   // My own standing review decision on this PR: "", "approved",
   // "changes_requested" or "commented". Mirrors vcs_review_requests.my_review_state.
   myReviewState?: string;
+  // GitHub merge-state; "BEHIND" means the Update branch action is available.
+  mergeStateStatus?: string;
 }
 
 // --- Context Relations ---
@@ -738,6 +740,8 @@ export interface AnalyticsDashboard {
   byType: Slice[];
   byOrg: Slice[];
   avgTask: AvgTask;
+  // LLM token bill over the selected range, recorded per chat call.
+  aiTokens: { promptTokens: number; completionTokens: number; totalTokens: number; calls: number };
 }
 
 // --- Code tour ---
