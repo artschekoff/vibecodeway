@@ -3,7 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../components/editor/Terminal", () => ({ Terminal: ({ cwd }: { cwd: string }) => <div data-testid="terminal">{cwd}</div> }));
 vi.mock("../components/editor/DiffEditorTab", () => ({
-  DiffEditorTab: ({ path }: { path: string }) => <div data-testid="diff">{path}</div>,
+  DiffEditorTab: ({ path, highlightAnchor }: { path: string; highlightAnchor?: string }) => (
+    <div data-testid="diff">{path}{highlightAnchor ? `:${highlightAnchor}` : ""}</div>
+  ),
 }));
 vi.mock("../components/editor/ChangedFilesPanel", () => ({
   ChangedFilesPanel: ({ onOpenFile, onRefresh }: { onOpenFile: (rp: string, rn: string, p: string, s: string) => void; onRefresh?: () => void }) => (
@@ -22,10 +24,15 @@ vi.mock("../components/editor/EditorPRInfo", () => ({
 // so EditorWorkspace tests only exercise the Start/Resume-tour wiring, not
 // TourCard's internals (which would pull in ReadRepoFile/Stage/Discard mocks).
 vi.mock("../components/editor/TourCard", () => ({
-  TourCard: ({ tour, onClose }: { tour: { title: string }; onClose: () => void }) => (
+  TourCard: ({ tour, onClose, onLocateAnchor }: {
+    tour: { title: string };
+    onClose: () => void;
+    onLocateAnchor: (repoPath: string, path: string, anchor: string) => void;
+  }) => (
     <div data-testid="tour-card">
       {tour.title}
       <button onClick={onClose}>close-tour</button>
+      <button onClick={() => onLocateAnchor("/r/api", "src/a.ts", "anchor-x")}>locate-anchor</button>
     </div>
   ),
 }));
@@ -303,6 +310,37 @@ describe("EditorWorkspace", () => {
     fireEvent.click(btn);
     await waitFor(() => expect(screen.getByText("No changes to tour")).toBeInTheDocument());
     expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument();
+  });
+
+  it("clears the anchor highlight target when the tour card is closed", async () => {
+    GetContextChanges.mockResolvedValue([
+      { repoName: "acme/api", repoPath: "/r/api", files: [{ path: "a.ts", status: "modified", workStatus: "modified" }] },
+    ]);
+    StartCodeTour.mockResolvedValue({ id: "t1", title: "Add feature", steps: [], stepIndex: 0, decisions: {}, repoPath: "/r/api" });
+    render(
+      <HotkeyProvider platform="darwin"><EditorFilesProvider>
+        <EditorWorkspace contextId="c1" />
+      </EditorFilesProvider></HotkeyProvider>
+    );
+    // Open the file the tour will highlight, then start the tour.
+    fireEvent.click(await screen.findByText("open-a"));
+    await waitFor(() => expect(screen.getByTestId("diff")).toHaveTextContent("src/a.ts"));
+    const startBtn = await screen.findByRole("button", { name: "Start tour" });
+    await waitFor(() => expect(startBtn).not.toBeDisabled());
+    fireEvent.click(startBtn);
+    await screen.findByTestId("tour-card");
+
+    // TourCard locates an anchor in the currently open file — DiffEditorTab
+    // should receive it as highlightAnchor.
+    fireEvent.click(screen.getByText("locate-anchor"));
+    await waitFor(() => expect(screen.getByTestId("diff")).toHaveTextContent("src/a.ts:anchor-x"));
+
+    // Closing the card must clear the highlight, not just hide the card —
+    // otherwise the decoration/scroll persists on the still-open file.
+    fireEvent.click(screen.getByText("close-tour"));
+    await waitFor(() => expect(screen.queryByTestId("tour-card")).not.toBeInTheDocument());
+    expect(screen.getByTestId("diff")).toHaveTextContent("src/a.ts");
+    expect(screen.getByTestId("diff")).not.toHaveTextContent("anchor-x");
   });
 
   it("offers Resume tour when GetCodeTour finds an existing tour on mount", async () => {

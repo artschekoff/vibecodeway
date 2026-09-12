@@ -95,6 +95,29 @@ describe("TourCard", () => {
     expect(await screen.findByText("Discarded")).toBeInTheDocument();
   });
 
+  it("does not record a decision and shows an error when StageFile rejects", async () => {
+    StageFile.mockRejectedValue(new Error("staging failed"));
+    render(<TourCard tour={baseTour} repoName="acme/api" onClose={vi.fn()} onOpenFile={vi.fn()} onLocateAnchor={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("stage step"));
+    await waitFor(() => expect(StageFile).toHaveBeenCalledWith("/r/api", "src/a.ts"));
+    expect(await screen.findByText("staging failed")).toBeInTheDocument();
+    expect(SetCodeTourDecision).not.toHaveBeenCalled();
+    expect(screen.queryByText("Staged")).not.toBeInTheDocument();
+  });
+
+  it("does not record a decision and shows an error when DiscardFile rejects", async () => {
+    DiscardFile.mockRejectedValue(new Error("discard failed"));
+    render(<TourCard tour={baseTour} repoName="acme/api" onClose={vi.fn()} onOpenFile={vi.fn()} onLocateAnchor={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("discard step"));
+    await waitFor(() => expect(ConfirmAction).toHaveBeenCalled());
+    await waitFor(() => expect(DiscardFile).toHaveBeenCalledWith("/r/api", "src/a.ts"));
+    expect(await screen.findByText("discard failed")).toBeInTheDocument();
+    expect(SetCodeTourDecision).not.toHaveBeenCalled();
+    expect(screen.queryByText("Discarded")).not.toBeInTheDocument();
+  });
+
   it("does not discard when confirmation is declined", async () => {
     ConfirmAction.mockResolvedValue(false);
     render(<TourCard tour={baseTour} repoName="acme/api" onClose={vi.fn()} onOpenFile={vi.fn()} onLocateAnchor={vi.fn()} />);

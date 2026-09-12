@@ -222,7 +222,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
             <TourCard
               tour={tour}
               repoName={activeRepo?.name ?? ""}
-              onClose={() => setTourOpen(false)}
+              onClose={() => { setTourOpen(false); setTourAnchorTarget(null); }}
               onOpenFile={openFile}
               onLocateAnchor={(repoPath, path, anchor) => setTourAnchorTarget({ repoPath, path, anchor })}
             />

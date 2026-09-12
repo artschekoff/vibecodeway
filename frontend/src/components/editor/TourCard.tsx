@@ -56,6 +56,7 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
   const [stepIndex, setStepIndex] = useState(tour.stepIndex ?? 0);
   const [decisions, setDecisions] = useState<Record<number, string>>(tour.decisions ?? {});
   const [anchorStatus, setAnchorStatus] = useState<AnchorStatus>("checking");
+  const [actionError, setActionError] = useState("");
 
   const steps = tour.steps ?? [];
   const step = steps[stepIndex];
@@ -76,6 +77,7 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
     if (!step) return;
     let active = true;
     setAnchorStatus("checking");
+    setActionError("");
     void ReadRepoFile(tour.repoPath, step.file)
       .then((content) => {
         if (!active) return;
@@ -102,6 +104,7 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
 
   const goto = (idx: number) => {
     if (idx < 0 || idx >= steps.length) return;
+    setActionError("");
     setStepIndex(idx);
     void SetCodeTourStep(tour.id, idx);
   };
@@ -111,22 +114,29 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
     void SetCodeTourDecision(tour.id, stepIndex, d);
   };
 
+  // No optimistic success (mirrors ChangedFilesPanel's act()): the decision is
+  // only recorded once the binding actually resolves. A rejection surfaces
+  // inline instead of silently persisting a false "Staged"/"Discarded" badge.
   const handleStage = async () => {
     if (broken) return;
+    setActionError("");
     try {
       await StageFile(tour.repoPath, step.file);
-    } finally {
       recordDecision("staged");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
     }
   };
 
   const handleDiscard = async () => {
     if (broken) return;
     if (!(await ConfirmAction("Discard changes", `Discard changes to ${step.file}? This cannot be undone.`))) return;
+    setActionError("");
     try {
       await DiscardFile(tour.repoPath, step.file);
-    } finally {
       recordDecision("discarded");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -162,6 +172,7 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor }
         {broken && <div role="status" style={badgeStyle("#f85149")}>File missing — step broken</div>}
         {!broken && anchorStatus === "lost" && <div role="status" style={badgeStyle("#d29922")}>Anchor lost</div>}
         {decision && <div role="status" style={badgeStyle("#3fb950")}>{decisionLabel(decision)}</div>}
+        {actionError && <div role="alert" style={{ fontSize: 11, color: "#f85149", marginBottom: 6 }}>{actionError}</div>}
 
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginBottom: 2 }}>What</div>
