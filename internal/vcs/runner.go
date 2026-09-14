@@ -110,6 +110,12 @@ type DeviceCodeInfo struct {
 	Interval        int    `json:"interval"`
 }
 
+// FetchAllPRLimit is the result cap requested by ListPRsForBranch when branch == ""
+// (fetch-all mode, shared across every branch tracked in a repo and filtered locally
+// by HeadBranch). Exported so the service-layer cache can detect a batch that hit this
+// cap — meaning older PRs may have been left out — without duplicating the number.
+const FetchAllPRLimit = 200
+
 // VCSRunner is the interface all VCS platform runners must implement.
 // Add a new runner in its own sub-package and register it with vcsservice.NewVCSProvider.
 type VCSRunner interface {
