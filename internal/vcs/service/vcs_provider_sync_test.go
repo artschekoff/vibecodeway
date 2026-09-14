@@ -28,6 +28,7 @@ type mockRunner struct {
 	branchPRCalls       []string            // branches passed to ListPRsForBranch
 	branchPRs           []vcs.PRData        // returned by ListPRsForBranch when branch == "" (fetch-all mode)
 	branchPRsErr        error
+	fallbackPRs         map[string][]vcs.PRData // returned by ListPRsForBranch when branch != "" (per-branch fallback), keyed by branch
 }
 
 func (m *mockRunner) Platform() vcs.Platform { return m.platform }
@@ -48,6 +49,9 @@ func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, branch string) ([
 	m.branchPRCalls = append(m.branchPRCalls, branch)
 	if m.branchPRsErr != nil {
 		return nil, m.branchPRsErr
+	}
+	if branch != "" {
+		return m.fallbackPRs[branch], nil
 	}
 	return m.branchPRs, nil
 }
@@ -557,6 +561,102 @@ func TestSyncBranchWithNoMatchingPRsSyncsNothing(t *testing.T) {
 	prs, err := vs.PullRequests.ListPRsForContext(ctx, "c1")
 	require.NoError(t, err)
 	assert.Len(t, prs, 0)
+}
+
+// When the fetch-all batch hits vcs.FetchAllPRLimit and a tracked branch has no
+// match in it, the branch's PR may simply have fallen off the page (gh's default
+// created-desc ordering caps at the limit) — so sync must fall back to a scoped
+// --head query for that branch alone, rather than treating "no match" as "no PR".
+func TestSyncFallsBackToPerBranchQueryWhenBatchAtLimitAndBranchMissing(t *testing.T) {
+	atLimit := make([]vcs.PRData, vcs.FetchAllPRLimit)
+	for i := range atLimit {
+		atLimit[i] = vcs.PRData{
+			Number: i + 1, Title: "filler", Author: "alice", State: "open",
+			HeadBranch: "other-branch", URL: "u", CreatedAt: "2026-01-01T00:00:00Z",
+		}
+	}
+	runner := &mockRunner{
+		platform:  vcs.PlatformGitHub,
+		branchPRs: atLimit,
+		fallbackPRs: map[string][]vcs.PRData{
+			"feat/a": {
+				{Number: 9001, Title: "old PR off the page", Author: "bob", State: "open",
+					HeadBranch: "feat/a", URL: "u9001", CreatedAt: "2020-01-01T00:00:00Z"},
+			},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+
+	stats, err := p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"", "feat/a"}, runner.branchPRCalls,
+		"a batch at the limit with no match must trigger a scoped fallback call for the branch")
+	assert.Equal(t, 1, stats.ItemsRefreshed, "the fallback-found PR must be upserted")
+}
+
+// When the fetch-all batch is under the limit, "no match" unambiguously means "no
+// PR" — no fallback call should fire.
+func TestSyncNoFallbackWhenBatchUnderLimitAndBranchMissing(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		branchPRs: []vcs.PRData{
+			{Number: 1, Title: "PR one", Author: "alice", State: "open", HeadBranch: "other-branch", URL: "u1", CreatedAt: "2026-01-01T00:00:00Z"},
+		},
+		fallbackPRs: map[string][]vcs.PRData{
+			"feat/a": {
+				{Number: 2, Title: "should never be reached", Author: "bob", State: "open", HeadBranch: "feat/a", URL: "u2", CreatedAt: "2026-01-01T00:00:00Z"},
+			},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+
+	stats, err := p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{""}, runner.branchPRCalls, "a batch under the limit must not trigger a fallback call")
+	assert.Equal(t, 0, stats.ItemsRefreshed, "empty means empty when the batch wasn't truncated")
+}
+
+// InvalidatePRCache must clear the cache so the next sync re-fetches every repo,
+// even though it's still well within the TTL.
+func TestInvalidatePRCacheForcesRefetchWithinTTL(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		branchPRs: []vcs.PRData{
+			{Number: 1, Title: "PR one", Author: "alice", State: "open", HeadBranch: "feat/a", URL: "u1", CreatedAt: "2026-01-01T00:00:00Z"},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+
+	_, err = p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+	require.Len(t, runner.branchPRCalls, 1)
+
+	// Still well within the 5min TTL — without invalidation this would be a cache hit.
+	p.InvalidatePRCache()
+
+	_, err = p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+	assert.Len(t, runner.branchPRCalls, 2, "InvalidatePRCache must force a re-fetch even within the TTL")
 }
 
 func TestSyncReviewRequestsPersistsMyReviewState(t *testing.T) {

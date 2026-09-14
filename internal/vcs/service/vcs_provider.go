@@ -61,6 +61,10 @@ const prCacheTTL = 5 * time.Minute
 type prCacheEntry struct {
 	prs       []vcs.PRData
 	fetchedAt time.Time
+	// truncated is true when prs hit vcs.FetchAllPRLimit, meaning older PRs may have
+	// been cut off the batch — a tracked branch with no match in prs is ambiguous
+	// ("no PR" vs "PR fell off the page") until a scoped per-branch query rules it out.
+	truncated bool
 }
 
 // VCSProvider implements provider.Provider for VCS platforms (GitHub, GitLab, Linear).
@@ -109,37 +113,42 @@ func NewVCSProvider(store *vcsstore.Store, logger *zap.Logger, msgWriter appstor
 // serializing the fetch across *all* repos (a single provider-wide lock) is not
 // acceptable — that would re-introduce the sequential-fetch bottleneck this cache
 // exists to remove. Rare duplicate fetches are an acceptable ceiling here.
-func (p *VCSProvider) listRepoPRsCached(ctx context.Context, runner vcs.VCSRunner, owner, name string) ([]vcs.PRData, error) {
+// listRepoPRsCached returns (prs, truncated). truncated is true when the batch result
+// hit vcs.FetchAllPRLimit — see prCacheEntry.truncated.
+func (p *VCSProvider) listRepoPRsCached(ctx context.Context, runner vcs.VCSRunner, owner, name string) ([]vcs.PRData, bool, error) {
 	key := owner + "/" + name
 
 	p.prCacheMu.Lock()
 	entry, ok := p.prCache[key]
 	p.prCacheMu.Unlock()
 	if ok && time.Since(entry.fetchedAt) < prCacheTTL {
-		return entry.prs, nil
+		return entry.prs, entry.truncated, nil
 	}
 
 	prs, err := runner.ListPRsForBranch(ctx, owner, name, "")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
+	truncated := len(prs) >= vcs.FetchAllPRLimit
 
 	p.prCacheMu.Lock()
-	p.prCache[key] = prCacheEntry{prs: prs, fetchedAt: time.Now()}
+	p.prCache[key] = prCacheEntry{prs: prs, fetchedAt: time.Now(), truncated: truncated}
 	p.prCacheMu.Unlock()
 
-	return prs, nil
+	return prs, truncated, nil
 }
 
 // InvalidatePRCache clears the repo-PR cache used by sync(), forcing the next
-// sync to re-fetch every repo instead of reusing a cached entry. Not wired into
-// any flow yet — a future manual-refresh action can call this to bypass the TTL.
+// sync to re-fetch every repo instead of reusing a cached entry. Called by
+// App.RefreshContext (the user-triggered manual refresh) before it delegates —
+// the periodic background sync (RefreshAllContexts) does not call this and keeps
+// relying on the TTL, which is the point of the cache.
 //
 // ponytail: TTL tradeoff — a PR opened seconds ago may not appear in a context's
-// synced PR list until prCacheTTL elapses or the app restarts. Acceptable because
-// this cache only backs the periodic background sync path; GetPRByNumber (used
-// when a user attaches a specific PR URL) bypasses it entirely and always fetches
-// live.
+// *background-synced* PR list until prCacheTTL elapses or a manual refresh clears
+// this cache. Acceptable because GetPRByNumber (used when a user attaches a
+// specific PR URL) bypasses the cache entirely and always fetches live, and the
+// manual refresh path above now also always sees fresh data.
 func (p *VCSProvider) InvalidatePRCache() {
 	p.prCacheMu.Lock()
 	p.prCache = make(map[string]prCacheEntry)
@@ -241,7 +250,7 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 					continue
 				}
 
-				allPRs, err := p.listRepoPRsCached(ctx, runner, branch.Repo.Owner, branch.Repo.Name)
+				allPRs, truncated, err := p.listRepoPRsCached(ctx, runner, branch.Repo.Owner, branch.Repo.Name)
 				if err != nil {
 					p.logger.Warn(
 						"vcs sync: list PRs failed",
@@ -256,6 +265,26 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 				for _, pr := range allPRs {
 					if pr.HeadBranch == branch.Branch {
 						prs = append(prs, pr)
+					}
+				}
+
+				// The cached batch is capped at vcs.FetchAllPRLimit and ordered
+				// newest-first, so a branch with no match in a batch that hit the cap
+				// is ambiguous: it may genuinely have no PR, or its PR may be old
+				// enough to have fallen off the page. Only in that specific case, pay
+				// for one scoped --head query (the pre-batching behavior) to resolve
+				// it — a branch with a match, or a batch under the cap, never pays this.
+				if len(prs) == 0 && truncated {
+					fallbackPRs, fbErr := runner.ListPRsForBranch(ctx, branch.Repo.Owner, branch.Repo.Name, branch.Branch)
+					if fbErr != nil {
+						p.logger.Warn(
+							"vcs sync: per-branch PR fallback failed",
+							zap.String("repo", branch.Repo.FullName()),
+							zap.String("branch", branch.Branch),
+							zap.Error(fbErr),
+						)
+					} else {
+						prs = fallbackPRs
 					}
 				}
 

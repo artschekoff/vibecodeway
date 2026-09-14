@@ -295,7 +295,7 @@ func (r *Runner) GetAuthUser(ctx context.Context) (string, error) {
 func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch string) ([]vcs.PRData, error) {
 	limit := "50"
 	if branch == "" {
-		limit = "200"
+		limit = strconv.Itoa(vcs.FetchAllPRLimit)
 	}
 	args := []string{
 		"pr", "list",
@@ -316,7 +316,24 @@ func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch strin
 	if err != nil {
 		return nil, fmt.Errorf("gh pr list: %w", err)
 	}
-	return parseGHPRList(out, "pr list")
+	prs, err := parseGHPRList(out, "pr list")
+	if err != nil {
+		return nil, err
+	}
+	// A fetch-all result that lands exactly on the requested cap means gh's default
+	// created-desc ordering may have cut off older PRs — including one belonging to a
+	// tracked branch that's now invisible to the local HeadBranch filter. Warn so this
+	// is diagnosable; the service layer falls back to a scoped --head query per branch
+	// when it can't find a match in a batch that hit this limit.
+	if branch == "" && len(prs) >= vcs.FetchAllPRLimit {
+		r.logger.Warn(
+			"gh pr list: fetch-all result hit the limit, older PRs may be missing",
+			zap.String("repo", owner+"/"+repo),
+			zap.Int("limit", vcs.FetchAllPRLimit),
+			zap.Int("count", len(prs)),
+		)
+	}
+	return prs, nil
 }
 
 // GetPRComments fetches all comments for a PR: inline review comments, review bodies,

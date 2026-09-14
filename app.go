@@ -718,6 +718,15 @@ func (a *App) emitDomainEvent(contextID, eventType, sourceType, sourceID, author
 }
 
 func (a *App) RefreshContext(contextID string) (*jiraservice.RefreshResult, error) {
+	// This is the user-triggered manual refresh path (as opposed to the periodic
+	// background sync in app_settings.go, which calls svc.RefreshAllContexts directly
+	// and never goes through here). A user hitting refresh expects to see PRs opened
+	// seconds ago, not whatever the background sync's TTL cache still holds — so
+	// invalidate it here, and only here, before delegating.
+	if a.vcsSvc != nil {
+		a.vcsSvc.InvalidatePRCache()
+	}
+
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.cancelMu.Lock()
 	a.cancelRefresh = cancel
