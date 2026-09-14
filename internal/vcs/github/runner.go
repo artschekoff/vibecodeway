@@ -290,13 +290,19 @@ func (r *Runner) GetAuthUser(ctx context.Context) (string, error) {
 
 // ListPRsForBranch fetches PRs for the given repo. When branch is non-empty only open PRs whose
 // head branch matches are returned; when branch is empty all open PRs for the repo are returned.
+// The fetch-all mode uses a higher --limit since its result is shared (and locally filtered by
+// headRefName) across every branch tracked in the repo, rather than fetched once per branch.
 func (r *Runner) ListPRsForBranch(ctx context.Context, owner, repo, branch string) ([]vcs.PRData, error) {
+	limit := "50"
+	if branch == "" {
+		limit = "200"
+	}
 	args := []string{
 		"pr", "list",
 		"--repo", owner + "/" + repo,
 		"--state", "all",
 		"--json", "number,title,author,state,isDraft,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt",
-		"--limit", "50",
+		"--limit", limit,
 	}
 	if branch != "" {
 		args = append(args, "--head", branch)

@@ -26,6 +26,8 @@ type mockRunner struct {
 	authoredErr         error
 	prByNumber          map[int]*vcs.PRData // served by GetPRByNumber (reconcile path)
 	branchPRCalls       []string            // branches passed to ListPRsForBranch
+	branchPRs           []vcs.PRData        // returned by ListPRsForBranch when branch == "" (fetch-all mode)
+	branchPRsErr        error
 }
 
 func (m *mockRunner) Platform() vcs.Platform { return m.platform }
@@ -44,7 +46,10 @@ func (m *mockRunner) ListAuthoredPRs(_ context.Context, _, _, _ string) ([]vcs.P
 
 func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, branch string) ([]vcs.PRData, error) {
 	m.branchPRCalls = append(m.branchPRCalls, branch)
-	return nil, nil
+	if m.branchPRsErr != nil {
+		return nil, m.branchPRsErr
+	}
+	return m.branchPRs, nil
 }
 
 func (m *mockRunner) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs.CommentData, error) {
@@ -82,6 +87,12 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 	db, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	// modernc.org/sqlite hands each new connection its own private ":memory:"
+	// database, so a pool with >1 connections can silently miss tables created
+	// on a different connection. sync()'s branch worker pool now issues
+	// concurrent writes (up to 4 goroutines), which surfaced this. Mirrors the
+	// SetMaxOpenConns(1) already used for sqlite in internal/store/store.go.
+	db.SetMaxOpenConns(1)
 
 	_, err = db.Exec(`PRAGMA foreign_keys = ON`)
 	require.NoError(t, err)
@@ -108,6 +119,28 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			created_at    TEXT NOT NULL,
 			autodetect_pr INTEGER NOT NULL DEFAULT 1,
 			UNIQUE (context_id, repo_id, branch)
+		);
+		CREATE TABLE IF NOT EXISTS vcs_pull_requests (
+			id                  TEXT PRIMARY KEY,
+			repo_id             TEXT NOT NULL REFERENCES vcs_repos(id) ON DELETE CASCADE,
+			branch_id           TEXT NOT NULL REFERENCES context_vcs_branches(id) ON DELETE CASCADE,
+			pr_number           INTEGER NOT NULL,
+			title               TEXT NOT NULL DEFAULT '',
+			author              TEXT NOT NULL DEFAULT '',
+			state               TEXT NOT NULL DEFAULT '',
+			is_draft            INTEGER NOT NULL DEFAULT 0,
+			review_status       TEXT NOT NULL DEFAULT '',
+			url                 TEXT NOT NULL DEFAULT '',
+			head_branch         TEXT NOT NULL DEFAULT '',
+			mergeable           TEXT NOT NULL DEFAULT '',
+			merge_state_status  TEXT NOT NULL DEFAULT '',
+			ci_status           TEXT NOT NULL DEFAULT '',
+			pr_created_at       TEXT NOT NULL DEFAULT '',
+			pr_updated_at       TEXT NOT NULL DEFAULT '',
+			fetched_at          TEXT NOT NULL DEFAULT '',
+			viewed_at           TEXT,
+			ai_processed_at     TEXT,
+			UNIQUE (repo_id, pr_number)
 		);
 		CREATE TABLE IF NOT EXISTS vcs_review_requests (
 			id            TEXT PRIMARY KEY,
@@ -402,7 +435,128 @@ func TestSyncSkipsPRLookupWhenAutodetectPROff(t *testing.T) {
 	_, err = p.Refresh(ctx, "c1")
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"feat/x"}, runner.branchPRCalls)
+	// The worker loop now fetches all PRs for the repo once (branch == "") and
+	// filters locally by HeadBranch, rather than calling per branch — so the single
+	// call reflects the "main" branch link being skipped, not "feat/x" being passed
+	// as an argument.
+	assert.Equal(t, []string{""}, runner.branchPRCalls)
+}
+
+// Two branches tracked in the same repo must share one repo-wide PR fetch: the
+// worker loop calls listRepoPRsCached per branch, which caches per owner/name, so
+// ListPRsForBranch(branch="") fires once total and each branch recovers its own
+// PRs via local HeadBranch filtering.
+func TestSyncBatchesPRFetchAcrossBranchesInSameRepo(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		branchPRs: []vcs.PRData{
+			{Number: 1, Title: "PR one", Author: "alice", State: "open", HeadBranch: "feat/a", URL: "u1", CreatedAt: "2026-01-01T00:00:00Z"},
+			{Number: 2, Title: "PR two", Author: "bob", State: "open", HeadBranch: "feat/b", URL: "u2", CreatedAt: "2026-01-01T00:00:00Z"},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/b", "", true)
+	require.NoError(t, err)
+
+	stats, err := p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{""}, runner.branchPRCalls, "one fetch-all call must serve both branches")
+	assert.Equal(t, 2, stats.ItemsRefreshed, "both branches' PRs must be upserted")
+
+	prs, err := vs.PullRequests.ListPRsForContext(ctx, "c1")
+	require.NoError(t, err)
+	require.Len(t, prs, 2)
+}
+
+// A second sync within the cache TTL must not re-fetch a repo already cached.
+func TestSyncReusesCachedPRsWithinTTL(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		branchPRs: []vcs.PRData{
+			{Number: 1, Title: "PR one", Author: "alice", State: "open", HeadBranch: "feat/a", URL: "u1", CreatedAt: "2026-01-01T00:00:00Z"},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+
+	_, err = p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+	require.Len(t, runner.branchPRCalls, 1)
+
+	_, err = p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+	assert.Len(t, runner.branchPRCalls, 1, "second sync within TTL must not re-fetch")
+}
+
+// Once a cache entry's fetchedAt is older than the TTL, the next sync must refetch.
+func TestSyncRefetchesPRsAfterCacheEntryExpires(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		branchPRs: []vcs.PRData{
+			{Number: 1, Title: "PR one", Author: "alice", State: "open", HeadBranch: "feat/a", URL: "u1", CreatedAt: "2026-01-01T00:00:00Z"},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+
+	_, err = p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+	require.Len(t, runner.branchPRCalls, 1)
+
+	// Force the cached entry to look stale — direct map manipulation, no clock
+	// injection needed for this test's purposes.
+	p.prCacheMu.Lock()
+	entry := p.prCache["octo/hello"]
+	entry.fetchedAt = time.Now().Add(-prCacheTTL - time.Minute)
+	p.prCache["octo/hello"] = entry
+	p.prCacheMu.Unlock()
+
+	_, err = p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+	assert.Len(t, runner.branchPRCalls, 2, "an expired cache entry must be refetched")
+}
+
+// A branch whose repo has PRs, but none matching its own HeadBranch, must sync
+// nothing and report no error — same as the pre-batching behavior.
+func TestSyncBranchWithNoMatchingPRsSyncsNothing(t *testing.T) {
+	runner := &mockRunner{
+		platform: vcs.PlatformGitHub,
+		branchPRs: []vcs.PRData{
+			{Number: 1, Title: "PR one", Author: "alice", State: "open", HeadBranch: "other-branch", URL: "u1", CreatedAt: "2026-01-01T00:00:00Z"},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+
+	stats, err := p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+	assert.Equal(t, 0, stats.ItemsRefreshed, "no PR matches the tracked branch")
+
+	prs, err := vs.PullRequests.ListPRsForContext(ctx, "c1")
+	require.NoError(t, err)
+	assert.Len(t, prs, 0)
 }
 
 func TestSyncReviewRequestsPersistsMyReviewState(t *testing.T) {
