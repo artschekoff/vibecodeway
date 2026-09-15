@@ -3,6 +3,7 @@ import { ChevronsDownUp, ChevronsUpDown, Terminal, Folder, File } from "lucide-r
 import { GetRepoFileTree } from "../../../wailsjs/go/main/App";
 import { buildFileTree, type FileTreeNode } from "../../lib/fileTree";
 import { useHotkey, useHotkeyScope } from "../../hotkeys/HotkeyProvider";
+import { useTabVisible } from "../../contexts/TabVisibleContext";
 
 type Props = {
   repoPath: string;
@@ -84,9 +85,12 @@ export function FileTreePanel({ repoPath, repoName, onOpenFile, onOpenTerminal }
 
   // The FILES zone owns "files" scope only while it holds DOM focus — so a plain
   // ⌘F elsewhere still opens global search (⌘F here becomes the file-search leader).
-  useHotkeyScope("files", focused);
-  useHotkey("files.reload", () => setReloadSignal((n) => n + 1), { scope: "files" });
-  useHotkey("files.focusSearch", () => searchRef.current?.focus(), { scope: "files" });
+  // Also gated on tab visibility: every open editor tab keeps its panel
+  // mounted, and the dispatcher picks the first registered handler.
+  const tabVisible = useTabVisible();
+  useHotkeyScope("files", focused && tabVisible);
+  useHotkey("files.reload", () => setReloadSignal((n) => n + 1), { scope: "files", enabled: tabVisible });
+  useHotkey("files.focusSearch", () => searchRef.current?.focus(), { scope: "files", enabled: tabVisible });
 
   const nodeByPath = useMemo(() => {
     const m = new Map<string, FileTreeNode>();

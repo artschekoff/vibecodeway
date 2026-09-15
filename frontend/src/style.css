@@ -1614,6 +1614,8 @@ select {
 
 .progress-modal {
   width: 440px;
+  /* Anchors the absolute minimize button in the corner */
+  position: relative;
 }
 
 /* Scrollable item list */

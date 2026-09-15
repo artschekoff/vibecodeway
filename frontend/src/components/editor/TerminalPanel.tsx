@@ -6,6 +6,7 @@ import { useTerminalCommands } from "../../hooks/useTerminalCommands";
 import { applyPlaceholders } from "../../lib/terminalPlaceholders";
 import { matchTerminalHotkey } from "../../lib/terminalHotkeys";
 import { useHotkey } from "../../hotkeys/HotkeyProvider";
+import { useTabVisible } from "../../contexts/TabVisibleContext";
 import { loadTerminals, saveTerminals } from "../../lib/terminalSession";
 
 // Stable local ids, independent of cwd, so two terminals in the same folder are
@@ -284,14 +285,18 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   // focus made them dead unless the cursor was already inside xterm. The panel
   // just needs to be mounted. The residual capture listener below still owns
   // ⌘W and ⌃1-9.
-  useHotkey("terminal.new", () => addTerminal(), { scope: "global" });
-  useHotkey("terminal.here", () => openTerminalAt(spawnCwd), { scope: "global" });
+  // `enabled: tabVisible` — every open editor tab keeps its TerminalPanel
+  // mounted (hidden ones via display:none), and the dispatcher picks the first
+  // registered handler; without the gate these fired in a hidden tab.
+  const tabVisible = useTabVisible();
+  useHotkey("terminal.new", () => addTerminal(), { scope: "global", enabled: tabVisible });
+  useHotkey("terminal.here", () => openTerminalAt(spawnCwd), { scope: "global", enabled: tabVisible });
   // A native <select> can't be opened programmatically in WebKit (Wails' macOS
   // webview): showPicker() is Chromium-only. So the picker is a React
   // state-driven popover the hotkey just flips open.
-  useHotkey("terminal.insert", () => setInsertOpen(true), { scope: "global" });
-  useHotkey("terminal.next", () => cycleTerminal(1), { scope: "global" });
-  useHotkey("terminal.prev", () => cycleTerminal(-1), { scope: "global" });
+  useHotkey("terminal.insert", () => setInsertOpen(true), { scope: "global", enabled: tabVisible });
+  useHotkey("terminal.next", () => cycleTerminal(1), { scope: "global", enabled: tabVisible });
+  useHotkey("terminal.prev", () => cycleTerminal(-1), { scope: "global", enabled: tabVisible });
 
   // The toolbar row is `overflow-x: auto`, which per CSS also clips vertically —
   // an absolutely-positioned popover inside it would be cut to the row's height.

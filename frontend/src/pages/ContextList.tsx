@@ -83,6 +83,7 @@ import {
   RemoveContextRelation,
   ListWorkflowStatuses,
   ReviewPRWithAI,
+  UpdatePRBranch,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type {
@@ -123,6 +124,7 @@ function ReviewCard({
   reviewing,
   isUnviewed,
   onMarkViewed,
+  onUpdateBranch,
 }: {
   review: ReviewRequest;
   onDismiss?: (id: string) => void;
@@ -132,8 +134,24 @@ function ReviewCard({
   reviewing?: boolean;
   isUnviewed?: boolean;
   onMarkViewed?: () => void;
+  onUpdateBranch?: () => Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
+  // GitHub processes "Update branch" asynchronously, so a successful call
+  // settles into "Updated ✓" until the next reviews refresh replaces the row.
+  const [updateState, setUpdateState] = useState<"idle" | "updating" | "updated" | "failed">("idle");
+  const [updateError, setUpdateError] = useState("");
+  const handleUpdateBranch = async () => {
+    if (!onUpdateBranch) return;
+    setUpdateState("updating");
+    try {
+      await onUpdateBranch();
+      setUpdateState("updated");
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : String(e));
+      setUpdateState("failed");
+    }
+  };
   const stage = reviewStage(review);
   // Dim the cards that are no longer my move.
   const isWaiting = stage === "reviewed_waiting" || stage === "terminal";
@@ -180,9 +198,27 @@ function ReviewCard({
           </span>
         )}
         {!status.terminal && review.mergeStateStatus === "BEHIND" && (
-          <span className="pr-status-badge pr-status-badge--conflict" title="Head branch is behind base — Update branch needed">
-            Update branch
-          </span>
+          updateState === "updated" ? (
+            <span className="pr-status-badge" title="Base merged into head on the remote — state refreshes on the next reviews sync">
+              Updated ✓
+            </span>
+          ) : onUpdateBranch ? (
+            <button
+              className="pr-status-badge pr-status-badge--conflict"
+              style={{ border: 0, cursor: updateState === "updating" ? "default" : "pointer" }}
+              disabled={updateState === "updating"}
+              onClick={() => void handleUpdateBranch()}
+              title={updateState === "failed"
+                ? `Update failed: ${updateError}`
+                : "Head branch is behind base — merge base into head (GitHub Update branch)"}
+            >
+              {updateState === "updating" ? "Updating…" : updateState === "failed" ? "Update failed" : "Update branch"}
+            </button>
+          ) : (
+            <span className="pr-status-badge pr-status-badge--conflict" title="Head branch is behind base — Update branch needed">
+              Update branch
+            </span>
+          )
         )}
         {review.ciStatus === "FAILURE" && (
           <span className="pr-status-badge pr-status--changes-requested" title="CI checks failed">
@@ -835,6 +871,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const handleDismissReview = async (id: string) => {
     try { await DismissReviewRequest(id); await loadReviews(); }
     catch (e) { setError(String(e)); }
+  };
+
+  // Errors propagate to the card, which renders them as "Update failed" on the
+  // badge itself; loadReviews is best-effort (GitHub merges asynchronously).
+  const handleUpdatePRBranch = async (review: ReviewRequest) => {
+    await UpdatePRBranch(review.repoId, review.prNumber);
+    await loadReviews().catch(() => {});
   };
 
   const handleMarkAllReviewsViewed = async () => {
@@ -1523,6 +1566,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               reviewing={reviewingId === review.id}
                               isUnviewed={!review.viewedAt}
                               onMarkViewed={() => handleMarkReviewViewed(review.id)}
+                              onUpdateBranch={() => handleUpdatePRBranch(review)}
                             />
                           ))}
                         </div>
@@ -1545,6 +1589,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                               reviewing={reviewingId === review.id}
                               isUnviewed={!review.viewedAt}
                               onMarkViewed={() => handleMarkReviewViewed(review.id)}
+                              onUpdateBranch={() => handleUpdatePRBranch(review)}
                             />
                           ))}
                         </div>

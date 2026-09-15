@@ -29,7 +29,11 @@ type ModifiedEditor = {
   onDidChangeModelContent?: (cb: () => void) => { dispose: () => void };
   getModel?: () => { getLineCount: () => number; getLineMaxColumn?: (line: number) => number } | null;
 };
-type DiffEditorInstance = { getModifiedEditor: () => ModifiedEditor; getLineChanges?: () => LineChange[] | null };
+type DiffEditorInstance = {
+  getModifiedEditor: () => ModifiedEditor;
+  getOriginalEditor?: () => { updateOptions: (o: Record<string, unknown>) => void };
+  getLineChanges?: () => LineChange[] | null;
+};
 // Minimal shape of the monaco namespace we use for blame decorations.
 type MonacoNs = { Range: new (a: number, b: number, c: number, d: number) => unknown };
 
@@ -206,6 +210,17 @@ export function DiffEditorTab({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen, historyOpen]);
+
+  // Monaco's diff editor doesn't forward minimap option changes to its inner
+  // editors — the settings-menu toggle silently did nothing. Push it to both
+  // panes directly, on mount and on every change.
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    const opts = { minimap: { enabled: settings.minimap } };
+    ed.getModifiedEditor().updateOptions?.(opts);
+    ed.getOriginalEditor?.().updateOptions?.(opts);
+  }, [settings.minimap, mountTick]);
 
   // Toggle inline blame: glyph-margin decorations on the modified editor, each
   // hovering to its commit/author/date/summary. Best-effort — needs the editor
