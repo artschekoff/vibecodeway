@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Settings } from "lucide-react";
 import { useEditorSettings, type EditorTheme } from "../../contexts/EditorSettingsContext";
+import { readVimMode, setVimMode } from "../../lib/vimMode";
 
 const iconBtn: React.CSSProperties = {
   display: "flex", alignItems: "center", background: "none", border: "none",
@@ -27,6 +28,8 @@ const THEME_LABEL: Record<EditorTheme, string> = { light: "Light", dark: "Dark",
 export function EditorSettingsMenu() {
   const { settings, update } = useEditorSettings();
   const [open, setOpen] = useState(false);
+  // Vim lives in localStorage (app-wide, shared with Settings page and ProseEditor).
+  const [vimOn, setVimOn] = useState(readVimMode);
 
   return (
     <div style={{ position: "relative" }}>
@@ -66,6 +69,11 @@ export function EditorSettingsMenu() {
             <label style={rowStyle}>
               <span>Minimap</span>
               <input type="checkbox" checked={settings.minimap} onChange={(e) => update({ minimap: e.target.checked })} />
+            </label>
+
+            <label style={rowStyle}>
+              <span>Vim mode</span>
+              <input type="checkbox" checked={vimOn} onChange={(e) => { setVimMode(e.target.checked); setVimOn(e.target.checked); }} />
             </label>
 
             <label style={rowStyle}>

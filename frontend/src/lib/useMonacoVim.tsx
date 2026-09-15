@@ -28,10 +28,23 @@ export function useMonacoVim() {
   useEffect(() => {
     if (!enabled || !editorRef.current || !statusRef.current) return;
     let cancelled = false;
-    void import("monaco-vim").then(({ initVimMode }) => {
-      if (cancelled || !editorRef.current || !statusRef.current) return;
-      modeRef.current = initVimMode(editorRef.current, statusRef.current);
-    });
+    // vite.config.ts aliases "monaco-vim" to its ESM build — the default
+    // ("browser") resolution serves a UMD bundle whose exports land under
+    // `default` in production, silently breaking vim in the packaged app.
+    void import("monaco-vim")
+      .then((mod) => {
+        const initVimMode = (mod.initVimMode ??
+          (mod as { default?: { initVimMode?: unknown } }).default?.initVimMode) as
+          | ((editor: unknown, status: HTMLElement) => VimMode)
+          | undefined;
+        if (!initVimMode) {
+          console.error("monaco-vim: initVimMode export not found", Object.keys(mod));
+          return;
+        }
+        if (cancelled || !editorRef.current || !statusRef.current) return;
+        modeRef.current = initVimMode(editorRef.current, statusRef.current);
+      })
+      .catch((err) => console.error("monaco-vim failed to load:", err));
     // Disposing restores the editor's normal keybindings, so flipping the
     // setting off takes effect without a remount.
     return () => {
