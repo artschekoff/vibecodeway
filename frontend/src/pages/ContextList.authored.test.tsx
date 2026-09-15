@@ -11,6 +11,7 @@ const {
   ListWorkflowStatuses,
   MarkReviewRequestViewed,
   MarkAllReviewRequestsViewed,
+  UpdatePRBranch,
 } = vi.hoisted(() => ({
   ListContextsByOrg: vi.fn(),
   AuthStatus: vi.fn(),
@@ -21,6 +22,7 @@ const {
   ListWorkflowStatuses: vi.fn(),
   MarkReviewRequestViewed: vi.fn(),
   MarkAllReviewRequestsViewed: vi.fn(),
+  UpdatePRBranch: vi.fn(),
 }));
 
 vi.mock("../../wailsjs/go/main/App", () => ({
@@ -33,6 +35,7 @@ vi.mock("../../wailsjs/go/main/App", () => ({
   ListWorkflowStatuses: ListWorkflowStatuses.mockResolvedValue([]),
   MarkReviewRequestViewed,
   MarkAllReviewRequestsViewed,
+  UpdatePRBranch,
   HasSlackPassphrase: vi.fn().mockResolvedValue(true),
   ValidateSlackPassphrase: vi.fn(),
   SetContextOrg: vi.fn(),
@@ -121,5 +124,52 @@ describe("Code Reviews — authored PRs (My PRs)", () => {
     await screen.findByText("My feature");
 
     expect(screen.getByRole("button", { name: /review with ai/i })).toBeInTheDocument();
+  });
+
+  it("Update branch button calls UpdatePRBranch and settles into Updated ✓", async () => {
+    GetPendingCodeReviews.mockResolvedValue([
+      {
+        id: "a1", repoId: "repo1", prNumber: 42, prTitle: "My feature", prAuthor: "me",
+        prUrl: "https://x/42", reviewStatus: "", headBranch: "feat/x",
+        requestedAt: "", fetchedAt: "", kind: "authored",
+        mergeStateStatus: "BEHIND",
+      },
+    ]);
+    let resolveUpdate: () => void = () => {};
+    UpdatePRBranch.mockImplementation(() => new Promise<void>((res) => { resolveUpdate = res; }));
+
+    renderList();
+    fireEvent.click(await screen.findByRole("button", { name: /code reviews/i }));
+    fireEvent.click(await screen.findByText("acme/widgets"));
+    await screen.findByText("My feature");
+
+    fireEvent.click(screen.getByRole("button", { name: /update branch/i }));
+    expect(UpdatePRBranch).toHaveBeenCalledWith("repo1", 42);
+    expect(await screen.findByText(/updating…/i)).toBeInTheDocument();
+
+    resolveUpdate();
+    expect(await screen.findByText(/updated ✓/i)).toBeInTheDocument();
+  });
+
+  it("failed Update branch shows Update failed and stays clickable", async () => {
+    GetPendingCodeReviews.mockResolvedValue([
+      {
+        id: "a1", repoId: "repo1", prNumber: 42, prTitle: "My feature", prAuthor: "me",
+        prUrl: "https://x/42", reviewStatus: "", headBranch: "feat/x",
+        requestedAt: "", fetchedAt: "", kind: "authored",
+        mergeStateStatus: "BEHIND",
+      },
+    ]);
+    UpdatePRBranch.mockRejectedValue(new Error("merge conflict"));
+
+    renderList();
+    fireEvent.click(await screen.findByRole("button", { name: /code reviews/i }));
+    fireEvent.click(await screen.findByText("acme/widgets"));
+    await screen.findByText("My feature");
+
+    fireEvent.click(screen.getByRole("button", { name: /update branch/i }));
+    const failed = await screen.findByRole("button", { name: /update failed/i });
+    expect(failed).toBeEnabled();
+    expect(failed.title).toMatch(/merge conflict/);
   });
 });
