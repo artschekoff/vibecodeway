@@ -45,7 +45,11 @@ export default function MyBoardPage() {
   const [creatingKey, setCreatingKey] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [jiraSort, setJiraSort] = useState<JiraSort>("priority");
-  const [statusFilter, setStatusFilter] = useState("");
+  // Multi-select: empty array = all statuses.
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const toggleStatus = (s: string) =>
+    setStatusFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   const [priorityFilter, setPriorityFilter] = useState("");
   const [orgFilter, setOrgFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -85,7 +89,7 @@ export default function MyBoardPage() {
 
   const visibleJira = useMemo(
     () => sortedJira.filter((i) =>
-      (!statusFilter || i.status === statusFilter) &&
+      (statusFilter.length === 0 || statusFilter.includes(i.status)) &&
       (!priorityFilter || i.priority === priorityFilter) &&
       (!orgFilter || i.org === orgFilter) &&
       (!typeFilter || i.issueType === typeFilter)),
@@ -453,11 +457,62 @@ export default function MyBoardPage() {
             <option value="date">Sort: Date</option>
           </select>
           {statusOptions.length > 0 && (
-            <select aria-label="filter by status" style={{ fontSize: 11 }} value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)} title="Filter by status">
-              <option value="">All statuses</option>
-              {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div style={{ position: "relative" }}>
+              <button
+                aria-label="filter by status"
+                aria-haspopup="menu"
+                aria-expanded={statusMenuOpen}
+                title="Filter by status (multi-select)"
+                onClick={() => setStatusMenuOpen((o) => !o)}
+                style={{
+                  fontSize: 11, background: "var(--surface)", border: "1px solid var(--border)",
+                  borderRadius: 4, color: statusFilter.length ? "var(--text)" : "var(--text-muted)",
+                  cursor: "pointer", padding: "2px 8px", whiteSpace: "nowrap",
+                }}
+              >
+                {statusFilter.length === 0
+                  ? "All statuses"
+                  : statusFilter.length === 1
+                    ? statusFilter[0]
+                    : `${statusFilter.length} statuses`} ▾
+              </button>
+              {statusMenuOpen && (
+                <>
+                  {/* click-away (window.confirm-style backdrop, same as the terminal insert popover) */}
+                  <div onClick={() => setStatusMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                  <div
+                    role="menu"
+                    style={{
+                      position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 50,
+                      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6,
+                      padding: 6, minWidth: 160, maxHeight: 240, overflowY: "auto",
+                      display: "flex", flexDirection: "column", gap: 2, boxShadow: "var(--shadow)",
+                    }}
+                  >
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", padding: "2px 4px" }}>
+                      <input
+                        type="checkbox"
+                        checked={statusFilter.length === 0}
+                        onChange={() => setStatusFilter([])}
+                        style={{ accentColor: "var(--accent)" }}
+                      />
+                      All statuses
+                    </label>
+                    {statusOptions.map((s) => (
+                      <label key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", padding: "2px 4px" }}>
+                        <input
+                          type="checkbox"
+                          checked={statusFilter.includes(s)}
+                          onChange={() => toggleStatus(s)}
+                          style={{ accentColor: "var(--accent)" }}
+                        />
+                        {s}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
           {priorityOptions.length > 0 && (
             <select aria-label="filter by priority" style={{ fontSize: 11 }} value={priorityFilter}

@@ -87,8 +87,13 @@ describe("MyBoardPage — My Jira To-Do", () => {
     render(<MyBoardPage />);
     await waitFor(() => expect(screen.getByText("Fix login")).toBeInTheDocument());
     expect(screen.getByText("Ship it")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: /filter by status/i }), { target: { value: "Done" } });
+    fireEvent.click(screen.getByRole("button", { name: /filter by status/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Done" }));
     await waitFor(() => expect(screen.queryByText("Fix login")).not.toBeInTheDocument());
+    expect(screen.getByText("Ship it")).toBeInTheDocument();
+    // Multi-select: adding a second status brings the other row back.
+    fireEvent.click(screen.getByRole("checkbox", { name: "To Do" }));
+    await waitFor(() => expect(screen.getByText("Fix login")).toBeInTheDocument());
     expect(screen.getByText("Ship it")).toBeInTheDocument();
   });
 
