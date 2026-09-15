@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { useHotkey, useHotkeyScope } from "../hotkeys/HotkeyProvider";
+import { useTabVisible } from "./TabVisibleContext";
 
 export type Zone = "editor" | "terminal" | "sidebar";
 type Dir = "up" | "down" | "left" | "right";
@@ -41,12 +42,16 @@ export function EditorFocusProvider({ children }: { children: React.ReactNode })
     if (next) setActive(next);
   }, [setActive]);
 
-  // Editor zone owns the ⌘E leader scope while this provider (the editor tab) is mounted.
-  useHotkeyScope("editor", true);
-  useHotkey("editor.focusUp", () => go("up"), { scope: "editor" });
-  useHotkey("editor.focusDown", () => go("down"), { scope: "editor" });
-  useHotkey("editor.focusLeft", () => go("left"), { scope: "editor" });
-  useHotkey("editor.focusRight", () => go("right"), { scope: "editor" });
+  // Editor zone owns the ⌘E leader scope while this editor tab is the VISIBLE
+  // one. Hidden tabs stay mounted (display:none in TabContent), so keying this
+  // on mere mount kept the "editor" scope active app-wide and let a hidden
+  // tab's handlers win the dispatcher's first-registered pick.
+  const tabVisible = useTabVisible();
+  useHotkeyScope("editor", tabVisible);
+  useHotkey("editor.focusUp", () => go("up"), { scope: "editor", enabled: tabVisible });
+  useHotkey("editor.focusDown", () => go("down"), { scope: "editor", enabled: tabVisible });
+  useHotkey("editor.focusLeft", () => go("left"), { scope: "editor", enabled: tabVisible });
+  useHotkey("editor.focusRight", () => go("right"), { scope: "editor", enabled: tabVisible });
 
   return (
     <EditorFocusContext.Provider value={{ active, setActive, register }}>

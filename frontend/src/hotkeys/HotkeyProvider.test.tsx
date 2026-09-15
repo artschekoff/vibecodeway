@@ -1,9 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
 import { HotkeyProvider, useHotkey, useHotkeyScope, type Scope } from "./HotkeyProvider";
+import { TabVisibleContext, useTabVisible } from "../contexts/TabVisibleContext";
 
 function Probe({ id, fn, scope }: { id: string; fn: () => void; scope?: Scope }) {
   useHotkey(id, fn, scope ? { scope } : undefined);
+  return null;
+}
+
+// Mirrors how per-tab components (TerminalPanel etc.) register their handlers.
+function TabProbe({ id, fn }: { id: string; fn: () => void }) {
+  useHotkey(id, fn, { scope: "global", enabled: useTabVisible() });
   return null;
 }
 
@@ -253,5 +260,29 @@ describe("HotkeyProvider", () => {
     });
     expect(listener).toHaveBeenCalledTimes(1);
     window.removeEventListener("hotkey:search.global", listener);
+  });
+
+  // Regression: editor tabs stay mounted (display:none) when inactive, so a
+  // hidden tab's TerminalPanel also registers global terminal.* handlers.
+  // Handlers gated on TabVisibleContext must win over hidden ones regardless
+  // of registration order (⌘I opened the insert menu in a hidden tab).
+  it("a hidden tab's handler does not steal a global command from the visible tab", () => {
+    const hidden = vi.fn();
+    const visible = vi.fn();
+    render(
+      <HotkeyProvider platform="darwin">
+        <TabVisibleContext.Provider value={false}>
+          <TabProbe id="terminal.insert" fn={hidden} />
+        </TabVisibleContext.Provider>
+        <TabVisibleContext.Provider value={true}>
+          <TabProbe id="terminal.insert" fn={visible} />
+        </TabVisibleContext.Provider>
+      </HotkeyProvider>
+    );
+    act(() => {
+      fireEvent.keyDown(window, { key: "i", metaKey: true });
+    });
+    expect(hidden).not.toHaveBeenCalled();
+    expect(visible).toHaveBeenCalledTimes(1);
   });
 });

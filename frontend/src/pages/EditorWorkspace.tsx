@@ -15,6 +15,7 @@ import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesCon
 import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
 import { EditorFocusProvider, useEditorFocus } from "../contexts/EditorFocusContext";
 import { useHotkey } from "../hotkeys/HotkeyProvider";
+import { useTabVisible } from "../contexts/TabVisibleContext";
 import { useRovingTab } from "../hotkeys/useRovingTab";
 import { editorModeForKey, editorModeLabel } from "../lib/contextMode";
 
@@ -102,8 +103,11 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
 
   // Sidebar FILES/GIT via the ⌘B leader: ⌘B F -> FILES, ⌘B G -> GIT. Scope
   // "editor" so it's active only while the editor/sidebar zone is focused.
-  useHotkey("sidebar.files", () => setSidebarTab("files"), { scope: "editor" });
-  useHotkey("sidebar.git", () => setSidebarTab("git"), { scope: "editor" });
+  // Gated on tab visibility: hidden editor tabs keep registering too, and the
+  // dispatcher would otherwise pick the first-mounted (possibly hidden) one.
+  const tabVisible = useTabVisible();
+  useHotkey("sidebar.files", () => setSidebarTab("files"), { scope: "editor", enabled: tabVisible });
+  useHotkey("sidebar.git", () => setSidebarTab("git"), { scope: "editor", enabled: tabVisible });
 
   useEffect(() => {
     let active = true;

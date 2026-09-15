@@ -12,6 +12,7 @@ import ActivityFeedPage from "../pages/ActivityFeedPage";
 import ProductivityPage from "../pages/ProductivityPage";
 import AnalyticsPage from "../pages/AnalyticsPage";
 import { EditorWorkspace } from "../pages/EditorWorkspace";
+import { TabVisibleContext } from "../contexts/TabVisibleContext";
 
 // Renders the non-editor tab types. Editor tabs are handled separately so they
 // can be kept mounted across tab switches.
@@ -56,7 +57,11 @@ export function TabContent() {
     <>
       {editorTabs.map((t) => (
         <div key={t.id} style={{ display: t.id === activeTabId ? "flex" : "none", height: "100%", minHeight: 0 }}>
-          <EditorWorkspace contextId={t.contextId!} contextKey={t.contextKey} initialCwd={t.initialCwd} />
+          {/* Hidden tabs stay mounted (PTY/xterm survive), but their hotkey
+              handlers must not fire — see TabVisibleContext. */}
+          <TabVisibleContext.Provider value={t.id === activeTabId}>
+            <EditorWorkspace contextId={t.contextId!} contextKey={t.contextKey} initialCwd={t.initialCwd} />
+          </TabVisibleContext.Provider>
         </div>
       ))}
       {activeTab.type !== "editor" && <NonEditorContent tab={activeTab} />}
