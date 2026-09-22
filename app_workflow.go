@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
@@ -540,6 +541,12 @@ func (a *App) SolveWithAI(contextID, userPrompt string) (string, error) {
 	}
 	if len(worktrees) == 0 {
 		return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
+	}
+	// Every linked branch must be checked out before the agent starts:
+	// contextWorktrees silently skips repos whose worktree could not be created,
+	// and an agent launched with a partial repo set edits against missing code.
+	if missing := a.missingWorktreeBranches(contextID, worktrees); len(missing) > 0 {
+		return "", fmt.Errorf("not all linked repos are checked out locally: %s — set a local path for them (Settings → Repositories) and retry", strings.Join(missing, ", "))
 	}
 	firstWorktreePath := worktrees[0].WorktreePath
 
