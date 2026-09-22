@@ -243,7 +243,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
           style={{ position: "relative", flex: 1, minHeight: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", margin: "6px 0 0 6px" }}>
           {active ? (
             <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} baseMode={active.baseMode} refreshSignal={refreshSignal}
-              highlightAnchor={highlightAnchor} revealLine={active.revealLine}
+              highlightAnchor={highlightAnchor} revealLine={active.revealLine} revealNonce={active.revealNonce}
               onSaved={() => { /* panel auto-polls */ }}
               onAskAi={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))} />
           ) : (

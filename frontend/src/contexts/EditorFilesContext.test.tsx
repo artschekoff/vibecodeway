@@ -16,6 +16,14 @@ describe("openFileReducer", () => {
     expect(again.tabs.map((x) => x.path)).toEqual(["a.ts", "b.ts"]);
     expect(again.activeKey).toBe(tabKey(t("a.ts")));
   });
+
+  it("bumps revealNonce on a repeat open of the same path with the same line", () => {
+    const opened = openFileReducer({ tabs: [], activeKey: "" }, { ...t("a.ts"), revealLine: 42 });
+    const openedAgain = openFileReducer(opened, { ...t("a.ts"), revealLine: 42 });
+    expect(opened.tabs[0].revealLine).toBe(42);
+    expect(openedAgain.tabs[0].revealLine).toBe(42);
+    expect(openedAgain.tabs[0].revealNonce).toBeGreaterThan(opened.tabs[0].revealNonce ?? 0);
+  });
 });
 
 describe("closeFileReducer", () => {
