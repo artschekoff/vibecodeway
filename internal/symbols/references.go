@@ -14,14 +14,15 @@ type Reference struct {
 	Preview string `json:"preview"`
 }
 
-// References lists word-boundary usages of name via `git grep -nw`. It needs
-// only git, so it works even when ctags is not installed. grep's exit code 1
-// (no matches) is a normal empty result.
+// References lists word-boundary usages of name via `git grep -nwF` (fixed
+// string, so names with regex metacharacters like "." are matched literally).
+// It needs only git, so it works even when ctags is not installed. grep's
+// exit code 1 (no matches) is a normal empty result.
 func References(worktree, name string, limit int) ([]Reference, error) {
 	if limit <= 0 {
 		limit = 200
 	}
-	cmd := exec.Command("git", "-C", worktree, "grep", "-nw", "--untracked", "--", name)
+	cmd := exec.Command("git", "-C", worktree, "grep", "-nw", "-F", "--untracked", "--", name)
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {

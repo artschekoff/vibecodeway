@@ -222,21 +222,31 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   const activeRepo = useMemo(() => repoPaths.find((r) => r.path === cwd), [repoPaths, cwd]);
   const activeRepoId = activeRepo?.id;
 
-  // registerMonacoSymbols registers once (module-level guard); these refs let
-  // its providers always read the currently active tab's repo/context, even
-  // though the registration closure itself is only created on first mount.
+  // registerMonacoSymbols registers monaco's providers/opener once (module-level
+  // guard) but reactivates its "active deps" on every call — these refs let
+  // that call always read the currently active tab's repo/context.
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
   const contextIdRef = useRef(contextId);
   contextIdRef.current = contextId;
   const repoNameRef = useRef(activeRepo?.name ?? "");
   repoNameRef.current = activeRepo?.name ?? "";
-  registerMonacoSymbols({
-    getRepoPath: () => cwdRef.current,
-    getContextId: () => contextIdRef.current,
-    getRepoName: () => repoNameRef.current,
-    openFile: openEditorFile,
-  });
+  const repoPathsRef = useRef<string[]>([]);
+  repoPathsRef.current = repoPaths.map((r) => r.path);
+  // Hidden editor tabs stay mounted (see tabVisible comments above), so
+  // re-run this whenever the tab becomes visible: the visible workspace must
+  // always be the one that owns Monaco's shared symbol-nav deps, otherwise
+  // F12/references in the active tab could read a hidden tab's cwd/contextId.
+  useEffect(() => {
+    if (!tabVisible) return;
+    registerMonacoSymbols({
+      getRepoPath: () => cwdRef.current,
+      getRepoPaths: () => repoPathsRef.current,
+      getContextId: () => contextIdRef.current,
+      getRepoName: () => repoNameRef.current,
+      openFile: openEditorFile,
+    });
+  }, [tabVisible, cwd, contextId, activeRepo?.name, repoPaths, openEditorFile]);
   const hasChangesForTour = (repoFileCounts[cwd] ?? 0) > 0;
   const highlightAnchor =
     active && tourAnchorTarget && active.repoPath === tourAnchorTarget.repoPath && active.path === tourAnchorTarget.path
@@ -428,7 +438,8 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
             {prRefreshError && (
               <div style={{ fontSize: 11, color: "var(--danger, #e5534b)", padding: "4px 12px" }}>{prRefreshError}</div>
             )}
-            <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined} refreshSignal={refreshSignal} />
+            <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined}
+              activeBranch={repoPaths.length > 1 ? activeRepo?.branch : undefined} refreshSignal={refreshSignal} />
             <ChangedFilesPanel contextId={contextId} onOpenFile={openFile}
               onOpenTerminal={(repoPath) => setPendingTerminalOpen((prev) => ({ cwd: repoPath, id: (prev?.id ?? 0) + 1 }))}
               onRefresh={() => void handleRefresh()} refreshing={refreshing}

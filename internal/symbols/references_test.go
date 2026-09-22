@@ -39,3 +39,19 @@ func TestReferences_noMatchesIsEmptyNotError(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, refs)
 }
+
+func TestReferences_fixedStringNotRegex(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init"}, {"config", "user.email", "t@t"}, {"config", "user.name", "t"}} {
+		require.NoError(t, exec.Command("git", append([]string{"-C", dir}, args...)...).Run())
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.ts"), []byte("const getXUser = 1;\nconst get.User = 2;\n"), 0o644))
+	require.NoError(t, exec.Command("git", "-C", dir, "add", ".").Run())
+
+	// "." in the query must be treated literally, not as a regex wildcard:
+	// it must NOT match "getXUser".
+	refs, err := References(dir, "get.User", 10)
+	require.NoError(t, err)
+	require.Len(t, refs, 1)
+	assert.Equal(t, "const get.User = 2;", refs[0].Preview)
+}

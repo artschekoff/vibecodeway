@@ -16,28 +16,51 @@ export function refsToLocations(repoPath: string, refs: Ref[]): Loc[] {
   return refs.map((r) => ({ uri: monaco.Uri.file(`${repoPath}/${r.path}`), range: lineRange(r.line) }));
 }
 
+// worktreeForPath picks the repoPath that is the longest-matching prefix of
+// path (a model URI's .path, e.g. from file://<worktree>/<relpath>). Returns
+// null when none of the known repo paths contain it — e.g. the synthetic
+// ".orig" original-side model of a diff editor.
+export function worktreeForPath(repoPaths: string[], path: string): string | null {
+  let best: string | null = null;
+  for (const repoPath of repoPaths) {
+    if (repoPath && (path === repoPath || path.startsWith(`${repoPath}/`))) {
+      if (best === null || repoPath.length > best.length) best = repoPath;
+    }
+  }
+  return best;
+}
+
 export interface SymbolNavDeps {
   getRepoPath: () => string;
+  getRepoPaths: () => string[];
   getContextId: () => string;
   getRepoName: () => string;
   openFile: (contextId: string, tab: { repoPath: string; repoName: string; path: string; status: string; revealLine: number }) => void;
 }
 
 let done = false;
+// activeDeps always points at the currently visible EditorWorkspace's deps.
+// Providers/opener are registered once (module-level guard below) but read
+// this at invocation time, so with multiple mounted (hidden + visible) tabs
+// navigation always targets the one the user is actually looking at.
+let activeDeps: SymbolNavDeps | null = null;
 
 // registerMonacoSymbols wires tags-based navigation into Monaco for every
 // language: definition (F12 / ⌘-click / vim gd), references (⇧F12) and an
 // editor opener that routes cross-file targets through the app's file tabs.
-// Registered once; the deps getters always reflect the active editor tab.
+// Call on every mount/visibility change of the active workspace — it always
+// updates activeDeps, but only registers monaco's providers/opener once.
 export function registerMonacoSymbols(deps: SymbolNavDeps): void {
+  activeDeps = deps;
   if (done) return;
   done = true;
 
   monaco.languages.registerDefinitionProvider("*", {
     async provideDefinition(model, position) {
+      const deps = activeDeps;
       const word = model.getWordAtPosition(position);
-      const repoPath = deps.getRepoPath();
-      if (!word || !repoPath) return null;
+      const repoPath = deps ? (worktreeForPath(deps.getRepoPaths(), model.uri.path) ?? deps.getRepoPath()) : "";
+      if (!deps || !word || !repoPath) return null;
       try {
         const syms = (await SymbolLookup(repoPath, word.word)) as unknown as Sym[];
         return lookupToLocations(repoPath, syms ?? []);
@@ -49,9 +72,10 @@ export function registerMonacoSymbols(deps: SymbolNavDeps): void {
 
   monaco.languages.registerReferenceProvider("*", {
     async provideReferences(model, position) {
+      const deps = activeDeps;
       const word = model.getWordAtPosition(position);
-      const repoPath = deps.getRepoPath();
-      if (!word || !repoPath) return null;
+      const repoPath = deps ? (worktreeForPath(deps.getRepoPaths(), model.uri.path) ?? deps.getRepoPath()) : "";
+      if (!deps || !word || !repoPath) return null;
       try {
         const refs = (await SymbolReferences(repoPath, word.word, 200)) as unknown as Ref[];
         return refsToLocations(repoPath, refs ?? []);
@@ -64,7 +88,9 @@ export function registerMonacoSymbols(deps: SymbolNavDeps): void {
   // Cross-file jump: resolve the target through the app's own tab system.
   monaco.editor.registerEditorOpener({
     openCodeEditor(_source, resource, selectionOrPosition) {
-      const repoPath = deps.getRepoPath();
+      const deps = activeDeps;
+      if (!deps) return false;
+      const repoPath = worktreeForPath(deps.getRepoPaths(), resource.path) ?? deps.getRepoPath();
       if (!repoPath || !resource.path.startsWith(`${repoPath}/`)) return false;
       const rel = resource.path.slice(repoPath.length + 1);
       const line =
