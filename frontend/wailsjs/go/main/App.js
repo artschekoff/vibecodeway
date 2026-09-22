@@ -58,6 +58,10 @@ export function AnalyzeContext(arg1) {
   return window['go']['main']['App']['AnalyzeContext'](arg1);
 }
 
+export function AppVersion() {
+  return window['go']['main']['App']['AppVersion']();
+}
+
 export function ApplyContextUpdateActions(arg1, arg2) {
   return window['go']['main']['App']['ApplyContextUpdateActions'](arg1, arg2);
 }

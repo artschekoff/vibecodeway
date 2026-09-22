@@ -41,6 +41,8 @@ export function AgentResumeCommand(arg1:string,arg2:number):Promise<string>;
 
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
 
+export function AppVersion():Promise<string>;
+
 export function ApplyContextUpdateActions(arg1:string,arg2:Array<store.ContextUpdateAction>):Promise<Array<main.ApplyActionResult>>;
 
 export function AskAI(arg1:string,arg2:string):Promise<agent.Answer>;

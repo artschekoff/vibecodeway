@@ -6,6 +6,12 @@ import (
 	"github.com/artschekoff/vibecodeway/internal/symbols"
 )
 
+// AppVersion returns the build-time version string (git describe), "dev" for
+// unstamped builds. Shown at the bottom of the sidebar.
+func (a *App) AppVersion() string {
+	return appVersion
+}
+
 // SymbolsIndexResult is returned by SymbolsIndex.
 type SymbolsIndexResult struct {
 	Count  int `json:"count"`

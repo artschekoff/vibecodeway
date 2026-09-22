@@ -15,8 +15,9 @@ dev: install-cli
 
 build: build-desktop build-cli dmg
 
+# -ldflags stamps the version into the binary (shown in the sidebar).
 build-desktop:
-	wails build
+	wails build -ldflags "-X main.appVersion=$(VERSION)"
 
 build-cli:
 	go build -o bin/vibecodeway-cli ./cmd/cli
