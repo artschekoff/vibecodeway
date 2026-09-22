@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 // baseMode picks the diff's "original" side: "branch" = vs the merge-base with
 // the default branch (full branch/PR diff), "head" = vs HEAD (only uncommitted
 // edits). Omitted defaults to "branch" for back-compat. See DiffEditorTab.
-export type OpenTab = { repoPath: string; repoName: string; path: string; status: string; baseMode?: "branch" | "head"; pinned?: boolean };
+export type OpenTab = { repoPath: string; repoName: string; path: string; status: string; baseMode?: "branch" | "head"; pinned?: boolean; revealLine?: number };
 export const tabKey = (t: OpenTab) => `${t.repoPath}::${t.path}`;
 
 export type EditorFilesState = { tabs: OpenTab[]; activeKey: string };
@@ -13,7 +13,10 @@ const EMPTY: EditorFilesState = { tabs: [], activeKey: "" };
 export function openFileReducer(state: EditorFilesState, tab: OpenTab): EditorFilesState {
   const key = tabKey(tab);
   const exists = state.tabs.some((t) => tabKey(t) === key);
-  return { tabs: exists ? state.tabs : [...state.tabs, tab], activeKey: key };
+  const tabs = exists
+    ? state.tabs.map((t) => (tabKey(t) === key ? { ...t, revealLine: tab.revealLine } : t))
+    : [...state.tabs, tab];
+  return { tabs, activeKey: key };
 }
 
 export function closeFileReducer(state: EditorFilesState, key: string): EditorFilesState {

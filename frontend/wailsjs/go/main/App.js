@@ -930,6 +930,22 @@ export function SwitchMainWorkingTree(arg1, arg2) {
   return window['go']['main']['App']['SwitchMainWorkingTree'](arg1, arg2);
 }
 
+export function SymbolLookup(arg1, arg2) {
+  return window['go']['main']['App']['SymbolLookup'](arg1, arg2);
+}
+
+export function SymbolReferences(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SymbolReferences'](arg1, arg2, arg3);
+}
+
+export function SymbolSearch(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SymbolSearch'](arg1, arg2, arg3);
+}
+
+export function SymbolsIndex(arg1) {
+  return window['go']['main']['App']['SymbolsIndex'](arg1);
+}
+
 export function SyncAllComments(arg1) {
   return window['go']['main']['App']['SyncAllComments'](arg1);
 }
