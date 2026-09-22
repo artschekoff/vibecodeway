@@ -30,6 +30,8 @@ export const COMMANDS: Command[] = [
     description: "Refresh the active context from external sources", scope: "global", defaultChord: "mod+shift+r" },
   { id: "tour.start", object: "tour", action: "start", label: "Start code tour",
     description: "Start (or resume) the code tour in the editor", scope: "editor", defaultChord: "mod+shift+u" },
+  { id: "symbols.search", object: "symbols", action: "search", label: "Search symbols",
+    description: "Fuzzy-search functions, classes and variables in the active repo", scope: "editor", defaultChord: "mod+shift+o" },
   { id: "tabs.next", object: "tabs", action: "next", label: "Next open context",
     description: "Switch to the next open context tab", scope: "global", defaultChord: "mod+shift+]" },
   { id: "tabs.prev", object: "tabs", action: "prev", label: "Previous open context",

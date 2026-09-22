@@ -7,6 +7,7 @@ import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
 import { FileTreePanel } from "../components/editor/FileTreePanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { TourCard } from "../components/editor/TourCard";
+import { SymbolPalette } from "../components/editor/SymbolPalette";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { NotesPanel } from "../components/editor/NotesPanel";
@@ -70,6 +71,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStarting, setTourStarting] = useState(false);
   const [tourError, setTourError] = useState("");
+  const [symbolsOpen, setSymbolsOpen] = useState(false);
   // Which (repoPath, path, anchor) the diff editor should highlight once that
   // file's DiffEditorTab is mounted — set by TourCard as the user steps through.
   const [tourAnchorTarget, setTourAnchorTarget] = useState<{ repoPath: string; path: string; anchor: string } | null>(null);
@@ -146,8 +148,8 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     return () => { active = false; };
   }, [contextId, cwd]);
 
-  const openFile = (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head" = "head") => {
-    const tab: OpenTab = { repoPath, repoName, path, status, baseMode };
+  const openFile = (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head" = "head", revealLine?: number) => {
+    const tab: OpenTab = { repoPath, repoName, path, status, baseMode, revealLine };
     openEditorFile(contextId, tab);
   };
 
@@ -209,6 +211,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     if (tour && !tourOpen) setTourOpen(true);
     else void handleStartTour();
   }, { scope: "editor", enabled: tabVisible });
+  useHotkey("symbols.search", () => setSymbolsOpen(true), { scope: "editor", enabled: tabVisible });
 
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
   const activeRepo = useMemo(() => repoPaths.find((r) => r.path === cwd), [repoPaths, cwd]);
@@ -269,6 +272,8 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               onAskAuthorAgent={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))}
             />
           )}
+          <SymbolPalette repoPath={cwd} open={symbolsOpen} onClose={() => setSymbolsOpen(false)}
+            onPick={(path, line) => openFile(cwd, activeRepo?.name ?? "", path, "", "branch", line)} />
         </div>
         <ResizeHandle
           orientation="horizontal"
