@@ -187,15 +187,18 @@ vi.mock("../../wailsjs/runtime/runtime", () => ({
 
 import { TabProvider } from "../contexts/TabContext";
 import { PassphraseProvider } from "../contexts/PassphraseContext";
+import { HotkeyProvider } from "../hotkeys/HotkeyProvider";
 import ContextDetailPage from "./ContextDetail";
 
 function renderDetail() {
   return render(
-    <TabProvider>
-      <PassphraseProvider>
-        <ContextDetailPage contextId="ctx-1" tabId="tab-1" />
-      </PassphraseProvider>
-    </TabProvider>
+    <HotkeyProvider platform="darwin">
+      <TabProvider>
+        <PassphraseProvider>
+          <ContextDetailPage contextId="ctx-1" tabId="tab-1" />
+        </PassphraseProvider>
+      </TabProvider>
+    </HotkeyProvider>
   );
 }
 

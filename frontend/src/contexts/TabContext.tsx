@@ -30,6 +30,7 @@ interface TabContextValue {
   openAnalyticsTab: () => void;
   closeTab: (tabId: string) => void;
   forceCloseTab: (tabId: string) => void;
+  closeTabsForContext: (contextId: string) => void;
   closeOtherTabs: (keepId: string) => void;
   pinTab: (tabId: string) => void;
   unpinTab: (tabId: string) => void;
@@ -274,6 +275,20 @@ export function TabProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Closes every tab tied to a context — detail AND editor — ignoring pins.
+  // Called when the context is deleted or deactivated: unmounting the editor
+  // tab is what kills its terminals (PTY sessions), so a closed context stops
+  // consuming resources.
+  const closeTabsForContext = useCallback((contextId: string) => {
+    setTabs((prev) => {
+      const next = prev.filter((t) => t.contextId !== contextId);
+      if (next.length === prev.length) return prev;
+      setActiveTabId((active) =>
+        next.some((t) => t.id === active) ? active : (next[next.length - 1]?.id ?? null));
+      return next;
+    });
+  }, []);
+
   // "Close all but this": keep only the right-clicked tab (keepId), dropping
   // everything else — pinned included — and make it active.
   const closeOtherTabs = useCallback((keepId: string) => {
@@ -395,6 +410,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
         openAnalyticsTab,
         closeTab,
         forceCloseTab,
+        closeTabsForContext,
         closeOtherTabs,
         pinTab,
         unpinTab,

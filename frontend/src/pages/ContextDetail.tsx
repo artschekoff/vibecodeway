@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
+import { useHotkey } from "../hotkeys/HotkeyProvider";
 import { ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Code, Copy, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Pencil, RefreshCw, Trash2, UserCheck, X } from "lucide-react";
 import {
   GetContextDetail,
@@ -379,6 +380,16 @@ export function WorkspaceMenu({
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  // Anchored with position:fixed to the trigger's viewport rect: the branches
+  // list scrolls (overflow), which clips an absolutely-positioned child menu.
+  // Same technique as the terminal's insert-command popover.
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+  }, [open]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -405,8 +416,8 @@ export function WorkspaceMenu({
         </span>
         {checkoutLoading ? <Spinner size={10} /> : <ChevronDown size={10} />}
       </button>
-      {open && (
-        <div className="workspace-menu-dropdown">
+      {open && menuPos && (
+        <div className="workspace-menu-dropdown" style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}>
           <button
             className="workspace-menu-item"
             onClick={() => { onCheckout(); setOpen(false); }}
@@ -468,7 +479,7 @@ function getAvatarColor(name: string): string {
 
 export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextDetailProps) {
   const id = contextId;
-  const { closeTab, navigateBack, openContextTab, openEditorTab } = useTabContext();
+  const { closeTab, navigateBack, openContextTab, openEditorTab, closeTabsForContext } = useTabContext();
   const editorOpener = useOpenContextEditor(openEditorTab);
   const progress = useProgress();
   const { ensurePassphrase } = usePassphrase();
@@ -737,6 +748,10 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   useEffect(() => {
     void ListWorkflowStatuses().then((ss) => setWorkflowStatuses(ss ?? []));
   }, [id]);
+
+  // ⌘⇧R — same as the Refresh button. This page is mounted only while its tab
+  // is active (NonEditorContent), so a plain global registration is safe.
+  useHotkey("context.refresh", () => { if (!refreshing) void handleRefresh(); }, { scope: "global" });
 
   const handleRefresh = async () => {
     if (!id) return;
@@ -1185,6 +1200,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     try {
       const updated = await ToggleContextStatus(context.id);
       setDetail((prev) => prev ? ({ ...prev, context: { ...prev.context, status: updated.status } } as service.ContextDetail) : prev);
+      // Deactivated: close this context's tabs (detail + editor) so its
+      // terminals stop running. Closes the very tab hosting this page too.
+      if (updated.status !== "active") closeTabsForContext(context.id);
     } catch {
       /* best-effort, mirrors list behaviour */
     }

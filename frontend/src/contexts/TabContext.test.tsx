@@ -234,3 +234,22 @@ describe("forceCloseTab", () => {
     expect(result.current.activeTabId).toBe(secondTabId);
   });
 });
+
+describe("closeTabsForContext", () => {
+  it("closes both the detail and editor tabs of a context, keeping others", () => {
+    const { result } = renderHook(() => useTabContext(), { wrapper });
+
+    act(() => {
+      result.current.openContextTab("ctx-1", "alpha");
+      result.current.openEditorTab("ctx-1", "alpha");
+      result.current.openContextTab("ctx-2", "beta");
+    });
+    expect(result.current.tabs).toHaveLength(3);
+
+    act(() => result.current.closeTabsForContext("ctx-1"));
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.tabs[0].contextId).toBe("ctx-2");
+    expect(result.current.activeTabId).toBe(result.current.tabs[0].id);
+  });
+});

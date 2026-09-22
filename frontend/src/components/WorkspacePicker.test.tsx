@@ -26,4 +26,26 @@ describe("WorkspacePicker", () => {
     fireEvent.click(screen.getByText("Cancel"));
     expect(onCancel).toHaveBeenCalled();
   });
+
+  it("ArrowDown moves the selection and Enter opens it", () => {
+    const onPick = vi.fn();
+    render(<WorkspacePicker worktrees={worktrees as never} onPick={onPick} onCancel={vi.fn()} />);
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onPick).toHaveBeenCalledWith("/wt/rdbms");
+  });
+
+  it("ArrowUp stops at the first row; Escape cancels", () => {
+    const onPick = vi.fn();
+    const onCancel = vi.fn();
+    render(<WorkspacePicker worktrees={worktrees as never} onPick={onPick} onCancel={onCancel} />);
+
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onPick).toHaveBeenCalledWith("/wt/api");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onCancel).toHaveBeenCalled();
+  });
 });

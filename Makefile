@@ -43,9 +43,11 @@ install-cli: build-cli
 	sudo install -m 755 $(CURDIR)/bin/$(APP_NAME)-cli $(INSTALL_DIR)/$(APP_NAME)-cli
 	@echo "Installed → $(INSTALL_DIR)/$(APP_NAME)-cli"
 
+# Ставит .app прямо в /Applications — без sudo: каталог доступен группе admin.
+# ditto сохраняет расширенные атрибуты и подпись (cp -r их ломает).
 install-app: build-desktop
-	sudo rm -rf /Applications/$(BUNDLE_NAME).app
-	sudo cp -r build/bin/$(APP_NAME).app /Applications/$(BUNDLE_NAME).app
+	rm -rf /Applications/$(BUNDLE_NAME).app
+	ditto build/bin/$(APP_NAME).app /Applications/$(BUNDLE_NAME).app
 	@echo "Installed → /Applications/$(BUNDLE_NAME).app"
 
 install-all: install-cli install-app

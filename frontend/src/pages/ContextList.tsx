@@ -341,7 +341,7 @@ interface ContextListProps {
 }
 
 export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) {
-  const { openContextTab, openNewContextTab, openSettingsTab, openEditorTab, tabs, forceCloseTab } = useTabContext();
+  const { openContextTab, openNewContextTab, openSettingsTab, openEditorTab, tabs, closeTabsForContext } = useTabContext();
   const progress = useProgress();
   const { ensurePassphrase } = usePassphrase();
 
@@ -789,9 +789,9 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     try {
       await DeleteContext(deletedId);
       setDeleteTarget(null);
-      // Close the open tab before reloading, so it's removed regardless of reload result
-      const openTab = tabs.find((t) => t.type === "context" && t.contextId === deletedId);
-      if (openTab) forceCloseTab(openTab.id);
+      // Close every tab of the deleted context — detail AND editor — so its
+      // terminals (PTY sessions) die with it and stop consuming resources.
+      closeTabsForContext(deletedId);
       void load();
     } finally {
       setDeleting(false);
@@ -846,6 +846,8 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     try {
       const updated = await ToggleContextStatus(c.id);
       setContexts((prev) => prev.map((ctx) => ctx.id === updated.id ? { ...ctx, status: updated.status } : ctx));
+      // Deactivated context: close its tabs so terminals stop running.
+      if (updated.status !== "active") closeTabsForContext(c.id);
     } catch { /* best-effort */ }
   };
 
