@@ -140,6 +140,8 @@ func (s *Service) entryFor(worktree string) (*indexEntry, error) {
 	if _, _, err := s.Index(worktree); err != nil {
 		// A stale entry beats a hard failure (e.g. ctags uninstalled mid-run).
 		if ok {
+			s.logger.Warn("symbols: index rebuild failed, serving stale entry",
+				zap.String("worktree", worktree), zap.Error(err))
 			return e, nil
 		}
 		return nil, err
