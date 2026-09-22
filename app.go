@@ -29,6 +29,7 @@ import (
 	"github.com/artschekoff/vibecodeway/internal/slack"
 	slackstore "github.com/artschekoff/vibecodeway/internal/slack/store"
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
+	"github.com/artschekoff/vibecodeway/internal/symbols"
 	"github.com/artschekoff/vibecodeway/internal/tooling"
 	githubrunner "github.com/artschekoff/vibecodeway/internal/vcs/github"
 	vcsservice "github.com/artschekoff/vibecodeway/internal/vcs/service"
@@ -92,6 +93,7 @@ type App struct {
 	ctx           context.Context
 	svc           *jiraservice.ContextService
 	analysisSvc   *analysis.Service
+	symbolsSvc    *symbols.Service
 	agent         *agent.Agent
 	openAI        *openaiclient.Client
 	db            *appstore.Store
@@ -233,6 +235,7 @@ func (a *App) startup(ctx context.Context) {
 	a.openAI = openAI
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
 	a.analysisSvc.SetVCSStore(a.vcsStore)
+	a.symbolsSvc = symbols.NewService(logger)
 	reg := tooling.NewRegistry(tooling.Deps{Store: s, Svc: a.svc, VCS: ghRunner, Repos: a.vcsStore, Logger: logger})
 	a.agent = agent.New(openAI, reg, s, logger)
 

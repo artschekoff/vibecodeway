@@ -46,6 +46,9 @@ func NewService(logger *zap.Logger) *Service {
 	return &Service{logger: logger, findCtags: DefaultFindCtags, cache: map[string]*indexEntry{}}
 }
 
+// SetFindCtagsForTest replaces binary discovery. Test-only by convention.
+func (s *Service) SetFindCtagsForTest(f func() (string, error)) { s.findCtags = f }
+
 // putForTest seeds the cache without running ctags. Test-only by convention.
 func (s *Service) putForTest(worktree string, syms []Symbol) {
 	s.mu.Lock()
