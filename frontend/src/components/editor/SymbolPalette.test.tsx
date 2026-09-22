@@ -38,4 +38,16 @@ describe("SymbolPalette", () => {
     fireEvent.change(screen.getByPlaceholderText(/search symbols/i), { target: { value: "x" } });
     expect(await screen.findByText(/brew install universal-ctags/i)).toBeInTheDocument();
   });
+
+  it("clears the stale ctags hint on reopen", async () => {
+    SymbolSearch.mockRejectedValue(new Error("ctags-not-found"));
+    const { rerender } = render(<SymbolPalette repoPath="/wt/api" open onClose={vi.fn()} onPick={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search symbols/i), { target: { value: "x" } });
+    await screen.findByText(/brew install universal-ctags/i);
+
+    rerender(<SymbolPalette repoPath="/wt/api" open={false} onClose={vi.fn()} onPick={vi.fn()} />);
+    rerender(<SymbolPalette repoPath="/wt/api" open onClose={vi.fn()} onPick={vi.fn()} />);
+
+    expect(screen.queryByText(/brew install universal-ctags/i)).not.toBeInTheDocument();
+  });
 });

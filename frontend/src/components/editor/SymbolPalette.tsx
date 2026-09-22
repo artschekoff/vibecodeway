@@ -13,7 +13,7 @@ export function SymbolPalette({ repoPath, open, onClose, onPick }: {
   const [ctagsMissing, setCtagsMissing] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { if (open) { setQuery(""); setRows([]); setHighlight(0); } }, [open]);
+  useEffect(() => { if (open) { setQuery(""); setRows([]); setHighlight(0); setCtagsMissing(false); } }, [open]);
 
   // Debounced search-as-you-type (150ms).
   useEffect(() => {
@@ -24,6 +24,7 @@ export function SymbolPalette({ repoPath, open, onClose, onPick }: {
         .then((r) => { setRows((r as Sym[]) ?? []); setHighlight(0); setCtagsMissing(false); })
         .catch((e) => { if (String(e).includes("ctags-not-found")) setCtagsMissing(true); });
     }, 150);
+    return () => { if (debounce.current) clearTimeout(debounce.current); };
   }, [query, open, repoPath]);
 
   // ↑/↓/Enter/Esc — capture phase so keys never leak to the page below.
