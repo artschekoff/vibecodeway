@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Copy, Check } from "lucide-react";
-import { GetContextChanges, RefreshContext, RefreshContextPRs, StartCodeTour, GetCodeTour } from "../../wailsjs/go/main/App";
+import { GetContextChanges, RefreshContext, RefreshContextPRs, StartCodeTour, GetCodeTour, SymbolsIndex } from "../../wailsjs/go/main/App";
 import type { CodeTour } from "../types";
 import { TerminalPanel } from "../components/editor/TerminalPanel";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
@@ -147,6 +147,11 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
       .catch(() => { if (active) setTour(null); });
     return () => { active = false; };
   }, [contextId, cwd]);
+
+  // Warm the symbol index as soon as the workspace knows its repo, so the
+  // first go-to-definition doesn't pay the ctags build. Fire-and-forget:
+  // ctags-not-found here is silent (the palette shows the install hint).
+  useEffect(() => { if (cwd) void SymbolsIndex(cwd).catch(() => {}); }, [cwd]);
 
   const openFile = (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head" = "head", revealLine?: number) => {
     const tab: OpenTab = { repoPath, repoName, path, status, baseMode, revealLine };
