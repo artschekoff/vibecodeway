@@ -106,6 +106,16 @@ func (p *JiraProvider) upsertWithMessage(ctx context.Context, contextID string, 
 }
 
 func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.Stats, error) {
+	return p.refresh(ctx, contextID, nil)
+}
+
+// RefreshWithProgress implements provider.ProgressReporter: report gets one
+// call per issue being fetched ("JH-1234 5/99"), from concurrent workers.
+func (p *JiraProvider) RefreshWithProgress(ctx context.Context, contextID string, report provider.ProgressFunc) (provider.Stats, error) {
+	return p.refresh(ctx, contextID, report)
+}
+
+func (p *JiraProvider) refresh(ctx context.Context, contextID string, report provider.ProgressFunc) (provider.Stats, error) {
 	issues, err := p.jiraRepo.GetIssuesByContext(ctx, contextID, false)
 	if err != nil {
 		return provider.Stats{}, fmt.Errorf("loading issues: %w", err)
@@ -131,12 +141,16 @@ func (p *JiraProvider) Refresh(ctx context.Context, contextID string) (provider.
 
 	var refreshed atomic.Int64
 	var notifications atomic.Int64
+	var started atomic.Int64
 	var wg sync.WaitGroup
 	wg.Add(workers)
 	for range workers {
 		go func() {
 			defer wg.Done()
 			for issue := range jobs {
+				if report != nil {
+					report(fmt.Sprintf("%s %d/%d", issue.JiraKey, started.Add(1), len(issues)))
+				}
 				detail, err := p.jira.ViewIssue(ctx, issue.JiraKey)
 				if err != nil {
 					p.logger.Warn("jira refresh: view issue failed", zap.String("key", issue.JiraKey), zap.Error(err))

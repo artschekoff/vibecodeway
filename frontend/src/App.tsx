@@ -9,7 +9,7 @@ import TabBar from "./components/TabBar";
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { ResizeHandle } from "./components/editor/ResizeHandle";
 import { nextPaneSize, readStoredPaneSize } from "./lib/paneSize";
-import { ListAllContexts, ListOrganizations, GetKeybindings } from "../wailsjs/go/main/App";
+import { ListAllContexts, ListOrganizations, GetKeybindings, AppVersion } from "../wailsjs/go/main/App";
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
@@ -171,6 +171,7 @@ function AppShell() {
           >
             {railWidth > RAIL_MIN ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
           </button>
+          <AppVersionBadge />
         </div>
         <ResizeHandle
           orientation="vertical"
@@ -195,6 +196,23 @@ function AppShell() {
       {toastMsg && <div className="toast toast--success">{toastMsg}</div>}
       <BgRefreshToast />
     </ProgressProvider>
+  );
+}
+
+// Build version pinned to the sidebar bottom. Stamped via -ldflags at build
+// time; "dev" (unstamped) builds show nothing — the badge only means something
+// for installed versions.
+function AppVersionBadge() {
+  const [version, setVersion] = useState("");
+  useEffect(() => {
+    AppVersion().then(setVersion).catch(() => {});
+  }, []);
+  if (!version || version === "dev") return null;
+  return (
+    <div title={`VibeCodeWay ${version}`}
+      style={{ fontSize: 9, color: "var(--text-muted)", opacity: 0.7, textAlign: "center", padding: "2px 4px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      {version}
+    </div>
   );
 }
 

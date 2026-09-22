@@ -4,6 +4,7 @@ import { render, fireEvent, waitFor } from "@testing-library/react";
 // Mock Wails bindings used by App.tsx to resolve platform + keybindings.
 const H = vi.hoisted(() => ({
   GetKeybindings: vi.fn(),
+  AppVersion: vi.fn().mockResolvedValue("dev"),
   ListAllContexts: vi.fn(),
   ListOrganizations: vi.fn(),
 }));

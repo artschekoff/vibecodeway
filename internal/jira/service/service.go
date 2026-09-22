@@ -1062,7 +1062,16 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		if notify != nil {
 			notify(i+1, len(svc.providers), p.Name())
 		}
-		stats, err := p.Refresh(ctx, contextID)
+		refresh := p.Refresh
+		if pr, ok := p.(provider.ProgressReporter); ok && notify != nil {
+			step, total := i+1, len(svc.providers)
+			refresh = func(ctx context.Context, id string) (provider.Stats, error) {
+				return pr.RefreshWithProgress(ctx, id, func(detail string) {
+					notify(step, total, p.Name()+" · "+detail)
+				})
+			}
+		}
+		stats, err := refresh(ctx, contextID)
 		if err != nil {
 			svc.logger.Warn("refresh: provider failed",
 				zap.String("provider", p.Name()), zap.String("contextID", contextID), zap.Error(err))
@@ -1488,32 +1497,58 @@ func (svc *ContextService) SetJiraBaseURL(ctx context.Context, contextID, baseUR
 	return svc.jiraRepo.SetJiraBaseURL(ctx, contextID, baseURL)
 }
 
+// refreshAllWorkers bounds how many contexts refresh concurrently. Each context
+// already runs 4-5 provider workers internally, so total outbound concurrency
+// is roughly this × 5 — raise with care (Jira/Slack/GitHub rate limits).
+const refreshAllWorkers = 4
+
 // RefreshAllContexts refreshes every active context and returns aggregated results.
 // notify is called before each provider step, same signature as ReloadAllContexts.
+// Contexts are processed by a bounded worker pool; `current` reports how many
+// contexts have finished (+1 for the one in flight), so the progress bar stays
+// monotonic even though several contexts refresh at once.
 func (svc *ContextService) RefreshAllContexts(ctx context.Context, notify ReloadProgressFunc) ([]ReloadAllResult, error) {
 	contexts, err := svc.store.ListContexts(ctx, false)
 	if err != nil {
 		return nil, fmt.Errorf("listing contexts for refresh: %w", err)
 	}
 	total := len(contexts)
-	results := make([]ReloadAllResult, 0, total)
-	for i, c := range contexts {
-		idx := i + 1
-		res, err := svc.RefreshContext(ctx, c.ID, func(_, _ int, step string) {
-			if notify != nil {
-				notify(idx, total, c.Key, step)
-			}
-		})
-		if err != nil {
-			results = append(results, ReloadAllResult{ContextID: c.ID, ContextKey: c.Key, Error: err.Error()})
-			continue
-		}
-		results = append(results, ReloadAllResult{
-			ContextID:        c.ID,
-			ContextKey:       c.Key,
-			ThreadsRefreshed: res.ThreadsRefreshed,
-			DMsRefreshed:     res.DMsRefreshed,
-		})
+	results := make([]ReloadAllResult, total)
+
+	var done atomic.Int64
+	jobs := make(chan int, total)
+	for i := range contexts {
+		jobs <- i
 	}
+	close(jobs)
+
+	workers := min(refreshAllWorkers, total)
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				c := contexts[i]
+				res, err := svc.RefreshContext(ctx, c.ID, func(_, _ int, step string) {
+					if notify != nil {
+						notify(int(done.Load())+1, total, c.Key, step)
+					}
+				})
+				if err != nil {
+					results[i] = ReloadAllResult{ContextID: c.ID, ContextKey: c.Key, Error: err.Error()}
+				} else {
+					results[i] = ReloadAllResult{
+						ContextID:        c.ID,
+						ContextKey:       c.Key,
+						ThreadsRefreshed: res.ThreadsRefreshed,
+						DMsRefreshed:     res.DMsRefreshed,
+					}
+				}
+				done.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
 	return results, nil
 }

@@ -11,7 +11,7 @@ import { countUnreadComments } from "../../lib/prComments";
  * PR linked to the context in context-editing mode. Renders nothing when there
  * are no linked PRs.
  */
-export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { contextId: string; activeRepoId?: string; refreshSignal?: number }) {
+export function EditorPRInfo({ contextId, activeRepoId, activeBranch, refreshSignal }: { contextId: string; activeRepoId?: string; activeBranch?: string; refreshSignal?: number }) {
   const [prs, setPrs] = useState<PullRequest[]>([]);
   const [updating, setUpdating] = useState<Set<string>>(new Set());
 
@@ -41,9 +41,14 @@ export function EditorPRInfo({ contextId, activeRepoId, refreshSignal }: { conte
     }
   };
 
-  // Follow the editor's repo selector: show only the selected repo's PR(s).
-  // Unset => show every linked PR (backward compatible with single-repo contexts).
-  const shown = activeRepoId ? prs.filter((pr) => pr.repoId === activeRepoId) : prs;
+  // Follow the editor's repo selector: show only the selected repo's PR(s),
+  // and — since the selector distinguishes branches of the same repo — only
+  // the PR(s) of the selected branch when one is set and matches something.
+  // A branch with no PR of its own falls back to the repo-wide list rather
+  // than an empty panel. Unset => every linked PR (single-repo contexts).
+  const repoPrs = activeRepoId ? prs.filter((pr) => pr.repoId === activeRepoId) : prs;
+  const branchPrs = activeBranch ? repoPrs.filter((pr) => pr.headBranch === activeBranch) : [];
+  const shown = branchPrs.length > 0 ? branchPrs : repoPrs;
 
   if (shown.length === 0) return null;
 

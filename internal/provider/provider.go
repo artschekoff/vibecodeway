@@ -27,6 +27,17 @@ type Item struct {
 	Body      string
 }
 
+// ProgressFunc receives a short human-readable detail of the item currently
+// being refreshed (e.g. "JH-1234 5/99"). Implementations may call it from
+// concurrent workers; consumers must be goroutine-safe.
+type ProgressFunc func(detail string)
+
+// ProgressReporter is optionally implemented by providers that can report
+// per-item progress during Refresh. Callers fall back to Refresh otherwise.
+type ProgressReporter interface {
+	RefreshWithProgress(ctx context.Context, contextID string, report ProgressFunc) (Stats, error)
+}
+
 // Provider is the interface every data-source plugin must satisfy.
 // Register implementations with service.New to include them in cross-cutting operations
 // (Refresh, Reload, FormatContext). Provider-specific APIs may remain on ContextService.

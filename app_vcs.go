@@ -524,6 +524,12 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 				"error":    err.Error(),
 			})
 		} else {
+			// Besides streaming to the UI, keep a bounded tail of the output so
+			// the run is diagnosable later from the Logs page — the checkout:log
+			// events are visible only on tabs that mount useCheckout.
+			var outMu sync.Mutex
+			var outTail []string
+			const maxTailLines = 200
 			streamPipe := func(r io.Reader, stream string) {
 				sc := bufio.NewScanner(r)
 				sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // ponytail: 1MB cap per line, enough for npm/yarn output
@@ -532,6 +538,12 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 						"line":   sc.Text(),
 						"stream": stream,
 					})
+					outMu.Lock()
+					outTail = append(outTail, "["+stream+"] "+sc.Text())
+					if len(outTail) > maxTailLines {
+						outTail = outTail[len(outTail)-maxTailLines:]
+					}
+					outMu.Unlock()
 				}
 			}
 			var wg sync.WaitGroup
@@ -542,13 +554,20 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 			runErr := cmd.Wait()
 			exitCode := 0
 			errStr := ""
+			output := strings.Join(outTail, "\n")
 			if runErr != nil {
 				exitCode = -1
 				if ee, ok := runErr.(*exec.ExitError); ok {
 					exitCode = ee.ExitCode()
 				}
 				errStr = runErr.Error()
-				a.logger.Sugar().Warnf("on_checkout_command failed: cmd=%q workDir=%q err=%v", onCheckoutCommand, path, runErr)
+				a.logger.Warn("on_checkout_command failed",
+					zap.String("cmd", onCheckoutCommand), zap.String("workDir", path),
+					zap.Int("exitCode", exitCode), zap.String("output", output), zap.Error(runErr))
+			} else {
+				a.logger.Info("on_checkout_command ok",
+					zap.String("cmd", onCheckoutCommand), zap.String("workDir", path),
+					zap.String("output", output))
 			}
 			runtime.EventsEmit(a.ctx, "checkout:done", map[string]interface{}{
 				"exitCode": exitCode,
@@ -1257,6 +1276,7 @@ type RepoChange struct {
 	RepoID   string           `json:"repoId"`
 	RepoName string           `json:"repoName"` // owner/name
 	RepoPath string           `json:"repoPath"`
+	Branch   string           `json:"branch"` // context branch link this path serves ("" = main checkout)
 	Files    []vcs.FileChange `json:"files"`
 }
 
@@ -1375,7 +1395,7 @@ func (a *App) GetContextChanges(contextID string) ([]RepoChange, error) {
 			if info, serr := os.Stat(path); serr != nil || !info.IsDir() {
 				continue
 			}
-			repos = append(repos, RepoChange{RepoID: b.RepoID, RepoName: repo.Owner + "/" + repo.Name, RepoPath: path})
+			repos = append(repos, RepoChange{RepoID: b.RepoID, RepoName: repo.Owner + "/" + repo.Name, RepoPath: path, Branch: b.Branch})
 			break // one (first existing) path per repo
 		}
 	}

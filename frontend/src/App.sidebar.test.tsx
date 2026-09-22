@@ -3,6 +3,7 @@ import { render, fireEvent, waitFor, screen } from "@testing-library/react";
 
 const H = vi.hoisted(() => ({
   GetKeybindings: vi.fn(),
+  AppVersion: vi.fn().mockResolvedValue("dev"),
   ListAllContexts: vi.fn(),
   ListOrganizations: vi.fn(),
 }));

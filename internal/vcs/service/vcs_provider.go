@@ -127,7 +127,17 @@ func (p *VCSProvider) listRepoPRsCached(ctx context.Context, runner vcs.VCSRunne
 
 	prs, err := runner.ListPRsForBranch(ctx, owner, name, "")
 	if err != nil {
-		return nil, false, err
+		// The fetch-all batch (--state all + statusCheckRollup, up to 200 PRs)
+		// is heavy enough that GitHub 504s on busy repos. Treat a failed batch
+		// like a fully truncated one: cache the failure for the TTL and return
+		// truncated=true, so every tracked branch in this repo resolves through
+		// the cheap scoped --head fallback instead of re-hitting the timeout.
+		p.logger.Warn("vcs sync: fetch-all PR batch failed; per-branch fallback will be used",
+			zap.String("repo", key), zap.Error(err))
+		p.prCacheMu.Lock()
+		p.prCache[key] = prCacheEntry{prs: nil, fetchedAt: time.Now(), truncated: true}
+		p.prCacheMu.Unlock()
+		return nil, true, nil
 	}
 	truncated := len(prs) >= vcs.FetchAllPRLimit
 
@@ -194,16 +204,22 @@ func (p *VCSProvider) IsConfigured(ctx context.Context, contextID string) (bool,
 // Refresh re-fetches PRs and comments for all branches already stored for contextID.
 // Stats.ItemsRefreshed = PRs upserted; Stats.NewItems = comments upserted.
 func (p *VCSProvider) Refresh(ctx context.Context, contextID string) (provider.Stats, error) {
-	return p.sync(ctx, contextID)
+	return p.sync(ctx, contextID, nil)
+}
+
+// RefreshWithProgress implements provider.ProgressReporter: report gets the
+// repo/branch currently being synced.
+func (p *VCSProvider) RefreshWithProgress(ctx context.Context, contextID string, report provider.ProgressFunc) (provider.Stats, error) {
+	return p.sync(ctx, contextID, report)
 }
 
 // Reload performs the same operation as Refresh (branches are user-managed, not discovered).
 func (p *VCSProvider) Reload(ctx context.Context, contextID string) (provider.Stats, error) {
-	return p.sync(ctx, contextID)
+	return p.sync(ctx, contextID, nil)
 }
 
 // sync is the shared implementation for Refresh and Reload.
-func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stats, error) {
+func (p *VCSProvider) sync(ctx context.Context, contextID string, report provider.ProgressFunc) (provider.Stats, error) {
 	branches, err := p.store.Branches.ListBranches(ctx, contextID)
 	if err != nil {
 		return provider.Stats{}, fmt.Errorf("vcs sync: list branches: %w", err)
@@ -238,6 +254,9 @@ func (p *VCSProvider) sync(ctx context.Context, contextID string) (provider.Stat
 				// without dragging in its pull requests.
 				if !branch.AutodetectPR {
 					continue
+				}
+				if report != nil {
+					report(branch.Repo.Name + " " + branch.Branch)
 				}
 				platform := vcs.Platform(branch.Repo.Platform)
 				runner, ok := p.runners[platform]
@@ -709,10 +728,20 @@ func reconcileTerminalStates(ctx context.Context, p *VCSProvider, runner vcs.VCS
 		// approval that removed this PR from the review-requested search in the
 		// first place. Authored PRs are skipped: "my review" is meaningless there.
 		if myLogin != "" && rr.Kind != "authored" {
-			if err := p.store.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, rr.PRNumber,
-				myStateFromReviewers(pr.Reviewers, myLogin)); err != nil {
+			myState := myStateFromReviewers(pr.Reviewers, myLogin)
+			if err := p.store.ReviewRequests.UpdateMyReviewState(ctx, repo.ID, rr.PRNumber, myState); err != nil {
 				p.logger.Warn("vcs: update my review state failed",
 					zap.Int("pr", rr.PRNumber), zap.Error(err))
+			}
+			// A decisive own review answers a pending re-request: approving is what
+			// removed the PR from the review-requested list in the first place, so
+			// the frozen "re_review_required" must not outlive it — rewrite it to
+			// the user's decision instead of leaving the card stuck until merge.
+			if rr.ReviewStatus == "re_review_required" && (myState == "approved" || myState == "changes_requested") {
+				if err := p.store.ReviewRequests.SetReviewStatus(ctx, repo.ID, rr.PRNumber, myState); err != nil {
+					p.logger.Warn("vcs: clear answered re-review failed",
+						zap.Int("pr", rr.PRNumber), zap.Error(err))
+				}
 			}
 		}
 	}

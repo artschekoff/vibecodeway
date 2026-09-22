@@ -9,10 +9,23 @@ import (
 	"go.uber.org/zap"
 )
 
+// scriptOutputTailLimit caps how much combined stdout+stderr of a user script
+// is kept for the app log — enough to diagnose a failing hook without letting
+// a chatty script (npm install…) flood the log store.
+const scriptOutputTailLimit = 4 * 1024
+
+// tailString returns at most the last limit bytes of s.
+func tailString(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	return "…" + s[len(s)-limit:]
+}
+
 // runScriptHook runs a user shell command for a hook. The context key is passed
 // both as $1 and via CONTEXT_KEY; CONTEXT_ID and EVENT_CATEGORY are also exported.
-// Synchronous; returns the command error if any.
-func runScriptHook(command, contextKey, contextID, eventCategory string) error {
+// Synchronous; returns the script's combined stdout+stderr and the command error.
+func runScriptHook(command, contextKey, contextID, eventCategory string) (string, error) {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "sh"
@@ -24,7 +37,8 @@ func runScriptHook(command, contextKey, contextID, eventCategory string) error {
 		"CONTEXT_ID="+contextID,
 		"EVENT_CATEGORY="+eventCategory,
 	)
-	return cmd.Run()
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
 
 // hookDetail carries the user-authored half of a notification-rule match into
@@ -48,9 +62,20 @@ func (a *App) runHook(c *appstore.Context, eventCategory, actionType, scriptComm
 			"note":          detail.Note,
 		})
 	case "run_script":
-		if err := runScriptHook(scriptCommand, c.Key, c.ID, eventCategory); err != nil {
+		// Both outcomes land in the app log with the script's output tail, so a
+		// hook that "silently misbehaves" is diagnosable from the Logs page.
+		out, err := runScriptHook(scriptCommand, c.Key, c.ID, eventCategory)
+		if err != nil {
 			a.logger.Warn("hooks: script failed",
-				zap.String("contextID", c.ID), zap.String("category", eventCategory), zap.Error(err))
+				zap.String("contextID", c.ID), zap.String("category", eventCategory),
+				zap.String("command", scriptCommand),
+				zap.String("output", tailString(out, scriptOutputTailLimit)),
+				zap.Error(err))
+		} else {
+			a.logger.Info("hooks: script ok",
+				zap.String("contextID", c.ID), zap.String("category", eventCategory),
+				zap.String("command", scriptCommand),
+				zap.String("output", tailString(out, scriptOutputTailLimit)))
 		}
 	}
 }

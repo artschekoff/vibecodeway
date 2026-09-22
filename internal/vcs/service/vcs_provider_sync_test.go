@@ -47,11 +47,14 @@ func (m *mockRunner) ListAuthoredPRs(_ context.Context, _, _, _ string) ([]vcs.P
 
 func (m *mockRunner) ListPRsForBranch(_ context.Context, _, _, branch string) ([]vcs.PRData, error) {
 	m.branchPRCalls = append(m.branchPRCalls, branch)
-	if m.branchPRsErr != nil {
-		return nil, m.branchPRsErr
-	}
 	if branch != "" {
 		return m.fallbackPRs[branch], nil
+	}
+	// branchPRsErr fails only the fetch-all batch (branch == ""), mirroring the
+	// production failure mode: GitHub 504s on the heavy batch while the cheap
+	// scoped --head query still works.
+	if m.branchPRsErr != nil {
+		return nil, m.branchPRsErr
 	}
 	return m.branchPRs, nil
 }
@@ -479,6 +482,38 @@ func TestSyncBatchesPRFetchAcrossBranchesInSameRepo(t *testing.T) {
 	require.Len(t, prs, 2)
 }
 
+// A failed fetch-all batch (e.g. GitHub 504 on a busy repo) must not lose the
+// branch's PR: the failure is cached as a truncated batch and every tracked
+// branch resolves through the scoped per-branch fallback instead.
+func TestSyncFallsBackPerBranchWhenFetchAllFails(t *testing.T) {
+	runner := &mockRunner{
+		platform:     vcs.PlatformGitHub,
+		branchPRsErr: errors.New("gh pr list: HTTP 504"),
+		fallbackPRs: map[string][]vcs.PRData{
+			"feat/a": {{Number: 451, Title: "PR", Author: "alice", State: "open", HeadBranch: "feat/a", URL: "u", CreatedAt: "2026-01-01T00:00:00Z"}},
+		},
+	}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+	_, err = vs.Branches.AddBranch(ctx, "c1", repo.ID, "feat/a", "", true)
+	require.NoError(t, err)
+
+	stats, err := p.Refresh(ctx, "c1")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"", "feat/a"}, runner.branchPRCalls,
+		"failed fetch-all must be followed by the scoped per-branch query")
+	assert.Equal(t, 1, stats.ItemsRefreshed)
+
+	prs, err := vs.PullRequests.ListPRsForContext(ctx, "c1")
+	require.NoError(t, err)
+	require.Len(t, prs, 1)
+	assert.Equal(t, 451, prs[0].PRNumber)
+}
+
 // A second sync within the cache TTL must not re-fetch a repo already cached.
 func TestSyncReusesCachedPRsWithinTTL(t *testing.T) {
 	runner := &mockRunner{
@@ -831,6 +866,37 @@ func TestReconcileDoesNotRecordStatEventForReviewedPR(t *testing.T) {
 
 	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
 	assert.Equal(t, 0, callCount, "a reviewed (non-authored) merged PR must not be recorded as the user's merge")
+}
+
+// A re-review request answered by the user's own decisive review must not keep
+// showing as "re_review_required": approving removes the PR from the
+// review-requested list, and the reconcile pass has to rewrite the frozen
+// status to the user's decision instead of leaving it stuck until merge.
+func TestReconcileClearsReReviewAfterOwnDecision(t *testing.T) {
+	runner := &mockRunner{platform: vcs.PlatformGitHub}
+	p, vs := newTestProvider(t, runner)
+	ctx := context.Background()
+	repo, err := vs.Repos.EnsureRepo(ctx, "github", "acme", "widgets")
+	require.NoError(t, err)
+
+	// Frozen snapshot from the last sync: still marked re-review-requested.
+	_, err = vs.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 445, "t", "carol",
+		"u", "re_review_required", "b", "2026-08-01T00:00:00Z", "[]", "MERGEABLE", "requested", "", "")
+	require.NoError(t, err)
+
+	// Live PR: open, no longer in any review list, and "me" has approved.
+	runner.prByNumber = map[int]*vcs.PRData{445: {
+		Number: 445, State: "open", Mergeable: "MERGEABLE",
+		Reviewers: []vcs.ReviewerDecision{{Login: "me", State: "approved"}},
+	}}
+
+	require.NoError(t, p.SyncReviewRequests(ctx, vcs.PlatformGitHub))
+
+	list, err := vs.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "approved", list[0].ReviewStatus, "answered re-review must not stay re_review_required")
+	assert.Equal(t, "approved", list[0].MyReviewState)
 }
 
 func TestMyStateFromReviewers(t *testing.T) {

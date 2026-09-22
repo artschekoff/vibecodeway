@@ -58,6 +58,32 @@ func (a *App) contextWorktrees(contextID string) ([]EditorWorktree, error) {
 	return wts, nil
 }
 
+// missingWorktreeBranches returns "owner/name (branch)" for every named branch
+// link of contextID that has no ready worktree in wts — i.e. the repos
+// contextWorktrees had to skip. Used to refuse agent runs on a partial set.
+func (a *App) missingWorktreeBranches(contextID string, wts []EditorWorktree) []string {
+	branches, err := a.ListVCSBranches(contextID)
+	if err != nil {
+		return nil // contextWorktrees already failed loudly on this
+	}
+	ready := map[string]bool{}
+	for _, w := range wts {
+		ready[w.RepoID+"\x00"+w.Branch] = true
+	}
+	var missing []string
+	for _, b := range branches {
+		if b.Branch == "" || ready[b.RepoID+"\x00"+b.Branch] {
+			continue
+		}
+		name := b.RepoID
+		if b.Repo != nil {
+			name = b.Repo.FullName()
+		}
+		missing = append(missing, name+" ("+b.Branch+")")
+	}
+	return missing
+}
+
 // EnsureContextEditorWorkspace prepares to open the in-app editor for a context.
 // It auto-creates/finds worktrees for the context's named branches; if at least
 // one is ready the editor can open straight into it. Otherwise it returns the

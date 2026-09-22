@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Copy, Check } from "lucide-react";
-import { GetContextChanges, RefreshContext, RefreshContextPRs, StartCodeTour, GetCodeTour } from "../../wailsjs/go/main/App";
+import { GetContextChanges, RefreshContext, RefreshContextPRs, StartCodeTour, GetCodeTour, SymbolsIndex } from "../../wailsjs/go/main/App";
 import type { CodeTour } from "../types";
 import { TerminalPanel } from "../components/editor/TerminalPanel";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
 import { FileTreePanel } from "../components/editor/FileTreePanel";
 import { DiffEditorTab } from "../components/editor/DiffEditorTab";
 import { TourCard } from "../components/editor/TourCard";
+import { SymbolPalette } from "../components/editor/SymbolPalette";
 import { ResizeHandle } from "../components/editor/ResizeHandle";
 import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { NotesPanel } from "../components/editor/NotesPanel";
 import { nextPaneSize, readStoredPaneSize, fitPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
+import { registerMonacoSymbols } from "../lib/monacoSymbols";
 import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
 import { EditorFocusProvider, useEditorFocus } from "../contexts/EditorFocusContext";
 import { useHotkey } from "../hotkeys/HotkeyProvider";
@@ -52,7 +54,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   // would break indent and terminal completion.
   const sidebarRef = useRef<HTMLElement | null>(null);
   useRovingTab(sidebarRef, { order: "ttb-rtl" });
-  const [repoPaths, setRepoPaths] = useState<{ id: string; name: string; path: string }[]>([]);
+  const [repoPaths, setRepoPaths] = useState<{ id: string; name: string; path: string; branch?: string }[]>([]);
   const [cwd, setCwd] = useState<string>("");
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [sidebarTab, setSidebarTab] = useState<"files" | "git">("git");
@@ -69,6 +71,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStarting, setTourStarting] = useState(false);
   const [tourError, setTourError] = useState("");
+  const [symbolsOpen, setSymbolsOpen] = useState(false);
   // Which (repoPath, path, anchor) the diff editor should highlight once that
   // file's DiffEditorTab is mounted — set by TourCard as the user steps through.
   const [tourAnchorTarget, setTourAnchorTarget] = useState<{ repoPath: string; path: string; anchor: string } | null>(null);
@@ -88,7 +91,14 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   // hard drag) used to exceed the column entirely.
   const columnRef = useRef<HTMLDivElement>(null);
   const [columnHeight, setColumnHeight] = useState(0);
+  const tabVisible = useTabVisible();
+  // Re-measured whenever the tab becomes visible: a hidden tab (display:none)
+  // measures 0 and any layout change that happens while hidden leaves a stale
+  // height behind — the panes then render off the old number until something
+  // (e.g. a window resize) pokes the observers. tabVisible in the deps forces
+  // a fresh measure on every show.
   useEffect(() => {
+    if (!tabVisible) return;
     const el = columnRef.current;
     if (!el) return;
     const measure = () => setColumnHeight(el.clientHeight);
@@ -96,7 +106,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [tabVisible]);
   // Persist what the user chose, render what fits: their size comes back
   // untouched when the window grows again.
   const visibleTerminalHeight = fitPaneSize(terminalHeight, columnHeight, EDITOR_MIN, TERMINAL_MIN);
@@ -105,7 +115,6 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   // "editor" so it's active only while the editor/sidebar zone is focused.
   // Gated on tab visibility: hidden editor tabs keep registering too, and the
   // dispatcher would otherwise pick the first-mounted (possibly hidden) one.
-  const tabVisible = useTabVisible();
   useHotkey("sidebar.files", () => setSidebarTab("files"), { scope: "editor", enabled: tabVisible });
   useHotkey("sidebar.git", () => setSidebarTab("git"), { scope: "editor", enabled: tabVisible });
 
@@ -115,7 +124,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
       if (!active) return;
       const paths = (repos ?? [])
         .filter((r) => r.repoPath)
-        .map((r) => ({ id: r.repoId, name: r.repoName, path: r.repoPath }));
+        .map((r) => ({ id: r.repoId, name: r.repoName, path: r.repoPath, branch: r.branch }));
       setRepoPaths(paths);
       const counts: Record<string, number> = {};
       (repos ?? []).forEach((r) => { counts[r.repoPath] = (counts[r.repoPath] ?? 0) + (r.files?.length ?? 0); });
@@ -139,8 +148,13 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     return () => { active = false; };
   }, [contextId, cwd]);
 
-  const openFile = (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head" = "head") => {
-    const tab: OpenTab = { repoPath, repoName, path, status, baseMode };
+  // Warm the symbol index as soon as the workspace knows its repo, so the
+  // first go-to-definition doesn't pay the ctags build. Fire-and-forget:
+  // ctags-not-found here is silent (the palette shows the install hint).
+  useEffect(() => { if (cwd) void SymbolsIndex(cwd).catch(() => {}); }, [cwd]);
+
+  const openFile = (repoPath: string, repoName: string, path: string, status: string, baseMode: "branch" | "head" = "head", revealLine?: number) => {
+    const tab: OpenTab = { repoPath, repoName, path, status, baseMode, revealLine };
     openEditorFile(contextId, tab);
   };
 
@@ -195,9 +209,44 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     }
   };
 
+  // ⌘⇧R — refresh this context; ⌘⇧U — start (or resume) the tour. Gated on
+  // tab visibility like every per-tab handler (hidden tabs stay mounted).
+  useHotkey("context.refresh", () => void handleRefresh(), { scope: "global", enabled: tabVisible });
+  useHotkey("tour.start", () => {
+    if (tour && !tourOpen) setTourOpen(true);
+    else void handleStartTour();
+  }, { scope: "editor", enabled: tabVisible });
+  useHotkey("symbols.search", () => setSymbolsOpen(true), { scope: "editor", enabled: tabVisible });
+
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
   const activeRepo = useMemo(() => repoPaths.find((r) => r.path === cwd), [repoPaths, cwd]);
   const activeRepoId = activeRepo?.id;
+
+  // registerMonacoSymbols registers monaco's providers/opener once (module-level
+  // guard) but reactivates its "active deps" on every call — these refs let
+  // that call always read the currently active tab's repo/context.
+  const cwdRef = useRef(cwd);
+  cwdRef.current = cwd;
+  const contextIdRef = useRef(contextId);
+  contextIdRef.current = contextId;
+  const repoNameRef = useRef(activeRepo?.name ?? "");
+  repoNameRef.current = activeRepo?.name ?? "";
+  const repoPathsRef = useRef<string[]>([]);
+  repoPathsRef.current = repoPaths.map((r) => r.path);
+  // Hidden editor tabs stay mounted (see tabVisible comments above), so
+  // re-run this whenever the tab becomes visible: the visible workspace must
+  // always be the one that owns Monaco's shared symbol-nav deps, otherwise
+  // F12/references in the active tab could read a hidden tab's cwd/contextId.
+  useEffect(() => {
+    if (!tabVisible) return;
+    registerMonacoSymbols({
+      getRepoPath: () => cwdRef.current,
+      getRepoPaths: () => repoPathsRef.current,
+      getContextId: () => contextIdRef.current,
+      getRepoName: () => repoNameRef.current,
+      openFile: openEditorFile,
+    });
+  }, [tabVisible, cwd, contextId, activeRepo?.name, repoPaths, openEditorFile]);
   const hasChangesForTour = (repoFileCounts[cwd] ?? 0) > 0;
   const highlightAnchor =
     active && tourAnchorTarget && active.repoPath === tourAnchorTarget.repoPath && active.path === tourAnchorTarget.path
@@ -212,7 +261,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
           style={{ position: "relative", flex: 1, minHeight: 0, borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--border)", margin: "6px 0 0 6px" }}>
           {active ? (
             <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} baseMode={active.baseMode} refreshSignal={refreshSignal}
-              highlightAnchor={highlightAnchor}
+              highlightAnchor={highlightAnchor} revealLine={active.revealLine} revealNonce={active.revealNonce}
               onSaved={() => { /* panel auto-polls */ }}
               onAskAi={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))} />
           ) : (
@@ -238,6 +287,8 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               onAskAuthorAgent={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))}
             />
           )}
+          <SymbolPalette repoPath={cwd} open={symbolsOpen} onClose={() => setSymbolsOpen(false)}
+            onPick={(path, line) => openFile(cwd, activeRepo?.name ?? "", path, "", "branch", line)} />
         </div>
         <ResizeHandle
           orientation="horizontal"
@@ -313,7 +364,9 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         {/* Repo selector sits above the Files/Git tabs — it scopes both. */}
         {repoPaths.length > 1 && (
           <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
-            {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
+            {/* Same repo can be linked via several branches (each its own
+                worktree) — the branch is what tells the entries apart. */}
+            {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}{r.branch ? ` · ${r.branch}` : ""}</option>)}
           </select>
         )}
         {/* Files (full repo tree) vs Git (changes + PRs), like VSCode's activity bar. */}
@@ -385,7 +438,8 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
             {prRefreshError && (
               <div style={{ fontSize: 11, color: "var(--danger, #e5534b)", padding: "4px 12px" }}>{prRefreshError}</div>
             )}
-            <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined} refreshSignal={refreshSignal} />
+            <EditorPRInfo contextId={contextId} activeRepoId={repoPaths.length > 1 ? activeRepoId : undefined}
+              activeBranch={repoPaths.length > 1 ? activeRepo?.branch : undefined} refreshSignal={refreshSignal} />
             <ChangedFilesPanel contextId={contextId} onOpenFile={openFile}
               onOpenTerminal={(repoPath) => setPendingTerminalOpen((prev) => ({ cwd: repoPath, id: (prev?.id ?? 0) + 1 }))}
               onRefresh={() => void handleRefresh()} refreshing={refreshing}

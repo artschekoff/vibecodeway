@@ -66,6 +66,9 @@ func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error)
 		// See searchFields: Created and Org stay "" for search results because
 		// acli's search allowlist can't return them.
 		"--fields", searchFields,
+		// Without --paginate acli silently caps at ~30 results; with an ORDER BY
+		// that put low-priority items last, whole statuses (To Do) never arrived.
+		"--paginate",
 		"--json",
 	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "search"}, nil, flags)

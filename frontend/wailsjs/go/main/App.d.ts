@@ -11,6 +11,7 @@ import {productivity} from '../models';
 import {vcs} from '../models';
 import {jira} from '../models';
 import {jirastore} from '../models';
+import {symbols} from '../models';
 
 export function AIMatchBranches(arg1:string):Promise<Array<main.MatchedBranch>>;
 
@@ -39,6 +40,8 @@ export function AdjustTodoNext(arg1:string):Promise<Array<store.AITodoItem>>;
 export function AgentResumeCommand(arg1:string,arg2:number):Promise<string>;
 
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
+
+export function AppVersion():Promise<string>;
 
 export function ApplyContextUpdateActions(arg1:string,arg2:Array<store.ContextUpdateAction>):Promise<Array<main.ApplyActionResult>>;
 
@@ -475,6 +478,14 @@ export function StartCodeTour(arg1:string,arg2:string):Promise<store.CodeTour>;
 export function SummarizeAskChat(arg1:string):Promise<string>;
 
 export function SwitchMainWorkingTree(arg1:string,arg2:string):Promise<void>;
+
+export function SymbolLookup(arg1:string,arg2:string):Promise<Array<symbols.Symbol>>;
+
+export function SymbolReferences(arg1:string,arg2:string,arg3:number):Promise<Array<symbols.Reference>>;
+
+export function SymbolSearch(arg1:string,arg2:string,arg3:number):Promise<Array<symbols.Symbol>>;
+
+export function SymbolsIndex(arg1:string):Promise<main.SymbolsIndexResult>;
 
 export function SyncAllComments(arg1:string):Promise<number>;
 

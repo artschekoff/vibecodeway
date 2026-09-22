@@ -13,6 +13,10 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// appVersion is stamped at build time via
+// `-ldflags "-X main.appVersion=<git describe>"` (see Makefile build-desktop).
+var appVersion = "dev"
+
 func main() {
 	app := NewApp()
 

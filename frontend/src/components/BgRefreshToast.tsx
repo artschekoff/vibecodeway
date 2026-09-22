@@ -8,6 +8,7 @@ interface ProgressPayload {
   current: number;
   total: number;
   contextKey: string;
+  step?: string; // provider being fetched right now: "jira" | "slack" | "vcs"
 }
 
 interface DonePayload {
@@ -17,7 +18,7 @@ interface DonePayload {
 
 type ToastState =
   | { phase: "idle" }
-  | { phase: "running"; current: number; total: number; contextKey: string }
+  | { phase: "running"; current: number; total: number; contextKey: string; step: string }
   | { phase: "done"; total: number; errors: number };
 
 export function BgRefreshToast() {
@@ -28,7 +29,7 @@ export function BgRefreshToast() {
     if (!isWailsContext()) return;
     const offStart = EventsOn("bg-refresh:contexts:start", () => {
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
-      setState({ phase: "running", current: 0, total: 0, contextKey: "" });
+      setState({ phase: "running", current: 0, total: 0, contextKey: "", step: "" });
     });
 
     const offProgress = EventsOn("bg-refresh:contexts:progress", (payload: ProgressPayload) => {
@@ -37,6 +38,7 @@ export function BgRefreshToast() {
         current: payload.current,
         total: payload.total,
         contextKey: payload.contextKey,
+        step: payload.step ?? "",
       });
     });
 
@@ -64,7 +66,7 @@ export function BgRefreshToast() {
             ? `Updating contexts… ${state.current}/${state.total}`
             : "Updating contexts…"}
           {state.contextKey && (
-            <span className="bg-refresh-toast__key"> {state.contextKey}</span>
+            <span className="bg-refresh-toast__key"> {state.contextKey}{state.step ? ` · ${state.step}` : ""}</span>
           )}
         </div>
         <div className="bg-refresh-toast__bar">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { main } from "../../wailsjs/go/models";
 
 interface Props {
@@ -10,6 +10,31 @@ interface Props {
 /** Choose which of a context's ready worktrees to open the editor into. */
 export function WorkspacePicker({ worktrees, onPick, onCancel }: Props) {
   const [selected, setSelected] = useState(worktrees[0]?.worktreePath ?? "");
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard-driven: ↑/↓ move the selection, Enter opens it, Esc cancels.
+  // Capture-phase window listener so the keys work regardless of what holds
+  // DOM focus behind the modal, and never leak into the page underneath.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const idx = worktrees.findIndex((w) => w.worktreePath === selected);
+      if (e.key === "ArrowDown") {
+        e.preventDefault(); e.stopPropagation();
+        setSelected(worktrees[Math.min(idx + 1, worktrees.length - 1)]?.worktreePath ?? selected);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault(); e.stopPropagation();
+        setSelected(worktrees[Math.max(idx - 1, 0)]?.worktreePath ?? selected);
+      } else if (e.key === "Enter") {
+        e.preventDefault(); e.stopPropagation();
+        if (selected) onPick(selected);
+      } else if (e.key === "Escape") {
+        e.preventDefault(); e.stopPropagation();
+        onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [worktrees, selected, onPick, onCancel]);
 
   return (
     <div
@@ -20,6 +45,7 @@ export function WorkspacePicker({ worktrees, onPick, onCancel }: Props) {
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
     >
       <div
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 20, maxWidth: 520, width: "90%" }}
       >
@@ -29,6 +55,8 @@ export function WorkspacePicker({ worktrees, onPick, onCancel }: Props) {
             <button
               key={w.worktreePath}
               onClick={() => setSelected(w.worktreePath)}
+              onDoubleClick={() => onPick(w.worktreePath)}
+              aria-selected={selected === w.worktreePath}
               style={{
                 textAlign: "left", padding: "8px 10px", borderRadius: 6, cursor: "pointer",
                 border: `1px solid ${selected === w.worktreePath ? "var(--accent, #6366f1)" : "var(--border)"}`,

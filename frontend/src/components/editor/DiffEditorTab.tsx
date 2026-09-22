@@ -56,8 +56,8 @@ function ensureAnchorStyle() {
 }
 
 export function DiffEditorTab({
-  repoPath, path, onSaved, refreshSignal, onAskAi, baseMode = "branch", highlightAnchor,
-}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void; baseMode?: "branch" | "head"; highlightAnchor?: string }) {
+  repoPath, path, onSaved, refreshSignal, onAskAi, baseMode = "branch", highlightAnchor, revealLine, revealNonce,
+}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void; baseMode?: "branch" | "head"; highlightAnchor?: string; revealLine?: number; revealNonce?: number }) {
   const [original, setOriginal] = useState<string | null>(null);
   const [modified, setModified] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -276,6 +276,15 @@ export function DiffEditorTab({
     me.revealLineInCenter?.(line);
   }, [highlightAnchor, modified, mountTick]);
 
+  // Cross-file jump target (Monaco go-to-definition / references opener):
+  // reveal the requested line once the editor is mounted. Keyed on revealNonce
+  // (not revealLine) so a repeat jump to the same file+line — after the user
+  // scrolled away — still re-fires the reveal instead of being a no-op.
+  useEffect(() => {
+    if (!revealLine) return;
+    editorRef.current?.getModifiedEditor().revealLineInCenter?.(revealLine);
+  }, [revealNonce, mountTick]);
+
   useEffect(() => {
     let active = true;
     // "head" (Staged/Local/file-tree) diffs against HEAD so only uncommitted
@@ -402,6 +411,8 @@ export function DiffEditorTab({
             language={languageFor(path)}
             theme={theme}
             options={options}
+            modifiedModelPath={`file://${repoPath}/${path}`}
+            originalModelPath={`file://${repoPath}/${path}.orig`}
             onMount={(editor, monaco) => {
               editorRef.current = editor as unknown as DiffEditorInstance;
               monacoRef.current = monaco as unknown as MonacoNs;

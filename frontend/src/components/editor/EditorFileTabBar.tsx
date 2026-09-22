@@ -22,7 +22,10 @@ export function EditorFileTabBar({ contextId }: { contextId: string }) {
   const [menu, setMenu] = useState<{ x: number; y: number; key: string; pinned: boolean } | null>(null);
   if (tabs.length === 0) return null;
   return (
-    <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
+    // userSelect none: the two-span middle-truncated label is plain text, so a
+    // double-click used to select the tail span and paint it like a broken
+    // highlight. Tabs are controls, not copyable text.
+    <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--border)", overflowX: "auto", userSelect: "none" }}>
       {tabs.map((t) => {
         const key = tabKey(t);
         return (

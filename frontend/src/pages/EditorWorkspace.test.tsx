@@ -48,7 +48,7 @@ vi.mock("../components/editor/TourCard", () => ({
   ),
 }));
 
-const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour } = vi.hoisted(() => ({
+const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour, SymbolsIndex } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   RefreshContext: vi.fn(),
   RefreshContextPRs: vi.fn(),
@@ -62,8 +62,9 @@ const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings,
   DeleteUserEvent: vi.fn(),
   StartCodeTour: vi.fn(),
   GetCodeTour: vi.fn(),
+  SymbolsIndex: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour, SymbolsIndex }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";

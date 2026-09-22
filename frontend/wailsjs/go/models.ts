@@ -609,6 +609,7 @@ export namespace main {
 	    repoId: string;
 	    repoName: string;
 	    repoPath: string;
+	    branch: string;
 	    files: vcs.FileChange[];
 	
 	    static createFrom(source: any = {}) {
@@ -620,6 +621,7 @@ export namespace main {
 	        this.repoId = source["repoId"];
 	        this.repoName = source["repoName"];
 	        this.repoPath = source["repoPath"];
+	        this.branch = source["branch"];
 	        this.files = this.convertValues(source["files"], vcs.FileChange);
 	    }
 	
@@ -655,6 +657,20 @@ export namespace main {
 	        this.contextId = source["contextId"];
 	        this.contextKey = source["contextKey"];
 	        this.instruction = source["instruction"];
+	    }
+	}
+	export class SymbolsIndexResult {
+	    count: number;
+	    tookMs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SymbolsIndexResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.count = source["count"];
+	        this.tookMs = source["tookMs"];
 	    }
 	}
 	export class UploadBatchResult {
@@ -2601,6 +2617,47 @@ export namespace store {
 	        this.color = source["color"];
 	        this.isSystem = source["isSystem"];
 	        this.createdAt = source["createdAt"];
+	    }
+	}
+
+}
+
+export namespace symbols {
+	
+	export class Reference {
+	    path: string;
+	    line: number;
+	    preview: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Reference(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.line = source["line"];
+	        this.preview = source["preview"];
+	    }
+	}
+	export class Symbol {
+	    name: string;
+	    kind: string;
+	    path: string;
+	    language: string;
+	    line: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Symbol(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.path = source["path"];
+	        this.language = source["language"];
+	        this.line = source["line"];
 	    }
 	}
 

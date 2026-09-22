@@ -57,15 +57,21 @@ func (p *SlackProvider) IsConfigured(ctx context.Context, contextID string) (boo
 // Refresh reloads all Slack threads stored for contextID.
 // Stats.ItemsRefreshed = threads reloaded.
 func (p *SlackProvider) Refresh(ctx context.Context, contextID string) (provider.Stats, error) {
-	return p.reload(ctx, contextID)
+	return p.reload(ctx, contextID, nil)
+}
+
+// RefreshWithProgress implements provider.ProgressReporter: report gets the
+// workspace/channel currently being fetched.
+func (p *SlackProvider) RefreshWithProgress(ctx context.Context, contextID string, report provider.ProgressFunc) (provider.Stats, error) {
+	return p.reload(ctx, contextID, report)
 }
 
 // Reload is equivalent to Refresh for Slack (no JQL-style discovery; channels are configured manually).
 func (p *SlackProvider) Reload(ctx context.Context, contextID string) (provider.Stats, error) {
-	return p.reload(ctx, contextID)
+	return p.reload(ctx, contextID, nil)
 }
 
-func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.Stats, error) {
+func (p *SlackProvider) reload(ctx context.Context, contextID string, report provider.ProgressFunc) (provider.Stats, error) {
 	stats := provider.Stats{}
 
 	// ── Refresh DM configs ───────────────────────────────────────────────────
@@ -86,6 +92,9 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 			go func() {
 				defer dmWg.Done()
 				for cfg := range dmJobs {
+					if report != nil {
+						report("DMs " + cfg.Workspace)
+					}
 					flags := []string{cfg.Workspace, "--with-messages"}
 					if cfg.StartFrom != "" {
 						flags = append(flags, "--start-from", cfg.StartFrom)
@@ -167,6 +176,13 @@ func (p *SlackProvider) reload(ctx context.Context, contextID string) (provider.
 			go func() {
 				defer tWg.Done()
 				for t := range tJobs {
+					if report != nil {
+						if t.ChannelName != "" {
+							report("#" + t.ChannelName)
+						} else {
+							report("thread " + t.ThreadTS)
+						}
+					}
 					chStartFrom := channelByID[t.ChannelID].StartFrom
 					flags := []string{t.Workspace, t.ChannelID, t.ThreadTS}
 					if t.ChannelName != "" {
