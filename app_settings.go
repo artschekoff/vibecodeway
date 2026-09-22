@@ -242,11 +242,12 @@ func (a *App) backgroundRefreshLoop(ctx context.Context, settings appstore.AppSe
 		case <-ctxC:
 			a.logger.Info("background refresh: refreshing all contexts")
 			runtime.EventsEmit(a.ctx, "bg-refresh:contexts:start", nil)
-			results, err := a.svc.RefreshAllContexts(ctx, func(idx, total int, contextKey, _ string) {
+			results, err := a.svc.RefreshAllContexts(ctx, func(idx, total int, contextKey, step string) {
 				runtime.EventsEmit(a.ctx, "bg-refresh:contexts:progress", map[string]interface{}{
 					"current":    idx,
 					"total":      total,
 					"contextKey": contextKey,
+					"step":       step,
 				})
 			})
 			if err != nil {
