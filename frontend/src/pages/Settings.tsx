@@ -1,6 +1,6 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, SetProductivitySettings, SetStatsAuthorName, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, SetAskChatRetentionDays, SetProductivitySettings, SetStatsAuthorName, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
 import type { store } from "../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
@@ -58,9 +58,22 @@ const CLAUDE_MODELS = [
   { id: "claude-opus-4-1-20250805",  label: "Claude Opus 4.1" },
 ] as const;
 
+// Left-rail tabs: one per settings area, so the page never shows everything at once.
+const SETTINGS_TABS = [
+  { id: "hotkeys", label: "Hotkeys" },
+  { id: "accounts", label: "Accounts" },
+  { id: "editor", label: "Editor" },
+  { id: "sync", label: "Background Sync" },
+  { id: "hooks", label: "Hooks" },
+  { id: "terminal", label: "Terminal" },
+  { id: "ai", label: "AI Provider" },
+  { id: "workflow", label: "Workflow" },
+] as const;
+type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
+
 export default function SettingsPage() {
   const { activeTabId, closeTab, navigateBack } = useTabContext();
-  const hotkeysRef = useRef<HTMLElement>(null);
+  const [tab, setTab] = useState<SettingsTabId>("hotkeys");
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [provider, setProvider] = useState<"openai" | "anthropic" | "local">("openai");
   const [apiKey, setApiKey] = useState("");
@@ -88,6 +101,7 @@ export default function SettingsPage() {
   const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
   const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
   const [prStaleThreshold, setPrStaleThreshold] = useState(7);
+  const [askChatRetention, setAskChatRetention] = useState(30);
   const [workdayHours, setWorkdayHours] = useState(8);
   const [taskHours, setTaskHours] = useState(2);
   const [statsAuthorName, setStatsAuthorName] = useState("");
@@ -143,6 +157,7 @@ export default function SettingsPage() {
           setReviewsRefetchEnabled(typedAppS.reviewsRefetchEnabled);
           setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
           setPrStaleThreshold(typedAppS.prStaleThresholdDays ?? 7);
+          setAskChatRetention(typedAppS.askChatRetentionDays ?? 30);
           setWorkdayHours(typedAppS.workdayHours ?? 8);
           setTaskHours(typedAppS.taskHours ?? 2);
           setStatsAuthorName(typedAppS.statsAuthorName ?? "");
@@ -217,6 +232,7 @@ export default function SettingsPage() {
       );
       await SetAutoLinkRepos(autoLinkRepos);
       await SetPRStaleThresholdDays(Math.max(1, prStaleThreshold));
+      await SetAskChatRetentionDays(Math.max(0, askChatRetention));
       // Clamping (including the upper bound) is enforced server-side in
       // SetProductivitySettings — the single authority for this policy.
       await SetProductivitySettings(workdayHours, taskHours);
@@ -227,6 +243,7 @@ export default function SettingsPage() {
       setCodingAgentApp(updated.codingAgentApp ?? "cursor");
       setAutoLinkRepos(updated.autoLinkReposOnContextCreate ?? true);
       setPrStaleThreshold(updated.prStaleThresholdDays ?? 7);
+      setAskChatRetention(updated.askChatRetentionDays ?? 30);
       setWorkdayHours(updated.workdayHours ?? 8);
       setTaskHours(updated.taskHours ?? 2);
       setStatsAuthorName(updated.statsAuthorName ?? "");
@@ -295,11 +312,29 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="content" style={{ maxWidth: 620 }}>
+      <div className="content" style={{ maxWidth: 820 }}>
         {error && <div className="error-banner">{error}</div>}
         {message && <div className="toast toast--success">{message}</div>}
 
-        <section className="detail-section" id="hotkeys" ref={hotkeysRef}>
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <nav aria-label="Settings sections" style={{ position: "sticky", top: 12, display: "flex", flexDirection: "column", gap: 2, width: 150, flexShrink: 0 }}>
+          {SETTINGS_TABS.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)} aria-pressed={tab === t.id}
+              style={{
+                textAlign: "left", padding: "7px 10px", fontSize: 13, borderRadius: 6, cursor: "pointer",
+                border: "none", font: "inherit",
+                background: tab === t.id ? "var(--surface2, rgba(127,127,127,0.15))" : "transparent",
+                color: tab === t.id ? "var(--text)" : "var(--text-muted)",
+                fontWeight: tab === t.id ? 600 : 400,
+              }}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        <div style={{ flex: 1, minWidth: 0, maxWidth: 620 }}>
+
+        {tab === "hotkeys" && (
+        <section className="detail-section" id="hotkeys">
           <div className="detail-section-header">
             <span className="detail-section-title">Keyboard Shortcuts</span>
           </div>
@@ -348,8 +383,9 @@ export default function SettingsPage() {
             </tbody>
           </table>
         </section>
+        )}
 
-        {platforms.length > 0 && (
+        {tab === "accounts" && platforms.length > 0 && (
           <section className="detail-section">
             <div className="detail-section-header">
               <span className="detail-section-title">Connected Accounts</span>
@@ -414,7 +450,11 @@ export default function SettingsPage() {
             </div>
           </section>
         )}
+        {tab === "accounts" && platforms.length === 0 && (
+          <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 12 }}>No VCS platforms available.</div>
+        )}
 
+        {tab === "editor" && (
         <section className="detail-section">
           <div className="detail-section-header">
             <span className="detail-section-title">Text Editing</span>
@@ -433,7 +473,9 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+        )}
 
+        {tab === "sync" && (
         <section className="detail-section">
           <div className="detail-section-header">
             <span className="detail-section-title">Background Refresh</span>
@@ -528,6 +570,27 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Ask AI chat retention */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <label style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  Keep Ask AI chats (days)
+                </label>
+                <input
+                  type="number"
+                  className="passphrase-input"
+                  min={0}
+                  max={3650}
+                  value={askChatRetention}
+                  onChange={(e) => setAskChatRetention(Math.max(0, Number(e.target.value)))}
+                  style={{ width: 80 }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                Saved Ask AI conversations (with tool calls) are deleted after this many days of inactivity. 0 keeps them forever.
+              </div>
+            </div>
+
             {/* Theoretical productivity model (Closed Tasks dashboard) */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -596,9 +659,11 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+        )}
 
-        <GlobalEventHooks />
+        {tab === "hooks" && <GlobalEventHooks />}
 
+        {tab === "terminal" && (<>
         <section className="detail-section">
           <div className="detail-section-header">
             <span className="detail-section-title">Terminal</span>
@@ -655,7 +720,7 @@ export default function SettingsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 14px" }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              Selectable above the terminal. Use <code>&lt;context-name&gt;</code> to insert the current context name. Inserting types the command; enable <strong>Send enter</strong> to also run it.
+              Selectable above the terminal. Placeholders: <code>&lt;context-name&gt;</code> — the current context name; <code>&lt;context-hydration&gt;</code> — the “Agent Context Hydration” prompt (editable in AI Prompts), shell-quoted as one argument, e.g. <code>codex &lt;context-hydration&gt;</code>. Inserting types the command; enable <strong>Send enter</strong> to also run it.
             </div>
             {commands.map((c) => (
               <div key={c.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -676,7 +741,9 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+        </>)}
 
+        {tab === "ai" && (
         <section className="detail-section">
           <div className="detail-section-header">
             <span className="detail-section-title">AI Provider</span>
@@ -843,11 +910,16 @@ export default function SettingsPage() {
 
           </div>
         </section>
+        )}
 
+        {tab === "workflow" && (
         <section className="settings-card">
           <WorkflowStatusManager />
         </section>
+        )}
 
+        </div>
+        </div>
       </div>
     </div>
   );

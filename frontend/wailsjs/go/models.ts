@@ -611,6 +611,8 @@ export namespace main {
 	    repoPath: string;
 	    branch: string;
 	    files: vcs.FileChange[];
+	    didHitLimit: boolean;
+	    statusLimit: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new RepoChange(source);
@@ -623,6 +625,8 @@ export namespace main {
 	        this.repoPath = source["repoPath"];
 	        this.branch = source["branch"];
 	        this.files = this.convertValues(source["files"], vcs.FileChange);
+	        this.didHitLimit = source["didHitLimit"];
+	        this.statusLimit = source["statusLimit"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -788,6 +792,65 @@ export namespace productivity {
 	        this.tasksToBeatYesterday = source["tasksToBeatYesterday"];
 	        this.tasksToBeatWeek = source["tasksToBeatWeek"];
 	        this.tasksToBeatMonth = source["tasksToBeatMonth"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace pty {
+	
+	export class SessionStat {
+	    sessionId: string;
+	    pid: number;
+	    cpu: number;
+	    rssBytes: number;
+	    procs: number;
+	    topComm: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionStat(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.pid = source["pid"];
+	        this.cpu = source["cpu"];
+	        this.rssBytes = source["rssBytes"];
+	        this.procs = source["procs"];
+	        this.topComm = source["topComm"];
+	    }
+	}
+	export class ProcessStats {
+	    app: SessionStat;
+	    sessions: SessionStat[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProcessStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.app = this.convertValues(source["app"], SessionStat);
+	        this.sessions = this.convertValues(source["sessions"], SessionStat);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1349,6 +1412,7 @@ export namespace store {
 	    workdayHours: number;
 	    taskHours: number;
 	    statsAuthorName: string;
+	    askChatRetentionDays: number;
 	    updatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1369,6 +1433,7 @@ export namespace store {
 	        this.workdayHours = source["workdayHours"];
 	        this.taskHours = source["taskHours"];
 	        this.statsAuthorName = source["statsAuthorName"];
+	        this.askChatRetentionDays = source["askChatRetentionDays"];
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
@@ -1394,6 +1459,26 @@ export namespace store {
 	        this.title = source["title"];
 	        this.created_at = source["created_at"];
 	        this.author = source["author"];
+	    }
+	}
+	export class AskChat {
+	    id: string;
+	    title: string;
+	    logJson?: string;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AskChat(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.logJson = source["logJson"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
 	    }
 	}
 	export class AuthorAssignment {
@@ -1474,6 +1559,7 @@ export namespace store {
 	    seen: boolean;
 	    fetchedAt: string;
 	    org: string;
+	    notMine: boolean;
 	    contextId?: string;
 	    contextKey?: string;
 	
@@ -1492,6 +1578,7 @@ export namespace store {
 	        this.seen = source["seen"];
 	        this.fetchedAt = source["fetchedAt"];
 	        this.org = source["org"];
+	        this.notMine = source["notMine"];
 	        this.contextId = source["contextId"];
 	        this.contextKey = source["contextKey"];
 	    }
@@ -2970,6 +3057,7 @@ export namespace vcsstore {
 	    ciStatus: string;
 	    myReviewState: string;
 	    mergeStateStatus: string;
+	    unresolvedCount: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ReviewRequest(source);
@@ -2996,6 +3084,7 @@ export namespace vcsstore {
 	        this.ciStatus = source["ciStatus"];
 	        this.myReviewState = source["myReviewState"];
 	        this.mergeStateStatus = source["mergeStateStatus"];
+	        this.unresolvedCount = source["unresolvedCount"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

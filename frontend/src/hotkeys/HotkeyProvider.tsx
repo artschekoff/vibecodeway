@@ -369,7 +369,9 @@ export function useHotkey(
   handler: () => void,
   opts?: { scope?: Scope; enabled?: boolean }
 ): void {
-  const { registry } = useHotkeyContext();
+  // Degrade to a no-op outside a provider (same as useChordHint) so pages can
+  // register hotkeys without every test tree mounting HotkeyProvider.
+  const registry = useContext(HotkeyContext)?.registry;
   const scope = opts?.scope ?? "global";
   const enabled = opts?.enabled ?? true;
 
@@ -379,6 +381,7 @@ export function useHotkey(
   handlerRef.current = handler;
 
   useEffect(() => {
+    if (!registry) return;
     const entry: HandlerEntry = {
       fn: () => handlerRef.current(),
       scope,
@@ -444,4 +447,28 @@ export function useSuspendHotkeys(): (suspended: boolean) => void {
 export function useHotkeyLeaderState(): { leader: LeaderState | null; platform: Platform } {
   const { leader, platform } = useHotkeyContext();
   return { leader, platform };
+}
+
+/**
+ * True while the platform "mod" key (⌘ on macOS, Ctrl elsewhere) is held.
+ * Used to surface chord hints next to buttons. Outside a provider assumes ⌘.
+ */
+export function useModHeld(): boolean {
+  const platform = useContext(HotkeyContext)?.platform ?? "darwin";
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    const isMod = (e: KeyboardEvent) => (platform === "darwin" ? e.metaKey : e.ctrlKey);
+    const down = (e: KeyboardEvent) => { if (isMod(e)) setHeld(true); };
+    const up = (e: KeyboardEvent) => { if (!isMod(e)) setHeld(false); };
+    const clear = () => setHeld(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", clear);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", clear);
+    };
+  }, [platform]);
+  return held;
 }

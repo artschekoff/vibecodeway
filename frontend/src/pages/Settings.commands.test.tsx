@@ -45,12 +45,15 @@ vi.mock("../../wailsjs/go/main/App", () => ({
 import Settings from "./Settings";
 import { TabProvider } from "../contexts/TabContext";
 
-function renderSettings() {
-  return render(
+async function renderSettings() {
+  const r = render(
     <TabProvider>
       <Settings />
     </TabProvider>
   );
+  // Settings is tabbed; terminal commands live under the Terminal tab.
+  fireEvent.click(await screen.findByRole("button", { name: "Terminal" }));
+  return r;
 }
 
 beforeEach(() => {
@@ -78,13 +81,13 @@ beforeEach(() => {
 
 describe("Settings terminal commands", () => {
   it("lists existing commands", async () => {
-    renderSettings();
+    await renderSettings();
     await waitFor(() => expect(screen.getByDisplayValue("Inject")).toBeInTheDocument());
     expect(screen.getByDisplayValue("/load-context <context-name>")).toBeInTheDocument();
   });
 
   it("adds a command", async () => {
-    renderSettings();
+    await renderSettings();
     await waitFor(() => expect(H.ListTerminalCommands).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: /add command/i }));
     await waitFor(() => expect(H.AddTerminalCommand).toHaveBeenCalledWith("", "", false));
@@ -95,7 +98,7 @@ describe("Settings terminal commands", () => {
       { id: "c1", title: "Inject", command: "/load", sendEnter: false, createdAt: "", updatedAt: "" },
       { id: "c2", title: "Run", command: "npm test", sendEnter: true, createdAt: "", updatedAt: "" },
     ]);
-    renderSettings();
+    await renderSettings();
     await waitFor(() => expect(screen.getByDisplayValue("Inject")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save all/i }));
     await waitFor(() => {
@@ -105,7 +108,7 @@ describe("Settings terminal commands", () => {
   });
 
   it("deletes a command", async () => {
-    renderSettings();
+    await renderSettings();
     await waitFor(() => expect(screen.getByDisplayValue("Inject")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: /delete command/i })[0]);
     await waitFor(() => expect(H.DeleteTerminalCommand).toHaveBeenCalledWith("c1"));

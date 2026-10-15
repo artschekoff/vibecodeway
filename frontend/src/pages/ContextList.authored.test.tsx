@@ -110,10 +110,23 @@ describe("Code Reviews — authored PRs (My PRs)", () => {
     fireEvent.click(await screen.findByText("acme/widgets"));
 
     expect(await screen.findByText("My feature")).toBeInTheDocument();
-    expect(screen.getByText("My PRs")).toBeInTheDocument();
+    expect(screen.getByText("My PRs", { selector: ".review-waiting-header" })).toBeInTheDocument();
     expect(screen.getByText("bob")).toBeInTheDocument();
     expect(screen.getByText(/CI failed/i)).toBeInTheDocument();
     expect(screen.getByText(/Conflicts/i)).toBeInTheDocument();
+  });
+  it("the My PRs checkbox hides and shows the authored section", async () => {
+    renderList();
+    fireEvent.click(await screen.findByRole("button", { name: /code reviews/i }));
+    fireEvent.click(await screen.findByText("acme/widgets"));
+    expect(await screen.findByText("My feature")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /show my prs/i }));
+    expect(screen.queryByText("My feature")).not.toBeInTheDocument();
+    expect(localStorage.getItem("vibecodeway:reviews:showMyPRs")).toBe("0");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /show my prs/i }));
+    expect(await screen.findByText("My feature")).toBeInTheDocument();
   });
 
   it("offers the editor-opening 'Review with AI' button on an authored PR", async () => {

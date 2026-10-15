@@ -7,6 +7,7 @@ import {slackstore} from '../models';
 import {agent} from '../models';
 import {analytics} from '../models';
 import {service} from '../models';
+import {pty} from '../models';
 import {productivity} from '../models';
 import {vcs} from '../models';
 import {jira} from '../models';
@@ -97,6 +98,8 @@ export function CreateUserAndAssign(arg1:string,arg2:string,arg3:string,arg4:str
 
 export function CreateWorkflowStatus(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.WorkflowStatus>;
 
+export function DeleteAskChat(arg1:string):Promise<void>;
+
 export function DeleteContext(arg1:string):Promise<void>;
 
 export function DeleteContextEventHook(arg1:string):Promise<void>;
@@ -175,6 +178,8 @@ export function GetAppLogs(arg1:number):Promise<Array<main.AppLogEntry>>;
 
 export function GetAppSettings():Promise<store.AppSettings>;
 
+export function GetAskChat(arg1:string):Promise<store.AskChat>;
+
 export function GetCodeTour(arg1:string,arg2:string):Promise<store.CodeTour>;
 
 export function GetContextChanges(arg1:string):Promise<Array<main.RepoChange>>;
@@ -190,6 +195,8 @@ export function GetContextSnapshot(arg1:string):Promise<store.ContextSnapshot>;
 export function GetEditorSettings():Promise<string>;
 
 export function GetEstimationHistory(arg1:string):Promise<Array<store.EstimationLog>>;
+
+export function GetFileDiff(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function GetJiraInstanceURL():Promise<string>;
 
@@ -208,6 +215,8 @@ export function GetPendingText():Promise<string>;
 export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.ReasoningChainStep>>;
 
 export function GetPersonAssignments(arg1:string):Promise<Array<store.PersonAssignment>>;
+
+export function GetProcessStats():Promise<pty.ProcessStats>;
 
 export function GetProductivityStats():Promise<productivity.Stats>;
 
@@ -238,6 +247,8 @@ export function ListAgentTools():Promise<Array<agent.ToolInfo>>;
 export function ListAllContexts():Promise<Array<store.Context>>;
 
 export function ListAllWorkspaces():Promise<Array<vcsstore.VCSWorkspace>>;
+
+export function ListAskChats():Promise<Array<store.AskChat>>;
 
 export function ListAssignmentVersions(arg1:string):Promise<Array<store.PersonAssignmentVersion>>;
 
@@ -409,6 +420,8 @@ export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:s
 
 export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
 
+export function SaveAskChat(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SaveAssignmentOutput(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
 export function SavePersonAssignment(arg1:string,arg2:string):Promise<void>;
@@ -434,6 +447,8 @@ export function SetAISettings(arg1:string,arg2:string,arg3:string,arg4:string,ar
 export function SetActiveAssignmentVersion(arg1:string,arg2:string):Promise<store.PersonAssignment>;
 
 export function SetAppSettings(arg1:boolean,arg2:number,arg3:boolean,arg4:number,arg5:string,arg6:string):Promise<void>;
+
+export function SetAskChatRetentionDays(arg1:number):Promise<void>;
 
 export function SetAutoLinkRepos(arg1:boolean):Promise<void>;
 

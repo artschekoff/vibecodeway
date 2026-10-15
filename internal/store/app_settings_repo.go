@@ -23,6 +23,7 @@ func defaultAppSettings() *AppSettings {
 		PRStaleThresholdDays:         7,
 		WorkdayHours:                 8,
 		TaskHours:                    2,
+		AskChatRetentionDays:         30,
 	}
 }
 
@@ -42,6 +43,7 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		workdayHours       float64
 		taskHours          float64
 		statsAuthorName    string
+		askChatRetention   int
 		updatedAt          string
 	)
 	err := s.db.QueryRowContext(
@@ -51,12 +53,12 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		        terminal_app_path, coding_agent_app,
 		        auto_link_repos_on_context_create, editor_settings,
 		        pr_stale_threshold_days, workday_hours, task_hours,
-		        stats_author_name, updated_at
+		        stats_author_name, ask_chat_retention_days, updated_at
 		 FROM app_settings WHERE id = ?`,
 		appSettingsSingletonID,
 	).Scan(&contextEnabled, &contextIntervalMin, &reviewsEnabled, &reviewsIntervalMin,
 		&terminalAppPath, &codingAgentApp, &autoLink, &editorSettings, &prStaleThreshold,
-		&workdayHours, &taskHours, &statsAuthorName, &updatedAt)
+		&workdayHours, &taskHours, &statsAuthorName, &askChatRetention, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return defaultAppSettings(), nil
 	}
@@ -76,6 +78,7 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		WorkdayHours:                 workdayHours,
 		TaskHours:                    taskHours,
 		StatsAuthorName:              statsAuthorName,
+		AskChatRetentionDays:         askChatRetention,
 		UpdatedAt:                    updatedAt,
 	}, nil
 }
@@ -105,8 +108,8 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		      terminal_app_path, coding_agent_app,
 		      auto_link_repos_on_context_create, editor_settings,
 		      pr_stale_threshold_days, workday_hours, task_hours,
-		      stats_author_name, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		      stats_author_name, ask_chat_retention_days, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     context_refetch_enabled           = excluded.context_refetch_enabled,
 		     context_refetch_interval_min      = excluded.context_refetch_interval_min,
@@ -120,6 +123,7 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		     workday_hours                     = excluded.workday_hours,
 		     task_hours                        = excluded.task_hours,
 		     stats_author_name                 = excluded.stats_author_name,
+		     ask_chat_retention_days           = excluded.ask_chat_retention_days,
 		     updated_at                        = excluded.updated_at`,
 		appSettingsSingletonID,
 		contextEnabled, settings.ContextRefetchIntervalMin,
@@ -132,6 +136,7 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		settings.WorkdayHours,
 		settings.TaskHours,
 		settings.StatsAuthorName,
+		settings.AskChatRetentionDays,
 		now,
 	)
 	if err != nil {

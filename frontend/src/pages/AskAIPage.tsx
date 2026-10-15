@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Loader2, Wrench, Eraser, FileStack } from "lucide-react";
+import { Send, Loader2, Wrench, Eraser, FileStack, History, Trash2 } from "lucide-react";
 import {
   AskAIChat,
   SummarizeAskChat,
   ListOrganizations,
   ListAgentTools,
   ResolveToolConfirmation,
+  SaveAskChat,
+  ListAskChats,
+  GetAskChat,
+  DeleteAskChat,
 } from "../../wailsjs/go/main/App";
-import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
-import type { agent } from "../../wailsjs/go/models";
+import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
+import type { agent, store } from "../../wailsjs/go/models";
 import type { Organization } from "../types";
 import { ProseEditor } from "../components/ProseEditor";
+import { MarkdownBody } from "../components/MarkdownBody";
+import { useTabContextOptional } from "../contexts/TabContext";
 
 type ProgressEvent = { phase: string; tool?: string; args?: string; result?: string; callId?: string };
 
@@ -25,21 +31,84 @@ type LogEntry =
   | { role: "assistant"; content: string; steps: agent.Step[] }
   | { role: "summary"; content: string };
 
+// Tool results replayed into history are capped so a chatty turn can't blow
+// the model's context: per result, and in total across the whole log (newest
+// turns keep theirs first; older ones degrade to text-only).
+const HISTORY_RESULT_CHARS = 8_000;
+const HISTORY_TOOL_BUDGET_CHARS = 80_000;
+
 // toHistory converts the on-screen log into the {role, content} shape AskAIChat
 // and SummarizeAskChat expect. A prior "summary" entry is sent as a system
 // turn so the model treats it as ground truth about earlier context rather
-// than something the user said.
-function toHistory(entries: LogEntry[]): { role: string; content: string }[] {
-  return entries.map((e) =>
-    e.role === "summary"
-      ? { role: "system", content: "Summary of the previous conversation:\n" + e.content }
-      : { role: e.role, content: e.content }
-  );
+// than something the user said. Tool results an assistant turn gathered are
+// replayed as a system turn right before that answer — otherwise the model
+// forgets everything it read (Jira comments, PR bodies) on the next question.
+export function toHistory(entries: LogEntry[]): { role: string; content: string }[] {
+  // Decide per entry (newest first) whether its tool results fit the budget.
+  let budget = HISTORY_TOOL_BUDGET_CHARS;
+  const toolBlocks = new Map<number, string>();
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (e.role !== "assistant" || e.steps.length === 0) continue;
+    const block = e.steps
+      .map((s) => `## ${s.tool} ${s.args}\n${s.result.length > HISTORY_RESULT_CHARS ? s.result.slice(0, HISTORY_RESULT_CHARS) + "…[truncated]" : s.result}`)
+      .join("\n\n");
+    if (block.length > budget) break;
+    budget -= block.length;
+    toolBlocks.set(i, block);
+  }
+
+  const out: { role: string; content: string }[] = [];
+  entries.forEach((e, i) => {
+    if (e.role === "summary") {
+      out.push({ role: "system", content: "Summary of the previous conversation:\n" + e.content });
+      return;
+    }
+    const block = toolBlocks.get(i);
+    if (block) out.push({ role: "system", content: "Tool results the assistant retrieved for its next reply (treat as already-known facts):\n\n" + block });
+    out.push({ role: e.role, content: e.content });
+  });
+  return out;
+}
+
+// Chat log survives tab close / app restart. One shared log (the page is a
+// singleton), stored whole — summarize already keeps it bounded. The same log
+// is also persisted to the DB under CHAT_ID_KEY (see SaveAskChat) so past
+// chats can be reopened from the History picker and dumped via the CLI.
+const LOG_KEY = "vibecodeway:askai:log";
+const CHAT_ID_KEY = "vibecodeway:askai:chatId";
+
+function loadLog(): LogEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(LOG_KEY) ?? "[]") as LogEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function newChatId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function loadChatId(): string {
+  try {
+    const id = localStorage.getItem(CHAT_ID_KEY);
+    if (id) return id;
+  } catch { /* fall through */ }
+  return newChatId();
+}
+
+// Title shown in the History picker: the first user question (or the summary).
+function chatTitle(entries: LogEntry[]): string {
+  const first = entries.find((e) => e.role === "user") ?? entries[0];
+  return (first?.content ?? "").replace(/\s+/g, " ").trim();
 }
 
 export default function AskAIPage() {
   const [question, setQuestion] = useState("");
-  const [log, setLog] = useState<LogEntry[]>([]);
+  const [log, setLog] = useState<LogEntry[]>(loadLog);
+  const [chatId, setChatId] = useState<string>(loadChatId);
+  const [chats, setChats] = useState<store.AskChat[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -48,6 +117,54 @@ export default function AskAIPage() {
   const [tools, setTools] = useState<{ name: string; description: string; write?: boolean }[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const tabs = useTabContextOptional();
+
+  // Links in answers: context://<id> opens the context in a new app tab
+  // (the link text is the context key, used as the tab title); normal URLs
+  // open in the system browser.
+  const onAnswerLink = (href: string, label: string) => {
+    if (href.startsWith("context://")) {
+      const id = href.slice("context://".length);
+      tabs?.openNewContextTab(id, label || id);
+      return;
+    }
+    if (/^https?:\/\//i.test(href)) BrowserOpenURL(href);
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOG_KEY, JSON.stringify(log));
+    } catch {
+      // Quota (huge tool results in steps): keep the text, drop the steps.
+      try {
+        localStorage.setItem(LOG_KEY, JSON.stringify(log.map((e) => (e.role === "assistant" ? { ...e, steps: [] } : e))));
+      } catch { /* give up; log lives only in memory this session */ }
+    }
+  }, [log]);
+
+  // Persist the active chat to the DB on every change (fire-and-forget).
+  useEffect(() => {
+    try { localStorage.setItem(CHAT_ID_KEY, chatId); } catch { /* ignore */ }
+    if (log.length === 0) return;
+    void SaveAskChat(chatId, chatTitle(log), JSON.stringify(log)).catch(() => {});
+  }, [chatId, log]);
+
+  const refreshChats = () => {
+    void ListAskChats().then((list) => setChats(list ?? [])).catch(() => {});
+  };
+
+  const openChat = async (id: string) => {
+    if (!id || id === chatId || loading) return;
+    try {
+      const chat = await GetAskChat(id);
+      setLog(JSON.parse(chat.logJson || "[]") as LogEntry[]);
+      setChatId(id);
+      setProgress([]);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   useEffect(() => {
     ListOrganizations().then((list) => setOrgs(list ?? [])).catch(() => {});
@@ -100,9 +217,26 @@ export default function AskAIPage() {
     }
   };
 
+  // Deletes the open chat from the DB and starts a fresh one.
+  const deleteChat = async () => {
+    if (loading || log.length === 0) return;
+    try {
+      await DeleteAskChat(chatId);
+      setLog([]);
+      setChatId(newChatId());
+      setProgress([]);
+      setError("");
+      refreshChats();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  // Starts a fresh chat; the previous one stays in History (DB).
   const clearContext = () => {
     if (loading || log.length === 0) return;
     setLog([]);
+    setChatId(newChatId());
     setProgress([]);
     setError("");
   };
@@ -163,6 +297,34 @@ export default function AskAIPage() {
           style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}
         >
           <FileStack size={13} /> Summarize context
+        </button>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-muted)" }}>
+          <History size={13} />
+          <select
+            aria-label="Chat history"
+            value=""
+            onFocus={refreshChats}
+            onChange={(e) => void openChat(e.target.value)}
+            disabled={loading}
+            style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", maxWidth: 320 }}
+          >
+            <option value="">History…</option>
+            {chats.filter((c) => c.id !== chatId).map((c) => (
+              <option key={c.id} value={c.id}>
+                {new Date(c.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })} — {c.title || "(untitled)"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="btn btn-secondary"
+          onClick={() => void deleteChat()}
+          disabled={loading || log.length === 0}
+          title="Delete this chat from history"
+          aria-label="Delete chat"
+          style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5, color: "var(--danger)" }}
+        >
+          <Trash2 size={13} />
         </button>
       </div>
 
@@ -253,9 +415,9 @@ export default function AskAIPage() {
           return (
             <div key={i}>
               <div
-                style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.55, padding: 14, border: "1px solid var(--border)", borderRadius: 8 }}
+                style={{ fontSize: 14, lineHeight: 1.55, padding: 14, border: "1px solid var(--border)", borderRadius: 8 }}
               >
-                {entry.content || "(no answer)"}
+                <MarkdownBody text={entry.content || "(no answer)"} onLinkClick={onAnswerLink} />
               </div>
               {entry.steps.length > 0 && (
                 <details style={{ marginTop: 8 }}>

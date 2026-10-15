@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
-import { HotkeyProvider, useHotkey, useHotkeyScope, type Scope } from "./HotkeyProvider";
+import { HotkeyProvider, useHotkey, useHotkeyScope, useModHeld, type Scope } from "./HotkeyProvider";
 import { TabVisibleContext, useTabVisible } from "../contexts/TabVisibleContext";
 
 function Probe({ id, fn, scope }: { id: string; fn: () => void; scope?: Scope }) {
@@ -24,7 +24,7 @@ describe("HotkeyProvider", () => {
     const fn = vi.fn();
     render(
       <HotkeyProvider platform="darwin">
-        <Probe id="search.global" fn={fn} />
+        <Probe id="context.filterItems" fn={fn} />
       </HotkeyProvider>
     );
     act(() => {
@@ -128,17 +128,17 @@ describe("HotkeyProvider", () => {
     expect(focusUp).toHaveBeenCalledTimes(0);
   });
 
-  it("⌘F fires search.global immediately when files scope is NOT active", () => {
+  it("⌘F fires context.filterItems immediately when files scope is NOT active", () => {
     const search = vi.fn();
     const focusSearch = vi.fn();
     render(
       <HotkeyProvider platform="darwin">
-        <Probe id="search.global" fn={search} />
+        <Probe id="context.filterItems" fn={search} />
         <Probe id="files.focusSearch" fn={focusSearch} scope="files" />
       </HotkeyProvider>
     );
     // files scope not active -> files.focusSearch handler can't fire, so
-    // mod+f is not a leader here and search.global fires on the single press.
+    // mod+f is not a leader here and context.filterItems fires on the single press.
     act(() => {
       fireEvent.keyDown(window, { key: "f", metaKey: true });
     });
@@ -146,18 +146,18 @@ describe("HotkeyProvider", () => {
     expect(focusSearch).toHaveBeenCalledTimes(0);
   });
 
-  it("⌘F with files scope active opens a leader that falls through to search.global on timeout", () => {
+  it("⌘F with files scope active opens a leader that falls through to context.filterItems on timeout", () => {
     vi.useFakeTimers();
     const search = vi.fn();
     const focusSearch = vi.fn();
     render(
       <HotkeyProvider platform="darwin">
         <ScopeActivator scope="files" />
-        <Probe id="search.global" fn={search} />
+        <Probe id="context.filterItems" fn={search} />
         <Probe id="files.focusSearch" fn={focusSearch} scope="files" />
       </HotkeyProvider>
     );
-    // ⌘F opens a leader for files.focusSearch (seq "f"), with search.global
+    // ⌘F opens a leader for files.focusSearch (seq "f"), with context.filterItems
     // retained as the fall-through default even though it's a different object.
     act(() => {
       fireEvent.keyDown(window, { key: "f", metaKey: true });
@@ -165,7 +165,7 @@ describe("HotkeyProvider", () => {
     expect(search).toHaveBeenCalledTimes(0);
     expect(focusSearch).toHaveBeenCalledTimes(0);
 
-    // No follow-up "f" -> timeout falls through to search.global.
+    // No follow-up "f" -> timeout falls through to context.filterItems.
     act(() => {
       vi.advanceTimersByTime(600);
     });
@@ -180,7 +180,7 @@ describe("HotkeyProvider", () => {
     render(
       <HotkeyProvider platform="darwin">
         <ScopeActivator scope="files" />
-        <Probe id="search.global" fn={search} />
+        <Probe id="context.filterItems" fn={search} />
         <Probe id="files.focusSearch" fn={focusSearch} scope="files" />
       </HotkeyProvider>
     );
@@ -226,7 +226,7 @@ describe("HotkeyProvider", () => {
     const search = vi.fn();
     render(
       <HotkeyProvider platform="darwin">
-        <Probe id="search.global" fn={search} />
+        <Probe id="context.filterItems" fn={search} />
         <input data-testid="txt" />
       </HotkeyProvider>
     );
@@ -249,17 +249,17 @@ describe("HotkeyProvider", () => {
   it("emits a hotkey:<id> CustomEvent when a command fires", () => {
     const fn = vi.fn();
     const listener = vi.fn();
-    window.addEventListener("hotkey:search.global", listener);
+    window.addEventListener("hotkey:context.filterItems", listener);
     render(
       <HotkeyProvider platform="darwin">
-        <Probe id="search.global" fn={fn} />
+        <Probe id="context.filterItems" fn={fn} />
       </HotkeyProvider>
     );
     act(() => {
       fireEvent.keyDown(window, { key: "f", metaKey: true });
     });
     expect(listener).toHaveBeenCalledTimes(1);
-    window.removeEventListener("hotkey:search.global", listener);
+    window.removeEventListener("hotkey:context.filterItems", listener);
   });
 
   // Regression: editor tabs stay mounted (display:none) when inactive, so a
@@ -284,5 +284,27 @@ describe("HotkeyProvider", () => {
     });
     expect(hidden).not.toHaveBeenCalled();
     expect(visible).toHaveBeenCalledTimes(1);
+  });
+
+  it("useModHeld tracks the ⌘ key and ⌘R fires reviews.refresh", () => {
+    const fn = vi.fn();
+    function ModProbe() { return <span data-testid="mod">{useModHeld() ? "held" : "idle"}</span>; }
+    const { getByTestId } = render(
+      <HotkeyProvider platform="darwin">
+        <Probe id="reviews.refresh" fn={fn} />
+        <ModProbe />
+      </HotkeyProvider>
+    );
+    expect(getByTestId("mod").textContent).toBe("idle");
+    act(() => { fireEvent.keyDown(window, { key: "Meta", metaKey: true }); });
+    expect(getByTestId("mod").textContent).toBe("held");
+    act(() => { fireEvent.keyDown(window, { key: "r", metaKey: true }); });
+    expect(fn).toHaveBeenCalledTimes(1);
+    act(() => { fireEvent.keyUp(window, { key: "Meta", metaKey: false }); });
+    expect(getByTestId("mod").textContent).toBe("idle");
+  });
+
+  it("useHotkey is a no-op outside a provider", () => {
+    expect(() => render(<Probe id="reviews.refresh" fn={vi.fn()} />)).not.toThrow();
   });
 });

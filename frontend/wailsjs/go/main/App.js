@@ -170,6 +170,10 @@ export function CreateWorkflowStatus(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CreateWorkflowStatus'](arg1, arg2, arg3, arg4);
 }
 
+export function DeleteAskChat(arg1) {
+  return window['go']['main']['App']['DeleteAskChat'](arg1);
+}
+
 export function DeleteContext(arg1) {
   return window['go']['main']['App']['DeleteContext'](arg1);
 }
@@ -326,6 +330,10 @@ export function GetAppSettings() {
   return window['go']['main']['App']['GetAppSettings']();
 }
 
+export function GetAskChat(arg1) {
+  return window['go']['main']['App']['GetAskChat'](arg1);
+}
+
 export function GetCodeTour(arg1, arg2) {
   return window['go']['main']['App']['GetCodeTour'](arg1, arg2);
 }
@@ -356,6 +364,10 @@ export function GetEditorSettings() {
 
 export function GetEstimationHistory(arg1) {
   return window['go']['main']['App']['GetEstimationHistory'](arg1);
+}
+
+export function GetFileDiff(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetFileDiff'](arg1, arg2, arg3);
 }
 
 export function GetJiraInstanceURL() {
@@ -392,6 +404,10 @@ export function GetPersonAssignmentSteps(arg1) {
 
 export function GetPersonAssignments(arg1) {
   return window['go']['main']['App']['GetPersonAssignments'](arg1);
+}
+
+export function GetProcessStats() {
+  return window['go']['main']['App']['GetProcessStats']();
 }
 
 export function GetProductivityStats() {
@@ -452,6 +468,10 @@ export function ListAllContexts() {
 
 export function ListAllWorkspaces() {
   return window['go']['main']['App']['ListAllWorkspaces']();
+}
+
+export function ListAskChats() {
+  return window['go']['main']['App']['ListAskChats']();
 }
 
 export function ListAssignmentVersions(arg1) {
@@ -794,6 +814,10 @@ export function RunSingleAssignmentStep(arg1, arg2, arg3) {
   return window['go']['main']['App']['RunSingleAssignmentStep'](arg1, arg2, arg3);
 }
 
+export function SaveAskChat(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveAskChat'](arg1, arg2, arg3);
+}
+
 export function SaveAssignmentOutput(arg1, arg2) {
   return window['go']['main']['App']['SaveAssignmentOutput'](arg1, arg2);
 }
@@ -844,6 +868,10 @@ export function SetActiveAssignmentVersion(arg1, arg2) {
 
 export function SetAppSettings(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SetAppSettings'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function SetAskChatRetentionDays(arg1) {
+  return window['go']['main']['App']['SetAskChatRetentionDays'](arg1);
 }
 
 export function SetAutoLinkRepos(arg1) {

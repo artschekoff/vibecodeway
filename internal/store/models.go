@@ -259,7 +259,9 @@ type AppSettings struct {
 	// synced comments to them for comment_authored stat-event capture.
 	// Empty (the default) means capture is skipped entirely.
 	StatsAuthorName string `json:"statsAuthorName"`
-	UpdatedAt       string `json:"updatedAt"`
+	// AskChatRetentionDays is how long saved Ask AI chats are kept (0 = forever).
+	AskChatRetentionDays int    `json:"askChatRetentionDays"`
+	UpdatedAt            string `json:"updatedAt"`
 }
 
 // SyncSession tracks one refresh run (Refresh All or per-source).

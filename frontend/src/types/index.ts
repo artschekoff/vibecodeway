@@ -396,6 +396,7 @@ export interface AppSettings {
   codingAgentApp: string;
   autoLinkReposOnContextCreate: boolean;
   prStaleThresholdDays: number;
+  askChatRetentionDays: number;
   workdayHours: number;
   taskHours: number;
   statsAuthorName: string;
@@ -550,6 +551,8 @@ export interface ReviewRequest {
   myReviewState?: string;
   // GitHub merge-state; "BEHIND" means the Update branch action is available.
   mergeStateStatus?: string;
+  // Number of unresolved review threads, recomputed on every reviews sync.
+  unresolvedCount?: number;
 }
 
 // --- Context Relations ---

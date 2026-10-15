@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Spinner from "../components/Spinner";
 import { useTabContext } from "../contexts/TabContext";
+import { useTabVisible } from "../contexts/TabVisibleContext";
+import { useHotkey, useChordHint, useModHeld } from "../hotkeys/HotkeyProvider";
 import { reviewStatusMeta } from "./reviewStatus";
 import { reviewStage, stageMeta, myReviewLabel, REQUESTED_STAGE_ORDER, type ReviewStage } from "./reviewStage";
 import { RefreshCw, RotateCcw, Settings, Pencil, X, ExternalLink, GitBranch, Hash, FileText, GripVertical, Folder, FolderOpen, Check, Copy, Trash2, Loader2, Search } from "lucide-react";
@@ -36,6 +38,7 @@ import {
   RefreshAllContexts,
   UpsertContextText,
   DeleteContextText,
+  DeleteJiraIssue,
   DeleteUploadedFile,
   ToggleContextStatus,
   CountOpenTickets,
@@ -95,6 +98,8 @@ import type {
 } from "../types";
 import { effectiveStatus } from "../types";
 import { needsAttentionTiles } from "./needsAttentionPanel";
+import { termSessionCountForContext } from "../lib/terminalRegistry";
+import { sortContexts, type ContextSortCol } from "./contextSort";
 import type { VCSBranchInput } from "../components/ContextForm";
 import type { service } from "../../wailsjs/go/models";
 import ContextForm from "../components/ContextForm";
@@ -227,6 +232,15 @@ function ReviewCard({
         )}
         {review.ciStatus === "PENDING" && (
           <span className="pr-status-badge" title="CI checks running">CI running</span>
+        )}
+        {!status.terminal && (review.unresolvedCount ?? 0) > 0 && (
+          <span
+            className="pr-status-badge pr-status-badge--unresolved"
+            data-testid="review-unresolved-count"
+            title={`${review.unresolvedCount} unresolved review comment${review.unresolvedCount === 1 ? "" : "s"}`}
+          >
+            {review.unresolvedCount} unresolved
+          </span>
         )}
       </div>
       {review.reviewers && review.reviewers.length > 0 && (
@@ -404,6 +418,35 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       return !v;
     });
   };
+  // "My PRs": show/hide the PRs I authored (independent of attention mode).
+  const [showMyPRs, setShowMyPRs] = useState<boolean>(
+    () => localStorage.getItem("vibecodeway:reviews:showMyPRs") !== "0"
+  );
+  const toggleShowMyPRs = () => {
+    setShowMyPRs((v) => {
+      localStorage.setItem("vibecodeway:reviews:showMyPRs", v ? "0" : "1");
+      return !v;
+    });
+  };
+  // Header sort. null col = the user's manual drag order (dragging is disabled
+  // while a sort is applied — the two orders would fight).
+  const [sortCol, setSortCol] = useState<ContextSortCol | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const handleSortClick = (col: ContextSortCol) => {
+    if (sortCol !== col) { setSortCol(col); setSortDir("asc"); return; }
+    if (sortDir === "asc") { setSortDir("desc"); return; }
+    setSortCol(null); // third click: back to manual order
+  };
+  // "Show only active": hides archived contexts from the Contexts table.
+  const [activeOnly, setActiveOnly] = useState<boolean>(
+    () => localStorage.getItem("vibecodeway:contexts:activeOnly") === "1"
+  );
+  const toggleActiveOnly = () => {
+    setActiveOnly((v) => {
+      localStorage.setItem("vibecodeway:contexts:activeOnly", v ? "0" : "1");
+      return !v;
+    });
+  };
   const [showAddRepo, setShowAddRepo] = useState(false);
   const [addPlatform, setAddPlatform] = useState<VCSPlatform>("github");
   const [addOwnerRepo, setAddOwnerRepo] = useState("");
@@ -457,7 +500,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   };
 
   // ── DnD ──
-  const isDraggingEnabled = !matchedIDs; // disable while searching
+  const isDraggingEnabled = !matchedIDs && !sortCol; // disable while searching or header-sorted
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -481,10 +524,11 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     [contexts],
   );
 
-  const filteredContexts = useMemo(
-    () => matchedIDs ? contexts.filter((c) => matchedIDs.has(c.id)) : contexts,
-    [contexts, matchedIDs],
-  );
+  const filteredContexts = useMemo(() => {
+    const base = matchedIDs ? contexts.filter((c) => matchedIDs.has(c.id)) : contexts;
+    const filtered = activeOnly ? base.filter((c) => c.status === "active") : base;
+    return sortCol ? sortContexts(filtered, sortCol, sortDir) : filtered;
+  }, [contexts, matchedIDs, activeOnly, sortCol, sortDir]);
 
   const needsAttentionContexts = useMemo(() => needsAttentionTiles(contexts), [contexts]);
 
@@ -720,7 +764,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   const handleUpdate = async (
     key: string, searchQuery: string, status: string | undefined,
     slackPayload?: SlackSavePayload, selectedJiraKeys?: string[],
-    _removedJiraIssueIds?: string[], textFilesPayload?: TextFilesPayload,
+    removedJiraIssueIds?: string[], textFilesPayload?: TextFilesPayload,
     removedUploadedFileIds?: string[],
     _pendingUploadTempIds?: string[],
     _newVCSBranches?: VCSBranchInput[],
@@ -750,6 +794,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
         progress.next(`Adding issue ${jiraKey}`);
         try { await AddIssuesToContext(editTarget.id, [jiraKey]); } catch { /* best-effort */ }
       }
+      for (const issueId of (removedJiraIssueIds ?? [])) { try { await DeleteJiraIssue(issueId); } catch { /* best-effort */ } }
       for (const id of removedChannelIds) { try { await RemoveSlackChannel(id); } catch { /* best-effort */ } }
       for (const group of slackGroups) {
         progress.next(`Adding ${group.channels.map((ch) => `#${ch.channelName}`).join(", ")} from ${group.workspace}`);
@@ -832,16 +877,21 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
   };
 
   const handleToggleStatus = async (_e: React.MouseEvent, c: Context) => {
-    // Deactivating a context hides its work from the board and stops background
-    // refresh — warn before doing that while tickets are still open.
+    // Deactivating always confirms: it hides the context's work from the board,
+    // stops background refresh, and closes its tabs — killing any terminals
+    // (running agents included), whose progress is then lost.
     if (c.status === "active") {
-      try {
-        const open = await CountOpenTickets(c.id);
-        // Native dialog — window.confirm() is a no-op in the Wails webview.
-        if (open > 0 && !(await ConfirmAction("Deactivate context", `${c.key} still has ${open} open ticket${open === 1 ? "" : "s"}. Deactivate anyway?`))) {
-          return;
-        }
-      } catch { /* best-effort: fall through to the toggle */ }
+      let open = 0;
+      try { open = await CountOpenTickets(c.id); } catch { /* best-effort */ }
+      const terms = termSessionCountForContext(c.key);
+      const warnings: string[] = [];
+      if (terms > 0) warnings.push(`${terms} running terminal${terms === 1 ? "" : "s"} (active tasks — closing loses their progress)`);
+      if (open > 0) warnings.push(`${open} open ticket${open === 1 ? "" : "s"}`);
+      const msg = warnings.length > 0
+        ? `${c.key} still has ${warnings.join(" and ")}. Deactivate anyway?`
+        : `Deactivate ${c.key}? Are you sure?`;
+      // Native dialog — window.confirm() is a no-op in the Wails webview.
+      if (!(await ConfirmAction("Deactivate context", msg))) return;
     }
     try {
       const updated = await ToggleContextStatus(c.id);
@@ -869,6 +919,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     catch (e) { setError(String(e)); }
     finally { setRefreshingReviews(false); setReviewsProgress(null); }
   };
+
+  // ⌘R on the Code Reviews tab re-fetches everything; a hint appears next to
+  // the refresh icon while ⌘ is held.
+  const tabVisible = useTabVisible();
+  useHotkey("reviews.refresh", () => void handleRefreshReviews(),
+    { enabled: tabVisible && activeTab === "reviews" && !refreshingReviews });
+  const reviewsRefreshChord = useChordHint("reviews.refresh");
+  const modHeld = useModHeld();
 
   const handleDismissReview = async (id: string) => {
     try { await DismissReviewRequest(id); await loadReviews(); }
@@ -1140,11 +1198,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
             {totalReviews > 0 && <span className="home-tab-badge">{totalReviews}</span>}
             <button
               className="home-tab-action"
-              title="Refresh"
+              title={`Refresh${reviewsRefreshChord ? ` (${reviewsRefreshChord})` : ""}`}
               disabled={refreshingReviews}
               onClick={(e) => { e.stopPropagation(); void handleRefreshReviews(); }}
             >
               {refreshingReviews ? <Spinner size={11} color="currentColor" /> : <RefreshCw size={11} />}
+              {modHeld && activeTab === "reviews" && reviewsRefreshChord && (
+                <kbd className="home-tab-action-hint">{reviewsRefreshChord}</kbd>
+              )}
             </button>
           </div>
 
@@ -1256,6 +1317,24 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
               </div>
             )}
 
+            {/* Show-only-active filter above the table */}
+            {!loading && contexts.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", margin: "4px 0 6px" }}>
+                <label
+                  title="Show only active contexts (hide archived)"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: activeOnly ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={activeOnly}
+                    onChange={toggleActiveOnly}
+                    aria-label="show only active contexts"
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  Show only active
+                </label>
+              </div>
+            )}
             {/* Table area */}
             {loading ? (
               <div className="loading">Loading…</div>
@@ -1278,15 +1357,29 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                     <thead>
                       <tr>
                         <th style={{ width: 20 }}></th>
-                        <th style={{ width: 40 }}>Active</th>
-                        <th>Key</th>
-                        <th style={{ width: 120 }}>Status</th>
+                        {([
+                          ["active", "Active", { width: 40 }],
+                          ["key", "Key", undefined],
+                          ["status", "Status", { width: 120 }],
+                        ] as [ContextSortCol, string, React.CSSProperties | undefined][]).map(([col, label, st]) => (
+                          <th key={col} style={{ ...st, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                            title={`Sort by ${label}`} onClick={() => handleSortClick(col)}>
+                            {label}{sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                          </th>
+                        ))}
                         <th style={{ width: 88 }}></th>
-                        <th>Issues</th>
-                        <th>Importance</th>
-                        <th>Unread</th>
-                        <th>Updated</th>
-                        <th>Latest item</th>
+                        {([
+                          ["issues", "Issues"],
+                          ["importance", "Importance"],
+                          ["unread", "Unread"],
+                          ["updated", "Updated"],
+                          ["latest", "Latest item"],
+                        ] as [ContextSortCol, string][]).map(([col, label]) => (
+                          <th key={col} style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                            title={`Sort by ${label}`} onClick={() => handleSortClick(col)}>
+                            {label}{sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                          </th>
+                        ))}
                         <th style={{ width: 72 }}></th>
                       </tr>
                     </thead>
@@ -1446,6 +1539,19 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   />
                   Needs my attention
                 </label>
+                <label
+                  title="Show the PRs I authored (My PRs section)"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: showMyPRs ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showMyPRs}
+                    onChange={toggleShowMyPRs}
+                    aria-label="show my PRs"
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  My PRs
+                </label>
                 {(() => {
                   const unviewed = repoGroups.flatMap((g) => g.reviews).filter((r) => !r.viewedAt && !r.dismissedAt).length;
                   return unviewed > 0 ? (
@@ -1520,7 +1626,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   });
                 // In attention mode my own PRs surface only when they need MY fix:
                 // a merge conflict on a still-open PR.
-                const authored = reviews.filter((r) => r.kind === "authored" && match(r))
+                const authored = reviews.filter((r) => showMyPRs && r.kind === "authored" && match(r))
                   .filter((r) => !attentionOnly ||
                     ((r.mergeable === "CONFLICTING" || r.mergeStateStatus === "BEHIND") &&
                       !reviewStatusMeta(r.reviewStatus).terminal));
