@@ -281,5 +281,3 @@ export function HotkeyHelpModal() {
     </div>
   );
 }
-
-export default HotkeyHelpModal;

@@ -48,7 +48,22 @@ func GitWorktreeAdd(baseDir, worktreePath, branch string) error {
 		}
 		return nil
 	}
+	// The branch is checked out in a worktree we don't own (an agent's /tmp
+	// checkout). Our workspace still has to exist, so allow the second checkout.
+	if strings.Contains(string(out), "already checked out") || strings.Contains(string(out), "already used by worktree") {
+		out3, err3 := exec.Command("git", "-C", baseDir, "worktree", "add", "--force", worktreePath, branch).CombinedOutput()
+		if err3 != nil {
+			return fmt.Errorf("git worktree add --force %s: %w\n%s", branch, err3, out3)
+		}
+		return nil
+	}
 	return fmt.Errorf("git worktree add %s: %w\n%s", branch, err, out)
+}
+
+// GitWorktreePrune drops worktree records whose directories are gone.
+// Best-effort: failures are irrelevant to the caller's next step.
+func GitWorktreePrune(baseDir string) {
+	_ = exec.Command("git", "-C", baseDir, "worktree", "prune").Run()
 }
 
 // GitWorktreeRemove removes a worktree from the repo rooted at baseDir, forcing

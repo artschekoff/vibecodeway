@@ -13,6 +13,7 @@ import ProductivityPage from "../pages/ProductivityPage";
 import AnalyticsPage from "../pages/AnalyticsPage";
 import { EditorWorkspace } from "../pages/EditorWorkspace";
 import { TabVisibleContext } from "../contexts/TabVisibleContext";
+import { TabErrorBoundary } from "./TabErrorBoundary";
 
 // Renders the non-editor tab types. Editor tabs are handled separately so they
 // can be kept mounted across tab switches.
@@ -60,11 +61,17 @@ export function TabContent() {
           {/* Hidden tabs stay mounted (PTY/xterm survive), but their hotkey
               handlers must not fire — see TabVisibleContext. */}
           <TabVisibleContext.Provider value={t.id === activeTabId}>
-            <EditorWorkspace contextId={t.contextId!} contextKey={t.contextKey} initialCwd={t.initialCwd} />
+            <TabErrorBoundary resetKey={t.id}>
+              <EditorWorkspace contextId={t.contextId!} contextKey={t.contextKey} initialCwd={t.initialCwd} />
+            </TabErrorBoundary>
           </TabVisibleContext.Provider>
         </div>
       ))}
-      {activeTab.type !== "editor" && <NonEditorContent tab={activeTab} />}
+      {activeTab.type !== "editor" && (
+        <TabErrorBoundary resetKey={activeTab.id}>
+          <NonEditorContent tab={activeTab} />
+        </TabErrorBoundary>
+      )}
     </>
   );
 }

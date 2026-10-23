@@ -1,13 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Activity } from "lucide-react";
+import { TaskManagerModal } from "./TaskManagerModal";
 import { Terminal } from "./Terminal";
-import { TerminalWrite, AgentResumeCommand } from "../../../wailsjs/go/main/App";
+import { TerminalWrite, AgentResumeCommand, ListAIPrompts } from "../../../wailsjs/go/main/App";
 import { useTerminalCommands } from "../../hooks/useTerminalCommands";
-import { applyPlaceholders } from "../../lib/terminalPlaceholders";
+import { applyPlaceholders, withAgentHydration } from "../../lib/terminalPlaceholders";
 import { matchTerminalHotkey } from "../../lib/terminalHotkeys";
 import { useHotkey } from "../../hotkeys/HotkeyProvider";
 import { useTabVisible } from "../../contexts/TabVisibleContext";
 import { loadTerminals, saveTerminals } from "../../lib/terminalSession";
+import { registerTermSession, unregisterTermSession } from "../../lib/terminalRegistry";
+import { FOCUS_TERMINAL_EVENT } from "../../lib/terminalAttention";
 
 // Stable local ids, independent of cwd, so two terminals in the same folder are
 // distinct and neither remounts when the list changes.
@@ -103,7 +106,7 @@ export function tabLabel(cwd: string): string {
  * switches. A terminal's PTY is closed only when it is removed via its × button.
  * New terminals open in the active terminal's folder.
  */
-export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpen, persistKey }: { spawnCwd: string; contextName?: string; pendingInsert?: { text: string; id: number }; pendingOpen?: { cwd: string; id: number }; persistKey?: string }) {
+export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpen, persistKey, onActiveCwd }: { spawnCwd: string; contextName?: string; pendingInsert?: { text: string; id: number }; pendingOpen?: { cwd: string; id: number }; persistKey?: string; onActiveCwd?: (cwd: string) => void }) {
   const [terminals, setTerminals] = useState<{ key: string; cwd: string; openedAt: number; resume?: string }[]>([]);
   const [activeKey, setActiveKey] = useState<string>("");
   const seededRef = useRef(false);
@@ -113,10 +116,18 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   // must not replay it.
   const pendingResume = useRef<Map<string, string>>(new Map());
   const wrapperByKey = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Tab chips by key: with many tabs the strip scrolls horizontally, and a
+  // newly opened or activated tab can sit outside the scrolled viewport —
+  // scroll it back into view whenever the active tab changes.
+  const tabElByKey = useRef<Map<string, HTMLDivElement>>(new Map());
+  useEffect(() => {
+    tabElByKey.current.get(activeKey)?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+  }, [activeKey]);
   const rootRef = useRef<HTMLDivElement>(null);
   const insertMenuRef = useRef<HTMLDivElement>(null);
   const insertBtnRef = useRef<HTMLButtonElement>(null);
   const [insertOpen, setInsertOpen] = useState(false);
+  const [taskManagerOpen, setTaskManagerOpen] = useState(false);
   const [insertPos, setInsertPos] = useState<{ left: number; top: number } | null>(null);
   // Keyboard-navigable active row. State-driven (not DOM focus) so ↑/↓/Enter work
   // regardless of what holds focus — a native <button>.focus() doesn't stick in
@@ -126,6 +137,17 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   insertActiveRef.current = insertActive;
   const lastInsertId = useRef(0);
   const { commands } = useTerminalCommands();
+  // Agent hydration prompt body, loaded once; empty string = feature off.
+  const hydrationPromptRef = useRef("");
+  useEffect(() => {
+    // try/catch: unit-test mocks of the wailsjs module may not stub this
+    // binding; hydration simply stays off there.
+    try {
+      void ListAIPrompts()
+        .then((rows) => { hydrationPromptRef.current = rows?.find((p) => p.id === "agent_hydration")?.body ?? ""; })
+        .catch(() => {});
+    } catch { /* binding absent */ }
+  }, []);
 
   const focusTerminal = (key: string) => {
     wrapperByKey.current.get(key)
@@ -133,12 +155,15 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
       ?.focus();
   };
 
-  const setSession = (key: string, sessionId: string) => {
+  const setSession = (key: string, cwd: string, sessionId: string) => {
     if (!sessionId) {
+      const old = sessionByKey.current.get(key);
+      if (old) unregisterTermSession(old);
       sessionByKey.current.delete(key);
       return;
     }
     sessionByKey.current.set(key, sessionId);
+    registerTermSession(sessionId, { contextKey: contextName ?? "", contextId: persistKey, tabLabel: tabLabel(cwd), cwd });
     // A restored agent tab types its resume command as soon as its shell exists.
     // Writing immediately is safe: the tty buffers the line until the shell has
     // finished sourcing its rc files and starts reading input.
@@ -174,7 +199,13 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   const insertCommand = (command: string, sendEnter: boolean) => {
     const sid = sessionByKey.current.get(activeKey);
     if (!sid) return;
-    const text = applyPlaceholders(command, { "context-name": contextName ?? "" });
+    // Hydration prompt (editable in Prompts settings, id "agent_hydration"):
+    // becomes the agent's first argument so it boots primed with this context.
+    // Newlines are flattened — a raw \n would submit the command mid-typing.
+    const hydration = applyPlaceholders(hydrationPromptRef.current, { "context-name": contextName ?? "" })
+      .replace(/\s*\n\s*/g, " ").trim();
+    const substituted = applyPlaceholders(command, { "context-name": contextName ?? "" });
+    const text = withAgentHydration(substituted, hydration);
     // Append "\r" (Enter) only when the snippet opts in, otherwise just type it.
     if (text) void TerminalWrite(sid, sendEnter ? text + "\r" : text);
     focusActiveTerminal();
@@ -205,9 +236,12 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
 
   // Ask the backend which tabs have a coding-agent conversation on disk, and
   // remember the command that resumes it. Polled instead of computed on close,
-  // because a force-quit never runs an unmount handler.
+  // because a force-quit never runs an unmount handler. Paused while the tab
+  // is hidden — N background editor tabs each scanning transcripts every 15s
+  // adds up.
+  const resumePollVisible = useTabVisible();
   useEffect(() => {
-    if (!persistKey || terminals.length === 0) return;
+    if (!persistKey || terminals.length === 0 || !resumePollVisible) return;
     let cancelled = false;
     const refresh = async () => {
       const found = await Promise.all(
@@ -232,7 +266,7 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
     void refresh();
     const h = setInterval(() => void refresh(), 15000);
     return () => { cancelled = true; clearInterval(h); };
-  }, [persistKey, terminals]);
+  }, [persistKey, terminals, resumePollVisible]);
 
   const openTerminalAt = (cwd: string) => {
     if (!cwd) return;
@@ -258,26 +292,68 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
   }, [pendingOpen]);
 
   const closeTerminal = (key: string) => {
-    const idx = terminals.findIndex((t) => t.key === key);
+    const closed = terminals.find((t) => t.key === key);
     const remaining = terminals.filter((t) => t.key !== key);
     setTerminals(remaining);
     if (key === activeKey) {
-      const fallback = remaining[idx] ?? remaining[idx - 1] ?? remaining[0];
+      // Fall back within the SAME repo only — tabs of other repos are hidden by
+      // the repo filter, and activating one would silently flip the selector.
+      const pool = remaining.filter((t) => t.cwd === closed?.cwd);
+      const fallback = pool[pool.length - 1];
       setActiveKey(fallback?.key ?? "");
       if (fallback) setTimeout(() => focusTerminal(fallback.key), 0);
     }
   };
+
+  // ── Tabs are bound to the repo selector (two-way) ──
+  // Only the selected repo's tabs are shown; the others stay mounted (PTYs
+  // keep running) but hidden.
+  const visibleTerminals = spawnCwd ? terminals.filter((t) => t.cwd === spawnCwd) : terminals;
+  // Selector changed → land on that repo's tab (or none, if it has no tabs).
+  // prevSpawnCwd guards the mount run: reacting there would race the seeding
+  // effect's setActiveKey (its setState hasn't applied yet) and clobber it.
+  const prevSpawnCwd = useRef(spawnCwd);
+  useEffect(() => {
+    if (prevSpawnCwd.current === spawnCwd) return;
+    prevSpawnCwd.current = spawnCwd;
+    // Empty list = the seeding effect is populating in this same pass (its
+    // setState hasn't applied yet) — let it pick the active tab.
+    if (!spawnCwd || terminals.length === 0) return;
+    const active = terminals.find((t) => t.key === activeKey);
+    if (active?.cwd === spawnCwd) return;
+    setActiveKey(terminals.find((t) => t.cwd === spawnCwd)?.key ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spawnCwd]);
+  // Activated a tab of another repo (e.g. "Open terminal here" from the file
+  // tree) → tell the parent so the repo selector follows.
+  useEffect(() => {
+    const active = terminals.find((t) => t.key === activeKey);
+    if (active && spawnCwd && active.cwd !== spawnCwd) onActiveCwd?.(active.cwd);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey]);
 
   // Switch active terminal and move keyboard focus into it (used by hotkeys).
   const switchTo = (key: string) => {
     setActiveKey(key);
     setTimeout(() => focusTerminal(key), 0);
   };
+  // "Jump to the waiting terminal" (toast / hotkey): activate the tab that
+  // owns the session; focusing xterm then clears the waiting mark.
+  useEffect(() => {
+    const onFocus = (e: Event) => {
+      const sid = (e as CustomEvent<{ sessionId: string }>).detail?.sessionId;
+      for (const [key, id] of sessionByKey.current) if (id === sid) { switchTo(key); return; }
+    };
+    window.addEventListener(FOCUS_TERMINAL_EVENT, onFocus);
+    return () => window.removeEventListener(FOCUS_TERMINAL_EVENT, onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const cycleTerminal = (dir: 1 | -1) => {
-    const n = terminals.length;
+    const pool = visibleTerminals;
+    const n = pool.length;
     if (n === 0) return;
-    const idx = terminals.findIndex((t) => t.key === activeKey);
-    switchTo(terminals[(idx + dir + n) % n].key);
+    const idx = pool.findIndex((t) => t.key === activeKey);
+    switchTo(pool[(idx + dir + n) % n].key);
   };
 
   // Rebindable terminal commands via the hotkey layer: ⌘T new, ⌘⇧T here, ⌘I
@@ -368,9 +444,10 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
           keep one spot however many tabs open; only the tabs strip scrolls. */}
       <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 4px", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 2, flex: 1, minWidth: 0, overflowX: "auto", order: 1 }}>
-        {terminals.map((t) => (
+        {visibleTerminals.map((t) => (
           <div
             key={t.key}
+            ref={(el) => { if (el) tabElByKey.current.set(t.key, el); else tabElByKey.current.delete(t.key); }}
             onClick={() => setActiveKey(t.key)}
             title={t.cwd}
             style={{
@@ -398,6 +475,14 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
           style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 4px", flexShrink: 0 }}
         >
           <Plus size={13} />
+        </button>
+        <button
+          onClick={() => setTaskManagerOpen(true)}
+          aria-label="task manager"
+          title="Task Manager (per-tab CPU / RAM)"
+          style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 4px", flexShrink: 0 }}
+        >
+          <Activity size={13} />
         </button>
         <div style={{ position: "relative", flexShrink: 0, order: -1 }}>
           <button
@@ -447,13 +532,14 @@ export function TerminalPanel({ spawnCwd, contextName, pendingInsert, pendingOpe
             style={{ position: "absolute", inset: 0, display: t.key === activeKey ? "block" : "none" }}>
             {/* `exit` in the shell retires the tab with it — a dead terminal is
                 nothing to keep a tab for. */}
-            <Terminal cwd={t.cwd} onSession={(id) => setSession(t.key, id)} onExit={() => closeTerminal(t.key)} />
+            <Terminal cwd={t.cwd} onSession={(id) => setSession(t.key, t.cwd, id)} onExit={() => closeTerminal(t.key)} />
           </div>
         ))}
-        {terminals.length === 0 && (
-          <div style={{ fontSize: 12, padding: 12 }}>{spawnCwd ? "No terminal." : "No repo path on disk."}</div>
+        {visibleTerminals.length === 0 && (
+          <div style={{ fontSize: 12, padding: 12 }}>{spawnCwd ? "No terminal for this repo — press + to open one." : "No repo path on disk."}</div>
         )}
       </div>
+      {taskManagerOpen && <TaskManagerModal onClose={() => setTaskManagerOpen(false)} />}
     </div>
   );
 }

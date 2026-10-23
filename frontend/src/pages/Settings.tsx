@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Copy, Check } from "lucide-react";
-import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, SetAskChatRetentionDays, SetProductivitySettings, SetStatsAuthorName, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
+import { GetAISettings, SetAISettings, GetSupportedPlatforms, GetVCSAuth, VCSLoginStart, VCSLoginComplete, GetAppSettings, SetAppSettings, SetAutoLinkRepos, SetPRStaleThresholdDays, SetAskChatRetentionDays, SetJiraOrgField, SetProductivitySettings, SetStatsAuthorName, GetKeybindings, UpdateKeybinding, ResetKeybinding, ListTerminalCommands, AddTerminalCommand, UpdateTerminalCommand, DeleteTerminalCommand } from "../../wailsjs/go/main/App";
 import type { store } from "../../wailsjs/go/models";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { AISettings, AppSettings, VCSPlatformInfo, VCSPlatform, DeviceCodeInfo, Keybinding } from "../types";
@@ -9,6 +9,8 @@ import WorkflowStatusManager from "../components/WorkflowStatusManager";
 import KeybindingRow from "../components/KeybindingRow";
 import GlobalEventHooks from "../components/GlobalEventHooks";
 import { readVimMode, setVimMode } from "../lib/vimMode";
+import { readPrefs as readAttentionPrefs, writePrefs as writeAttentionPrefs, type AttentionPrefs } from "../lib/terminalAttention";
+import { AgentNotificationsStatus, EnableAgentNotifications } from "../../wailsjs/go/main/App";
 
 // Group bindings by their `object` field, preserving first-seen order.
 function groupKeybindings(kbs: Keybinding[]): [string, Keybinding[]][] {
@@ -73,7 +75,14 @@ type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 
 export default function SettingsPage() {
   const { activeTabId, closeTab, navigateBack } = useTabContext();
-  const [tab, setTab] = useState<SettingsTabId>("hotkeys");
+  const [tab, setTab] = useState<SettingsTabId>(() => {
+    // Deep link from the setup checklist ("app-settings:<tab>").
+    try {
+      const want = localStorage.getItem("vibecodeway:settings:tab");
+      if (want) { localStorage.removeItem("vibecodeway:settings:tab"); if (SETTINGS_TABS.some((t) => t.id === want)) return want as SettingsTabId; }
+    } catch { /* ignore */ }
+    return "hotkeys";
+  });
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [provider, setProvider] = useState<"openai" | "anthropic" | "local">("openai");
   const [apiKey, setApiKey] = useState("");
@@ -96,12 +105,31 @@ export default function SettingsPage() {
   // Background refresh settings
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [vimEnabled, setVimEnabled] = useState(readVimMode);
+  // Agent "waiting for input" notifications.
+  const [attention, setAttention] = useState<AttentionPrefs>(readAttentionPrefs);
+  const setAttentionPref = (patch: Partial<AttentionPrefs>) =>
+    setAttention((p) => { const n = { ...p, ...patch }; writeAttentionPrefs(n); return n; });
+  const [agentNotify, setAgentNotify] = useState<{ claudeBell: boolean; codexNotifications: boolean } | null>(null);
+  const [agentNotifyMsg, setAgentNotifyMsg] = useState("");
+  useEffect(() => {
+    try { void AgentNotificationsStatus().then(setAgentNotify).catch(() => {}); } catch { /* binding absent in tests */ }
+  }, []);
+  const enableAgentNotifications = async () => {
+    setAgentNotifyMsg("");
+    try {
+      setAgentNotify(await EnableAgentNotifications());
+      setAgentNotifyMsg("Enabled. Restart running agents to pick it up.");
+    } catch (e) {
+      setAgentNotifyMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
   const [contextRefetchEnabled, setContextRefetchEnabled] = useState(false);
   const [contextRefetchInterval, setContextRefetchInterval] = useState(30);
   const [reviewsRefetchEnabled, setReviewsRefetchEnabled] = useState(false);
   const [reviewsRefetchInterval, setReviewsRefetchInterval] = useState(30);
   const [prStaleThreshold, setPrStaleThreshold] = useState(7);
   const [askChatRetention, setAskChatRetention] = useState(30);
+  const [jiraOrgField, setJiraOrgField] = useState("");
   const [workdayHours, setWorkdayHours] = useState(8);
   const [taskHours, setTaskHours] = useState(2);
   const [statsAuthorName, setStatsAuthorName] = useState("");
@@ -158,6 +186,7 @@ export default function SettingsPage() {
           setReviewsRefetchInterval(typedAppS.reviewsRefetchIntervalMin);
           setPrStaleThreshold(typedAppS.prStaleThresholdDays ?? 7);
           setAskChatRetention(typedAppS.askChatRetentionDays ?? 30);
+          setJiraOrgField(typedAppS.jiraOrgField ?? "");
           setWorkdayHours(typedAppS.workdayHours ?? 8);
           setTaskHours(typedAppS.taskHours ?? 2);
           setStatsAuthorName(typedAppS.statsAuthorName ?? "");
@@ -233,6 +262,7 @@ export default function SettingsPage() {
       await SetAutoLinkRepos(autoLinkRepos);
       await SetPRStaleThresholdDays(Math.max(1, prStaleThreshold));
       await SetAskChatRetentionDays(Math.max(0, askChatRetention));
+      await SetJiraOrgField(jiraOrgField.trim());
       // Clamping (including the upper bound) is enforced server-side in
       // SetProductivitySettings — the single authority for this policy.
       await SetProductivitySettings(workdayHours, taskHours);
@@ -244,6 +274,7 @@ export default function SettingsPage() {
       setAutoLinkRepos(updated.autoLinkReposOnContextCreate ?? true);
       setPrStaleThreshold(updated.prStaleThresholdDays ?? 7);
       setAskChatRetention(updated.askChatRetentionDays ?? 30);
+      setJiraOrgField(updated.jiraOrgField ?? "");
       setWorkdayHours(updated.workdayHours ?? 8);
       setTaskHours(updated.taskHours ?? 2);
       setStatsAuthorName(updated.statsAuthorName ?? "");
@@ -570,6 +601,27 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Jira scope/service custom field (splits My Board by "org") */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <label style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  Jira scope field
+                </label>
+                <input
+                  type="text"
+                  className="passphrase-input"
+                  value={jiraOrgField}
+                  onChange={(e) => setJiraOrgField(e.target.value)}
+                  placeholder="customfield_12345"
+                  aria-label="Jira scope custom field"
+                  style={{ width: 180 }}
+                />
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                Optional. A custom field whose value names the ticket's service or scope; My Board groups tickets by it. Leave empty if your Jira has none.
+              </div>
+            </div>
+
             {/* Ask AI chat retention */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -664,6 +716,36 @@ export default function SettingsPage() {
         {tab === "hooks" && <GlobalEventHooks />}
 
         {tab === "terminal" && (<>
+        <section className="detail-section">
+          <div className="detail-section-header">
+            <span className="detail-section-title">Agent notifications</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 14px", fontSize: 13 }}>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              When a coding agent in an in-app terminal finishes and waits for you, the owning tab lights up and you can jump to it (⌘⇧J).
+              The signal comes from the agents themselves: Claude Code's terminal bell and Codex's TUI notifications.
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" className="btn-secondary" onClick={() => void enableAgentNotifications()}>Enable in Claude Code &amp; Codex</button>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                Claude Code: {agentNotify ? (agentNotify.claudeBell ? "bell on" : "off") : "…"} · Codex: {agentNotify ? (agentNotify.codexNotifications ? "notifications on" : "off") : "…"}
+              </span>
+              {agentNotifyMsg && <span style={{ fontSize: 12 }}>{agentNotifyMsg}</span>}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={attention.highlight} onChange={(e) => setAttentionPref({ highlight: e.target.checked })} />
+              Highlight the context tab in the sidebar
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={attention.toast} onChange={(e) => setAttentionPref({ toast: e.target.checked })} />
+              In-app toast with a jump link (only when that terminal is not on screen)
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={attention.native} onChange={(e) => setAttentionPref({ native: e.target.checked })} />
+              macOS notification when the app is in the background
+            </label>
+          </div>
+        </section>
         <section className="detail-section">
           <div className="detail-section-header">
             <span className="detail-section-title">Terminal</span>

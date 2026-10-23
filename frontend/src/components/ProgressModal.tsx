@@ -22,7 +22,9 @@ export default function ProgressModal() {
         className="bg-refresh-toast"
         role="status"
         // Sits above the bg-refresh toast's spot so the two never overlap.
-        style={{ bottom: 76, cursor: "pointer" }}
+        // pointer-events: the shared toast class sets none (the done-toast is
+        // passive); this one must stay clickable to expand.
+        style={{ bottom: 76, cursor: "pointer", pointerEvents: "auto" }}
         onClick={() => setMinimized(false)}
         title="Click to expand"
         data-testid="progress-minimized"

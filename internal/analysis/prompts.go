@@ -25,12 +25,13 @@ A branch belongs to this context if its name references the context's ticket key
 
 Respond with ONLY a JSON array of the 0-based indices of matching branches (e.g. [0, 3]). If none match, return [].`
 
-// defaultAgentTaskPrompt mirrors migration 082's seed body for "agent_task":
+// defaultAgentTaskPrompt mirrors migration 128's body for "agent_task":
 // used by BuildAgentTask to assemble a coding-agent instruction string from a
 // context's linked tickets and on-disk repos. Pure string assembly — no LLM
 // call is made with this prompt; it is handed to an external coding agent.
-const defaultAgentTaskPrompt = `/superpowers:writing-plans
-/vibecodeway-load-context {{context_key}}
+// Skill names carry no leading slash: Codex does not resolve slash commands.
+const defaultAgentTaskPrompt = `superpowers:writing-plans
+vibecodeway-load-context {{context_key}}
 
 You are a coding agent. Implement the task below using the git worktrees checked out on disk.
 
@@ -49,13 +50,15 @@ You are a coding agent. Implement the task below using the git worktrees checked
 ## Filesystem scope (STRICT)
 The worktrees listed under "Workspaces on disk" are the ONLY locations you may read from or write to. Do NOT read, edit, create, or delete files anywhere else on the filesystem, and do NOT ` + "`cd`" + ` into or run shell commands that touch paths outside them (no other repositories, no home-directory files such as ~/.ssh or ~/.config, no system paths). If the task appears to require a file outside these worktrees, STOP and ask the user instead of proceeding.
 
+Exception — skills: it is OK to load and read agent skills, prompts, and plugin files that live outside these worktrees (e.g. under ~/.claude or ~/.codex) — the user explicitly approves loading skills from outside the working paths. This exception is read-only: never write outside the worktrees.
+
 Work directly in these worktrees to implement the task. Inspect the relevant files, make the changes, and keep them scoped to the task.`
 
-// defaultPRReviewPrompt mirrors migration 085's seed body for "pr_review":
+// defaultPRReviewPrompt mirrors migration 128's body for "pr_review":
 // used by BuildReviewTask to assemble a PR-review instruction string for an
 // external coding agent. Pure string assembly — no LLM call is made with
 // this prompt.
-const defaultPRReviewPrompt = `/vibecodeway-load-context {{context_key}}
+const defaultPRReviewPrompt = `vibecodeway-load-context {{context_key}}
 
 You are a senior code reviewer. Review pull request #{{pr_number}} — {{pr_title}}.
 

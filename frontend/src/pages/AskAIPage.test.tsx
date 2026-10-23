@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const { AskAIChat, SummarizeAskChat, ListAgentTools, SaveAskChat, ListAskChats, GetAskChat, DeleteAskChat } = vi.hoisted(() => ({
+const { AskAIChat, SummarizeAskChat, ListAgentTools, SaveAskChat, ListAskChats, GetAskChat, DeleteAskChat, ListTrackedRepos, ListRepoLocalPaths, ListLocalBranches, EnsureBranchWorktree } = vi.hoisted(() => ({
+  ListTrackedRepos: vi.fn().mockResolvedValue([]),
+  ListRepoLocalPaths: vi.fn().mockResolvedValue([]),
+  ListLocalBranches: vi.fn().mockResolvedValue([]),
+  EnsureBranchWorktree: vi.fn(),
   AskAIChat: vi.fn(),
   SummarizeAskChat: vi.fn(),
   ListAgentTools: vi.fn(),
@@ -19,8 +23,15 @@ vi.mock("../../wailsjs/go/main/App", () => ({
   GetAskChat,
   DeleteAskChat,
   ListAgentTools: ListAgentTools.mockResolvedValue([{ name: "search_contexts", description: "Full-text search across contexts." }]),
-  ListOrganizations: vi.fn().mockResolvedValue([{ id: "o1", name: "jiro" }]),
+  ListOrganizations: vi.fn().mockResolvedValue([{ id: "o1", name: "acme" }]),
   ResolveToolConfirmation: vi.fn(),
+  ListTrackedRepos,
+  ListRepoLocalPaths,
+  ListLocalBranches,
+  EnsureBranchWorktree,
+}));
+vi.mock("../components/editor/TerminalPanel", () => ({
+  TerminalPanel: ({ spawnCwd }: { spawnCwd: string }) => <div data-testid="term">{spawnCwd}</div>,
 }));
 
 // Capture the ask:progress handler so the test can drive live events.
@@ -277,5 +288,23 @@ describe("AskAIPage DB history", () => {
     expect(DeleteAskChat).toHaveBeenCalledWith("old-1");
     expect(screen.queryByText("older answer")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /delete chat/i })).toBeDisabled();
+  });
+
+  it("repo → branch picker opens an in-app terminal at the branch worktree", async () => {
+    ListTrackedRepos.mockResolvedValue([{ id: "repo1", owner: "acme", name: "widgets" }]);
+    ListRepoLocalPaths.mockResolvedValue([{ id: "p1", path: "/tmp/widgets" }]);
+    ListLocalBranches.mockResolvedValue([{ name: "main", isCurrent: false }, { name: "feat/x", isCurrent: true }]);
+    EnsureBranchWorktree.mockResolvedValue("/tmp/widgets/.worktrees/feat_x");
+    const user = userEvent.setup();
+    render(<AskAIPage />);
+
+    await user.selectOptions(await screen.findByLabelText("Repository"), "repo1");
+    const branchSel = (await screen.findByLabelText("Branch")) as HTMLSelectElement;
+    await screen.findByRole("option", { name: "feat/x" });
+    expect(branchSel.value).toBe("feat/x");
+
+    await user.click(screen.getByRole("button", { name: /open agent terminal/i }));
+    expect(EnsureBranchWorktree).toHaveBeenCalledWith("repo1", "feat/x");
+    expect(await screen.findByTestId("term")).toHaveTextContent("/tmp/widgets/.worktrees/feat_x");
   });
 });

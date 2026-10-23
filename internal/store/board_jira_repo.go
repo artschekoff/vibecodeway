@@ -111,8 +111,10 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 		}
 
 		// Only a *transition* counts. An issue that is already terminal the first
-		// time we see it has no observed close date and is skipped.
-		if old, seen := prevStatus[it.Key]; seen && !IsTerminalTicketStatus(old) && IsTerminalTicketStatus(it.Status) {
+		// time we see it has no observed close date and is skipped. NotMine rows
+		// (parents of the user's subtasks, assigned to someone else) are on the
+		// board for visibility only — their closes are not the user's work.
+		if old, seen := prevStatus[it.Key]; seen && !it.NotMine && !IsTerminalTicketStatus(old) && IsTerminalTicketStatus(it.Status) {
 			if err := recordTaskCompletion(ctx, tx, it, now); err != nil {
 				return err
 			}
@@ -121,7 +123,7 @@ func (s *Store) UpsertBoardJiraAssignments(ctx context.Context, issues []BoardJi
 		// Same idea for task_started: only a transition *into* In Progress counts,
 		// and only when we actually saw a prior status (an issue already In
 		// Progress the first time we see it has no observed start time).
-		if old, seen := prevStatus[it.Key]; seen && !strings.EqualFold(old, "In Progress") && strings.EqualFold(it.Status, "In Progress") {
+		if old, seen := prevStatus[it.Key]; seen && !it.NotMine && !strings.EqualFold(old, "In Progress") && strings.EqualFold(it.Status, "In Progress") {
 			if err := recordTaskStarted(ctx, tx, it, now); err != nil {
 				return err
 			}
@@ -159,6 +161,12 @@ func (s *Store) ListBoardJiraAssignments(ctx context.Context, orderBy string) ([
 		var ctxID, ctxKey sql.NullString
 		if err := rows.Scan(&it.Key, &it.Summary, &it.Status, &it.IssueType, &it.Priority, &it.Created, &it.Org, &seen, &it.FetchedAt, &ctxID, &ctxKey); err != nil {
 			return nil, fmt.Errorf("scan board jira: %w", err)
+		}
+		// Terminal tickets stay in the table (the upsert needs the previous
+		// status to record completions for productivity stats) but are finished
+		// work — they do not belong on the To-Do board or in todo generation.
+		if IsTerminalTicketStatus(it.Status) {
+			continue
 		}
 		it.Seen = seen != 0
 		if ctxID.Valid && ctxID.String != "" {
@@ -206,10 +214,58 @@ func (s *Store) SetBoardAssignmentOrg(ctx context.Context, key, org string) erro
 	return nil
 }
 
+// ResetBoardOrgChecks re-queues every assignment for the org backfill (the
+// Jira scope field changed, so cached orgs are stale).
+func (s *Store) ResetBoardOrgChecks(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE board_jira_assignments SET org = '', org_checked = 0`)
+	return err
+}
+
 // MarkBoardJiraAssignmentsSeen marks every persisted assignment as seen.
 func (s *Store) MarkBoardJiraAssignmentsSeen(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `UPDATE board_jira_assignments SET seen = 1 WHERE seen = 0`); err != nil {
 		return fmt.Errorf("mark board jira seen: %w", err)
+	}
+	return nil
+}
+
+// GetSubtaskParents returns the cached subtask→parent mapping for the given
+// subtask keys (missing keys are simply absent from the result).
+func (s *Store) GetSubtaskParents(ctx context.Context, keys []string) (map[string]string, error) {
+	out := make(map[string]string, len(keys))
+	if len(keys) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(keys))
+	placeholders := make([]string, len(keys))
+	for i, k := range keys {
+		args[i] = k
+		placeholders[i] = "?"
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT subtask_key, parent_key FROM jira_subtask_parents WHERE subtask_key IN (`+strings.Join(placeholders, ",")+`)`,
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("get subtask parents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var sub, parent string
+		if err := rows.Scan(&sub, &parent); err != nil {
+			return nil, fmt.Errorf("scan subtask parent: %w", err)
+		}
+		out[sub] = parent
+	}
+	return out, rows.Err()
+}
+
+// SetSubtaskParent caches a subtask's parent key permanently.
+func (s *Store) SetSubtaskParent(ctx context.Context, subtaskKey, parentKey string) error {
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO jira_subtask_parents (subtask_key, parent_key) VALUES (?, ?)
+		 ON CONFLICT(subtask_key) DO UPDATE SET parent_key = excluded.parent_key`,
+		subtaskKey, parentKey); err != nil {
+		return fmt.Errorf("set subtask parent %s: %w", subtaskKey, err)
 	}
 	return nil
 }

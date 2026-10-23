@@ -42,6 +42,20 @@ beforeEach(() => {
 });
 
 describe("ChangedFilesPanel", () => {
+  it("warns when the status limit truncated the list (VS Code git.statusLimit)", async () => {
+    GetContextChanges.mockResolvedValue([
+      {
+        repoName: "acme/api",
+        repoPath: "/r/api",
+        didHitLimit: true,
+        statusLimit: 10000,
+        files: [{ path: "work.ts", status: "modified", diff: "", indexStatus: "", workStatus: "modified" }],
+      },
+    ]);
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/only the first 10,000/));
+  });
+
   it("groups files into Staged Changes and Local Changes", async () => {
     render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Staged Changes")).toBeInTheDocument());
@@ -153,12 +167,10 @@ describe("ChangedFilesPanel", () => {
     expect(onOpenFile).toHaveBeenCalledWith("/r/api", "acme/api", "feature.ts", "added", "branch");
   });
 
-  it("shows a GitHub-refresh icon in the repo header and calls onRefresh", async () => {
-    const onRefresh = vi.fn();
-    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} onRefresh={onRefresh} />);
+  it("has no per-repo refresh button — the sidebar reload owns re-sync", async () => {
+    render(<ChangedFilesPanel contextId="c1" onOpenFile={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("acme/api")).toBeInTheDocument());
-    fireEvent.click(screen.getByLabelText("refresh from github"));
-    expect(onRefresh).toHaveBeenCalled();
+    expect(screen.queryByLabelText("refresh from github")).not.toBeInTheDocument();
   });
 
   it("copies the repo path and opens a terminal from the repo header", async () => {

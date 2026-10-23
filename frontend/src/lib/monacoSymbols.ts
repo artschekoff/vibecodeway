@@ -50,9 +50,17 @@ let activeDeps: SymbolNavDeps | null = null;
 // editor opener that routes cross-file targets through the app's file tabs.
 // Call on every mount/visibility change of the active workspace — it always
 // updates activeDeps, but only registers monaco's providers/opener once.
-export function registerMonacoSymbols(deps: SymbolNavDeps): void {
+// releaseMonacoSymbols drops the shared deps IF they still belong to the
+// releasing workspace — called on unmount so a closed editor tab's closures
+// (contextId, file opener) are not retained by the module-level slot. A newer
+// workspace's deps are left untouched.
+export function releaseMonacoSymbols(deps: SymbolNavDeps): void {
+  if (activeDeps === deps) activeDeps = null;
+}
+
+export function registerMonacoSymbols(deps: SymbolNavDeps): SymbolNavDeps {
   activeDeps = deps;
-  if (done) return;
+  if (done) return deps;
   done = true;
 
   monaco.languages.registerDefinitionProvider("*", {
@@ -103,4 +111,5 @@ export function registerMonacoSymbols(deps: SymbolNavDeps): void {
       return true;
     },
   });
+  return deps;
 }

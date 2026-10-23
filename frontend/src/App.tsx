@@ -13,8 +13,11 @@ import { ListAllContexts, ListOrganizations, GetKeybindings, AppVersion } from "
 import { ProgressProvider } from "./contexts/ProgressContext";
 import ProgressModal from "./components/ProgressModal";
 import { QuickAttachOverlay } from "./components/QuickAttachOverlay";
-import { AccessibilityBanner } from "./components/AccessibilityBanner";
+import { AgentWaitingToast } from "./components/AgentWaitingToast";
+import { ReadinessModal, READINESS_SEEN_KEY, OPEN_READINESS_EVENT } from "./components/ReadinessModal";
+import { RunReadinessChecks } from "../wailsjs/go/main/App";
 import { BgRefreshToast } from "./components/BgRefreshToast";
+import { CheckoutLog } from "./components/CheckoutLog";
 import { EventsOn, EventsOff, SendNotification, InitializeNotifications, Environment } from "../wailsjs/runtime/runtime";
 import { hookNotificationOptions, type HookNotifyPayload } from "./lib/hookNotify";
 import { HotkeyProvider } from "./hotkeys/HotkeyProvider";
@@ -28,7 +31,7 @@ import logo from "./assets/images/logo.png";
 import "./style.css";
 
 // The context rail starts as an icon-only strip; dragging it wide enough gives
-// context names room to render in full instead of truncating to "juna-healt…".
+// context names room to render in full instead of truncating to "acme-fronte…".
 export const SIDEBAR_RAIL_KEY = "vibecodeway:app:sidebarRailWidth";
 export const RAIL_MIN = 72;   // the icon-only width the rail shipped with
 export const RAIL_MAX = 320;
@@ -63,12 +66,28 @@ function AppShell() {
       if (w > RAIL_MIN) { lastExpanded.current = w; return RAIL_MIN; }
       return lastExpanded.current;
     });
-  const [showA11yBanner, setShowA11yBanner] = useState(false);
+  // Setup checklist: first launch, a failing required check, or ☰ → Setup check.
+  const [readinessOpen, setReadinessOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setReadinessOpen(true);
+    window.addEventListener(OPEN_READINESS_EVENT, open);
+    if (isWailsContext()) {
+      RunReadinessChecks().then((list) => {
+        const seen = (() => { try { return localStorage.getItem(READINESS_SEEN_KEY); } catch { return "1"; } })();
+        const failing = (list ?? []).some((c) => c.required && c.status === "fail");
+        if (!seen || failing) setReadinessOpen(true);
+        try { localStorage.setItem(READINESS_SEEN_KEY, "1"); } catch { /* ignore */ }
+      }).catch(() => {});
+    }
+    return () => window.removeEventListener(OPEN_READINESS_EVENT, open);
+  }, []);
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { openContextTab, openAskTab, tabs, activeTabId, forceCloseTab } = useTabContext();
+  const { openContextTab, openAskTab, tabs, activeTabId, forceCloseTab, openSettingsTab } = useTabContext();
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const activeOrgId = activeTab?.type === "org" ? activeTab.orgId : undefined;
+  // Org tabs AND context tabs carry orgId — use whichever is active so the
+  // quick-attach picker scopes to the organization the user is working in.
+  const activeOrgId = activeTab?.orgId;
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -83,8 +102,9 @@ function AppShell() {
     InitializeNotifications().catch(() => {});
     const offPicker = EventsOn("hotkey:show-picker", (text: string) =>
       setPicker({ visible: true, text: text ?? "" }));
-    const offA11y = EventsOn("accessibility:needed", () => setShowA11yBanner(true));
-    const offA11yGranted = EventsOn("accessibility:granted", () => setShowA11yBanner(false));
+    // First hotkey use without the Accessibility grant: the setup checklist
+    // shows the missing permission with its fix button.
+    const offA11y = EventsOn("accessibility:needed", () => setReadinessOpen(true));
     const offNoSelection = EventsOn("hotkey:no-selection", () =>
       showToast("No text selected — select text in another app first"));
     const offHookNotify = EventsOn("hook:notify", (payload: HookNotifyPayload) => {
@@ -101,7 +121,6 @@ function AppShell() {
     return () => {
       safeOff(offPicker, "hotkey:show-picker");
       safeOff(offA11y, "accessibility:needed");
-      safeOff(offA11yGranted, "accessibility:granted");
       safeOff(offNoSelection, "hotkey:no-selection");
       safeOff(offHookNotify, "hook:notify");
       safeOff(offAutoLink, "autolink:done");
@@ -185,7 +204,7 @@ function AppShell() {
           <TabContent />
         </div>
       </div>
-      {showA11yBanner && <AccessibilityBanner onDismiss={() => setShowA11yBanner(false)} />}
+      {readinessOpen && <ReadinessModal onClose={() => setReadinessOpen(false)} openSettings={openSettingsTab} />}
       <QuickAttachOverlay
         visible={picker.visible}
         text={picker.text}
@@ -194,6 +213,8 @@ function AppShell() {
         onDismiss={() => setPicker({ visible: false, text: "" })}
       />
       {toastMsg && <div className="toast toast--success">{toastMsg}</div>}
+      <CheckoutLog />
+      <AgentWaitingToast />
       <BgRefreshToast />
     </ProgressProvider>
   );

@@ -21,15 +21,15 @@ func TestReviewContextForRepoIsIdempotent(t *testing.T) {
 
 	a := &App{db: s, ctx: ctx, logger: newTestLogger()}
 
-	id1, err := a.reviewContextForRepo("repo-x", "juna-api")
+	id1, err := a.reviewContextForRepo("repo-x", "acme-api")
 	require.NoError(t, err)
 	require.NotEmpty(t, id1)
 
-	id2, err := a.reviewContextForRepo("repo-x", "juna-api")
+	id2, err := a.reviewContextForRepo("repo-x", "acme-api")
 	require.NoError(t, err)
 	require.Equal(t, id1, id2) // second call returns the SAME context, not a duplicate
 
-	c, err := s.GetContextByKey(ctx, "juna-api — reviews")
+	c, err := s.GetContextByKey(ctx, "acme-api — reviews")
 	require.NoError(t, err)
 	assert.Equal(t, id1, c.ID)
 }

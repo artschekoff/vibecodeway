@@ -28,15 +28,6 @@ func ParseTime(s string) time.Time {
 	return time.Time{}
 }
 
-// formatDateStr parses a stored date string and returns a short human-readable form.
-func formatDateStr(s string) string {
-	t := ParseTime(s)
-	if t.IsZero() {
-		return s
-	}
-	return t.Format("Jan 2, 2006")
-}
-
 // FormatDateTime parses a stored date string and returns "YYYY-MM-DD HH:MM".
 func FormatDateTime(s string) string {
 	t := ParseTime(s)
@@ -55,12 +46,4 @@ func indent(text, prefix string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
-}
-
-// plural returns "s" when n != 1.
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }

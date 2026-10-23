@@ -3,9 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../lib/monacoSetup", () => ({ setupMonaco: vi.fn() }));
 
-let mountCb: ((editor: unknown) => void) | undefined;
+let mountCb: ((editor: unknown, monaco?: unknown) => void) | undefined;
 vi.mock("@monaco-editor/react", () => ({
-  DiffEditor: (props: { onMount?: (e: unknown) => void }) => {
+  DiffEditor: (props: { onMount?: (e: unknown, m?: unknown) => void }) => {
     mountCb = props.onMount;
     return <div data-testid="diff-editor" />;
   },
@@ -57,6 +57,61 @@ describe("DiffEditorTab", () => {
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() => expect(SaveRepoFile).toHaveBeenCalledWith("/r/api", "src/a.ts", "edited\n"));
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("re-centers the tour anchor line after the diff layout lands (onDidUpdateDiff)", async () => {
+    ReadRepoFile.mockResolvedValue("line1\nline2\nANCHOR here\nline4\n");
+    const revealLineInCenter = vi.fn();
+    let diffListener: (() => void) | undefined;
+    const disposeSpy = vi.fn();
+
+    render(
+      <EditorSettingsProvider>
+        <DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={vi.fn()} highlightAnchor="ANCHOR here" />
+      </EditorSettingsProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
+
+    mountCb?.(
+      {
+        getModifiedEditor: () => ({
+          getValue: () => "",
+          deltaDecorations: vi.fn().mockReturnValue([]),
+          revealLineInCenter,
+        }),
+        onDidUpdateDiff: (l: () => void) => { diffListener = l; return { dispose: disposeSpy }; },
+      },
+      { Range: class { constructor() { /* range stub */ } } }
+    );
+
+    // Immediate reveal at the anchor's line (3) once content + editor are ready.
+    await waitFor(() => expect(revealLineInCenter).toHaveBeenCalledWith(3));
+
+    // Alignment view zones land later and shift line positions — the diff
+    // update must re-center the same line, then unsubscribe.
+    diffListener?.();
+    expect(revealLineInCenter).toHaveBeenLastCalledWith(3);
+    expect(revealLineInCenter.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(disposeSpy).toHaveBeenCalled();
+  });
+
+  it("markdown files get a preview toggle rendering the live model text", async () => {
+    ReadRepoFile.mockResolvedValue("# Title\n");
+    render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="docs/readme.md" onSaved={vi.fn()} /></EditorSettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
+
+    mountCb?.({ getModifiedEditor: () => ({ getValue: () => "# Live Heading\n" }) });
+    fireEvent.click(screen.getByRole("button", { name: "toggle markdown preview" }));
+    expect(screen.getByRole("heading", { name: "Live Heading" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "toggle markdown preview" }));
+    expect(screen.queryByRole("heading", { name: "Live Heading" })).not.toBeInTheDocument();
+  });
+
+  it("non-markdown files have no preview toggle", async () => {
+    render(<EditorSettingsProvider><DiffEditorTab repoPath="/r/api" path="src/a.ts" onSaved={vi.fn()} /></EditorSettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("diff-editor")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "toggle markdown preview" })).not.toBeInTheDocument();
   });
 
   it("baseMode='head' diffs against HEAD (uncommitted only), not the merge-base", async () => {

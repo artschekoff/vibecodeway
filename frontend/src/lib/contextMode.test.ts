@@ -3,7 +3,7 @@ import { editorModeForKey, editorModeLabel } from "./contextMode";
 
 describe("editorModeForKey", () => {
   it("detects PR-review contexts by their owner/name#number key", () => {
-    expect(editorModeForKey("juna-health/juna-api#4521")).toBe("review");
+    expect(editorModeForKey("acme/acme-api#4521")).toBe("review");
   });
 
   it("treats Jira-keyed and other contexts as context editing", () => {

@@ -26,6 +26,7 @@ const issue = (over: Record<string, unknown>) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.setItem("cc:board-view", "list");
   H.GetVCSAuth.mockResolvedValue(null);
   H.GetPendingCodeReviews.mockResolvedValue([]);
   H.ListTodoNext.mockResolvedValue([]);

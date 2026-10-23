@@ -25,3 +25,9 @@ func (a *App) TerminalResize(sessionID string, cols, rows int) error {
 func (a *App) TerminalClose(sessionID string) error {
 	return a.ptyMgr.Close(sessionID)
 }
+
+// GetProcessStats returns Task Manager data: CPU/RSS aggregated over the app's
+// own process subtree and over each live PTY session's subtree.
+func (a *App) GetProcessStats() (pty.ProcessStats, error) {
+	return a.ptyMgr.ProcessStats()
+}

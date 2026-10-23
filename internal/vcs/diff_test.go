@@ -37,9 +37,18 @@ func TestRepoDiff(t *testing.T) {
 	}
 	require.Contains(t, byPath, "a.txt")
 	assert.Equal(t, "modified", byPath["a.txt"].Status)
-	assert.Contains(t, byPath["a.txt"].Diff, "+two")
+	// Diffs are lazy now — the list carries no diff text.
+	assert.Empty(t, byPath["a.txt"].Diff)
 	require.Contains(t, byPath, "b.txt")
 	assert.Equal(t, "untracked", byPath["b.txt"].Status)
+
+	// The on-demand diff still produces the content the list no longer embeds.
+	d, err := FileDiffText(dir, "a.txt", "head")
+	require.NoError(t, err)
+	assert.Contains(t, d, "+two")
+	du, err := FileDiffText(dir, "b.txt", "untracked")
+	require.NoError(t, err)
+	assert.Contains(t, du, "+new")
 }
 
 // A brand-new untracked directory must expand into its individual files, not
@@ -65,6 +74,55 @@ func TestRepoDiff_UntrackedDirectoryExpandsToFiles(t *testing.T) {
 	require.Contains(t, byPath, "src/newfeature/index.ts", "untracked file must be listed individually")
 	assert.Equal(t, "untracked", byPath["src/newfeature/index.ts"].Status)
 	assert.NotContains(t, byPath, "src/newfeature/", "the collapsed directory entry must not appear")
+}
+
+// VS Code git.statusLimit behavior: the list truncates at the limit and
+// reports didHitLimit; 0 means unlimited.
+func TestRepoDiffWithLimit_truncatesAndFlags(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o644))
+	git(t, dir, "add", "a.txt")
+	git(t, dir, "commit", "-m", "init")
+	for _, name := range []string{"u1.txt", "u2.txt", "u3.txt", "u4.txt", "u5.txt"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("x\n"), 0o644))
+	}
+
+	files, hit, err := RepoDiffWithLimit(dir, 3)
+	require.NoError(t, err)
+	assert.True(t, hit, "5 untracked files with limit 3 must report didHitLimit")
+	assert.Len(t, files, 3)
+
+	files, hit, err = RepoDiffWithLimit(dir, 0)
+	require.NoError(t, err)
+	assert.False(t, hit, "0 means unlimited")
+	assert.Len(t, files, 5)
+
+	files, hit, err = RepoDiffWithLimit(dir, 5)
+	require.NoError(t, err)
+	assert.False(t, hit, "exactly at the limit is not a hit")
+	assert.Len(t, files, 5)
+}
+
+// The cap also bounds the branch-vs-base list: status files fill the budget
+// first, branch files stop at the remainder.
+func TestRepoDiffWithLimit_capsBranchList(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "base.txt"), []byte("base\n"), 0o644))
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "base")
+	git(t, dir, "checkout", "-b", "feat")
+	for _, name := range []string{"f1.txt", "f2.txt", "f3.txt"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("f\n"), 0o644))
+	}
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "feat files")
+
+	files, hit, err := RepoDiffWithLimit(dir, 2)
+	require.NoError(t, err)
+	assert.True(t, hit)
+	assert.Len(t, files, 2)
 }
 
 // A worktree/checkout of a feature branch has a clean working tree, so
@@ -96,6 +154,9 @@ func TestRepoDiff_BranchVsBase(t *testing.T) {
 	}
 	require.Contains(t, byPath, "feature.txt", "branch's committed file must appear vs base")
 	assert.Equal(t, "added", byPath["feature.txt"].CommitStatus)
+	d, err := FileDiffText(dir, "feature.txt", "branch")
+	require.NoError(t, err)
+	assert.Contains(t, d, "+feature")
 	// base.txt is unchanged vs base — must NOT appear.
 	assert.NotContains(t, byPath, "base.txt")
 }

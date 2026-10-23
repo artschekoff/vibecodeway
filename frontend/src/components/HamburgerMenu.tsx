@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useTabContext } from "../contexts/TabContext";
 import OrgFormModal from "./OrgFormModal";
+import { TaskManagerModal } from "./editor/TaskManagerModal";
 import {
   ListOrganizations,
   DeleteOrganization,
@@ -14,9 +15,10 @@ export default function HamburgerMenu() {
   const [showNewOrg, setShowNewOrg] = useState(false);
   const [editOrg, setEditOrg] = useState<Organization | null>(null);
   const [confirmDeleteOrgId, setConfirmDeleteOrgId] = useState<string | null>(null);
+  const [taskManagerOpen, setTaskManagerOpen] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, openBoardTab, openAskTab, openTimelineTab, openActivityFeedTab, openProductivityTab, openAnalyticsTab, tabs, closeTab } = useTabContext();
+  const { openOrgTab, openSettingsTab, openLogsTab, openPromptsTab, openBoardTab, openAskTab, openTimelineTab, openActivityFeedTab, openAnalyticsTab, tabs, closeTab } = useTabContext();
 
   const loadOrgs = useCallback(async () => {
     try {
@@ -108,12 +110,7 @@ export default function HamburgerMenu() {
             >
               Activity Feed
             </button>
-            <button
-              className="app-menu-item"
-              onClick={() => { openProductivityTab(); setOpen(false); }}
-            >
-              Closed Tasks
-            </button>
+            {/* "Closed Tasks" (Productivity) merged into Analytics — one view. */}
             <button
               className="app-menu-item"
               onClick={() => { openAnalyticsTab(); setOpen(false); }}
@@ -191,10 +188,22 @@ export default function HamburgerMenu() {
               Hotkeys
             </button>
             <button
+              className="app-menu-item app-menu-item--sub"
+              onClick={() => { window.dispatchEvent(new CustomEvent("vibecodeway:open-readiness")); setOpen(false); }}
+            >
+              Setup check
+            </button>
+            <button
               className="app-menu-item"
               onClick={() => { openLogsTab(); setOpen(false); }}
             >
               App Logs
+            </button>
+            <button
+              className="app-menu-item"
+              onClick={() => { setTaskManagerOpen(true); setOpen(false); }}
+            >
+              Task Manager
             </button>
             <button
               className="app-menu-item"
@@ -205,6 +214,8 @@ export default function HamburgerMenu() {
           </div>
         )}
       </div>
+
+      {taskManagerOpen && <TaskManagerModal onClose={() => setTaskManagerOpen(false)} />}
 
       {showNewOrg && (
         <OrgFormModal

@@ -305,4 +305,10 @@ describe("TourCard", () => {
       expect(text).toContain(".vibecodeway/tour.json");
     });
   });
+
+  it("shows the reviewer remark the step addresses", async () => {
+    const tour = { ...baseTour, steps: [{ ...baseTour.steps[0], review: "@bob src/a.ts:12 — tenant scoping is missing here" }] };
+    render(<TourCard tour={tour} repoName="api" onClose={vi.fn()} onOpenFile={vi.fn()} onLocateAnchor={vi.fn()} onAskAuthorAgent={vi.fn()} />);
+    expect(await screen.findByTestId("tour-review")).toHaveTextContent("@bob src/a.ts:12 — tenant scoping is missing here");
+  });
 });

@@ -60,16 +60,6 @@ type Runner struct {
 // Option configures a Runner.
 type Option func(*Runner)
 
-// WithBinPath overrides the CLI binary path.
-func WithBinPath(path string) Option {
-	return func(r *Runner) { r.binPath = path }
-}
-
-// WithTimeout overrides the per-command execution timeout (default 60s).
-func WithTimeout(d time.Duration) Option {
-	return func(r *Runner) { r.timeout = d }
-}
-
 // WithPassphraseFunc provides a function that returns the current passphrase,
 // injected as VIBECODEWAY_PASSPHRASE into each CLI subprocess.
 func WithPassphraseFunc(fn func() string) Option {

@@ -16,6 +16,21 @@ func newBJAStore(t *testing.T) *Store {
 	return s
 }
 
+func TestListBoardJiraAssignments_hidesTerminalStatuses(t *testing.T) {
+	s := newBJAStore(t)
+	ctx := t.Context()
+
+	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{
+		{Key: "JH-1", Summary: "open", Status: "In Progress", IssueType: "Task", Priority: "High", Created: "2026-07-20T10:00:00Z"},
+		{Key: "JH-2", Summary: "done", Status: "Done", IssueType: "Story", Priority: "Highest", Created: "2026-07-21T10:00:00Z"},
+		{Key: "JH-3", Summary: "closed", Status: "Closed", IssueType: "Bug", Priority: "Low", Created: "2026-07-22T10:00:00Z"},
+	}))
+	list, err := s.ListBoardJiraAssignments(ctx, "priority")
+	require.NoError(t, err)
+	require.Len(t, list, 1, "terminal tickets are finished work and stay off the board")
+	assert.Equal(t, "JH-1", list[0].Key)
+}
+
 func TestBoardJiraAssignments_UpsertPreservesSeenAndReplaces(t *testing.T) {
 	s := newBJAStore(t)
 	ctx := t.Context()
@@ -89,7 +104,7 @@ func TestBoardJiraAssignments_OrgRoundTrips(t *testing.T) {
 	ctx := t.Context()
 
 	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{
-		{Key: "JH-1", Summary: "one", Status: "Open", Priority: "High", Created: "2026-07-20T10:00:00Z", Org: "juna-api"},
+		{Key: "JH-1", Summary: "one", Status: "Open", Priority: "High", Created: "2026-07-20T10:00:00Z", Org: "acme-api"},
 		{Key: "JH-2", Summary: "two", Status: "Open", Priority: "Low", Created: "2026-07-21T10:00:00Z", Org: ""},
 	}))
 
@@ -99,7 +114,7 @@ func TestBoardJiraAssignments_OrgRoundTrips(t *testing.T) {
 	for _, it := range list {
 		byKey[it.Key] = it
 	}
-	assert.Equal(t, "juna-api", byKey["JH-1"].Org)
+	assert.Equal(t, "acme-api", byKey["JH-1"].Org)
 	assert.Equal(t, "", byKey["JH-2"].Org)
 
 	// Re-upsert updates the org (issue moved scope).
@@ -145,7 +160,7 @@ func TestBoardJiraAssignments_OrgBackfill(t *testing.T) {
 	ctx := t.Context()
 
 	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{
-		{Key: "JH-1", Summary: "one", Status: "Open", Org: "juna-api"},
+		{Key: "JH-1", Summary: "one", Status: "Open", Org: "acme-api"},
 		{Key: "JH-2", Summary: "two", Status: "Open"},
 		{Key: "JH-3", Summary: "three", Status: "Open"},
 	}))
@@ -170,7 +185,7 @@ func TestBoardJiraAssignments_OrgBackfill(t *testing.T) {
 		byKey[it.Key] = it
 	}
 	assert.Equal(t, "rdbms", byKey["JH-2"].Org)
-	assert.Equal(t, "juna-api", byKey["JH-1"].Org)
+	assert.Equal(t, "acme-api", byKey["JH-1"].Org)
 
 	// A later refresh (search can't return org -> empty) must not undo the backfill.
 	require.NoError(t, s.UpsertBoardJiraAssignments(ctx, []BoardJiraAssignment{

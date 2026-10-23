@@ -104,6 +104,8 @@ export const COMMANDS: Command[] = [
     description: "Switch to the next terminal", scope: "global", defaultChord: "mod+]" },
   { id: "terminal.prev", object: "terminal", action: "prev", label: "Previous terminal",
     description: "Switch to the previous terminal", scope: "global", defaultChord: "mod+[" },
+  { id: "terminal.jumpWaiting", object: "terminal", action: "jumpWaiting", label: "Jump to waiting terminal",
+    description: "Go to the next terminal whose agent is waiting for input", scope: "global", defaultChord: "mod+shift+j" },
 ].map((c) => ({ ...c })) as Command[];
 
 export function commandById(id: string): Command | undefined {

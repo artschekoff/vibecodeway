@@ -9,6 +9,8 @@ import {
 } from "react";
 import { arrayMove } from "@dnd-kit/sortable";
 import type { Tab } from "../types";
+import { ConfirmAction } from "../../wailsjs/go/main/App";
+import { termSessionCountForContext } from "../lib/terminalRegistry";
 
 const TAB_STORAGE_KEY = "vibecodeway:tabs-v1";
 
@@ -43,6 +45,12 @@ interface TabContextValue {
 }
 
 const TabContext = createContext<TabContextValue | null>(null);
+
+// Like useTabContext but tolerates a missing provider (unit tests render pages
+// bare). Callers must treat a null result as "tab actions unavailable".
+export function useTabContextOptional(): TabContextValue | null {
+  return useContext(TabContext);
+}
 
 export function useTabContext(): TabContextValue {
   const ctx = useContext(TabContext);
@@ -245,7 +253,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
     );
   }, [focusOrOpen]);
 
-  const closeTab = useCallback((tabId: string) => {
+  const doCloseTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === tabId);
       if (idx === -1) return prev;
@@ -260,6 +268,23 @@ export function TabProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  // Same guard as the app-quit hook: closing an editor tab unmounts its
+  // TerminalPanel and kills every PTY (running coding agents included), so a
+  // tab with live terminals confirms first. Covers all close paths — the ×
+  // button, ⌘⇧W, and menu items — since they all land here. The no-terminals
+  // path stays synchronous.
+  const closeTab = useCallback((tabId: string) => {
+    const tab = tabsRef.current.find((t) => t.id === tabId);
+    const terms = tab?.type === "editor" && tab.contextKey ? termSessionCountForContext(tab.contextKey) : 0;
+    if (terms === 0) { doCloseTab(tabId); return; }
+    void ConfirmAction(
+      "Close editor?",
+      `${terms} terminal${terms === 1 ? "" : "s"} still running in ${tab!.contextKey} (coding agents may be working). Closing will kill them and their progress will be lost. Close anyway?`,
+    )
+      .then((ok) => { if (ok) doCloseTab(tabId); })
+      .catch(() => doCloseTab(tabId)); // dialog failed — do not trap the tab open
+  }, [doCloseTab]);
 
   const forceCloseTab = useCallback((tabId: string) => {
     setTabs((prev) => {

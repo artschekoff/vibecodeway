@@ -17,7 +17,6 @@ require (
 	github.com/wailsapp/wails/v2 v2.12.0
 	go.uber.org/zap v1.27.0
 	golang.design/x/hotkey v0.4.1
-	golang.org/x/crypto v0.51.0
 	modernc.org/sqlite v1.48.2
 )
 
@@ -69,6 +68,7 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
+	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect

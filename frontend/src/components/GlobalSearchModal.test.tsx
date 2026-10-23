@@ -25,15 +25,15 @@ describe("GlobalSearchModal", () => {
     vi.clearAllMocks();
   });
 
-  it("opens on Cmd+F, lists cross-org hits with org tag, arrows + Enter open the context", async () => {
+  it("opens on Cmd+Shift+F, lists cross-org hits with org tag, arrows + Enter open the context", async () => {
     H.SearchContexts.mockResolvedValue([
-      { id: "c1", key: "JH-1", orgId: "o1", orgName: "jiro", summary: "fix login" },
+      { id: "c1", key: "JH-1", orgId: "o1", orgName: "globex", summary: "fix login" },
       { id: "c2", key: "AB-9", orgId: "o2", orgName: "acme", summary: "billing" },
     ]);
     renderModal();
-    fireEvent.keyDown(window, { key: "f", metaKey: true });
+    fireEvent.keyDown(window, { key: "f", metaKey: true, shiftKey: true });
     fireEvent.change(await screen.findByPlaceholderText(/search/i), { target: { value: "x" } });
-    expect(await screen.findByText("jiro")).toBeInTheDocument(); // org tag on left
+    expect(await screen.findByText("globex")).toBeInTheDocument(); // org tag on left
     fireEvent.keyDown(window, { key: "ArrowDown" }); // highlight row 2
     fireEvent.keyDown(window, { key: "Enter" });
     expect(openContextTab).toHaveBeenCalledWith("c2", "AB-9", "acme", "o2");
@@ -42,7 +42,7 @@ describe("GlobalSearchModal", () => {
   it("closes on Escape", async () => {
     H.SearchContexts.mockResolvedValue([]);
     renderModal();
-    fireEvent.keyDown(window, { key: "f", metaKey: true });
+    fireEvent.keyDown(window, { key: "f", metaKey: true, shiftKey: true });
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

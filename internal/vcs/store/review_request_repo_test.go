@@ -35,6 +35,30 @@ func TestReviewRequestKindAndCIRoundTrip(t *testing.T) {
 	}
 }
 
+func TestUpdateUnresolvedCountRoundTrips(t *testing.T) {
+	_, vcsStore := openTestDB(t)
+	ctx := context.Background()
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "octo", "hello")
+	require.NoError(t, err)
+
+	_, err = vcsStore.ReviewRequests.UpsertReviewRequest(ctx, repo.ID, 7, "My PR", "me",
+		"https://x/7", "review_required", "feat/x", "2026-08-01T00:00:00Z",
+		"[]", "MERGEABLE", "requested", "", "")
+	require.NoError(t, err)
+
+	require.NoError(t, vcsStore.ReviewRequests.UpdateUnresolvedCount(ctx, repo.ID, 7, 3))
+	list, err := vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, 3, list[0].UnresolvedCount)
+
+	// Resolved on the next sync → count drops back to 0.
+	require.NoError(t, vcsStore.ReviewRequests.UpdateUnresolvedCount(ctx, repo.ID, 7, 0))
+	list, err = vcsStore.ReviewRequests.ListReviewRequests(ctx, repo.ID)
+	require.NoError(t, err)
+	require.Equal(t, 0, list[0].UnresolvedCount)
+}
+
 func TestMarkReviewedOnlyTouchesRequested(t *testing.T) {
 	_, vcsStore := openTestDB(t)
 	ctx := context.Background()

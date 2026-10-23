@@ -259,6 +259,9 @@ Typical flow:
 6. list_commits to read git history by date — use this for "what did I do on <date>" questions instead of searching contexts for a date word.
 
 Cite the concrete items you relied on (e.g. Jira keys, text names). Be concise and factual.
+Whenever you mention a context, write it as a markdown link whose text is the context's key and
+whose URL is context://<context id>, e.g. [payments-refactor](context://ede7a6fb-a08d-4fa3-9800-fff903f7a555).
+The ids and keys come from the tool results — never invent them.
 If you cannot find something, say so plainly.`
 
 const defaultSummarizePrompt = `Compress this conversation into a single message: keep every fact, ` +

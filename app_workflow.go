@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
-	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 )
 
 // --- Analysis ---
@@ -34,12 +32,6 @@ func (a *App) InterpretContextUpdate(contextID, userText string) ([]appstore.Con
 // Each call produces a new packet — use GetLatestHandoffPacket to retrieve without re-generating.
 func (a *App) GenerateHandoffPacket(contextID string) (*appstore.InferredRequirementsPacket, error) {
 	return a.analysisSvc.GenerateHandoffPacket(a.ctx, contextID)
-}
-
-// GetLatestHandoffPacket returns the most recently generated handoff packet for a context
-// without calling the AI. Returns nil if no packet has been generated yet.
-func (a *App) GetLatestHandoffPacket(contextID string) (*appstore.InferredRequirementsPacket, error) {
-	return a.db.GetLatestPacket(context.Background(), contextID)
 }
 
 // --- Snapshot ---
@@ -75,11 +67,6 @@ func (a *App) SetContextWorkflowStatus(contextID, slug, comment string) (*appsto
 		return nil, err
 	}
 	return a.db.GetSnapshot(ctx, contextID)
-}
-
-// GetStatusLog returns the full status log for a context in chronological order.
-func (a *App) GetStatusLog(contextID string) ([]appstore.StatusLogEntry, error) {
-	return a.db.ListStatusLog(context.Background(), contextID)
 }
 
 // UpdateUserNextSteps saves user-written next-step notes by time horizon.
@@ -445,30 +432,12 @@ func (a *App) addRelationByKey(contextID, targetKey, relationType string) error 
 
 // --- VCS Repo Meta ---
 
-func (a *App) UpdateVCSRepoMeta(repoID, label, description string) error {
-	repo, err := a.vcsStore.Repos.GetRepo(context.Background(), repoID)
-	if err != nil {
-		return err
-	}
-	return a.vcsStore.Repos.UpdateRepoMeta(context.Background(), repoID, label, description, repo.OnCheckoutCommand)
-}
-
-func (a *App) ListVCSRepos(platform string) ([]vcsstore.VCSRepo, error) {
-	return a.vcsStore.Repos.ListRepos(context.Background(), platform)
-}
-
 // --- Plans ---
 
 // GeneratePlan generates and persists a new implementation plan for the given
 // person assignment.
 func (a *App) GeneratePlan(contextID, personAssignmentID string) (*appstore.ContextPlan, error) {
 	return a.analysisSvc.GeneratePlan(a.ctx, contextID, personAssignmentID)
-}
-
-// ListContextPlans returns all previously generated plans for a person
-// assignment, most recent first.
-func (a *App) ListContextPlans(personAssignmentID string) ([]appstore.ContextPlan, error) {
-	return a.db.ListContextPlansByAssignment(a.ctx, personAssignmentID)
 }
 
 // writePlanTempFile writes a plan's markdown body to a temp file named
@@ -501,7 +470,7 @@ func (a *App) OpenPlanInTerminal(contextID, planID string) (string, error) {
 		return "", err
 	}
 
-	if err := a.openWithCheckout("", repoPath); err != nil {
+	if err := a.openTerminalAt(repoPath); err != nil {
 		return "", err
 	}
 
@@ -529,49 +498,43 @@ func (a *App) firstAttachedRepoPath(contextID string) (string, error) {
 	return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
 }
 
-// SolveWithAI ensures a git worktree exists for every repo attached to the
-// context, assembles a context-grounded task instruction that lists those
-// worktree paths and starts with the /writing-plans + /vibecodeway-load-context skill
-// commands, opens the configured agent/terminal at the first worktree, and
-// returns the instruction (the frontend copies it to the clipboard).
-func (a *App) SolveWithAI(contextID, userPrompt string) (string, error) {
-	worktrees, err := a.contextWorktrees(contextID)
-	if err != nil {
-		return "", err
-	}
-	if len(worktrees) == 0 {
-		return "", fmt.Errorf("no linked repo with a local path found for context %q", contextID)
-	}
-	// Every linked branch must be checked out before the agent starts:
-	// contextWorktrees silently skips repos whose worktree could not be created,
-	// and an agent launched with a partial repo set edits against missing code.
-	if missing := a.missingWorktreeBranches(contextID, worktrees); len(missing) > 0 {
-		return "", fmt.Errorf("not all linked repos are checked out locally: %s — set a local path for them (Settings → Repositories) and retry", strings.Join(missing, ", "))
-	}
-	firstWorktreePath := worktrees[0].WorktreePath
+// SolveResult is what SolveWithAI hands the frontend: the task instruction
+// (copied to the clipboard) and the worktree the editor should open into.
+type SolveResult struct {
+	Instruction  string `json:"instruction"`
+	WorktreePath string `json:"worktreePath"`
+}
 
-	// Restrict the agent's file access to the context's worktrees: install a
-	// PreToolUse guard hook into the primary worktree. Best-effort — a failure
-	// here still leaves the prompt's scope instructions in place.
-	roots := make([]string, 0, len(worktrees))
-	for _, w := range worktrees {
-		if w.WorktreePath != "" {
-			roots = append(roots, w.WorktreePath)
-		}
+// SolveWithAI checks out the one branch the user picked (repoID, branch) —
+// creating its worktree and running the repo's on-checkout script when it
+// did not exist yet — assembles a context-grounded task instruction and
+// returns it with the worktree path. Other repos attached to the context are
+// left alone: the agent works in the chosen one.
+func (a *App) SolveWithAI(contextID, userPrompt, repoID, branch string) (*SolveResult, error) {
+	if repoID == "" || branch == "" {
+		return nil, fmt.Errorf("pick a repository and branch to work in")
 	}
-	if guardErr := a.installScopeGuard(contextID, firstWorktreePath, roots); guardErr != nil {
+	worktree, err := a.ensureWorktreeForBranch(repoID, branch)
+	if err != nil {
+		return nil, err
+	}
+	if worktree == "" {
+		return nil, fmt.Errorf("no local path for this repo; set one in the Repositories tab")
+	}
+
+	// Restrict the agent's file access to the chosen worktree: install a
+	// PreToolUse guard hook there. Best-effort — a failure here still leaves
+	// the prompt's scope instructions in place.
+	if guardErr := a.installScopeGuard(contextID, worktree, []string{worktree}); guardErr != nil {
 		a.logger.Sugar().Warnf("SolveWithAI: install scope guard failed: %v", guardErr)
 	}
 
-	// Built after the worktrees exist so attachedRepoLines surfaces their paths.
+	// Built after the worktree exists so attachedRepoLines surfaces its path.
 	instruction, err := a.analysisSvc.BuildAgentTask(a.ctx, contextID, userPrompt)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	// Consolidated with "Open Editor": the frontend opens the in-app editor after
-	// this returns (SolveWithAIModal.onOpenEditor), so we no longer launch a
-	// separate external agent via openWithCheckout — that was a double open. The
-	// task instruction is returned + copied to the clipboard to paste into the
-	// editor's terminal.
-	return instruction, nil
+	// The frontend opens the in-app editor at WorktreePath and pastes the
+	// instruction into its terminal — no separate external agent launch.
+	return &SolveResult{Instruction: instruction, WorktreePath: worktree}, nil
 }

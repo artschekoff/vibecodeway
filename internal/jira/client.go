@@ -14,18 +14,21 @@ import (
 // instanceSiteRE extracts the bare hostname from the "Site:" line of acli jira auth status output.
 var instanceSiteRE = regexp.MustCompile(`(?i)Site:\s*(\S+)`)
 
-// OrgScopeFieldID is the Jira custom field this instance uses for the per-ticket
-// scope/service (values like "juna-api", "juna-frontend", "rdbms") — treated as
-// the ticket's "organization" for the board split.
-// ponytail: hardcoded field id (instance-specific); move to a setting if the app
-// ever targets multiple Jira instances.
-const OrgScopeFieldID = "customfield_10160"
-
 // Client wraps the acli Runner and provides typed Jira query methods.
 type Client struct {
 	runner *acli.Runner
 	logger *zap.Logger
+	// orgField is the custom field (customfield_NNNNN) holding a ticket's
+	// scope/service, shown as the ticket's "org" on My Board. Instance-specific,
+	// configured in Settings; empty disables org lookups.
+	orgField string
 }
+
+// SetOrgField configures the scope/service custom field id ("" = off).
+func (c *Client) SetOrgField(id string) { c.orgField = id }
+
+// OrgField returns the configured scope/service custom field id.
+func (c *Client) OrgField() string { return c.orgField }
 
 // NewClient creates a new Jira client.
 func NewClient(runner *acli.Runner, logger *zap.Logger) *Client {
@@ -56,7 +59,7 @@ func (c *Client) GetInstanceURL(ctx context.Context) string {
 // acli enforces a fixed allowlist here and rejects anything outside it with
 // "field 'X' is not allowed", which fails the WHOLE search — so this list must
 // never grow a custom field (customfield_*) or "created". Custom fields are only
-// retrievable via `acli jira workitem view` (see ViewIssue / OrgScopeFieldID).
+// retrievable via `acli jira workitem view` (see ViewIssue / IssueOrg).
 const searchFields = "key,summary,status,assignee,issuetype,priority"
 
 // Search executes a JQL search and returns matching issues.
@@ -75,7 +78,7 @@ func (c *Client) Search(ctx context.Context, jql string) ([]SearchResult, error)
 	if err != nil {
 		return nil, fmt.Errorf("jira search: %w", err)
 	}
-	return parseSearchResults(out)
+	return parseSearchResults(out, c.orgField)
 }
 
 // ViewIssue fetches full details for a single issue key.
@@ -96,21 +99,24 @@ func (c *Client) ViewIssue(ctx context.Context, key string) (*IssueDetail, error
 // rejects them, see searchFields) and it takes one key per call at roughly 5s,
 // so callers must treat this as expensive and cache the result.
 func (c *Client) IssueOrg(ctx context.Context, key string) (string, error) {
+	if c.orgField == "" {
+		return "", nil
+	}
 	out, err := c.runner.Run(ctx, []string{"jira", "workitem", "view"}, []string{key},
-		[]string{"--fields", OrgScopeFieldID, "--json"})
+		[]string{"--fields", c.orgField, "--json"})
 	if err != nil {
 		return "", fmt.Errorf("jira view %s org: %w", key, err)
 	}
-	return parseIssueOrg(out)
+	return parseIssueOrg(out, c.orgField)
 }
 
 // parseIssueOrg pulls the org/scope value out of a `workitem view` payload.
-func parseIssueOrg(raw string) (string, error) {
+func parseIssueOrg(raw, orgField string) (string, error) {
 	var item acliIssue
 	if err := json.Unmarshal([]byte(raw), &item); err != nil {
 		return "", fmt.Errorf("parsing org field: %w", err)
 	}
-	return item.field(OrgScopeFieldID), nil
+	return item.field(orgField), nil
 }
 
 // TransitionIssue moves a work item to the target status (by name). acli resolves
@@ -150,7 +156,7 @@ func (a acliIssue) field(k string) string {
 	return parseString(a.Fields[k])
 }
 
-func parseSearchResults(raw string) ([]SearchResult, error) {
+func parseSearchResults(raw, orgField string) ([]SearchResult, error) {
 	var items []acliIssue
 	if err := json.Unmarshal([]byte(raw), &items); err != nil {
 		return nil, fmt.Errorf("parsing search results: %w", err)
@@ -165,7 +171,7 @@ func parseSearchResults(raw string) ([]SearchResult, error) {
 			IssueType: item.field("issuetype"),
 			Priority:  item.field("priority"),
 			Created:   item.field("created"),
-			Org:       item.field(OrgScopeFieldID),
+			Org:       item.field(orgField),
 		})
 	}
 	return results, nil
@@ -187,11 +193,10 @@ func parseIssueDetail(raw string) (*IssueDetail, error) {
 		Priority:    item.field("priority"),
 	}
 	if rawParent := item.Fields["parent"]; rawParent != nil {
-		var p struct {
-			Key string `json:"key"`
-		}
+		var p rawIssueLinkRef
 		if json.Unmarshal(rawParent, &p) == nil {
 			detail.ParentKey = p.Key
+			detail.ParentType = parseString(p.Fields["issuetype"])
 		}
 	}
 	if rawSubs := item.Fields["subtasks"]; rawSubs != nil {
@@ -211,20 +216,22 @@ func parseIssueDetail(raw string) (*IssueDetail, error) {
 		if json.Unmarshal(rawLinks, &links) == nil {
 			for _, l := range links {
 				typeName := parseString(l.Type["name"])
-				if l.OutwardIssue != nil && l.OutwardIssue.Key != "" {
+				add := func(ref *rawIssueLinkRef, direction string) {
+					if ref == nil || ref.Key == "" {
+						return
+					}
 					detail.Links = append(detail.Links, IssueLink{
 						TypeName:  typeName,
-						Direction: "outward",
-						LinkedKey: l.OutwardIssue.Key,
+						Direction: direction,
+						LinkedKey: ref.Key,
+						Summary:   parseString(ref.Fields["summary"]),
+						Status:    parseString(ref.Fields["status"]),
+						IssueType: parseString(ref.Fields["issuetype"]),
+						Priority:  parseString(ref.Fields["priority"]),
 					})
 				}
-				if l.InwardIssue != nil && l.InwardIssue.Key != "" {
-					detail.Links = append(detail.Links, IssueLink{
-						TypeName:  typeName,
-						Direction: "inward",
-						LinkedKey: l.InwardIssue.Key,
-					})
-				}
+				add(l.OutwardIssue, "outward")
+				add(l.InwardIssue, "inward")
 			}
 		}
 	}
@@ -245,7 +252,8 @@ type rawIssueLink struct {
 }
 
 type rawIssueLinkRef struct {
-	Key string `json:"key"`
+	Key    string                     `json:"key"`
+	Fields map[string]json.RawMessage `json:"fields"` // summary/status/issuetype/priority of the other side
 }
 
 // acliCommentList mirrors the paginated comment list response from acli --json.

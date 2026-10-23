@@ -87,7 +87,13 @@ local reads (`context-list`, `context-get`, `text-list`, …).
 - For load-context flows, follow `/vibecodeway-load-context`; do not duplicate its steps here.
 - For everything else, drive the CLI using the schema from Step 1: read `input`, `flags`, and `output` to build the call and parse the result.
 - Every command prints JSON to stdout on success; errors go to stderr with a non-zero exit.
-- Prefer `--context-key` when the user names a context; use `--context-id` (UUID) when you already have it from `context-list`.
+- **Flags are per-command.** Read `input` / `flags` from `describe` before calling.
+  - Commands that accept either: `context-get`, `branch-add`, `jira-add`, `jira-search`, …
+    → prefer `--context-key` when the user names a key; use `--context-id` when you already have the UUID.
+  - Commands that accept **`--context-id` only** (no `--context-key`): `text-list`,
+    `file-list`, `jira-sync-comments`, `jira-refresh`, `slack-list-channels`,
+    `slack-list-threads`, `slack-list-dm-configs`, and most Slack mutators.
+    Resolve UUID first via `context-get` / `context-list` (`.context.id` or `.id`).
 - If no row matches, ask the user to clarify what they want to do with vibecodeway.
 
 ## Step 5 — Safe JSON handling (required)
@@ -98,7 +104,15 @@ CLI output is JSON. Follow these rules whenever you inspect or summarize it.
 
 ```bash
 vibecodeway-cli context-list | jq '[.[] | {key, status, id}]'
-vibecodeway-cli context-get --context-key KEY | jq '{key: .context.key, issues: [.issues[]? | {jiraKey, summary, status, assignee}]}'
+# context-get nests metadata under .context — not flat .id / .key at the root
+vibecodeway-cli context-get --context-key KEY | jq '{
+  id: .context.id,
+  key: .context.key,
+  issues: [.issues[]? | {jiraKey, summary, status, assignee}],
+  vcsBranches: [.vcsBranches[]? | {branch, label, repo: (.repo.owner + "/" + .repo.name)}]
+}'
+# text-list / file-list: UUID only (from .context.id above)
+vibecodeway-cli text-list --context-id UUID | jq '[.[]? | {id, name, isActive}]'
 ```
 
 Pipe stdout. Avoid writing `/tmp` when worktree scope may block files outside the active repo.
@@ -115,6 +129,9 @@ python3 -c 'import json; d=json.load(open("/tmp/cc-ctx.json")); print(d["context
 | Anti-pattern | Why it breaks |
 |---|---|
 | Searching MCP / gh / Jira REST / the git repo for "vibecodeway context" | Wrong source; local consolidator DB via `vibecodeway-cli` is the only load path |
+| `text-list` / `file-list` / `jira-refresh` with `--context-key` | Those commands only define `--context-id` → `unknown flag: --context-key` |
+| Projecting invented keys (`.repos`, `.branches`, `.texts`) on `context-get` | Real keys: `.context`, `.issues`, `.vcsBranches`, `.pullRequests`, `.contextTexts`, `.uploadedFiles` |
+| Treating `describe.output` as optional / inventing shapes | Prefer live `describe`; for `context-get` project `. \| keys` if the documented shape looks wrong |
 | `cli … \| python3 <<'PY' … PY` | Pipe + heredoc fight over stdin; Python may **execute JSON as code** → `NameError: true is not defined` |
 | `python3 -c` with nested `\"` inside f-strings | Shell escaping corrupts the script → `SyntaxError` |
 | Feeding CLI JSON straight into `python3` with no `-c` / script file | JSON is executed as Python |

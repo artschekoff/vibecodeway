@@ -21,7 +21,8 @@ function noteTime(iso: string): string {
  *
  * Collapsed, the panel is just the latest note — the sidebar is short and an
  * always-open composer left the log one clipped line. Clicking it opens the
- * composer with the full log underneath; adding a note collapses back so the
+ * composer, caret inside, with the previous notes small and muted underneath;
+ * adding a note (⌘Enter, or Esc then Enter in vim mode) collapses back so the
  * thing you just wrote is what you see.
  */
 export function NotesPanel({ contextId }: { contextId: string }) {
@@ -86,7 +87,9 @@ export function NotesPanel({ contextId }: { contextId: string }) {
         {latest ? (
           <>
             <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>{noteTime(latest.timestamp)}</div>
-            <div style={{ fontSize: 12, color: "var(--text)", whiteSpace: "pre-wrap", wordBreak: "break-word",
+            {/* The latest note is the "where was I?" answer — bigger + accent so
+                it doesn't drown among the sidebar's muted labels. */}
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--accent, #e3b341)", whiteSpace: "pre-wrap", wordBreak: "break-word",
               display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
               {latest.summary}
             </div>
@@ -109,11 +112,14 @@ export function NotesPanel({ contextId }: { contextId: string }) {
               e.preventDefault();
               void add();
             }
-            if (e.key === "Escape") {
+            // Escape with text in the box belongs to vim (INSERT → NORMAL, then
+            // Enter submits); only an empty composer closes on it.
+            if (e.key === "Escape" && draft.trim() === "") {
               e.preventDefault();
               setOpen(false);
             }
           }}
+          onEnterSubmit={() => void add()}
           placeholder="What did you just do here?"
           aria-label="note text"
           autoFocus
@@ -148,11 +154,14 @@ export function NotesPanel({ contextId }: { contextId: string }) {
         {notes.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 12 }}>No notes yet.</div>
         ) : (
-          notes.map((n) => (
+          notes.map((n, i) => (
             <div key={n.id} style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "flex-start" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>{noteTime(n.timestamp)}</div>
-                <div style={{ fontSize: 12, color: "var(--text)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{n.summary}</div>
+                {/* While composing, what's below is the past: the previous note
+                    sits right under the box, small and muted, older ones fainter. */}
+                <div style={{ fontSize: 11, color: "var(--text-muted)", opacity: i === 0 ? 1 : 0.7,
+                  whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{n.summary}</div>
               </div>
               <button
                 onClick={() => void remove(n.id)}

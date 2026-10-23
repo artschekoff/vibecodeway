@@ -6,8 +6,11 @@ import (
 )
 
 type FileChange struct {
-	Path         string `json:"path"`
-	Status       string `json:"status"`
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	// Diff is always empty: diffs are computed lazily via FileDiffText when a
+	// file is opened (VS Code-style — status lists names only). The field stays
+	// so the generated frontend model shape doesn't churn.
 	Diff         string `json:"diff"`
 	IndexStatus  string `json:"indexStatus"`  // staged-side status word; "" when not staged
 	WorkStatus   string `json:"workStatus"`   // worktree-side status word; "" when clean in worktree
@@ -67,7 +70,18 @@ func splitStatus(code string) (indexStatus, workStatus string) {
 	return statusLetterWord(code[0]), statusLetterWord(code[1])
 }
 
-// RepoDiff lists changes for repoPath. It combines two views, always queried
+// DefaultStatusLimit mirrors VS Code's `git.statusLimit` default: list at most
+// this many changed files per repo. 0 means no limit.
+const DefaultStatusLimit = 10000
+
+// RepoDiff is RepoDiffWithLimit at the default limit, discarding the
+// hit-limit flag — the signature the existing callers and tests use.
+func RepoDiff(repoPath string) ([]FileChange, error) {
+	files, _, err := RepoDiffWithLimit(repoPath, DefaultStatusLimit)
+	return files, err
+}
+
+// RepoDiffWithLimit lists changes for repoPath. It combines two views, always queried
 // live from git (no caching):
 //  1. working-tree changes vs HEAD (staged/unstaged/untracked) — via git status,
 //  2. the branch's committed changes vs its base branch — via git diff
@@ -79,18 +93,27 @@ func splitStatus(code string) (indexStatus, workStatus string) {
 // the branch AND has a local uncommitted edit appears in both — once with
 // CommitStatus (the PR stays complete, GitHub-style) and once with
 // index/work status (the local change).
-func RepoDiff(repoPath string) ([]FileChange, error) {
+//
+// limit caps the total number of listed files (VS Code's git.statusLimit:
+// default 10000, 0 = unlimited). When the cap is hit the list is truncated
+// and didHitLimit is true so the UI can warn instead of silently dropping.
+func RepoDiffWithLimit(repoPath string, limit int) (files []FileChange, didHitLimit bool, err error) {
 	// git status --porcelain gives the file list + codes. --untracked-files=all
 	// expands wholly-untracked directories into their individual files instead of
 	// collapsing them to a single "dir/" entry (which the editor can't open/diff).
 	out, err := exec.Command("git", "-C", repoPath, "status", "--porcelain", "--untracked-files=all").Output()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var changes []FileChange
+	atLimit := func() bool { return limit > 0 && len(changes) >= limit }
 	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
 		if len(line) < 4 {
 			continue
+		}
+		if atLimit() {
+			didHitLimit = true
+			break
 		}
 		code := line[:2]
 		path := strings.TrimSpace(line[3:])
@@ -106,18 +129,7 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 		if conflicted {
 			indexStatus, workStatus = "", ""
 		}
-		var diff string
-		if status == "untracked" {
-			// Show the new file's content as an add-diff (no-index; non-zero exit is expected on diff).
-			d, _ := exec.Command("git", "-C", repoPath, "diff", "--no-index", "--", "/dev/null", path).Output()
-			diff = string(d)
-		} else {
-			d, derr := exec.Command("git", "-C", repoPath, "diff", "HEAD", "--", path).Output()
-			if derr == nil {
-				diff = string(d)
-			}
-		}
-		changes = append(changes, FileChange{Path: path, Status: status, Diff: diff, IndexStatus: indexStatus, WorkStatus: workStatus, Conflicted: conflicted})
+		changes = append(changes, FileChange{Path: path, Status: status, IndexStatus: indexStatus, WorkStatus: workStatus, Conflicted: conflicted})
 	}
 
 	// Append the branch's committed changes vs its base branch.
@@ -129,22 +141,49 @@ func RepoDiff(repoPath string) ([]FileChange, error) {
 				if len(fields) < 2 {
 					continue
 				}
+				if atLimit() {
+					didHitLimit = true
+					break
+				}
 				code := fields[0]             // e.g. "M", "A", "D", "R100"
 				path := fields[len(fields)-1] // rename: old \t new — take new
 				word := statusLetterWord(code[0])
 				if word == "" {
 					word = "modified"
 				}
-				d, derr := exec.Command("git", "-C", repoPath, "diff", mergeBase, "HEAD", "--", path).Output()
-				var diff string
-				if derr == nil {
-					diff = string(d)
-				}
-				changes = append(changes, FileChange{Path: path, Status: word, Diff: diff, CommitStatus: word})
+				changes = append(changes, FileChange{Path: path, Status: word, CommitStatus: word})
 			}
 		}
 	}
-	return changes, nil
+	return changes, didHitLimit, nil
+}
+
+// FileDiffText computes one file's unified diff on demand. RepoDiff
+// deliberately returns no diff text: a worktree with thousands of untracked
+// files (an npm cache, a tool dir) used to fork one `git diff` per file and
+// ship the whole content over IPC on every poll — minutes per refresh. Like
+// VS Code's git extension, status lists names and the diff loads when a file
+// is actually opened.
+//
+// mode: "untracked" (add-diff vs /dev/null), "branch" (merge-base vs HEAD),
+// anything else = working tree vs HEAD.
+func FileDiffText(repoPath, path, mode string) (string, error) {
+	switch mode {
+	case "untracked":
+		// no-index exits non-zero when files differ — expected, ignore it.
+		out, _ := exec.Command("git", "-C", repoPath, "diff", "--no-index", "--", "/dev/null", path).Output()
+		return string(out), nil
+	case "branch":
+		mergeBase := MergeBaseAgainstDefault(repoPath)
+		if mergeBase == "" {
+			return "", nil
+		}
+		out, err := exec.Command("git", "-C", repoPath, "diff", mergeBase, "HEAD", "--", path).Output()
+		return string(out), err
+	default:
+		out, err := exec.Command("git", "-C", repoPath, "diff", "HEAD", "--", path).Output()
+		return string(out), err
+	}
 }
 
 // defaultBaseCandidates lists the refs, in priority order, that RepoDiff treats

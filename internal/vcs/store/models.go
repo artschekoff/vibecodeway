@@ -136,6 +136,9 @@ type ReviewRequest struct {
 	// MergeStateStatus is GitHub's merge-state for this PR; "BEHIND" means the
 	// head branch is out of date and the "Update branch" action is available.
 	MergeStateStatus string `json:"mergeStateStatus"`
+	// UnresolvedCount is the number of unresolved review threads on the PR,
+	// recomputed on every reviews sync.
+	UnresolvedCount int `json:"unresolvedCount"`
 }
 
 // ReviewerDecision is one reviewer's latest decision on a PR.

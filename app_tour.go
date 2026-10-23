@@ -11,6 +11,7 @@ import (
 	openaiclient "github.com/artschekoff/vibecodeway/internal/openai"
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/artschekoff/vibecodeway/internal/tour"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"go.uber.org/zap"
 )
 
@@ -109,6 +110,7 @@ func (a *App) importCodeTourFile(contextID, repoPath string, file *tour.File) (*
 		Decisions: map[int]string{},
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
+	attachReviewRemarks(repoPath, stored.Steps, a.reviewRemarks(contextID))
 	if err := a.db.UpsertCodeTour(a.ctx, stored); err != nil {
 		return nil, fmt.Errorf("code tour: %w", err)
 	}
@@ -122,8 +124,9 @@ func (a *App) importCodeTourFile(contextID, repoPath string, file *tour.File) (*
 // transcript tail (spec §3) and stores it as source="generated".
 func (a *App) generateCodeTour(contextID, repoPath string) (*appstore.CodeTour, error) {
 	transcriptTail := a.ptyMgr.TailForCwd(repoPath)
+	remarks := a.reviewRemarks(contextID)
 
-	generated, err := tour.Generate(a.ctx, a.openAI, repoPath, transcriptTail)
+	generated, err := tour.Generate(a.ctx, a.openAI, repoPath, transcriptTail, formatReviewRemarks(remarks))
 	if err != nil {
 		if errors.Is(err, tour.ErrNoChanges) {
 			return nil, ErrCodeTourNoChanges
@@ -141,10 +144,121 @@ func (a *App) generateCodeTour(contextID, repoPath string) (*appstore.CodeTour, 
 		Decisions: map[int]string{},
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
+	attachReviewRemarks(repoPath, stored.Steps, remarks)
 	if err := a.db.UpsertCodeTour(a.ctx, stored); err != nil {
 		return nil, fmt.Errorf("code tour: %w", err)
 	}
 	return stored, nil
+}
+
+// reviewRemarks returns the reviewer comments on the context's pull
+// request(s): review bodies and inline review comments by people other than
+// the PR author. Empty for contexts without a PR, so ordinary tours are
+// unaffected.
+func (a *App) reviewRemarks(contextID string) []vcsstore.PRComment {
+	if a.vcsStore == nil {
+		return nil
+	}
+	prs, err := a.vcsStore.PullRequests.ListPRsForContext(a.ctx, contextID)
+	if err != nil {
+		return nil
+	}
+	var out []vcsstore.PRComment
+	for _, pr := range prs {
+		comments, err := a.vcsStore.PullRequests.ListCommentsForPR(a.ctx, pr.ID)
+		if err != nil {
+			continue
+		}
+		for _, c := range comments {
+			if c.Author == pr.Author || strings.TrimSpace(c.Body) == "" {
+				continue
+			}
+			if c.CommentType == "review_comment" || c.CommentType == "review" {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+// formatReviewRemarks renders comments for the generation prompt, one per line.
+func formatReviewRemarks(comments []vcsstore.PRComment) string {
+	var b strings.Builder
+	for _, c := range comments {
+		b.WriteString("- ")
+		b.WriteString(remarkLabel(c))
+		b.WriteString(" ")
+		b.WriteString(strings.ReplaceAll(strings.TrimSpace(c.Body), "\n", " "))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// remarkLabel is "@author path:line" (+ " (resolved)"), or "@author" for a
+// review body without a location.
+func remarkLabel(c vcsstore.PRComment) string {
+	s := "@" + c.Author
+	if c.Path != nil && *c.Path != "" {
+		s += " " + *c.Path
+		if c.Line != nil {
+			s += fmt.Sprintf(":%d", *c.Line)
+		}
+	}
+	if c.IsResolved {
+		s += " (resolved)"
+	}
+	return s + " —"
+}
+
+// reviewRemarkWindow is how far (in lines) an inline comment may sit from a
+// step's anchor and still count as the remark that step addresses.
+const reviewRemarkWindow = 40
+
+// attachReviewRemarks fills Review for steps the model (or the agent) left
+// blank, from inline comments on the step's file nearest to its anchor —
+// so the reviewer's words always show next to the change that answers them.
+func attachReviewRemarks(repoPath string, steps []appstore.TourStep, comments []vcsstore.PRComment) {
+	if len(comments) == 0 {
+		return
+	}
+	for i := range steps {
+		if steps[i].Review != "" {
+			continue
+		}
+		anchorLine := anchorLineOf(repoPath, steps[i].File, steps[i].Anchor)
+		var picked []string
+		for _, c := range comments {
+			if c.Path == nil || *c.Path != steps[i].File {
+				continue
+			}
+			if anchorLine > 0 && c.Line != nil && abs(*c.Line-anchorLine) > reviewRemarkWindow {
+				continue
+			}
+			picked = append(picked, remarkLabel(c)+" "+strings.TrimSpace(c.Body))
+		}
+		steps[i].Review = strings.Join(picked, "\n\n")
+	}
+}
+
+// anchorLineOf returns the 1-based line where anchor first occurs in the
+// file, or 0 when the file or anchor cannot be found.
+func anchorLineOf(repoPath, file, anchor string) int {
+	b, err := os.ReadFile(filepath.Join(repoPath, file))
+	if err != nil {
+		return 0
+	}
+	idx := strings.Index(string(b), anchor)
+	if idx < 0 {
+		return 0
+	}
+	return strings.Count(string(b[:idx]), "\n") + 1
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 // GetCodeTour returns the active tour for (contextID, repoPath), or nil if

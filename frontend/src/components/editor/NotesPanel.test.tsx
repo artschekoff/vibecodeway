@@ -51,8 +51,11 @@ describe("NotesPanel", () => {
     openComposer();
 
     expect(screen.getByLabelText("note text")).toBeInTheDocument();
-    const shown = screen.getAllByText(/^(newer|older) note$/).map((el) => el.textContent);
-    expect(shown).toEqual(["newer note", "older note"]);
+    const shown = screen.getAllByText(/^(newer|older) note$/);
+    expect(shown.map((el) => el.textContent)).toEqual(["newer note", "older note"]);
+    // Below the composer the previous note is history: small, muted, older fainter.
+    expect(shown[0]).toHaveStyle({ fontSize: "11px", opacity: "1" });
+    expect(shown[1]).toHaveStyle({ opacity: "0.7" });
   });
 
   it("lists only user_note events, newest first", async () => {
@@ -136,6 +139,21 @@ describe("NotesPanel", () => {
     fireEvent.keyDown(screen.getByLabelText("note text"), { key: "Escape" });
 
     expect(screen.queryByLabelText("note text")).not.toBeInTheDocument();
+    expect(AddUserEvent).not.toHaveBeenCalled();
+  });
+
+  it("keeps the composer open on escape while there is a draft", async () => {
+    ListEvents.mockResolvedValue([]);
+    render(<NotesPanel contextId="ctx1" />);
+    await waitFor(() => expect(ListEvents).toHaveBeenCalled());
+    openComposer();
+
+    const box = screen.getByLabelText("note text");
+    fireEvent.change(box, { target: { value: "half-written" } });
+    fireEvent.keyDown(box, { key: "Escape" });
+
+    // Escape is vim's INSERT → NORMAL here, not "discard"; the Close button is.
+    expect(screen.getByLabelText("note text")).toBeInTheDocument();
     expect(AddUserEvent).not.toHaveBeenCalled();
   });
 

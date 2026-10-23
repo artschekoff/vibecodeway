@@ -71,7 +71,7 @@ func TestSearchContexts_ReturnsOrgAndSummary(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
-	org, err := s.CreateOrganization(ctx, "jiro")
+	org, err := s.CreateOrganization(ctx, "acme")
 	require.NoError(t, err)
 	c, err := s.CreateContext(ctx, "ENG-7", org.ID)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestSearchContexts_ReturnsOrgAndSummary(t *testing.T) {
 	require.NotNil(t, hit, "seeded context should be found")
 	assert.Equal(t, "ENG-7", hit.Key)
 	assert.Equal(t, org.ID, hit.OrgID)
-	assert.Equal(t, "jiro", hit.OrgName)
+	assert.Equal(t, "acme", hit.OrgName)
 	assert.Equal(t, "Fix login bug", hit.Summary)
 }
 
@@ -202,4 +202,31 @@ func TestSearchIndexesPRContent(t *testing.T) {
 	m2, err := s.SearchContextItems(ctx, c.ID, "quokka")
 	require.NoError(t, err)
 	assert.Contains(t, m2.PRIDs, prID)
+}
+
+// A multi-token query where the tokens live in DIFFERENT contexts must still
+// find each of them: AND-only FTS returned zero (the agent's "JH-1 JH-2 JH-3"
+// lookups always came back empty), so zero AND-hits fall back to OR.
+func TestSearchContextIDs_MultiTokenFallsBackToOr(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	org, err := s.CreateOrganization(ctx, "test-org")
+	require.NoError(t, err)
+
+	c1, err := s.CreateContext(ctx, "feature-one", org.ID)
+	require.NoError(t, err)
+	c2, err := s.CreateContext(ctx, "feature-two", org.ID)
+	require.NoError(t, err)
+
+	jiraRepo := jirastore.NewRepo(s.DB())
+	_, err = jiraRepo.UpsertIssue(ctx, c1.ID, "JH-6223", "Opportunities tab", "todo", "", "task", "", "", "", "")
+	require.NoError(t, err)
+	_, err = jiraRepo.UpsertIssue(ctx, c2.ID, "JH-5612", "Metric admin", "todo", "", "task", "", "", "", "")
+	require.NoError(t, err)
+
+	ids, err := s.SearchContextIDs(ctx, "JH-6223 JH-5612")
+	require.NoError(t, err)
+	assert.Contains(t, ids, c1.ID, "OR fallback must find the JH-6223 context")
+	assert.Contains(t, ids, c2.ID, "OR fallback must find the JH-5612 context")
 }

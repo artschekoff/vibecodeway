@@ -24,11 +24,11 @@ const Wrap = ({ children }: { children: React.ReactNode }) => (
 
 describe("tabLabel", () => {
   it("prepends the repo name for a worktree path", () => {
-    expect(tabLabel("/Users/a/jiro/juna-api/.worktrees/feat_JH-4302")).toBe("juna-api / feat_JH-4302");
-    expect(tabLabel("/x/juna-functions/.worktrees/feat_JH-4836")).toBe("juna-functions / feat_JH-4836");
+    expect(tabLabel("/Users/a/work/acme-api/.worktrees/feat_JH-4302")).toBe("acme-api / feat_JH-4302");
+    expect(tabLabel("/x/acme-functions/.worktrees/feat_JH-4836")).toBe("acme-functions / feat_JH-4836");
   });
   it("shows the name once for a plain checkout (repo === folder)", () => {
-    expect(tabLabel("/Users/a/jiro/juna-api")).toBe("juna-api");
+    expect(tabLabel("/Users/a/work/acme-api")).toBe("acme-api");
   });
 });
 

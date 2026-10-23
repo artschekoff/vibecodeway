@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Send, Loader2, Wrench, Eraser, FileStack, History, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { Send, Loader2, Wrench, Eraser, FileStack, History, Trash2, TerminalSquare } from "lucide-react";
 import {
   AskAIChat,
   SummarizeAskChat,
@@ -10,6 +10,10 @@ import {
   ListAskChats,
   GetAskChat,
   DeleteAskChat,
+  ListTrackedRepos,
+  ListRepoLocalPaths,
+  ListLocalBranches,
+  EnsureBranchWorktree,
 } from "../../wailsjs/go/main/App";
 import { EventsOn, EventsOff, BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { agent, store } from "../../wailsjs/go/models";
@@ -17,6 +21,9 @@ import type { Organization } from "../types";
 import { ProseEditor } from "../components/ProseEditor";
 import { MarkdownBody } from "../components/MarkdownBody";
 import { useTabContextOptional } from "../contexts/TabContext";
+
+// Lazy: xterm is heavy and only needed once a repo terminal is opened.
+const TerminalPanel = lazy(() => import("../components/editor/TerminalPanel").then((m) => ({ default: m.TerminalPanel })));
 
 type ProgressEvent = { phase: string; tool?: string; args?: string; result?: string; callId?: string };
 
@@ -264,6 +271,37 @@ export default function AskAIPage() {
     }
   };
 
+  // Repo → branch → in-app terminal (same TerminalPanel as the editor; the
+  // agent is launched from its Insert menu / ⌘I like there).
+  const [repos, setRepos] = useState<{ id: string; owner: string; name: string }[]>([]);
+  const [repoID, setRepoID] = useState("");
+  const [branches, setBranches] = useState<string[]>([]);
+  const [branch, setBranch] = useState("");
+  const [termCwd, setTermCwd] = useState("");
+  const [termOpen, setTermOpen] = useState<{ cwd: string; id: number } | undefined>();
+  const [termErr, setTermErr] = useState("");
+  useEffect(() => { void ListTrackedRepos("").then((r) => setRepos(r ?? [])).catch(() => {}); }, []);
+  useEffect(() => {
+    setBranches([]); setBranch("");
+    if (!repoID) return;
+    void ListRepoLocalPaths(repoID)
+      .then((ps) => (ps?.[0] ? ListLocalBranches(ps[0].id) : []))
+      .then((bs) => {
+        setBranches(bs.map((b) => b.name));
+        setBranch(bs.find((b) => b.isCurrent)?.name ?? bs[0]?.name ?? "");
+      })
+      .catch(() => {});
+  }, [repoID]);
+  const openAgentTerminal = async () => {
+    setTermErr("");
+    try {
+      const cwd = await EnsureBranchWorktree(repoID, branch);
+      if (termCwd) setTermOpen({ cwd, id: Date.now() }); else setTermCwd(cwd);
+    } catch (e) {
+      setTermErr(String(e));
+    }
+  };
+
   return (
     <div className="page" style={{ width: "100%", maxWidth: 860, margin: "0 auto", padding: 16 }}>
       <h1 style={{ fontSize: 18, marginBottom: 12 }}>Ask AI</h1>
@@ -491,6 +529,32 @@ export default function AskAIPage() {
           <span style={{ color: "var(--text-muted)", fontSize: 12 }}>⌘/Ctrl + Enter</span>
         </div>
       </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+        <TerminalSquare size={13} style={{ color: "var(--text-muted)" }} />
+        <select aria-label="Repository" value={repoID} onChange={(e) => setRepoID(e.target.value)}
+          style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", maxWidth: 260 }}>
+          <option value="">Repository…</option>
+          {repos.map((r) => <option key={r.id} value={r.id}>{r.owner}/{r.name}</option>)}
+        </select>
+        <select aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)} disabled={branches.length === 0}
+          style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", maxWidth: 320 }}>
+          {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <button className="btn btn-secondary" onClick={() => void openAgentTerminal()} disabled={!repoID || !branch}
+          title="Open an in-app terminal at this branch's worktree; launch the agent from its Insert menu (⌘I)"
+          style={{ fontSize: 12 }}>
+          Open agent terminal
+        </button>
+        {termErr && <span style={{ color: "var(--danger)", fontSize: 12 }}>{termErr}</span>}
+      </div>
+      {termCwd && (
+        <div style={{ height: 320, marginTop: 8, border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
+          <Suspense fallback={null}>
+            <TerminalPanel spawnCwd={termCwd} pendingOpen={termOpen} />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
 }

@@ -63,6 +63,10 @@ func (m *mockRunner) GetPRComments(_ context.Context, _, _ string, _ int) ([]vcs
 	return nil, nil
 }
 
+func (m *mockRunner) CountUnresolvedThreads(_ context.Context, _, _ string, _ int) (int, error) {
+	return 0, nil
+}
+
 func (m *mockRunner) ListRepoBranches(_ context.Context, _, _ string) ([]string, error) {
 	return nil, nil
 }
@@ -169,6 +173,7 @@ func openTestVCSStore(t *testing.T) *vcsstore.Store {
 			ci_status     TEXT NOT NULL DEFAULT '',
 			my_review_state TEXT NOT NULL DEFAULT '',
 			merge_state_status TEXT NOT NULL DEFAULT '',
+			unresolved_count INTEGER NOT NULL DEFAULT 0,
 			UNIQUE (repo_id, pr_number)
 		);
 	`)

@@ -39,7 +39,7 @@ func (r *RepoRepo) EnsureRepo(ctx context.Context, platform, owner, name string)
 	var repo VCSRepo
 	err := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, platform, owner, name, local_path, label, description, on_checkout_command, created_at FROM vcs_repos WHERE platform = ? AND owner = ? AND name = ?`,
+		`SELECT id, platform, owner, name, local_path, label, description, on_checkout_command, created_at FROM vcs_repos WHERE platform = ? AND lower(owner) = lower(?) AND lower(name) = lower(?)`,
 		platform, owner, name,
 	).Scan(&repo.ID, &repo.Platform, &repo.Owner, &repo.Name, &repo.LocalPath, &repo.Label, &repo.Description, &repo.OnCheckoutCommand, &repo.CreatedAt)
 	if err == nil {

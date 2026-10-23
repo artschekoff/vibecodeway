@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EnsureContextEditorWorkspace, CheckoutInWorkspace } from "../../wailsjs/go/main/App";
+import { EnsureContextEditorWorkspace, CheckoutInWorkspace, EnsureBranchWorktree } from "../../wailsjs/go/main/App";
 import type { main } from "../../wailsjs/go/models";
 
 type PickerState = {
@@ -17,10 +17,12 @@ type WorkspacePickerState = {
 const NO_REPO_MSG = "No linked repo with a local path. Add one in the Repositories tab.";
 
 /**
- * Shared flow for opening the in-app editor from a context. Ensures a git
- * workspace exists first: 2+ ready worktrees -> a workspace picker; exactly one
- * -> open directly into it; none but a linked repo has a local path -> a repo ->
- * branch checkout picker; nothing checkout-able -> an error.
+ * Shared flow for opening the in-app editor from a context. Nothing is checked
+ * out until a branch is chosen: 2+ linked branches -> a picker; exactly one ->
+ * it is the choice; the chosen branch gets its worktree (on-checkout script runs
+ * when it is created) and the editor opens there. No named branch but a linked
+ * repo with a local path -> a repo -> branch checkout picker; nothing
+ * checkout-able -> an error.
  */
 export function useOpenContextEditor(openEditorTab: (contextId: string, contextKey: string, initialCwd?: string) => void) {
   const [picker, setPicker] = useState<PickerState | null>(null);
@@ -39,7 +41,12 @@ export function useOpenContextEditor(openEditorTab: (contextId: string, contextK
           setWorkspacePicker({ contextId, contextKey, worktrees });
           return;
         }
-        openEditorTab(contextId, contextKey, worktrees[0]?.worktreePath);
+        if (worktrees[0]) {
+          const path = await EnsureBranchWorktree(worktrees[0].repoId, worktrees[0].branch);
+          openEditorTab(contextId, contextKey, path);
+        } else {
+          openEditorTab(contextId, contextKey);
+        }
         return;
       }
       if (prep.choices && prep.choices.length > 0) {
@@ -54,10 +61,20 @@ export function useOpenContextEditor(openEditorTab: (contextId: string, contextK
     }
   };
 
-  const confirmWorkspace = (worktreePath: string) => {
+  // Only the picked branch gets checked out (and its on-checkout script run).
+  const confirmWorkspace = async (w: main.EditorWorktree) => {
     if (!workspacePicker) return;
-    openEditorTab(workspacePicker.contextId, workspacePicker.contextKey, worktreePath);
-    setWorkspacePicker(null);
+    setError(null);
+    setLoading(true);
+    try {
+      const path = await EnsureBranchWorktree(w.repoId, w.branch);
+      openEditorTab(workspacePicker.contextId, workspacePicker.contextKey, path);
+      setWorkspacePicker(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const confirmPick = async (pathId: string, branch: string) => {

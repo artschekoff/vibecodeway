@@ -70,24 +70,6 @@ func (a *App) DeleteTodoNextItem(id string) ([]appstore.AITodoItem, error) {
 	return a.db.ListTodoItems(a.ctx)
 }
 
-// AddTodoNextItem appends a user-authored item at the end and returns the list.
-func (a *App) AddTodoNextItem(kind, title, refType, refKey, priority string) ([]appstore.AITodoItem, error) {
-	existing, err := a.db.ListTodoItems(a.ctx)
-	if err != nil {
-		return nil, err
-	}
-	if priority == "" {
-		priority = "medium"
-	}
-	if _, err := a.db.AddTodoItem(a.ctx, appstore.AITodoItem{
-		Kind: kind, Title: title, RefType: refType, RefKey: refKey,
-		Priority: priority, Position: len(existing), Status: "pending", Source: "user",
-	}); err != nil {
-		return nil, err
-	}
-	return a.db.ListTodoItems(a.ctx)
-}
-
 // DraftTodoMessage drafts a copy-ready message for a todo's recommended action.
 // The draft is returned to the UI for review and manual copy — nothing is sent.
 func (a *App) DraftTodoMessage(kind, title, refKey, rationale string) (string, error) {

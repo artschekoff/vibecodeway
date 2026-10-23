@@ -73,9 +73,13 @@ type BoardJiraAssignment struct {
 	Created   string `json:"created"`
 	Seen      bool   `json:"seen"`
 	FetchedAt string `json:"fetchedAt"`
-	// Org is the ticket's Jira scope/service (from the OrgScopeFieldID custom field),
+	// Org is the ticket's Jira scope/service (from the configured Jira scope custom field),
 	// used to split the board. Empty when the issue has no scope set.
 	Org string `json:"org"`
+	// NotMine marks a board row shown for visibility only (a parent ticket of
+	// the user's subtask, assigned to someone else). Its status transitions
+	// must NOT feed the user's productivity stats.
+	NotMine bool `json:"notMine"`
 	// ContextID/ContextKey are set when this assignment's Jira key already belongs
 	// to a context (so the board can show/open the linked context). Nil otherwise.
 	ContextID  *string `json:"contextId,omitempty"`

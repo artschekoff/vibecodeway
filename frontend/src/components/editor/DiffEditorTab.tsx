@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
-import { History, ScrollText, Maximize2, Minimize2, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
+import { History, ScrollText, Maximize2, Minimize2, ChevronUp, ChevronDown, Sparkles, Activity, Eye } from "lucide-react";
+import { MarkdownBody } from "../MarkdownBody";
 import { ReadRepoFile, ReadRepoFileBase, ReadRepoFileHead, SaveRepoFile, FileBlame, DiscardFile, ConfirmAction } from "../../../wailsjs/go/main/App";
 import { setupMonaco } from "../../lib/monacoSetup";
 import { useEditorSettings, toMonacoOptions } from "../../contexts/EditorSettingsContext";
 import { EditorSettingsMenu } from "./EditorSettingsMenu";
 import { FileHistoryModal } from "./FileHistoryModal";
+import { TaskManagerModal } from "./TaskManagerModal";
 import { computeHunkRevert, type LineChange } from "../../lib/hunkRevert";
 import { languageFor } from "../../lib/languageFor";
 import { useMonacoVim } from "../../lib/useMonacoVim";
@@ -33,6 +35,7 @@ type DiffEditorInstance = {
   getModifiedEditor: () => ModifiedEditor;
   getOriginalEditor?: () => { updateOptions: (o: Record<string, unknown>) => void };
   getLineChanges?: () => LineChange[] | null;
+  onDidUpdateDiff?: (listener: () => void) => { dispose: () => void };
 };
 // Minimal shape of the monaco namespace we use for blame decorations.
 type MonacoNs = { Range: new (a: number, b: number, c: number, d: number) => unknown };
@@ -57,14 +60,35 @@ function ensureAnchorStyle() {
 
 export function DiffEditorTab({
   repoPath, path, onSaved, refreshSignal, onAskAi, baseMode = "branch", highlightAnchor, revealLine, revealNonce,
-}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void; baseMode?: "branch" | "head"; highlightAnchor?: string; revealLine?: number; revealNonce?: number }) {
+  fullscreen: fullscreenProp, onFullscreenChange,
+}: { repoPath: string; path: string; onSaved: () => void; refreshSignal?: number; onAskAi?: (text: string) => void; baseMode?: "branch" | "head"; highlightAnchor?: string; revealLine?: number; revealNonce?: number;
+  // Controlled fullscreen (EditorWorkspace owns it so it survives the per-file
+  // remount when the user switches tabs while fullscreen). Uncontrolled falls
+  // back to local state.
+  fullscreen?: boolean; onFullscreenChange?: (f: boolean) => void }) {
   const [original, setOriginal] = useState<string | null>(null);
   const [modified, setModified] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [blameOn, setBlameOn] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [taskManagerOpen, setTaskManagerOpen] = useState(false);
+  // Markdown preview overlay. previewText is snapshotted from the live editor
+  // model on toggle, so unsaved edits are rendered too; the DiffEditor stays
+  // mounted underneath (hiding Monaco loses unsaved models on remount).
+  const isMarkdown = /\.(md|markdown)$/i.test(path);
+  const [previewOn, setPreviewOn] = useState(false);
+  const [previewText, setPreviewText] = useState("");
+  const togglePreview = () => {
+    if (!previewOn) {
+      const live = editorRef.current?.getModifiedEditor?.()?.getValue?.();
+      setPreviewText(typeof live === "string" ? live : (modified ?? ""));
+    }
+    setPreviewOn((v) => !v);
+  };
+  const [fsInternal, setFsInternal] = useState(false);
+  const fullscreen = fullscreenProp ?? fsInternal;
+  const setFullscreen = onFullscreenChange ?? setFsInternal;
   const [localReload, setLocalReload] = useState(0);
   // Bumped once Monaco's onMount fires, so effects that need editorRef.current
   // (e.g. the tour anchor highlight below) can re-run once the editor instance
@@ -211,16 +235,19 @@ export function DiffEditorTab({
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen, historyOpen]);
 
-  // Monaco's diff editor doesn't forward minimap option changes to its inner
-  // editors — the settings-menu toggle silently did nothing. Push it to both
-  // panes directly, on mount and on every change.
+  // Monaco's diff editor doesn't forward minimap/wordWrap option changes to its
+  // inner editors — the settings-menu toggles silently did nothing. Push them to
+  // both panes directly, on mount and on every change.
   useEffect(() => {
     const ed = editorRef.current;
     if (!ed) return;
-    const opts = { minimap: { enabled: settings.minimap } };
+    const opts = {
+      minimap: { enabled: settings.minimap },
+      wordWrap: settings.wordWrap ? ("on" as const) : ("off" as const),
+    };
     ed.getModifiedEditor().updateOptions?.(opts);
     ed.getOriginalEditor?.().updateOptions?.(opts);
-  }, [settings.minimap, mountTick]);
+  }, [settings.minimap, settings.wordWrap, mountTick]);
 
   // Toggle inline blame: glyph-margin decorations on the modified editor, each
   // hovering to its commit/author/date/summary. Best-effort — needs the editor
@@ -274,6 +301,15 @@ export function DiffEditorTab({
       { range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: "tour-anchor-highlight" } },
     ]);
     me.revealLineInCenter?.(line);
+    // The diff engine lays out alignment view zones asynchronously; a reveal
+    // that fired before they land scrolls to where the line USED to be and the
+    // viewport ends up off by the zones' height. Re-center once the diff
+    // update arrives (if it already did, the first reveal was correct).
+    const d = editorRef.current?.onDidUpdateDiff?.(() => {
+      me.revealLineInCenter?.(line);
+      d?.dispose();
+    });
+    return () => d?.dispose();
   }, [highlightAnchor, modified, mountTick]);
 
   // Cross-file jump target (Monaco go-to-definition / references opener):
@@ -282,7 +318,14 @@ export function DiffEditorTab({
   // scrolled away — still re-fires the reveal instead of being a no-op.
   useEffect(() => {
     if (!revealLine) return;
-    editorRef.current?.getModifiedEditor().revealLineInCenter?.(revealLine);
+    const me = editorRef.current?.getModifiedEditor();
+    me?.revealLineInCenter?.(revealLine);
+    // Same alignment-view-zone race as the tour anchor reveal above.
+    const d = editorRef.current?.onDidUpdateDiff?.(() => {
+      me?.revealLineInCenter?.(revealLine);
+      d?.dispose();
+    });
+    return () => d?.dispose();
   }, [revealNonce, mountTick]);
 
   useEffect(() => {
@@ -349,12 +392,35 @@ export function DiffEditorTab({
     }
   };
 
+  // Fullscreen covers only the tab pane (.app-content minus the open-file tab
+  // bar), so the app rail and the file tabs stay visible and clickable.
+  // Measured live: rail drags and window resizes both move the pane.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [fsRect, setFsRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!fullscreen) { setFsRect(null); return; }
+    let pane: HTMLElement | null = rootRef.current;
+    while (pane && !pane.parentElement?.classList.contains("app-content")) pane = pane.parentElement;
+    if (!pane) return; // no app shell (tests) — keep the inset:0 fallback
+    const target = pane;
+    const measure = () => {
+      const r = target.getBoundingClientRect();
+      setFsRect({ left: r.left, top: r.top, width: r.width, height: r.height });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(target);
+    return () => { window.removeEventListener("resize", measure); ro?.disconnect(); };
+  }, [fullscreen]);
+
   const rootStyle: React.CSSProperties = fullscreen
-    ? { position: "fixed", inset: 0, zIndex: 90, background: "var(--bg)", display: "flex", flexDirection: "column" }
+    ? { position: "fixed", zIndex: 90, background: "var(--bg)", display: "flex", flexDirection: "column",
+        ...(fsRect ? { left: fsRect.left, top: fsRect.top, width: fsRect.width, height: fsRect.height } : { inset: 0 }) }
     : { display: "flex", flexDirection: "column", height: "100%" };
 
   return (
-    <div style={rootStyle}>
+    <div ref={rootRef} style={rootStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 11 }}>{path}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
@@ -369,17 +435,26 @@ export function DiffEditorTab({
               <Sparkles size={13} />
             </button>
           )}
+          {isMarkdown && (
+            <button aria-label="toggle markdown preview" title={previewOn ? "Show code" : "Preview Markdown"}
+              style={iconBtn(previewOn)} onClick={togglePreview}>
+              <Eye size={13} />
+            </button>
+          )}
           <button aria-label="toggle blame" title="Toggle blame" style={iconBtn(blameOn)} onClick={() => setBlameOn((b) => !b)}>
             <ScrollText size={13} />
           </button>
           <button aria-label="file history" title="File history" style={iconBtn(false)} onClick={() => setHistoryOpen(true)}>
             <History size={13} />
           </button>
+          <button aria-label="task manager" title="Task Manager (per-tab CPU / RAM)" style={iconBtn(taskManagerOpen)} onClick={() => setTaskManagerOpen(true)}>
+            <Activity size={13} />
+          </button>
           <button
             aria-label={fullscreen ? "exit fullscreen" : "fullscreen editor"}
             title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen editor"}
             style={iconBtn(fullscreen)}
-            onClick={() => setFullscreen((f) => !f)}
+            onClick={() => setFullscreen(!fullscreen)}
           >
             {fullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           </button>
@@ -403,7 +478,15 @@ export function DiffEditorTab({
         </div>
       </div>
       {error && <div style={{ fontSize: 11, color: "#dc2626", padding: "2px 8px" }}>{error}</div>}
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+        {previewOn && isMarkdown && (
+          <div aria-label="markdown preview" style={{
+            position: "absolute", inset: 0, zIndex: 5, overflowY: "auto",
+            padding: "16px 24px", background: "var(--surface, #1e1e1e)",
+          }}>
+            <MarkdownBody text={previewText} />
+          </div>
+        )}
         {original !== null && modified !== null && (
           <DiffEditor
             original={original}
@@ -429,6 +512,7 @@ export function DiffEditorTab({
       </div>
       <VimStatusBar />
       {historyOpen && <FileHistoryModal repoPath={repoPath} path={path} onClose={() => setHistoryOpen(false)} />}
+      {taskManagerOpen && <TaskManagerModal onClose={() => setTaskManagerOpen(false)} />}
     </div>
   );
 }

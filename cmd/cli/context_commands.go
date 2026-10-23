@@ -215,9 +215,9 @@ func newContextGetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&contextKey, "context-key", "", "Context key")
 	return setAgentDocs(
 		cmd,
-		"Get full context detail including Jira config, Slack config, issues, and item counts.",
+		"Get full context detail: nested context metadata, Jira/Slack configs, issues, texts, files, VCS branches, and PRs.",
 		"--context-id UUID | --context-key STRING (one required)",
-		`{"id":"uuid","key":"string","jiraConfig":{...},"slackConfig":{...},"issues":[...],...}`,
+		`{"context":{"id":"uuid","key":"string","status":"active","snapshotStatus":"string","snapshotIsStale":false},"jira":{...},"slack":{...},"issues":[...],"contextTexts":[...],"uploadedFiles":[...],"vcsBranches":[{"id":"uuid","branch":"string","label":"string","autodetectPr":true,"repo":{"owner":"string","name":"string","platform":"github"}}],"pullRequests":[{"prNumber":1,"title":"string","state":"OPEN","url":"string"}],"slackThreads":[...],"slackChannels":[...]}`,
 		`vibecodeway-cli context-get --context-key sprint-42`,
 	)
 }

@@ -34,6 +34,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newAgentToolCmd())
 	root.AddCommand(newAskChatListCmd())
 	root.AddCommand(newAskChatGetCmd())
+	root.AddCommand(newTaskGraphCmd())
 
 	// Text / file write
 	root.AddCommand(newAddTextCmd())

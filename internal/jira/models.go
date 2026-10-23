@@ -17,7 +17,7 @@ type SearchResult struct {
 	Priority  string `json:"priority"`
 	Created   string `json:"created"`
 	// Org is the ticket's scope/service (this instance's "organization"), read from
-	// the OrgScopeFieldID custom field. Empty when the field is unset on the issue.
+	// the configured scope custom field (Client.SetOrgField). Empty when unset.
 	Org string `json:"org"`
 }
 
@@ -31,6 +31,7 @@ type IssueDetail struct {
 	Description string       `json:"description"`
 	Updated     string       `json:"updated"`
 	ParentKey   string       `json:"parentKey,omitempty"`
+	ParentType  string       `json:"parentType,omitempty"` // issue type of the parent (e.g. Epic)
 	Priority    string       `json:"priority"`
 	Subtasks    []SubtaskRef `json:"subtasks,omitempty"`
 	Links       []IssueLink  `json:"links,omitempty"`
@@ -49,6 +50,11 @@ type IssueLink struct {
 	TypeName  string `json:"typeName"`
 	Direction string `json:"direction"` // "outward" | "inward"
 	LinkedKey string `json:"linkedKey"`
+	// Snapshot of the linked issue as embedded in the link payload.
+	Summary   string `json:"summary,omitempty"`
+	Status    string `json:"status,omitempty"`
+	IssueType string `json:"issueType,omitempty"`
+	Priority  string `json:"priority,omitempty"`
 }
 
 // Comment represents a comment returned by jira workitem comment list.

@@ -16,8 +16,11 @@ import (
 type PRActions interface {
 	ListReviewRequestsForUser(ctx context.Context, owner, repo, login string) ([]vcs.PRData, error)
 	ListChangesRequestedForUser(ctx context.Context, owner, repo, login string) ([]vcs.PRData, error)
+	ListAuthoredPRs(ctx context.Context, owner, repo, login string) ([]vcs.PRData, error)
 	GetPRByNumber(ctx context.Context, owner, repo string, number int) (*vcs.PRData, error)
 	GetPRComments(ctx context.Context, owner, repo string, number int) ([]vcs.CommentData, error)
+	CountUnresolvedThreads(ctx context.Context, owner, repo string, prNumber int) (int, error)
+	GetAuthUser(ctx context.Context) (string, error)
 
 	ApprovePR(ctx context.Context, owner, repo string, number int, body string) error
 	RequestChangesPR(ctx context.Context, owner, repo string, number int, body string) error
@@ -37,6 +40,10 @@ type Deps struct {
 	VCS    PRActions
 	Repos  RepoLocations
 	Logger *zap.Logger
+	// VCSStore is the app's VCS state (tracked repos + last-synced PR snapshots).
+	// When set, the PR tools gain lazy-load behavior: reads default to the stored
+	// snapshot and refreshes write the latest GitHub state back into it.
+	VCSStore *vcsstore.Store
 }
 
 // NewRegistry builds the full tool set from the app's shared services. PR tools

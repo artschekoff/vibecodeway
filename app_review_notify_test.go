@@ -21,9 +21,9 @@ func TestOnReviewNotifyEmitsReviewRequestedEvent(t *testing.T) {
 
 	a := &App{db: s, ctx: ctx, logger: newTestLogger()}
 
-	a.onReviewNotify(ctx, "repo-x", "juna-api", 88, "Fix flaky test", "octocat")
+	a.onReviewNotify(ctx, "repo-x", "acme-api", 88, "Fix flaky test", "octocat")
 
-	rc, err := s.GetContextByKey(ctx, "juna-api — reviews") // em-dash U+2014
+	rc, err := s.GetContextByKey(ctx, "acme-api — reviews") // em-dash U+2014
 	require.NoError(t, err)
 	require.NotNil(t, rc)
 
@@ -33,7 +33,7 @@ func TestOnReviewNotifyEmitsReviewRequestedEvent(t *testing.T) {
 
 	assert.Equal(t, appstore.EventTypeReviewRequested, evs[0].Type)
 	assert.Equal(t, appstore.EventSourceGitHub, evs[0].SourceType)
-	assert.Equal(t, "juna-api#88", evs[0].SourceID)
+	assert.Equal(t, "acme-api#88", evs[0].SourceID)
 	assert.Equal(t, "octocat", evs[0].Author)
 	assert.Contains(t, evs[0].Summary, "PR #88")
 }

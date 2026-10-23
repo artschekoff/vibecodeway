@@ -47,6 +47,32 @@ func (s *Store) ListKnownJiraStatuses(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
+// ListContextIDsWithOpenTickets returns the ids of contexts holding at least
+// one NON-terminal Jira issue — the "still open work" query. Classified in Go
+// against the canonical terminal set (same reasoning as contextTicketCounts).
+func (s *Store) ListContextIDsWithOpenTickets(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DISTINCT context_id, status FROM jira_issues WHERE TRIM(status) <> ''`)
+	if err != nil {
+		return nil, fmt.Errorf("listing contexts with open tickets: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	seen := map[string]bool{}
+	var out []string
+	for rows.Next() {
+		var id, st string
+		if err := rows.Scan(&id, &st); err != nil {
+			return nil, err
+		}
+		if seen[id] || IsTerminalTicketStatus(st) {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // contextTicketCounts returns how many Jira issues are linked to the context
 // (total) and how many of those are non-terminal ("open"). Contexts hold few
 // issues, so statuses are classified in Go against the canonical set rather than
@@ -69,6 +95,29 @@ func (s *Store) contextTicketCounts(ctx context.Context, contextID string) (tota
 		}
 	}
 	return total, open, rows.Err()
+}
+
+// ContextWorkDone reports whether the context's tracked work is finished: it
+// has at least one Jira ticket or linked PR, every ticket is terminal, and
+// every linked PR is closed or merged. Contexts with neither tickets nor PRs
+// return false so they are never auto-archived on a vacuously-true "all done".
+// Unlike ContextAllTicketsDone, an open PR keeps the context active even when
+// all its tickets are closed ("merged ticket, PR still waiting" workflows).
+func (s *Store) ContextWorkDone(ctx context.Context, contextID string) (bool, error) {
+	total, open, err := s.contextTicketCounts(ctx, contextID)
+	if err != nil {
+		return false, err
+	}
+	var prTotal, prOpen int
+	err = s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(CASE WHEN p.state = 'open' THEN 1 ELSE 0 END), 0)
+		FROM vcs_pull_requests p
+		JOIN context_vcs_branches b ON b.id = p.branch_id
+		WHERE b.context_id = ?`, contextID).Scan(&prTotal, &prOpen)
+	if err != nil {
+		return false, fmt.Errorf("context pr counts: %w", err)
+	}
+	return total+prTotal > 0 && open == 0 && prOpen == 0, nil
 }
 
 // CountOpenTickets returns the number of non-terminal Jira issues in the context.

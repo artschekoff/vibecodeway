@@ -115,18 +115,34 @@ describe("Code Reviews — authored PRs (My PRs)", () => {
     expect(screen.getByText(/CI failed/i)).toBeInTheDocument();
     expect(screen.getByText(/Conflicts/i)).toBeInTheDocument();
   });
-  it("the My PRs checkbox hides and shows the authored section", async () => {
+  it("the My PRs checkbox hides requested reviews and keeps authored PRs", async () => {
+    GetPendingCodeReviews.mockResolvedValue([
+      {
+        id: "a1", repoId: "repo1", prNumber: 42, prTitle: "My feature", prAuthor: "me",
+        prUrl: "https://x/42", reviewStatus: "changes_requested", headBranch: "feat/x",
+        requestedAt: "", fetchedAt: "", reviewedAt: undefined, dismissedAt: undefined, viewedAt: undefined,
+        mergeable: "CONFLICTING", ciStatus: "FAILURE", kind: "authored", reviewers: [],
+      },
+      {
+        id: "r1", repoId: "repo1", prNumber: 43, prTitle: "Someone else's PR", prAuthor: "alice",
+        prUrl: "https://x/43", reviewStatus: "pending", headBranch: "feat/y",
+        requestedAt: "", fetchedAt: "", reviewedAt: undefined, dismissedAt: undefined, viewedAt: undefined,
+        mergeable: "MERGEABLE", ciStatus: "SUCCESS", kind: "requested", reviewers: [],
+      },
+    ]);
     renderList();
     fireEvent.click(await screen.findByRole("button", { name: /code reviews/i }));
     fireEvent.click(await screen.findByText("acme/widgets"));
     expect(await screen.findByText("My feature")).toBeInTheDocument();
+    expect(screen.getByText("Someone else's PR")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /show my prs/i }));
-    expect(screen.queryByText("My feature")).not.toBeInTheDocument();
-    expect(localStorage.getItem("vibecodeway:reviews:showMyPRs")).toBe("0");
+    fireEvent.click(screen.getByRole("checkbox", { name: /my prs only/i }));
+    expect(screen.getByText("My feature")).toBeInTheDocument();
+    expect(screen.queryByText("Someone else's PR")).not.toBeInTheDocument();
+    expect(localStorage.getItem("vibecodeway:reviews:myPRsOnly")).toBe("1");
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /show my prs/i }));
-    expect(await screen.findByText("My feature")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /my prs only/i }));
+    expect(await screen.findByText("Someone else's PR")).toBeInTheDocument();
   });
 
   it("offers the editor-opening 'Review with AI' button on an authored PR", async () => {

@@ -110,4 +110,13 @@ func TestScopeGuard_enforcesRoots(t *testing.T) {
 	// Bash touching only system paths (not under HOME) is allowed.
 	bashOk := `{"tool_name":"Bash","tool_input":{"command":"ls /usr/bin"}}`
 	assert.Equal(t, 0, run(bashOk), "bash on system paths is allowed")
+
+	// Skills outside the worktrees are user-approved: reading them is allowed,
+	// writing to them stays blocked.
+	skillRead := `{"tool_name":"Read","tool_input":{"file_path":"~/.claude/skills/foo/SKILL.md"}}`
+	assert.Equal(t, 0, run(skillRead), "reading a skill under ~/.claude is allowed")
+	skillBash := `{"tool_name":"Bash","tool_input":{"command":"cat ~/.codex/prompts/foo.md"}}`
+	assert.Equal(t, 0, run(skillBash), "bash reading ~/.codex is allowed")
+	skillWrite := `{"tool_name":"Write","tool_input":{"file_path":"~/.claude/skills/foo/SKILL.md"}}`
+	assert.Equal(t, 2, run(skillWrite), "writing a skill file stays blocked")
 }

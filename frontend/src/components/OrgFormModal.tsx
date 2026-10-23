@@ -61,7 +61,7 @@ export default function OrgFormModal({ org, onSave, onClose }: Props) {
               className="form-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Jiro Health"
+              placeholder="e.g. Acme Corp"
               maxLength={80}
               disabled={saving}
             />

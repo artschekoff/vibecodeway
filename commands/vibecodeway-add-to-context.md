@@ -49,7 +49,7 @@ Match in this order and stop at the first hit:
 | anything else | **text** | the string verbatim |
 
 Print one line stating the classification before writing, e.g.
-`Detected: GitHub PR juna-health/frontend#397`.
+`Detected: GitHub PR acme/frontend#397`.
 
 ## Step 2 — Resolve the context
 
@@ -104,7 +104,7 @@ Report `added` and `newComments` from the JSON.
 ### branch
 
 ```bash
-vibecodeway-cli branch-add --context-key <key> --owner-repo juna-health/frontend --branch feat/JH-123-login
+vibecodeway-cli branch-add --context-key <key> --owner-repo acme/frontend --branch feat/JH-123-login
 ```
 
 ### pr
@@ -112,7 +112,7 @@ vibecodeway-cli branch-add --context-key <key> --owner-repo juna-health/frontend
 `branch-add` resolves the head branch itself via `gh` — do not call `gh` yourself:
 
 ```bash
-vibecodeway-cli branch-add --context-key <key> --owner-repo juna-health/frontend --pr-number 397
+vibecodeway-cli branch-add --context-key <key> --owner-repo acme/frontend --pr-number 397
 ```
 
 If it fails with a gh auth error, tell the user to run `gh auth login` and stop.
@@ -125,7 +125,7 @@ the PR itself or its comments, so nothing PR-shaped shows up until the next sync
 No branch — tracks every PR of the repo:
 
 ```bash
-vibecodeway-cli branch-add --context-key <key> --owner-repo juna-health/frontend
+vibecodeway-cli branch-add --context-key <key> --owner-repo acme/frontend
 ```
 
 ### text

@@ -5,21 +5,39 @@ import (
 	"testing"
 
 	"github.com/artschekoff/vibecodeway/internal/vcs"
+	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 )
 
 // fakePR is a test double for PRActions (extended with write methods in Task 8).
 type fakePR struct {
 	reviewReq  []vcs.PRData
 	changesReq []vcs.PRData
+	authored   []vcs.PRData
 	pr         *vcs.PRData
 	comments   []vcs.CommentData
+	authUser   string
+	unresolved int
 
-	lastLogin  string
-	approved   int    // PR number approved
-	changesFor int    // PR number changes-requested
-	commented  int    // PR number commented
-	lastBody   string // body of the last write action
+	lastLogin     string
+	approved      int    // PR number approved
+	changesFor    int    // PR number changes-requested
+	commented     int    // PR number commented
+	lastBody      string // body of the last write action
+	getPRCalls    int    // GetPRByNumber invocations (lazy-load cache assertions)
+	authoredCalls int    // ListAuthoredPRs invocations
 }
+
+func (f *fakePR) ListAuthoredPRs(_ context.Context, _, _, login string) ([]vcs.PRData, error) {
+	f.lastLogin = login
+	f.authoredCalls++
+	return f.authored, nil
+}
+
+func (f *fakePR) CountUnresolvedThreads(_ context.Context, _, _ string, _ int) (int, error) {
+	return f.unresolved, nil
+}
+
+func (f *fakePR) GetAuthUser(_ context.Context) (string, error) { return f.authUser, nil }
 
 func (f *fakePR) ListReviewRequestsForUser(_ context.Context, _, _, login string) ([]vcs.PRData, error) {
 	f.lastLogin = login
@@ -32,6 +50,7 @@ func (f *fakePR) ListChangesRequestedForUser(_ context.Context, _, _, login stri
 }
 
 func (f *fakePR) GetPRByNumber(_ context.Context, _, _ string, _ int) (*vcs.PRData, error) {
+	f.getPRCalls++
 	return f.pr, nil
 }
 func (f *fakePR) UpdatePRBranch(_ context.Context, _, _ string, _ int) error { return nil }
@@ -130,5 +149,70 @@ func TestBadRepoArg(t *testing.T) {
 	if _, err := reg.Call(context.Background(), "get_pr",
 		map[string]any{"repo": "not-a-repo", "number": float64(1)}, Ctx{}); err == nil {
 		t.Fatal("expected error for malformed repo")
+	}
+}
+
+func TestLazyLoadPRStatusTools(t *testing.T) {
+	s := newTestStore(t)
+	vs := vcsstore.NewStore(s.DB())
+	ctx := context.Background()
+	if _, err := vs.Repos.EnsureRepo(ctx, "github", "octo", "hello"); err != nil {
+		t.Fatalf("ensure repo: %v", err)
+	}
+
+	pr := vcs.PRData{Number: 7, Title: "Add search", Author: "me", State: "open",
+		ReviewStatus: "review_required", MergeStateStatus: "BEHIND", CIStatus: "FAILURE", CreatedAt: "2026-10-01T00:00:00Z"}
+	fake := &fakePR{authUser: "me", pr: &pr, authored: []vcs.PRData{pr}, unresolved: 2}
+	reg := NewRegistry(Deps{VCS: fake, VCSStore: vs})
+
+	// First get_pr_status: uncached → fetched from GitHub and snapshotted.
+	res, err := reg.Call(ctx, "get_pr_status", map[string]any{"repo": "octo/hello", "number": 7}, Ctx{})
+	if err != nil {
+		t.Fatalf("get_pr_status: %v", err)
+	}
+	out := res.(map[string]any)
+	if out["source"] != "github" || fake.getPRCalls != 1 {
+		t.Fatalf("expected live fetch, got %v (calls=%d)", out["source"], fake.getPRCalls)
+	}
+	brief := out["pullRequest"].(map[string]any)
+	if brief["unresolvedComments"] != 2 || brief["updateBranchNeeded"] != true {
+		t.Fatalf("snapshot brief wrong: %v", brief)
+	}
+
+	// Second call: answered from the snapshot, GitHub untouched.
+	res, err = reg.Call(ctx, "get_pr_status", map[string]any{"repo": "octo/hello", "number": 7}, Ctx{})
+	if err != nil {
+		t.Fatalf("get_pr_status cached: %v", err)
+	}
+	if res.(map[string]any)["source"] != "snapshot" || fake.getPRCalls != 1 {
+		t.Fatalf("expected snapshot read, got %v (calls=%d)", res.(map[string]any)["source"], fake.getPRCalls)
+	}
+
+	// refresh=true forces a GitHub fetch and snapshot update.
+	res, err = reg.Call(ctx, "get_pr_status", map[string]any{"repo": "octo/hello", "number": 7, "refresh": true}, Ctx{})
+	if err != nil {
+		t.Fatalf("get_pr_status refresh: %v", err)
+	}
+	if res.(map[string]any)["source"] != "github" || fake.getPRCalls != 2 {
+		t.Fatalf("expected refresh fetch, got %v (calls=%d)", res.(map[string]any)["source"], fake.getPRCalls)
+	}
+
+	// list_author_prs: snapshot already has the PR → no GitHub call.
+	res, err = reg.Call(ctx, "list_author_prs", map[string]any{"repo": "octo/hello"}, Ctx{})
+	if err != nil {
+		t.Fatalf("list_author_prs: %v", err)
+	}
+	out = res.(map[string]any)
+	if out["source"] != "snapshot" || out["count"] != 1 || fake.authoredCalls != 0 {
+		t.Fatalf("expected snapshot list, got %v", out)
+	}
+
+	// refresh=true re-syncs the list from GitHub.
+	res, err = reg.Call(ctx, "list_author_prs", map[string]any{"repo": "octo/hello", "refresh": true}, Ctx{})
+	if err != nil {
+		t.Fatalf("list_author_prs refresh: %v", err)
+	}
+	if res.(map[string]any)["source"] != "github" || fake.authoredCalls != 1 {
+		t.Fatalf("expected live list, got %v (calls=%d)", res.(map[string]any)["source"], fake.authoredCalls)
 	}
 }

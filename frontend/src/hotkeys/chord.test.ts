@@ -21,6 +21,16 @@ describe("chord", () => {
       { mod: true, ctrl: false, shift: false, alt: false, key: "t" });
   });
 
+  it("resolves shifted punctuation to the physical key (⌘⇧[ arrives as '{')", () => {
+    expect(eventToToken(ev({ metaKey: true, shiftKey: true, key: "{", code: "BracketLeft" }), "darwin")).toEqual(
+      { mod: true, ctrl: false, shift: true, alt: false, key: "[" });
+    expect(eventToToken(ev({ metaKey: true, shiftKey: true, key: "}", code: "BracketRight" }), "darwin")).toEqual(
+      { mod: true, ctrl: false, shift: true, alt: false, key: "]" });
+    // Shifted letters keep their layout meaning (Dvorak ⇧KeyY = F stays "f").
+    expect(eventToToken(ev({ metaKey: true, shiftKey: true, key: "F", code: "KeyY" }), "darwin")).toEqual(
+      { mod: true, ctrl: false, shift: true, alt: false, key: "f" });
+  });
+
   it("keeps raw ctrl separate from mod on darwin (for zone focus)", () => {
     expect(eventToToken(ev({ ctrlKey: true, key: "ArrowRight" }), "darwin")).toEqual(
       { mod: false, ctrl: true, shift: false, alt: false, key: "arrowright" });

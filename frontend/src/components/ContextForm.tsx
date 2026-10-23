@@ -5,11 +5,12 @@ import "react-datepicker/dist/react-datepicker.css";
 import Spinner from "./Spinner";
 import ContextEventHooks from "./ContextEventHooks";
 import { usePassphrase } from "../contexts/PassphraseContext";
-import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, UpdateVCSRepoMeta, InterpretContextUpdate, ApplyContextUpdateActions, AIMatchBranches } from "../../wailsjs/go/main/App";
+import { ListSlackWorkspaces, PickAndExtractFiles, PickAndExtractFilesPreview, PreviewSlackDMs, SearchJQL, SearchSlackChannels, DeleteUploadedFile, DiscardPendingUpload, GetSupportedPlatforms, ListRepoBranches, ListTrackedRepos, ListContexts, InterpretContextUpdate, ApplyContextUpdateActions, AIMatchBranches } from "../../wailsjs/go/main/App";
 import type { store, main } from "../../wailsjs/go/models";
 import type { ContextText, Context, Issue, PendingUploadPreview, SearchResult, SlackChannel, SlackChannelInput, SlackChannelResult, SlackDMConfig, SlackDMConfigInput, SlackSavePayload, SlackWorkspaceResult, TextFilesPayload, UploadBatchResult, UploadPreviewBatchResult, UploadedFile, VCSBranch, VCSPlatform, VCSPlatformInfo, VCSRepo, ContextRelation, RelationInput, RelationsPayload, ContextRelationType } from "../types";
 import { RELATION_TYPE_LABELS } from "../types";
 import { ProseEditor } from "./ProseEditor";
+import { AIMatchPicker, type AIMatchCandidate } from "./AIMatchPicker";
 
 export interface VCSBranchInput {
   platform: VCSPlatform;
@@ -152,17 +153,6 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [newVCSBranches, setNewVCSBranches] = useState<VCSBranchInput[]>([]);
   const [removedVCSBranchIds, setRemovedVCSBranchIds] = useState<string[]>([]);
   // Per-repo-id metadata drafts: { label, description }
-  const [repoMeta, setRepoMeta] = useState<Map<string, { label: string; description: string }>>(() => {
-    const m = new Map<string, { label: string; description: string }>();
-    for (const b of initialVCSBranches ?? []) {
-      if (b.repo && !m.has(b.repo.id)) {
-        m.set(b.repo.id, { label: b.repo.label ?? "", description: b.repo.description ?? "" });
-      }
-    }
-    return m;
-  });
-  const [savingRepoMeta, setSavingRepoMeta] = useState<Set<string>>(new Set());
-  const [savedRepoMeta, setSavedRepoMeta] = useState<Set<string>>(new Set());
   const [vcsPlatforms, setVCSPlatforms] = useState<VCSPlatformInfo[]>([]);
   const [vcsPlatform, setVCSPlatform] = useState<VCSPlatform>("github");
   const [vcsOwnerRepo, setVCSOwnerRepo] = useState("");
@@ -172,6 +162,8 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
   const [vcsAddError, setVCSAddError] = useState("");
   const [aiMatching, setAiMatching] = useState(false);
   const [aiMatchNote, setAiMatchNote] = useState("");
+  // AI Match proposals awaiting the user's pick — nothing is added until Accept.
+  const [aiMatchCandidates, setAiMatchCandidates] = useState<AIMatchCandidate[] | null>(null);
   // Repo picker
   const [trackedRepos, setTrackedRepos] = useState<VCSRepo[]>([]);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
@@ -729,18 +721,23 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     if (debounceRef.current) clearTimeout(debounceRef.current);
   };
 
+  // Fetch AI-matched branches and PROPOSE them — the user picks which to add.
   const handleAIMatch = async () => {
     if (!initial) return;
     setAiMatching(true);
     setAiMatchNote("");
+    setAiMatchCandidates(null);
     try {
       const matches = await AIMatchBranches(initial.id);
       const fresh = (matches ?? []).filter((m) =>
         !newVCSBranches.some((b) => b.platform === m.platform && b.ownerRepo === m.ownerRepo && b.branch === m.branch) &&
         !existingVCSBranches.some((b) => b.repo?.platform === m.platform && `${b.repo?.owner}/${b.repo?.name}` === m.ownerRepo && b.branch === m.branch)
       );
-      setNewVCSBranches((prev) => [...prev, ...fresh.map((m) => ({ platform: m.platform as VCSPlatform, ownerRepo: m.ownerRepo, branch: m.branch, label: m.label, autodetectPr: true }))]);
-      setAiMatchNote(fresh.length ? `Added ${fresh.length} matched branch(es) — review and Save.` : "No new matching branches found.");
+      if (fresh.length === 0) {
+        setAiMatchNote("No new matching branches found.");
+      } else {
+        setAiMatchCandidates(fresh);
+      }
     } catch (e) {
       setAiMatchNote(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -748,19 +745,12 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
     }
   };
 
-  const handleSaveRepoMeta = async (repoId: string) => {
-    const meta = repoMeta.get(repoId);
-    if (!meta) return;
-    setSavingRepoMeta((prev) => new Set([...prev, repoId]));
-    try {
-      await UpdateVCSRepoMeta(repoId, meta.label, meta.description);
-      setSavedRepoMeta((prev) => new Set([...prev, repoId]));
-      setTimeout(() => setSavedRepoMeta((prev) => { const n = new Set(prev); n.delete(repoId); return n; }), 2000);
-    } catch { /* best-effort */ }
-    finally {
-      setSavingRepoMeta((prev) => { const n = new Set(prev); n.delete(repoId); return n; });
-    }
+  const handleAcceptAiMatches = (selected: AIMatchCandidate[]) => {
+    setNewVCSBranches((prev) => [...prev, ...selected.map((m) => ({ platform: m.platform as VCSPlatform, ownerRepo: m.ownerRepo, branch: m.branch, label: m.label, autodetectPr: true }))]);
+    setAiMatchCandidates(null);
+    setAiMatchNote(`Added ${selected.length} branch${selected.length === 1 ? "" : "es"} — review and Save.`);
   };
+
 
   // close branch picker when clicking outside
   useEffect(() => {
@@ -1693,63 +1683,6 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                   </div>
                 )}
 
-                {/* Repository metadata — for AI agent use */}
-                {(() => {
-                  const uniqueRepos = existingVCSBranches
-                    .filter((b) => b.repo)
-                    .reduce<VCSRepo[]>((acc, b) => {
-                      if (!acc.some((r) => r.id === b.repo!.id)) acc.push(b.repo!);
-                      return acc;
-                    }, []);
-                  if (uniqueRepos.length === 0) return null;
-                  return (
-                    <div className="repo-meta-section">
-                      <div className="repo-meta-section-header">Repository info (for AI context)</div>
-                      {uniqueRepos.map((repo) => {
-                        const draft = repoMeta.get(repo.id) ?? { label: "", description: "" };
-                        const isSaving = savingRepoMeta.has(repo.id);
-                        const isSaved = savedRepoMeta.has(repo.id);
-                        return (
-                          <div key={repo.id} className="repo-meta-item">
-                            <span className="repo-meta-name">{repo.owner}/{repo.name}</span>
-                            <input
-                              className="repo-meta-input"
-                              value={draft.label}
-                              onChange={(e) => setRepoMeta((prev) => {
-                                const n = new Map(prev);
-                                const cur = prev.get(repo.id) ?? { label: "", description: "" };
-                                n.set(repo.id, { ...cur, label: e.target.value });
-                                return n;
-                              })}
-                              placeholder="Label (e.g. api, frontend)"
-                            />
-                            <input
-                              className="repo-meta-input repo-meta-input--desc"
-                              value={draft.description}
-                              onChange={(e) => setRepoMeta((prev) => {
-                                const n = new Map(prev);
-                                const cur = prev.get(repo.id) ?? { label: "", description: "" };
-                                n.set(repo.id, { ...cur, description: e.target.value });
-                                return n;
-                              })}
-                              placeholder="Description for AI agent (e.g. Backend service for billing)"
-                            />
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              style={{ flexShrink: 0, fontSize: 11, padding: "2px 10px" }}
-                              onClick={() => void handleSaveRepoMeta(repo.id)}
-                              disabled={isSaving}
-                            >
-                              {isSaved ? "Saved" : isSaving ? "Saving…" : "Save"}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-
                 {/* Add branch form */}
                 <div className="channel-search-section">
                   <div className="channel-search-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -1780,6 +1713,13 @@ export default function ContextForm({ initial, initialJqlQuery, initialJiraIssue
                   )}
                   {aiMatchNote && (
                     <div className="form-hint" style={{ marginTop: 4 }}>{aiMatchNote}</div>
+                  )}
+                  {aiMatchCandidates && (
+                    <AIMatchPicker
+                      matches={aiMatchCandidates}
+                      onAccept={handleAcceptAiMatches}
+                      onCancel={() => setAiMatchCandidates(null)}
+                    />
                   )}
 
                   {/* Row 1: platform + repo selector */}

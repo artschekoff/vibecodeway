@@ -1,24 +1,27 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { EnsureContextEditorWorkspace, CheckoutInWorkspace } = vi.hoisted(() => ({
+const { EnsureContextEditorWorkspace, CheckoutInWorkspace, EnsureBranchWorktree } = vi.hoisted(() => ({
   EnsureContextEditorWorkspace: vi.fn(),
   CheckoutInWorkspace: vi.fn(),
+  EnsureBranchWorktree: vi.fn(),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ EnsureContextEditorWorkspace, CheckoutInWorkspace }));
+vi.mock("../../wailsjs/go/main/App", () => ({ EnsureContextEditorWorkspace, CheckoutInWorkspace, EnsureBranchWorktree }));
 
 import { useOpenContextEditor } from "./useOpenContextEditor";
 
 beforeEach(() => {
   vi.clearAllMocks();
   CheckoutInWorkspace.mockResolvedValue(undefined);
+  // The checkout happens only for the picked branch, after the pick.
+  EnsureBranchWorktree.mockImplementation(async (_repo: string, branch: string) => `/wt/${branch}`);
 });
 
 describe("useOpenContextEditor", () => {
-  it("opens the editor directly when a workspace is ready", async () => {
+  it("checks out the single linked branch and opens the editor there", async () => {
     EnsureContextEditorWorkspace.mockResolvedValue({
       ready: true,
-      worktrees: [{ repoId: "a", repoName: "r", branch: "b", worktreePath: "/wt/a" }],
+      worktrees: [{ repoId: "a", repoName: "r", branch: "b", worktreePath: "" }],
       choices: [],
     });
     const openEditorTab = vi.fn();
@@ -26,16 +29,17 @@ describe("useOpenContextEditor", () => {
 
     await act(async () => { await result.current.open("c1", "KEY-1"); });
 
-    expect(openEditorTab).toHaveBeenCalledWith("c1", "KEY-1", "/wt/a");
+    expect(EnsureBranchWorktree).toHaveBeenCalledWith("a", "b");
+    expect(openEditorTab).toHaveBeenCalledWith("c1", "KEY-1", "/wt/b");
     expect(result.current.picker).toBeNull();
   });
 
-  it("shows the workspace picker when ≥2 worktrees are ready", async () => {
+  it("shows the branch picker when ≥2 branches are linked and checks out only the pick", async () => {
     EnsureContextEditorWorkspace.mockResolvedValue({
       ready: true,
       worktrees: [
         { repoId: "a", repoName: "acme/api", branch: "feat/x", worktreePath: "/wt/api" },
-        { repoId: "b", repoName: "acme/rdbms", branch: "feat/y", worktreePath: "/wt/rdbms" },
+        { repoId: "b", repoName: "acme/rdbms", branch: "feat/y", worktreePath: "" },
       ],
       choices: [],
     });
@@ -45,24 +49,14 @@ describe("useOpenContextEditor", () => {
     await act(async () => { await result.current.open("c1", "KEY-1"); });
 
     expect(openEditorTab).not.toHaveBeenCalled();
+    expect(EnsureBranchWorktree).not.toHaveBeenCalled();
     expect(result.current.workspacePicker?.worktrees).toHaveLength(2);
 
-    // Picking a worktree opens the editor with that path as initial cwd.
-    act(() => { result.current.confirmWorkspace("/wt/rdbms"); });
-    expect(openEditorTab).toHaveBeenCalledWith("c1", "KEY-1", "/wt/rdbms");
-    expect(result.current.workspacePicker).toBeNull();
-  });
-
-  it("opens directly with the single worktree path when exactly one is ready", async () => {
-    EnsureContextEditorWorkspace.mockResolvedValue({
-      ready: true,
-      worktrees: [{ repoId: "a", repoName: "acme/api", branch: "feat/x", worktreePath: "/wt/api" }],
-      choices: [],
-    });
-    const openEditorTab = vi.fn();
-    const { result } = renderHook(() => useOpenContextEditor(openEditorTab));
-    await act(async () => { await result.current.open("c1", "KEY-1"); });
-    expect(openEditorTab).toHaveBeenCalledWith("c1", "KEY-1", "/wt/api");
+    // Picking a branch checks out just that one and opens the editor there.
+    await act(async () => { await result.current.confirmWorkspace(result.current.workspacePicker!.worktrees[1]); });
+    expect(EnsureBranchWorktree).toHaveBeenCalledTimes(1);
+    expect(EnsureBranchWorktree).toHaveBeenCalledWith("b", "feat/y");
+    expect(openEditorTab).toHaveBeenCalledWith("c1", "KEY-1", "/wt/feat/y");
     expect(result.current.workspacePicker).toBeNull();
   });
 

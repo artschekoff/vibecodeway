@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, Copy, Check } from "lucide-react";
-import { GetContextChanges, RefreshContext, RefreshContextPRs, StartCodeTour, GetCodeTour, SymbolsIndex } from "../../wailsjs/go/main/App";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { RefreshCw, Copy, Check, ExternalLink } from "lucide-react";
+import { GetContextChanges, RefreshContext, RefreshContextPRs, StartCodeTour, GetCodeTour, SymbolsIndex, CancelRefresh } from "../../wailsjs/go/main/App";
+import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { useProgress } from "../contexts/ProgressContext";
 import type { CodeTour } from "../types";
 import { TerminalPanel } from "../components/editor/TerminalPanel";
 import { ChangedFilesPanel } from "../components/editor/ChangedFilesPanel";
@@ -13,13 +15,16 @@ import { EditorPRInfo } from "../components/editor/EditorPRInfo";
 import { NotesPanel } from "../components/editor/NotesPanel";
 import { nextPaneSize, readStoredPaneSize, fitPaneSize } from "../lib/paneSize";
 import { useEditorFiles, tabKey, type OpenTab } from "../contexts/EditorFilesContext";
-import { registerMonacoSymbols } from "../lib/monacoSymbols";
+import { registerMonacoSymbols, releaseMonacoSymbols } from "../lib/monacoSymbols";
 import { EditorSettingsProvider } from "../contexts/EditorSettingsContext";
 import { EditorFocusProvider, useEditorFocus } from "../contexts/EditorFocusContext";
 import { useHotkey } from "../hotkeys/HotkeyProvider";
 import { useTabVisible } from "../contexts/TabVisibleContext";
+import { useTabContextOptional } from "../contexts/TabContext";
 import { useRovingTab } from "../hotkeys/useRovingTab";
 import { editorModeForKey, editorModeLabel } from "../lib/contextMode";
+import { repoTileLabel } from "../lib/repoTileLabel";
+import { subscribeTermSessions, termSessionsVersion, termSessionCountForCwd } from "../lib/terminalRegistry";
 
 const SIDEBAR_KEY = "vibecodeway:editor:sidebarWidth";
 const SIDEBAR_MIN = 180;
@@ -48,6 +53,7 @@ export function EditorWorkspace(props: { contextId: string; contextKey?: string;
 }
 
 function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId: string; contextKey?: string; initialCwd?: string }) {
+  const progress = useProgress();
   const { active: activeZone, register: registerZone } = useEditorFocus();
   // ponytail: roving Tab only on the sidebar (buttons + tree). The editor and
   // terminal zones host Monaco/xterm, which own Tab natively — hijacking it there
@@ -58,6 +64,9 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   const [cwd, setCwd] = useState<string>("");
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [sidebarTab, setSidebarTab] = useState<"files" | "git">("git");
+  // Owned here (not in DiffEditorTab) so fullscreen survives switching between
+  // open-file tabs — each switch remounts DiffEditorTab (key=activeKey).
+  const [editorFullscreen, setEditorFullscreen] = useState(false);
   const [pendingTerminalInsert, setPendingTerminalInsert] = useState<{ text: string; id: number } | null>(null);
   const [pendingTerminalOpen, setPendingTerminalOpen] = useState<{ cwd: string; id: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,15 +76,22 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   // repoPath -> number of changed files, from the same GetContextChanges fetch
   // that populates repoPaths — drives the Start-tour button's disabled state.
   const [repoFileCounts, setRepoFileCounts] = useState<Record<string, number>>({});
+  const [changesError, setChangesError] = useState("");
   const [tour, setTour] = useState<CodeTour | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStarting, setTourStarting] = useState(false);
   const [tourError, setTourError] = useState("");
   const [symbolsOpen, setSymbolsOpen] = useState(false);
+  // What the quick-open palette starts with: "" files, "#" symbols, "*" everything.
+  const [paletteSeed, setPaletteSeed] = useState("");
+  const openPalette = (seed: string) => { setPaletteSeed(seed); setSymbolsOpen(true); };
   // Which (repoPath, path, anchor) the diff editor should highlight once that
   // file's DiffEditorTab is mounted — set by TourCard as the user steps through.
   const [tourAnchorTarget, setTourAnchorTarget] = useState<{ repoPath: string; path: string; anchor: string } | null>(null);
   const { getFiles, openEditorFile } = useEditorFiles();
+  const tabCtx = useTabContextOptional();
+  // Re-render when terminals start/exit so the repo tiles' counters stay live.
+  useSyncExternalStore(subscribeTermSessions, termSessionsVersion);
   const { tabs, activeKey } = getFiles(contextId);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readStoredPaneSize(localStorage.getItem(SIDEBAR_KEY), SIDEBAR_DEFAULT, SIDEBAR_MIN, SIDEBAR_MAX)
@@ -120,6 +136,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
 
   useEffect(() => {
     let active = true;
+    setChangesError("");
     void GetContextChanges(contextId).then((repos) => {
       if (!active) return;
       const paths = (repos ?? [])
@@ -133,6 +150,10 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         const preferred = initialCwd && paths.some((p) => p.path === initialCwd) ? initialCwd : paths[0].path;
         setCwd((prev) => prev || preferred);
       }
+    }).catch((e) => {
+      // A transient failure here (e.g. DB contention at startup) used to brick
+      // the whole editor silently — no repos, no terminal, no explanation.
+      if (active) setChangesError(e instanceof Error ? e.message : String(e));
     });
     return () => { active = false; };
   }, [contextId, refreshSignal]);
@@ -163,11 +184,33 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   const handleRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
+    // Same progress modal + per-provider steps as Context Detail's refresh —
+    // RefreshContext can run for a minute on big contexts, and a bare spinning
+    // icon reads as "hung".
+    progress.begin("Reloading Workspace", [], () => { void CancelRefresh(); });
+    const REFRESH_LABELS: Record<string, string> = {
+      jira: "Syncing Jira issues & comments",
+      slack: "Refreshing Slack threads & DMs",
+      vcs: "Fetching pull requests",
+      text: "Syncing texts & files",
+    };
+    const unsubscribe = EventsOn(
+      "refresh:progress",
+      (data: { current: number; total: number; step: string }) => {
+        const label = REFRESH_LABELS[data.step] ?? `Syncing ${data.step}`;
+        progress.set(data.current - 1, data.total, label);
+      }
+    );
     try {
+      // Worktrees are never created here: a branch attached after the editor
+      // opened is checked out only when the user picks it (Open Editor).
       await RefreshContext(contextId);
     } catch {
       /* fail-soft: still re-read local state below */
     } finally {
+      unsubscribe();
+      EventsOff("refresh:progress");
+      progress.done();
       setRefreshSignal((n) => n + 1);
       setRefreshing(false);
     }
@@ -216,7 +259,9 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
     if (tour && !tourOpen) setTourOpen(true);
     else void handleStartTour();
   }, { scope: "editor", enabled: tabVisible });
-  useHotkey("symbols.search", () => setSymbolsOpen(true), { scope: "editor", enabled: tabVisible });
+  useHotkey("symbols.search", () => openPalette("#"), { scope: "editor", enabled: tabVisible });
+  useHotkey("files.quickOpen", () => openPalette(""), { scope: "editor", enabled: tabVisible });
+  useHotkey("search.code", () => openPalette("*"), { scope: "editor", enabled: tabVisible });
 
   const active = useMemo(() => tabs.find((t) => tabKey(t) === activeKey), [tabs, activeKey]);
   const activeRepo = useMemo(() => repoPaths.find((r) => r.path === cwd), [repoPaths, cwd]);
@@ -239,13 +284,16 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
   // F12/references in the active tab could read a hidden tab's cwd/contextId.
   useEffect(() => {
     if (!tabVisible) return;
-    registerMonacoSymbols({
+    const deps = registerMonacoSymbols({
       getRepoPath: () => cwdRef.current,
       getRepoPaths: () => repoPathsRef.current,
       getContextId: () => contextIdRef.current,
       getRepoName: () => repoNameRef.current,
       openFile: openEditorFile,
     });
+    // On unmount (tab closed), release the shared slot so this workspace's
+    // closures are not retained; a newer workspace's deps are left alone.
+    return () => releaseMonacoSymbols(deps);
   }, [tabVisible, cwd, contextId, activeRepo?.name, repoPaths, openEditorFile]);
   const hasChangesForTour = (repoFileCounts[cwd] ?? 0) > 0;
   const highlightAnchor =
@@ -262,6 +310,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
           {active ? (
             <DiffEditorTab key={activeKey} repoPath={active.repoPath} path={active.path} baseMode={active.baseMode} refreshSignal={refreshSignal}
               highlightAnchor={highlightAnchor} revealLine={active.revealLine} revealNonce={active.revealNonce}
+              fullscreen={editorFullscreen} onFullscreenChange={setEditorFullscreen}
               onSaved={() => { /* panel auto-polls */ }}
               onAskAi={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))} />
           ) : (
@@ -287,7 +336,7 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               onAskAuthorAgent={(text) => setPendingTerminalInsert((prev) => ({ text, id: (prev?.id ?? 0) + 1 }))}
             />
           )}
-          <SymbolPalette repoPath={cwd} open={symbolsOpen} onClose={() => setSymbolsOpen(false)}
+          <SymbolPalette repoPath={cwd} open={symbolsOpen} initialQuery={paletteSeed} onClose={() => setSymbolsOpen(false)}
             onPick={(path, line) => openFile(cwd, activeRepo?.name ?? "", path, "", "branch", line)} />
         </div>
         <ResizeHandle
@@ -312,7 +361,10 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               resolved (and forever for a context with no repo on disk). The panel
               handles an empty spawnCwd itself and seeds its first terminal once
               a path arrives. */}
-          <TerminalPanel spawnCwd={cwd} contextName={contextKey} persistKey={contextId} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined} />
+          <TerminalPanel spawnCwd={cwd} contextName={contextKey} persistKey={contextId} pendingInsert={pendingTerminalInsert ?? undefined} pendingOpen={pendingTerminalOpen ?? undefined}
+            // A terminal tab bound to another repo became active → follow it in
+            // the repo selector (only for repos this context actually links).
+            onActiveCwd={(c) => setCwd((prev) => (repoPaths.some((r) => r.path === c) ? c : prev))} />
         </div>
       </div>
       <ResizeHandle
@@ -326,12 +378,24 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
         {contextKey && (
           <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-              <div
-                title={contextKey}
-                style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              <button
+                title={`Open context ${contextKey}`}
+                aria-label={`open context ${contextKey}`}
+                // openContextTab focuses the context's tab when it is already
+                // open, and opens a new one otherwise.
+                onClick={() => tabCtx?.openContextTab(contextId, contextKey)}
+                style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text)", textAlign: "left" }}
               >
                 {contextKey}
-              </div>
+              </button>
+              <button
+                aria-label={`open context tab ${contextKey}`}
+                title="Open context in its tab"
+                onClick={() => tabCtx?.openContextTab(contextId, contextKey)}
+                style={{ display: "flex", flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}
+              >
+                <ExternalLink size={12} />
+              </button>
               <button
                 aria-label="copy context name"
                 title={copied ? "Copied" : "Copy context name"}
@@ -362,12 +426,63 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
           <NotesPanel contextId={contextId} />
         </div>
         {/* Repo selector sits above the Files/Git tabs — it scopes both. */}
+        {changesError && (
+          <div role="alert" style={{ padding: "8px 12px", fontSize: 11, color: "var(--danger, #e5534b)", borderBottom: "1px solid var(--border)" }}>
+            Failed to load the context&apos;s repos: {changesError}{" "}
+            <button className="btn-secondary" style={{ fontSize: 11, padding: "1px 8px", marginLeft: 4 }}
+              onClick={() => setRefreshSignal((n) => n + 1)}>
+              Retry
+            </button>
+          </div>
+        )}
+        {!changesError && repoPaths.length === 0 && (
+          <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
+            No repos resolved on disk.{" "}
+            <button className="btn-secondary" style={{ fontSize: 11, padding: "1px 8px", marginLeft: 4 }}
+              onClick={() => setRefreshSignal((n) => n + 1)}>
+              Retry
+            </button>
+          </div>
+        )}
         {repoPaths.length > 1 && (
-          <select value={cwd} onChange={(e) => setCwd(e.target.value)} style={{ fontSize: 11, margin: 8 }}>
-            {/* Same repo can be linked via several branches (each its own
-                worktree) — the branch is what tells the entries apart. */}
-            {repoPaths.map((r) => <option key={r.path} value={r.path}>{r.name}{r.branch ? ` · ${r.branch}` : ""}</option>)}
-          </select>
+          // One-click repo switching: a wrapping tile grid instead of a select.
+          // Fixed min column width + ellipsis inside — tiles never stretch or
+          // clip however many worktrees (12+) the context links.
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(86px, 1fr))", gap: 4, padding: 8 }}>
+            {repoPaths.map((r) => {
+              const { top, sub } = repoTileLabel(r.name, r.branch);
+              const selected = r.path === cwd;
+              const terms = termSessionCountForCwd(r.path);
+              return (
+                <button
+                  key={r.path}
+                  onClick={() => setCwd(r.path)}
+                  title={`${r.name}${r.branch ? ` · ${r.branch}` : ""}${terms > 0 ? ` · ${terms} terminal${terms === 1 ? "" : "s"}` : ""}`}
+                  aria-pressed={selected}
+                  style={{
+                    position: "relative",
+                    display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1,
+                    padding: "4px 7px", minWidth: 0, overflow: "hidden", textAlign: "left",
+                    borderRadius: 5, cursor: "pointer", font: "inherit",
+                    background: selected ? "var(--surface2, rgba(127,127,127,0.15))" : "transparent",
+                    border: selected ? "1px solid var(--accent, #e3b341)" : "1px solid var(--border)",
+                    color: selected ? "var(--text)" : "var(--text-muted)",
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 600, maxWidth: terms > 0 ? "calc(100% - 18px)" : "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{top}</span>
+                  {sub && <span style={{ fontSize: 10, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}
+                  {terms > 0 && (
+                    <span aria-label={`${terms} running terminals`} style={{
+                      position: "absolute", top: 3, right: 4,
+                      fontSize: 9, lineHeight: "14px", minWidth: 14, textAlign: "center",
+                      borderRadius: 7, padding: "0 3px",
+                      background: "var(--accent, #e3b341)", color: "#1a1a1a", fontWeight: 700,
+                    }}>{terms}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         )}
         {/* Files (full repo tree) vs Git (changes + PRs), like VSCode's activity bar. */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
@@ -381,6 +496,16 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               {t === "files" ? "Files" : "Git"}
             </button>
           ))}
+          <button
+            aria-label="reload editor workspace"
+            title="Reload workspace: re-sync the context, pick up newly attached branches (⌘⇧R)"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            style={{ display: "flex", alignItems: "center", padding: "0 8px", background: "transparent",
+              border: "none", borderBottom: "2px solid transparent", cursor: "pointer", color: "var(--text-muted)" }}
+          >
+            <RefreshCw size={11} className={refreshing ? "spinning" : undefined} />
+          </button>
         </div>
 
         {sidebarTab === "git" && (
@@ -442,7 +567,6 @@ function EditorWorkspaceInner({ contextId, contextKey, initialCwd }: { contextId
               activeBranch={repoPaths.length > 1 ? activeRepo?.branch : undefined} refreshSignal={refreshSignal} />
             <ChangedFilesPanel contextId={contextId} onOpenFile={openFile}
               onOpenTerminal={(repoPath) => setPendingTerminalOpen((prev) => ({ cwd: repoPath, id: (prev?.id ?? 0) + 1 }))}
-              onRefresh={() => void handleRefresh()} refreshing={refreshing}
               activeRepoPath={cwd} refreshSignal={refreshSignal} />
           </>
         )}

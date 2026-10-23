@@ -19,6 +19,9 @@ type TourStep struct {
 	Anchor string `json:"anchor"` // unique code snippet to position on
 	What   string `json:"what"`
 	Why    string `json:"why"`
+	// Review is the reviewer remark this step addresses (PR review tours):
+	// "@author path:line: body". Empty for ordinary tours.
+	Review string `json:"review,omitempty"`
 }
 
 // CodeTour is a guided tour through an agent's changes for one (context,

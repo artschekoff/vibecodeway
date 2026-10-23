@@ -66,7 +66,7 @@ export interface Issue {
   comments?: Comment[];
 }
 
-export interface JiraProvider {
+interface JiraProvider {
   id: string;
   contextId: string;
   searchQuery: string;
@@ -75,7 +75,7 @@ export interface JiraProvider {
   updatedAt: string;
 }
 
-export interface ContextDetail {
+interface ContextDetail {
   context: Context;
   jira?: JiraProvider;
   issues: Issue[];
@@ -93,13 +93,7 @@ export interface SearchResult {
   issuetype: string;
 }
 
-export interface SearchDiff {
-  contextId: string;
-  new: SearchResult[];
-  existing: SearchResult[];
-}
-
-export interface SlackMessageItem {
+interface SlackMessageItem {
   user: string;
   userId: string;
   text: string;
@@ -115,7 +109,7 @@ export interface SlackChannelInput {
   messages?: SlackMessageItem[];
 }
 
-export interface SlackChannelGroup {
+interface SlackChannelGroup {
   workspace: string;
   channels: SlackChannelInput[];
 }
@@ -145,7 +139,7 @@ export interface SlackSavePayload {
   removedDMConfigIds?: string[];
 }
 
-export interface SlackThread {
+interface SlackThread {
   id: string;
   contextId: string;
   slackChannelId?: string;
@@ -397,6 +391,7 @@ export interface AppSettings {
   autoLinkReposOnContextCreate: boolean;
   prStaleThresholdDays: number;
   askChatRetentionDays: number;
+  jiraOrgField: string;
   workdayHours: number;
   taskHours: number;
   statsAuthorName: string;
@@ -514,7 +509,7 @@ export interface PRComment {
   replies?: PRComment[];
 }
 
-export interface VCSAuth {
+interface VCSAuth {
   id: string;
   platform: VCSPlatform;
   username: string;
@@ -522,7 +517,7 @@ export interface VCSAuth {
   updatedAt: string;
 }
 
-export interface ReviewerDecision {
+interface ReviewerDecision {
   login: string;
   state: string;
   submittedAt: string;
@@ -603,7 +598,7 @@ export interface WorkflowStatus {
   createdAt: string;
 }
 
-export interface StatusLogEntry {
+interface StatusLogEntry {
   id: string;
   contextId: string;
   statusSlug: string;
@@ -613,7 +608,7 @@ export interface StatusLogEntry {
   createdAt: string;
 }
 
-export type WorkflowStatusValue =
+type WorkflowStatusValue =
   | 'not_started'
   | 'scoping'
   | 'in_progress'
@@ -632,7 +627,7 @@ export interface Organization {
 
 // --- Tab system ---
 
-export type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "productivity" | "analytics" | "editor";
+type TabType = "org" | "context" | "settings" | "logs" | "prompts" | "board" | "ask" | "timeline" | "activity-feed" | "productivity" | "analytics" | "editor";
 
 export type ActivitySource = "jira" | "github";
 
@@ -687,7 +682,7 @@ export interface Tab {
 
 // --- Productivity dashboard ---
 
-export interface DayCount {
+interface DayCount {
   day: string;  // local YYYY-MM-DD
   count: number;
 }
@@ -729,7 +724,7 @@ export interface Slice {
   count: number;
 }
 
-export interface AvgTask {
+interface AvgTask {
   medianHours: number;
   meanHours: number;
   samples: number;
@@ -749,11 +744,12 @@ export interface AnalyticsDashboard {
 
 // --- Code tour ---
 
-export interface TourStep {
+interface TourStep {
   file: string; // repo-relative path
   anchor: string; // unique code snippet to position on
   what: string;
   why: string;
+  review?: string; // reviewer remark this step addresses (PR review tours)
 }
 
 export interface CodeTour {

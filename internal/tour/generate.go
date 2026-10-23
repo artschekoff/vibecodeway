@@ -59,7 +59,8 @@ Respond with STRICT JSON only — no prose, no markdown code fences, no commenta
       "file": "repo-relative path",
       "anchor": "a unique verbatim snippet copied from the post-change file content",
       "what": "what changed at this spot",
-      "why": "why it changed"
+      "why": "why it changed",
+      "review": "the reviewer comment this step addresses, quoted verbatim with its author and location; empty when none"
     }
   ]
 }
@@ -69,6 +70,7 @@ Rules:
 - "anchor" MUST be copied verbatim, character for character, from the file's current (post-change) content, and MUST be unique within that file — the UI finds the step by searching the live file for this exact text. Never invent an anchor or normalize whitespace.
 - Every step needs a non-empty "file", "anchor", and "what". "why" may be empty, but fill it in from the transcript's stated reasoning whenever it's there.
 - Only reference files and code that actually appear in the diff below — never invent files.
+- When a "Reviewer comments" section is present, the change is a response to a pull-request review: order the steps by the comments they resolve, put the comment (verbatim, with "@author path:line — ") into "review" for the step that addresses it, and leave "review" empty for steps unrelated to any comment. Never paraphrase or invent reviewer comments.
 - Output ONLY the JSON object described above. Nothing else.`
 
 // Generate produces a fallback tour from repoPath's working-tree diff and a
@@ -78,7 +80,9 @@ Rules:
 // is not valid tour JSON, with the validation error appended to the retry
 // prompt. If both attempts are invalid, the returned error wraps both
 // failures (and ErrInvalid).
-func Generate(ctx context.Context, ai AIClient, repoPath, transcriptTail string) (*File, error) {
+// reviewNotes, when non-empty, lists the pull-request reviewer comments the
+// change responds to (one per line); the model then ties steps to them.
+func Generate(ctx context.Context, ai AIClient, repoPath, transcriptTail, reviewNotes string) (*File, error) {
 	diff, err := CollectDiff(repoPath)
 	if err != nil {
 		return nil, fmt.Errorf("collect diff: %w", err)
@@ -89,7 +93,7 @@ func Generate(ctx context.Context, ai AIClient, repoPath, transcriptTail string)
 
 	messages := []openai.Message{
 		{Role: "system", Content: generateSystemPrompt},
-		{Role: "user", Content: buildUserPrompt(diff, transcriptTail)},
+		{Role: "user", Content: buildUserPrompt(diff, transcriptTail, reviewNotes)},
 	}
 
 	file, firstErr := callAndParse(ctx, ai, messages)
@@ -149,7 +153,7 @@ func extractJSON(s string) string {
 // its head (earlier files in the diff matter most and stay intact); the
 // transcript keeps its tail (the most recent reasoning is the most relevant,
 // and it is already "the tail" of a larger transcript).
-func buildUserPrompt(diff, transcriptTail string) string {
+func buildUserPrompt(diff, transcriptTail, reviewNotes string) string {
 	diffText, diffTruncated := truncateWithNote(diff, diffPromptCap, false)
 	transcriptText, transcriptTruncated := truncateWithNote(transcriptTail, transcriptPromptCap, true)
 
@@ -161,6 +165,12 @@ func buildUserPrompt(diff, transcriptTail string) string {
 	b.WriteString("```diff\n")
 	b.WriteString(diffText)
 	b.WriteString("\n```\n\n")
+
+	if strings.TrimSpace(reviewNotes) != "" {
+		b.WriteString("## Reviewer comments on the pull request (the change responds to these)\n")
+		b.WriteString(reviewNotes)
+		b.WriteString("\n\n")
+	}
 
 	b.WriteString("## Terminal transcript tail\n")
 	if transcriptTruncated {

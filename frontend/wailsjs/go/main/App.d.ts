@@ -9,6 +9,7 @@ import {analytics} from '../models';
 import {service} from '../models';
 import {pty} from '../models';
 import {productivity} from '../models';
+import {taskgraph} from '../models';
 import {vcs} from '../models';
 import {jira} from '../models';
 import {jirastore} from '../models';
@@ -28,8 +29,6 @@ export function AddSpecificPR(arg1:string,arg2:string,arg3:string,arg4:number):P
 
 export function AddTerminalCommand(arg1:string,arg2:string,arg3:boolean):Promise<store.TerminalCommand>;
 
-export function AddTodoNextItem(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<Array<store.AITodoItem>>;
-
 export function AddTrackedRepo(arg1:string,arg2:string):Promise<vcsstore.VCSRepo>;
 
 export function AddUserEvent(arg1:string,arg2:string,arg3:string):Promise<store.Event>;
@@ -38,6 +37,8 @@ export function AddVCSBranch(arg1:string,arg2:string,arg3:string,arg4:string,arg
 
 export function AdjustTodoNext(arg1:string):Promise<Array<store.AITodoItem>>;
 
+export function AgentNotificationsStatus():Promise<main.AgentNotifyStatus>;
+
 export function AgentResumeCommand(arg1:string,arg2:number):Promise<string>;
 
 export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
@@ -45,8 +46,6 @@ export function AnalyzeContext(arg1:string):Promise<store.ContextSnapshot>;
 export function AppVersion():Promise<string>;
 
 export function ApplyContextUpdateActions(arg1:string,arg2:Array<store.ContextUpdateAction>):Promise<Array<main.ApplyActionResult>>;
-
-export function AskAI(arg1:string,arg2:string):Promise<agent.Answer>;
 
 export function AskAIChat(arg1:string,arg2:string,arg3:string):Promise<agent.Answer>;
 
@@ -59,10 +58,6 @@ export function AuthStatus():Promise<string>;
 export function AutoLinkRepos(arg1:string):Promise<void>;
 
 export function CancelRefresh():Promise<void>;
-
-export function CheckAccessibility():Promise<boolean>;
-
-export function CheckoutBranch(arg1:string,arg2:string):Promise<void>;
 
 export function CheckoutInWorkspace(arg1:string,arg2:string):Promise<void>;
 
@@ -89,8 +84,6 @@ export function CreateContextEventHook(arg1:string,arg2:string,arg3:string,arg4:
 export function CreateContextFromJiraIssue(arg1:string,arg2:string):Promise<store.Context>;
 
 export function CreateGlobalEventHook(arg1:string,arg2:string,arg3:string):Promise<store.GlobalEventHook>;
-
-export function CreateOrgUser(arg1:string,arg2:string,arg3:string):Promise<store.User>;
 
 export function CreateOrganization(arg1:string):Promise<store.Organization>;
 
@@ -143,6 +136,10 @@ export function DismissPicker():Promise<void>;
 export function DismissReviewRequest(arg1:string):Promise<void>;
 
 export function DraftTodoMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function EnableAgentNotifications():Promise<main.AgentNotifyStatus>;
+
+export function EnsureBranchWorktree(arg1:string,arg2:string):Promise<string>;
 
 export function EnsureContextEditorWorkspace(arg1:string):Promise<main.ContextEditorPrep>;
 
@@ -202,15 +199,11 @@ export function GetJiraInstanceURL():Promise<string>;
 
 export function GetKeybindings():Promise<Array<store.Keybinding>>;
 
-export function GetLatestHandoffPacket(arg1:string):Promise<store.InferredRequirementsPacket>;
-
 export function GetMyBoard(arg1:string):Promise<store.MyBoardData>;
 
 export function GetPendingCodeReviews():Promise<Array<vcsstore.ReviewRequest>>;
 
 export function GetPendingMessages(arg1:string):Promise<Array<store.Message>>;
-
-export function GetPendingText():Promise<string>;
 
 export function GetPersonAssignmentSteps(arg1:string):Promise<Array<store.ReasoningChainStep>>;
 
@@ -222,9 +215,9 @@ export function GetProductivityStats():Promise<productivity.Stats>;
 
 export function GetRepoFileTree(arg1:string):Promise<Array<string>>;
 
-export function GetStatusLog(arg1:string):Promise<Array<store.StatusLogEntry>>;
-
 export function GetSupportedPlatforms():Promise<Array<vcsstore.VCSPlatformInfo>>;
+
+export function GetTaskGraph(arg1:string):Promise<taskgraph.Graph>;
 
 export function GetUnresolvedAuthors(arg1:string):Promise<Array<store.UnresolvedAuthor>>;
 
@@ -254,8 +247,6 @@ export function ListAssignmentVersions(arg1:string):Promise<Array<store.PersonAs
 
 export function ListContextEventHooks(arg1:string):Promise<Array<store.ContextEventHook>>;
 
-export function ListContextPlans(arg1:string):Promise<Array<store.ContextPlan>>;
-
 export function ListContextTexts(arg1:string):Promise<Array<store.ContextText>>;
 
 export function ListContexts():Promise<Array<store.Context>>;
@@ -269,8 +260,6 @@ export function ListGlobalEventHooks():Promise<Array<store.GlobalEventHook>>;
 export function ListKnownJiraStatuses():Promise<Array<string>>;
 
 export function ListLocalBranches(arg1:string):Promise<Array<vcs.LocalBranch>>;
-
-export function ListMessages(arg1:string):Promise<Array<store.Message>>;
 
 export function ListMyAssignedJiraIssues(arg1:string):Promise<Array<store.BoardJiraAssignment>>;
 
@@ -290,6 +279,8 @@ export function ListSlackThreads(arg1:string):Promise<Array<slackstore.SlackThre
 
 export function ListSlackWorkspaces():Promise<Array<service.SlackWorkspaceResult>>;
 
+export function ListTaskProviders():Promise<Array<string>>;
+
 export function ListTerminalCommands():Promise<Array<store.TerminalCommand>>;
 
 export function ListTodoNext():Promise<Array<store.AITodoItem>>;
@@ -299,8 +290,6 @@ export function ListTrackedRepos(arg1:string):Promise<Array<vcsstore.VCSRepo>>;
 export function ListUploadedFiles(arg1:string):Promise<Array<store.ContextUploadedFile>>;
 
 export function ListVCSBranches(arg1:string):Promise<Array<vcsstore.ContextVCSBranch>>;
-
-export function ListVCSRepos(arg1:string):Promise<Array<vcsstore.VCSRepo>>;
 
 export function ListWorkflowStatuses():Promise<Array<store.WorkflowStatus>>;
 
@@ -338,6 +327,8 @@ export function MarkSlackThreadViewed(arg1:string):Promise<void>;
 
 export function MarkWorkspaceShouldDelete(arg1:string):Promise<void>;
 
+export function NotifyNative(arg1:string,arg2:string):Promise<void>;
+
 export function OpenAccessibilityPreferences():Promise<void>;
 
 export function OpenPlanInTerminal(arg1:string,arg2:string):Promise<string>;
@@ -366,8 +357,6 @@ export function ReadRepoFileBase(arg1:string,arg2:string):Promise<string>;
 
 export function ReadRepoFileHead(arg1:string,arg2:string):Promise<string>;
 
-export function ReadRepoFiles(arg1:string,arg2:Array<string>):Promise<Record<string, string>>;
-
 export function RebuildAssignmentChainFrom(arg1:string,arg2:number,arg3:string):Promise<store.PersonAssignment>;
 
 export function ReconcileMyOpenPRs():Promise<void>;
@@ -383,6 +372,8 @@ export function RefreshContextPRs(arg1:string):Promise<Array<vcsstore.PullReques
 export function RefreshMyAssignedJiraIssues(arg1:string):Promise<Array<store.BoardJiraAssignment>>;
 
 export function RefreshPendingReviews():Promise<void>;
+
+export function RefreshTaskGraph(arg1:string,arg2:boolean):Promise<taskgraph.Graph>;
 
 export function RefreshWorkspacesForRepo(arg1:string):Promise<void>;
 
@@ -412,11 +403,15 @@ export function ResetKeybinding(arg1:string):Promise<void>;
 
 export function ResolveConflict(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ResolveReadiness(arg1:string):Promise<void>;
+
 export function ResolveToolConfirmation(arg1:string,arg2:boolean):Promise<void>;
 
 export function ReviewPRWithAI(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.ReviewPRResult>;
 
 export function RunAssignmentStepWithCustomPrompt(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function RunReadinessChecks():Promise<Array<main.ReadinessCheck>>;
 
 export function RunSingleAssignmentStep(arg1:string,arg2:number,arg3:string):Promise<string>;
 
@@ -470,6 +465,8 @@ export function SetJiraBaseURL(arg1:string,arg2:string):Promise<void>;
 
 export function SetJiraConfig(arg1:string,arg2:string):Promise<jirastore.JiraProvider>;
 
+export function SetJiraOrgField(arg1:string):Promise<void>;
+
 export function SetOrganizationsOrder(arg1:Array<string>):Promise<void>;
 
 export function SetPRStaleThresholdDays(arg1:number):Promise<void>;
@@ -478,13 +475,11 @@ export function SetProductivitySettings(arg1:number,arg2:number):Promise<void>;
 
 export function SetSlackConfig(arg1:string,arg2:string,arg3:string):Promise<slackstore.SlackProvider>;
 
-export function SetSlackPassphrase(arg1:string):Promise<void>;
-
 export function SetStatsAuthorName(arg1:string):Promise<void>;
 
 export function SetTrackedRepoPath(arg1:string,arg2:string):Promise<void>;
 
-export function SolveWithAI(arg1:string,arg2:string):Promise<string>;
+export function SolveWithAI(arg1:string,arg2:string,arg3:string,arg4:string):Promise<main.SolveResult>;
 
 export function StageFile(arg1:string,arg2:string):Promise<void>;
 
@@ -549,10 +544,6 @@ export function UpdateTrackedRepoMeta(arg1:string,arg2:string,arg3:string,arg4:s
 export function UpdateUserEvent(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.Event>;
 
 export function UpdateUserNextSteps(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
-
-export function UpdateVCSBranchLabel(arg1:string,arg2:string):Promise<void>;
-
-export function UpdateVCSRepoMeta(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function UpdateWorkflowStatus(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.WorkflowStatus>;
 

@@ -24,20 +24,30 @@ function physicalKey(code: string): string | null {
   return CODE_KEYS[code] ?? null;
 }
 
+/**
+ * Canonical key for a KeyboardEvent. Rewrites via the physical key when the
+ * layout meaning can't match a binding:
+ *  - keys a Latin layout could never produce (Russian ⌘I = "ш"), and
+ *  - shifted punctuation/symbols (⌘⇧[ arrives as "{"), since chords are
+ *    serialized with the shift flag + the UNshifted base key ("mod+shift+[").
+ * Shifted letters/digits keep their layout meaning (Dvorak ⇧KeyY = F stays "f").
+ */
+export function normalizeEventKey(e: KeyboardEvent): string {
+  let key = normKey(e.key);
+  if (key.length === 1 && (/[^\x20-\x7e]/.test(key) || (e.shiftKey && !/[a-z0-9]/.test(key)))) {
+    const phys = physicalKey(e.code || "");
+    if (phys) key = phys;
+  }
+  return key;
+}
+
 export function eventToToken(e: KeyboardEvent, platform: Platform): Chord | null {
   const raw = (e.key || "").toLowerCase();
   if (MODS_ONLY.has(raw)) return null;
   const modPressed = platform === "darwin" ? !!e.metaKey : !!e.ctrlKey;
   // On darwin, ctrlKey is a distinct raw modifier; on other, ctrl IS mod, so raw ctrl = false.
   const rawCtrl = platform === "darwin" ? !!e.ctrlKey : false;
-  let key = normKey(e.key);
-  // Only rewrite keys a Latin layout could never produce, so every existing
-  // ASCII binding keeps today's behavior exactly.
-  if (key.length === 1 && /[^\x20-\x7e]/.test(key)) {
-    const phys = physicalKey(e.code || "");
-    if (phys) key = phys;
-  }
-  return { mod: modPressed, ctrl: rawCtrl, shift: !!e.shiftKey, alt: !!e.altKey, key };
+  return { mod: modPressed, ctrl: rawCtrl, shift: !!e.shiftKey, alt: !!e.altKey, key: normalizeEventKey(e) };
 }
 
 export function parseChord(s: string): Chord {

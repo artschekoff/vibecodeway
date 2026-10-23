@@ -127,5 +127,3 @@ export function GlobalSearchModal() {
     </div>
   );
 }
-
-export default GlobalSearchModal;

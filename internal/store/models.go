@@ -260,8 +260,11 @@ type AppSettings struct {
 	// Empty (the default) means capture is skipped entirely.
 	StatsAuthorName string `json:"statsAuthorName"`
 	// AskChatRetentionDays is how long saved Ask AI chats are kept (0 = forever).
-	AskChatRetentionDays int    `json:"askChatRetentionDays"`
-	UpdatedAt            string `json:"updatedAt"`
+	AskChatRetentionDays int `json:"askChatRetentionDays"`
+	// JiraOrgField is the Jira custom field id (customfield_NNNNN) whose value is
+	// the ticket's scope/service, used to split My Board. Empty = off.
+	JiraOrgField string `json:"jiraOrgField"`
+	UpdatedAt    string `json:"updatedAt"`
 }
 
 // SyncSession tracks one refresh run (Refresh All or per-source).
@@ -592,7 +595,7 @@ type AITodoItem struct {
 	Title     string `json:"title"`
 	Rationale string `json:"rationale"`
 	RefType   string `json:"refType"` // jira | pr | review | ""
-	RefKey    string `json:"refKey"`  // e.g. JH-4922 or juna-health/juna-api#218
+	RefKey    string `json:"refKey"`  // e.g. JH-4922 or acme/api#218
 	// Resolved at read time (not stored): the in-app context this ref maps to,
 	// so the board can deep-link into it. "" when the ref has no linked context.
 	ContextID  string `json:"contextId"`

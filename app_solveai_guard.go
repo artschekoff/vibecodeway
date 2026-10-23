@@ -32,6 +32,11 @@ def under(p, roots):
     rp = os.path.realpath(os.path.expanduser(p))
     return any(rp == r or rp.startswith(r + os.sep) for r in roots)
 
+# Skill/prompt homes the user explicitly allows READING from outside the
+# worktrees, so agents can load skills (writes there stay blocked).
+SKILL_ROOTS = [os.path.realpath(os.path.expanduser(p)) for p in ("~/.claude", "~/.codex")]
+READ_TOOLS = {"Read", "Glob", "Grep"}
+
 def deny(msg):
     sys.stderr.write("Scope guard: " + msg + "\n")
     sys.exit(2)
@@ -51,6 +56,8 @@ def main():
         for key in ("file_path", "path", "notebook_path"):
             v = ti.get(key)
             if isinstance(v, str) and v and not under(v, roots):
+                if tool in READ_TOOLS and under(v, SKILL_ROOTS):
+                    continue  # user-approved: skills may be read from outside the worktrees
                 deny(tool + " path is outside the allowed repositories: " + v)
         sys.exit(0)
 
@@ -59,7 +66,7 @@ def main():
         home = os.path.realpath(os.path.expanduser("~"))
         for m in re.findall(r'(?:^|[\s"\x27=(:])(~/[^\s"\x27;|&)]*|/[^\s"\x27;|&)]+)', cmd):
             p = os.path.realpath(os.path.expanduser(m))
-            if (p == home or p.startswith(home + os.sep)) and not under(p, roots):
+            if (p == home or p.startswith(home + os.sep)) and not under(p, roots) and not under(p, SKILL_ROOTS):
                 deny("Bash command references a path outside the allowed repositories: " + m)
         sys.exit(0)
 

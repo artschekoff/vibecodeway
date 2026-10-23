@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare, Compass, Sparkles, ArrowUp, ArrowDown, X } from "lucide-react";
+import { useProgress } from "../contexts/ProgressContext";
+import { ExternalLink, RefreshCw, AlertTriangle, Activity, GitPullRequest, ClipboardList, Eye, Copy, Check, FolderPlus, FolderOpen, MessageSquare, Compass, Sparkles, ArrowUp, ArrowDown, X, Lock, Network, List } from "lucide-react";
 import { GetMyBoard, GetVCSAuth, GetPendingCodeReviews, DismissReviewRequest, RefreshMyAssignedJiraIssues, ReconcileMyOpenPRs, CreateContextFromJiraIssue, ListOrganizations, GetJiraInstanceURL, ListMyAssignedJiraIssues, ListTodoNext, GenerateTodoNext, AdjustTodoNext, ReorderTodoNext, DeleteTodoNextItem } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn } from "../../wailsjs/runtime/runtime";
 import { todoRefUrl } from "../lib/todoRef";
@@ -8,8 +9,11 @@ import { TodoActionModal } from "../components/TodoActionModal";
 import type { store, vcsstore } from "../../wailsjs/go/models";
 import { ProseEditor } from "../components/ProseEditor";
 import { reviewStage, stageMeta, REQUESTED_STAGE_ORDER } from "./reviewStage";
+import { TaskGraphView } from "../components/board/TaskGraphView";
 
 const PERSON_NAME_KEY = "cc:board-person-name";
+// "graph" (task graph + rails + Todo Next) or "list" (the classic sections).
+const VIEW_KEY = "cc:board-view";
 const PRIORITY_RANK: Record<string, number> = { Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1 };
 type JiraSort = "priority" | "status" | "date";
 
@@ -30,6 +34,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function MyBoardPage() {
+  const progress = useProgress();
   const [personName, setPersonName] = useState(() => localStorage.getItem(PERSON_NAME_KEY) ?? "");
   const [nameInput, setNameInput] = useState(personName);
   const [data, setData] = useState<store.MyBoardData | null>(null);
@@ -59,6 +64,14 @@ export default function MyBoardPage() {
   const [adjustText, setAdjustText] = useState("");
   const [draftFor, setDraftFor] = useState<store.AITodoItem | null>(null);
   const { openContextTab } = useTabContext();
+  const [view, setView] = useState<"graph" | "list">(() => (localStorage.getItem(VIEW_KEY) === "list" ? "list" : "graph"));
+  const switchView = (v: "graph" | "list") => { localStorage.setItem(VIEW_KEY, v); setView(v); };
+  // From the graph: ready (unblocked, best first) and waiting keys, used to
+  // highlight Todo Next items.
+  const [graphRank, setGraphRank] = useState<{ ready: string[]; waiting: string[] }>({ ready: [], waiting: [] });
+  const [graphRefresh, setGraphRefresh] = useState(0);
+  // Bumped after a context is created so the graph re-reads its context links.
+  const [contextVersion, setContextVersion] = useState(0);
 
   // Distinct filter options present in the current issues.
   const statusOptions = useMemo(() => [...new Set(jiraIssues.map((i) => i.status).filter(Boolean))].sort(), [jiraIssues]);
@@ -178,6 +191,7 @@ export default function MyBoardPage() {
     try {
       await CreateContextFromJiraIssue(selectedOrgId, key);
       await load(personName); // re-read the board so the row shows the new context link
+      setContextVersion((v) => v + 1);
     } catch (e) {
       setJiraError(e instanceof Error ? e.message : "Failed to create context");
     } finally {
@@ -219,7 +233,26 @@ export default function MyBoardPage() {
     }
   };
 
-  const generateTodos = async () => {
+  // Generate ranks whatever is in the local DB — it does NOT re-sync Jira.
+  // Gate it on data freshness: tickets older than a day get a warning with a
+  // reload path first, so the AI ranks current statuses and priorities.
+  const STALE_JIRA_MS = 24 * 60 * 60 * 1000;
+  const [staleWarning, setStaleWarning] = useState(false);
+  const jiraLastSyncedAt = useMemo(() => {
+    let max = 0;
+    for (const i of jiraIssues) {
+      const t = Date.parse(i.fetchedAt || "");
+      if (!Number.isNaN(t) && t > max) max = t;
+    }
+    return max; // 0 = unknown (empty board)
+  }, [jiraIssues]);
+
+  const generateTodos = async (skipStaleCheck = false) => {
+    if (!skipStaleCheck && jiraLastSyncedAt > 0 && Date.now() - jiraLastSyncedAt > STALE_JIRA_MS) {
+      setStaleWarning(true);
+      return;
+    }
+    setStaleWarning(false);
     setTodoBusy(true);
     try {
       setTodos((await GenerateTodoNext(personName)) ?? []);
@@ -227,6 +260,20 @@ export default function MyBoardPage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setTodoBusy(false);
+    }
+  };
+
+  const reloadAndGenerate = async () => {
+    setStaleWarning(false);
+    // Two long steps back to back — show which one is running.
+    progress.begin("Reload & Generate", ["Reloading Jira tickets", "Generating todo list"]);
+    try {
+      progress.next("Reloading Jira tickets");
+      await refreshBoard();
+      progress.next("Generating todo list");
+      await generateTodos(true);
+    } finally {
+      progress.done();
     }
   };
 
@@ -280,6 +327,10 @@ export default function MyBoardPage() {
       {/* Header */}
       <div className="board-header">
         <span className="board-title">My Board</span>
+        <div className="board-view-switch" role="tablist" aria-label="Board view">
+          <button type="button" role="tab" aria-selected={view === "graph"} className={view === "graph" ? "active" : ""} onClick={() => switchView("graph")}><Network size={12} /> Graph</button>
+          <button type="button" role="tab" aria-selected={view === "list"} className={view === "list" ? "active" : ""} onClick={() => switchView("list")}><List size={12} /> List</button>
+        </div>
         <div className="board-name-row">
           <input
             className="board-name-input"
@@ -291,12 +342,27 @@ export default function MyBoardPage() {
           />
           <button className="board-name-save" onClick={handleNameSave}>Apply</button>
         </div>
-        <button className="board-refresh-btn" onClick={() => load(personName)} disabled={loading}>
+        <button className="board-refresh-btn" title={view === "graph" ? "Pull fresh tracker data" : "Refresh"}
+          onClick={() => { if (view === "graph") setGraphRefresh((t) => t + 1); else void load(personName); }} disabled={loading}>
           <RefreshCw size={14} className={loading ? "spinning" : ""} />
         </button>
       </div>
 
       {error && <div className="board-error">{error}</div>}
+
+      {view === "graph" && (
+        <TaskGraphView
+          onOpenContext={openContextTab}
+          onCreateContext={createContextForIssue}
+          orgs={orgs}
+          selectedOrgId={selectedOrgId}
+          onSelectOrg={setSelectedOrgId}
+          creatingKey={creatingKey}
+          reloadToken={contextVersion}
+          refreshToken={graphRefresh}
+          onRankChange={(ready, waiting) => setGraphRank({ ready, waiting })}
+        />
+      )}
 
       {/* Section: TODO NEXT (BY AI) */}
       <div className="board-section">
@@ -313,6 +379,23 @@ export default function MyBoardPage() {
             </button>
           </div>
         </div>
+
+        {staleWarning && (
+          <div className="todo-adjust" role="alert" style={{ alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", flex: 1 }}>
+              Jira tickets were last synced {Math.round((Date.now() - jiraLastSyncedAt) / (60 * 60 * 1000))}h ago —
+              reload them so the AI ranks current statuses and priorities.
+            </span>
+            <button className="board-name-save" disabled={todoBusy || refreshingJira}
+              onClick={() => void reloadAndGenerate()}>
+              {refreshingJira ? "Reloading…" : "Reload & Generate"}
+            </button>
+            <button className="board-name-save" disabled={todoBusy}
+              onClick={() => void generateTodos(true)}>
+              Generate anyway
+            </button>
+          </div>
+        )}
 
         {adjustOpen && (
           <div className="todo-adjust">
@@ -335,8 +418,9 @@ export default function MyBoardPage() {
             {todos.map((t, i) => {
               const refUrl = todoRefUrl(t.refType, t.refKey, jiraBaseUrl);
               return (
-              <div key={t.id} className="board-card todo-card">
+              <div key={t.id} className={`board-card todo-card${graphRank.ready.slice(0, 3).includes(t.refKey) ? " todo-card--ready" : ""}${graphRank.waiting.includes(t.refKey) ? " todo-card--waiting" : ""}`}>
                 <div className="todo-card-main">
+                  {graphRank.waiting.includes(t.refKey) && <Lock size={12} className="todo-lock" aria-label="blocked" />}
                   <span className={`todo-kind kind-${t.kind}`}>{t.kind.replace(/_/g, " ")}</span>
                   <span className={`todo-prio prio-${t.priority}`}>{t.priority}</span>
                   <span className="todo-title">{t.title}</span>
@@ -374,6 +458,7 @@ export default function MyBoardPage() {
         )}
       </div>
 
+      {view === "list" && (<>
       {/* Section 0: Recent Activity */}
       <BoardSection
         icon={<Activity size={14} />}
@@ -672,6 +757,7 @@ export default function MyBoardPage() {
           );
         })}
       </BoardSection>
+      </>)}
     </div>
   );
 }

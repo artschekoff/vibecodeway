@@ -7,7 +7,7 @@ import {
 } from "../../wailsjs/go/main/App";
 import { toLaneEvent, type Lane, type RelationEdge } from "../lib/timeline";
 
-export interface WorkflowStatusInfo {
+interface WorkflowStatusInfo {
   slug: string;
   label: string;
   color: string;

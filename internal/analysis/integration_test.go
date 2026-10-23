@@ -255,7 +255,7 @@ func TestAnalysis_RealJiraTicket(t *testing.T) {
 	slackRepo := slackstore.NewRepo(s.DB())
 	vcsStore := vcsstore.NewStore(s.DB())
 
-	org, err := s.CreateOrganization(ctx, "juna-health")
+	org, err := s.CreateOrganization(ctx, "acme")
 	require.NoError(t, err)
 
 	ctxRow, err := s.CreateContext(ctx, "JH-2210", org.ID)
@@ -268,7 +268,7 @@ func TestAnalysis_RealJiraTicket(t *testing.T) {
 		"JH-477",
 		"[Practice] Pro Paywall -- Referral Missed Opportunities Blur",
 		"In Progress",
-		"artem@jirohealth.com",
+		"alice@example.com",
 		"Story",
 		`v1 implementation agreed in the Referral pro-paywall implementation meeting (May 5, 2026).
 Full blur of the referral table for non-pro users — the first row will NOT be exposed in v1 (departure from the current Figma).
@@ -293,7 +293,7 @@ Out of scope (handled in [Cross-Pod] Pro-Paywall Features [GA launch] epic):
 - Video walkthrough showing pro-only experience
 - Abstract / reusable pro-paywall middleware (deferred until coding pattern detection lands)
 
-Backend (Artem):
+Backend (Alice):
 - Add pro-subscription check on the referral missed-opportunities endpoint
 - If non-pro: return empty array plus a status flag indicating the data is hidden/mocked. If pro: return real data unchanged
 - Flag travels on the response payload (decided over user-profile placement so FE doesn't have to sync two sources)
@@ -319,9 +319,9 @@ Acceptance criteria:
 Open questions / follow-ups:
 - Confirm the upgrade-modal CTA wiring with Timur (believed done on dev).
 - Mock data table content — Rustam to share draft for Liora's sign-off.
-- Confirm exact name of the response flag (isMocked vs isHidden vs other) — Artem + Rustam.
+- Confirm exact name of the response flag (isMocked vs isHidden vs other) — Alice + Rustam.
 
-Source: Referral pro-paywall implementation meeting — May 5, 2026 (Liora, Artem, Rustam, McLean).`,
+Source: Referral pro-paywall implementation meeting — May 5, 2026 (Liora, Alice, Rustam, McLean).`,
 		time.Now().Add(-7*24*time.Hour).UTC().Format(time.RFC3339),
 		"",
 		"",
@@ -332,11 +332,11 @@ Source: Referral pro-paywall implementation meeting — May 5, 2026 (Liora, Arte
 	_, err = jiraRepo.UpsertIssue(
 		ctx, contextID,
 		"JH-2210",
-		"[juna-api] - development (JH-477 - [Practice] Pro Paywall -- Referral Missed Opportunities Blur)",
+		"[acme-api] - development (JH-477 - [Practice] Pro Paywall -- Referral Missed Opportunities Blur)",
 		"In Progress",
-		"artem@jirohealth.com",
+		"alice@example.com",
 		"Subtask",
-		`Development tasks for juna-api scope.
+		`Development tasks for acme-api scope.
 Write engineering notes here. Update ticket to require configuration or DB schema change, setup instructions or test coverage requirement.
 Move subtask to Ready For Development status to create github branch.
 Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering task.`,
@@ -347,7 +347,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 	require.NoError(t, err)
 
 	// GitHub PR #221 for the API work.
-	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "juna-health", "juna-api")
+	repo, err := vcsStore.Repos.EnsureRepo(ctx, "github", "acme", "acme-api")
 	require.NoError(t, err)
 
 	branch, err := vcsStore.Branches.AddBranch(ctx, contextID, repo.ID, "feat_JH-477_task_JH-2210_pr", "Pro paywall branch", true)
@@ -360,7 +360,7 @@ Acceptance Criteria: 1. [todo] define acceptance criteria for this engineering t
 		"artschekoff",
 		"open",
 		"changes_requested",
-		"https://github.com/juna-health/juna-api/pull/221",
+		"https://github.com/acme/acme-api/pull/221",
 		"feat_JH-477_task_JH-2210_pr",
 		"mergeable",
 		"",

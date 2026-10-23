@@ -3,11 +3,11 @@ package main
 import "testing"
 
 func TestSplitOwnerRepo(t *testing.T) {
-	owner, repo, err := splitOwnerRepo("juna-health/frontend")
-	if err != nil || owner != "juna-health" || repo != "frontend" {
+	owner, repo, err := splitOwnerRepo("acme/frontend")
+	if err != nil || owner != "acme" || repo != "frontend" {
 		t.Fatalf("splitOwnerRepo = %q, %q, %v", owner, repo, err)
 	}
-	for _, bad := range []string{"", "frontend", "/frontend", "juna-health/", "/"} {
+	for _, bad := range []string{"", "frontend", "/frontend", "acme/", "/"} {
 		if _, _, err := splitOwnerRepo(bad); err == nil {
 			t.Errorf("splitOwnerRepo(%q) must error", bad)
 		}

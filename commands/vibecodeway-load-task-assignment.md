@@ -21,7 +21,7 @@ asks to refresh. Follow **Safe JSON handling** in `/vibecodeway-prime`
 ## Hard rules (before any other tool)
 
 1. **First tool call must be `vibecodeway-cli`.** If the user named a key,
-   resolve it and run `text-list` immediately.
+   resolve the UUID first, then run `text-list --context-id`.
 2. Do **not** search MCP, `ctx_search`, git worktrees, GitHub, or Jira REST
    as a substitute.
 3. Do **not** wait on `/vibecodeway-prime` when a key is already given.
@@ -29,13 +29,20 @@ asks to refresh. Follow **Safe JSON handling** in `/vibecodeway-prime`
    `make install-cli` from the vibecodeway repo and stop.
 5. Pipe to `jq` — do not write `/tmp` if worktree scope may block files
    outside the active repo.
+6. **`text-list` has no `--context-key`.** Passing the key string →
+   `unknown flag: --context-key`. Always resolve UUID first.
 
 ## Workflow
 
-### Step 1: Resolve which context
+### Step 1: Resolve which context (need UUID)
 
-**If the user already named a context key**, skip to Step 3 (resolve UUID via
-`context-list` if you only have the key).
+**If the user already named a context key**, resolve UUID:
+
+```bash
+vibecodeway-cli context-list | jq --arg k KEY '[.[] | select(.key == $k) | {key, id, status}]'
+# or:
+vibecodeway-cli context-get --context-key KEY | jq '{id: .context.id, key: .context.key}'
+```
 
 **Otherwise**, list contexts:
 
@@ -51,14 +58,14 @@ Show: key, status, issue count. Ask which context. If only one exists, proceed w
 
 ### Step 3: Fetch text entries
 
-Use the context UUID from step 1:
+Use the context **UUID** from step 1 (never the key string as a flag):
 
 ```bash
-vibecodeway-cli text-list --context-id UUID | jq '[.[] | {id, name, isActive, updatedAt, content}]'
+vibecodeway-cli text-list --context-id UUID | jq '[.[]? | {id, name, isActive, updatedAt, content}]'
 ```
 
-**Input:** `--context-id UUID` (required)  
-**Output:** JSON array of `{id, name, content, isActive, createdAt, updatedAt}`.
+**Input:** `--context-id UUID` (required) — **not** `--context-key`  
+**Output:** JSON array of `{id, name, content, isActive, createdAt, updatedAt}` (or `null` / empty when none).
 
 ### Step 4: Present the data
 

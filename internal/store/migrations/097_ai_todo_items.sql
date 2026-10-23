@@ -8,7 +8,7 @@ CREATE TABLE ai_todo_items (
   title      TEXT NOT NULL,
   rationale  TEXT NOT NULL DEFAULT '',
   ref_type   TEXT NOT NULL DEFAULT '', -- jira | pr | review | (empty)
-  ref_key    TEXT NOT NULL DEFAULT '', -- e.g. JH-4922 or juna-health/juna-api#218
+  ref_key    TEXT NOT NULL DEFAULT '', -- e.g. JH-4922 or acme/api#218
   priority   TEXT NOT NULL DEFAULT 'medium', -- critical | high | medium | low
   position   INTEGER NOT NULL DEFAULT 0,
   status     TEXT NOT NULL DEFAULT 'pending', -- pending | done | dismissed

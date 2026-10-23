@@ -175,6 +175,11 @@ func TestAgentTaskPrompt_migrationUpgradesSeededBody(t *testing.T) {
 
 	p, err := s.GetAIPrompt(context.Background(), "agent_task")
 	require.NoError(t, err)
-	assert.Contains(t, p.Body, "/superpowers:writing-plans")
-	assert.Contains(t, p.Body, "/vibecodeway-load-context {{context_key}}")
+	// Migration 128 strips the leading slashes (Codex does not resolve slash
+	// commands) and adds the skills-outside-worktrees exception.
+	assert.Contains(t, p.Body, "superpowers:writing-plans")
+	assert.NotContains(t, p.Body, "/superpowers:writing-plans")
+	assert.Contains(t, p.Body, "vibecodeway-load-context {{context_key}}")
+	assert.NotContains(t, p.Body, "/vibecodeway-load-context")
+	assert.Contains(t, p.Body, "Exception — skills:")
 }

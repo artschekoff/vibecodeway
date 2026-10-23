@@ -17,11 +17,8 @@ vi.mock("../components/editor/DiffEditorTab", () => ({
   ),
 }));
 vi.mock("../components/editor/ChangedFilesPanel", () => ({
-  ChangedFilesPanel: ({ onOpenFile, onRefresh }: { onOpenFile: (rp: string, rn: string, p: string, s: string) => void; onRefresh?: () => void }) => (
-    <>
-      <button onClick={() => onOpenFile("/r/api", "acme/api", "src/a.ts", "modified")}>open-a</button>
-      {onRefresh && <button aria-label="refresh from github" onClick={onRefresh}>refresh</button>}
-    </>
+  ChangedFilesPanel: ({ onOpenFile }: { onOpenFile: (rp: string, rn: string, p: string, s: string) => void }) => (
+    <button onClick={() => onOpenFile("/r/api", "acme/api", "src/a.ts", "modified")}>open-a</button>
   ),
 }));
 vi.mock("../components/editor/EditorPRInfo", () => ({
@@ -48,7 +45,12 @@ vi.mock("../components/editor/TourCard", () => ({
   ),
 }));
 
-const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour, SymbolsIndex } = vi.hoisted(() => ({
+vi.mock("../../wailsjs/runtime/runtime", () => ({
+  EventsOn: vi.fn(() => () => {}),
+  EventsOff: vi.fn(),
+}));
+
+const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour, SymbolsIndex, EnsureContextEditorWorkspace, CancelRefresh } = vi.hoisted(() => ({
   GetContextChanges: vi.fn(),
   RefreshContext: vi.fn(),
   RefreshContextPRs: vi.fn(),
@@ -63,8 +65,10 @@ const { GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings,
   StartCodeTour: vi.fn(),
   GetCodeTour: vi.fn(),
   SymbolsIndex: vi.fn().mockResolvedValue(undefined),
+  EnsureContextEditorWorkspace: vi.fn().mockResolvedValue({ ready: true, worktrees: [] }),
+  CancelRefresh: vi.fn(),
 }));
-vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour, SymbolsIndex }));
+vi.mock("../../wailsjs/go/main/App", () => ({ GetContextChanges, RefreshContext, RefreshContextPRs, GetEditorSettings, SetEditorSettings, ListTerminalCommands, TerminalWrite, AgentResumeCommand, ListEvents, AddUserEvent, DeleteUserEvent, StartCodeTour, GetCodeTour, SymbolsIndex, EnsureContextEditorWorkspace, CancelRefresh }));
 
 import { EditorWorkspace } from "./EditorWorkspace";
 import { EditorFilesProvider } from "../contexts/EditorFilesContext";
@@ -123,17 +127,17 @@ describe("EditorWorkspace", () => {
   it("shows PR Review mode for a PR-review context key", async () => {
     render(
       <HotkeyProvider platform="darwin"><EditorFilesProvider>
-        <EditorWorkspace contextId="c1" contextKey="juna-health/juna-api#4521" />
+        <EditorWorkspace contextId="c1" contextKey="acme/acme-api#4521" />
       </EditorFilesProvider></HotkeyProvider>
     );
-    await waitFor(() => expect(screen.getByText("juna-health/juna-api#4521")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("acme/acme-api#4521")).toBeInTheDocument());
     expect(screen.getByText("PR Review")).toBeInTheDocument();
   });
 
   it("renders the PR info block for the context", async () => {
     render(
       <HotkeyProvider platform="darwin"><EditorFilesProvider>
-        <EditorWorkspace contextId="c1" contextKey="juna-health/juna-api#349" />
+        <EditorWorkspace contextId="c1" contextKey="acme/acme-api#349" />
       </EditorFilesProvider></HotkeyProvider>
     );
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1"));
@@ -164,8 +168,8 @@ describe("EditorWorkspace", () => {
     await waitFor(() => expect(screen.getByTestId("terminal")).toHaveTextContent("/r/api"));
     GetContextChanges.mockClear();
 
-    // The refresh icon lives in the changed-files repo header, which loads async.
-    fireEvent.click(await screen.findByRole("button", { name: /refresh from github/i }));
+    // The single reload button lives in the FILES/GIT sidebar strip.
+    fireEvent.click(await screen.findByRole("button", { name: /reload editor workspace/i }));
 
     await waitFor(() => expect(RefreshContext).toHaveBeenCalledWith("c1"));
     await waitFor(() => expect(GetContextChanges).toHaveBeenCalled());
@@ -218,10 +222,11 @@ describe("EditorWorkspace", () => {
     // Defaults to the first repo's id.
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1:id-api"));
 
-    // Switching the repo selector re-targets the PR head at the new repo. Scope
-    // to the repo <select> (the terminal command selector is also a combobox).
-    const repoSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="/r/rdbms"]'))!;
-    fireEvent.change(repoSelect, { target: { value: "/r/rdbms" } });
+    // Switching the repo (now a tile grid, one click per repo) re-targets the
+    // PR head at the new repo.
+    // ^rdbms: the tile's accessible name may also carry the running-terminals
+    // badge text ("rdbms1 running terminals").
+    fireEvent.click(screen.getByRole("button", { name: /^rdbms/ }));
     await waitFor(() => expect(screen.getByTestId("pr-info")).toHaveTextContent("c1:id-rdbms"));
   });
 

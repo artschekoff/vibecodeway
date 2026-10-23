@@ -29,6 +29,7 @@ import MyBoardPage from "./MyBoardPage";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.setItem("cc:board-view", "list");
   H.GetVCSAuth.mockResolvedValue(null);
   H.ListTodoNext.mockResolvedValue([]);
   H.ListMyAssignedJiraIssues.mockResolvedValue([]);

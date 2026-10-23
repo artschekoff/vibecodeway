@@ -61,6 +61,9 @@ func openServiceEnv() (*serviceEnv, error) {
 
 	aRunner := acli.NewRunner(logger)
 	jiraClient := jira.NewClient(aRunner, logger)
+	if st, err := s.GetAppSettings(context.Background()); err == nil {
+		jiraClient.SetOrgField(st.JiraOrgField)
+	}
 
 	var slackOpts []slack.Option
 	if passphrase != "" {
@@ -104,7 +107,7 @@ func openServiceEnv() (*serviceEnv, error) {
 // toolRegistry builds the shared tool registry from this CLI's service env, so
 // the CLI mirrors exactly what the Ask AI agent can call.
 func (e *serviceEnv) toolRegistry() *tooling.Registry {
-	return tooling.NewRegistry(tooling.Deps{Store: e.store, Svc: e.svc, VCS: e.runner, Repos: e.vcsStore, Logger: e.logger})
+	return tooling.NewRegistry(tooling.Deps{Store: e.store, Svc: e.svc, VCS: e.runner, Repos: e.vcsStore, VCSStore: e.vcsStore, Logger: e.logger})
 }
 
 // resolveContextID returns the context UUID from --context-id or --context-key flags.

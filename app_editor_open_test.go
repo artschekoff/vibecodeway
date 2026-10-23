@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A context with a named branch + a local path gets its worktree auto-created,
-// so the editor is ready to open with no picker.
+// A context with a named branch + a local path is offered as a target, but
+// nothing is checked out until the user picks it (EnsureBranchWorktree).
 func TestEnsureContextEditorWorkspace_ready(t *testing.T) {
 	app, contextID := newAppWithContext(t)
 	dir := initWorktreeTestRepo(t) // main + feat/x
@@ -24,6 +24,18 @@ func TestEnsureContextEditorWorkspace_ready(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, prep.Ready)
 	assert.Empty(t, prep.Choices)
+	require.Len(t, prep.Worktrees, 1)
+	assert.Equal(t, "", prep.Worktrees[0].WorktreePath, "not checked out yet")
+	ws, err := app.FindWorkspaceForBranch(repo.ID, "feat/x")
+	require.NoError(t, err)
+	assert.Nil(t, ws)
+
+	// Picking it creates the worktree; the prep then reports its path.
+	path, err := app.EnsureBranchWorktree(repo.ID, "feat/x")
+	require.NoError(t, err)
+	prep, err = app.EnsureContextEditorWorkspace(contextID)
+	require.NoError(t, err)
+	assert.Equal(t, path, prep.Worktrees[0].WorktreePath)
 }
 
 // A context that only links a repo (empty branch, "track all PRs") has no
@@ -65,8 +77,8 @@ func TestEnsureContextEditorWorkspace_noLocalPath(t *testing.T) {
 	assert.Empty(t, prep.Choices)
 }
 
-// Two linked repos each with a named branch => two ready worktrees returned,
-// so the frontend can offer a choice.
+// Two linked repos each with a named branch => two targets returned, so the
+// frontend can offer a choice; neither is checked out by the prep.
 func TestEnsureContextEditorWorkspace_returnsAllWorktrees(t *testing.T) {
 	app, contextID := newAppWithContext(t)
 	dirA := initWorktreeTestRepo(t) // main + feat/x
@@ -98,6 +110,6 @@ func TestEnsureContextEditorWorkspace_returnsAllWorktrees(t *testing.T) {
 	require.Contains(t, byName, "acme/repoA")
 	require.Contains(t, byName, "acme/repoB")
 	assert.Equal(t, "feat/x", byName["acme/repoA"].Branch)
-	assert.NotEmpty(t, byName["acme/repoA"].WorktreePath)
-	assert.NotEqual(t, dirA, byName["acme/repoA"].WorktreePath) // it's the .worktrees path, not the main checkout
+	assert.Empty(t, byName["acme/repoA"].WorktreePath, "the prep checks nothing out")
+	assert.Empty(t, byName["acme/repoB"].WorktreePath)
 }

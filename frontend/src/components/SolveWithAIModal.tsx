@@ -1,18 +1,52 @@
 import { useEffect, useState } from "react";
-import { SolveWithAI } from "../../wailsjs/go/main/App";
+import { SolveWithAI, ListVCSBranches } from "../../wailsjs/go/main/App";
 import { ProseEditor } from "./ProseEditor";
 
 interface Props {
   contextId: string;
   onClose: () => void;
-  onOpenEditor?: () => void;
+  /** Called with the worktree the agent works in, so the editor opens right there. */
+  onOpenEditor?: (worktreePath: string) => void;
 }
 
+type Target = { repoId: string; branch: string; label: string };
+const targetKey = (t: Target) => `${t.repoId}\u0000${t.branch}`;
+
+/**
+ * Solve with AI: pick the branch (repo) to work in — only that one gets a
+ * worktree and the on-checkout script — then build the agent task and open the
+ * editor there. A single linked branch is preselected.
+ */
 export function SolveWithAIModal({ contextId, onClose, onOpenEditor }: Props) {
   const [task, setTask] = useState("implement");
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [targetsLoaded, setTargetsLoaded] = useState(false);
+  const [picked, setPicked] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    ListVCSBranches(contextId)
+      .then((rows) => {
+        if (!alive) return;
+        const seen = new Set<string>();
+        const list: Target[] = [];
+        for (const b of rows ?? []) {
+          if (!b.branch) continue;
+          const t = { repoId: b.repoId, branch: b.branch, label: `${b.repo ? `${b.repo.owner}/${b.repo.name}` : b.repoId} · ${b.branch}` };
+          if (seen.has(targetKey(t))) continue;
+          seen.add(targetKey(t));
+          list.push(t);
+        }
+        setTargets(list);
+        if (list.length === 1) setPicked(targetKey(list[0]));
+      })
+      .catch(() => { /* no branches: the backend error on Solve says so */ })
+      .finally(() => { if (alive) setTargetsLoaded(true); });
+    return () => { alive = false; };
+  }, [contextId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -22,14 +56,16 @@ export function SolveWithAIModal({ contextId, onClose, onOpenEditor }: Props) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  const target = targets.find((t) => targetKey(t) === picked);
+
   const handleConfirm = async () => {
     setLoading(true);
     setError(null);
     try {
-      const cmd = await SolveWithAI(contextId, task);
-      await navigator.clipboard.writeText(cmd).catch(() => {});
+      const res = await SolveWithAI(contextId, task, target?.repoId ?? "", target?.branch ?? "");
+      await navigator.clipboard.writeText(res.instruction).catch(() => {});
       setDone(true);
-      onOpenEditor?.();
+      onOpenEditor?.(res.worktreePath);
     } catch (err) {
       // Wails rejects with a plain string, not an Error — coerce whatever we got.
       const msg = err instanceof Error ? err.message : String(err);
@@ -87,11 +123,26 @@ export function SolveWithAIModal({ contextId, onClose, onOpenEditor }: Props) {
             resize: "vertical"
           }}
         />
+        {targets.length > 1 && (
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, marginBottom: 12 }}>
+            Work in
+            <select aria-label="Repository and branch" value={picked} onChange={(e) => setPicked(e.target.value)}>
+              <option value="">Choose a repository…</option>
+              {targets.map((t) => <option key={targetKey(t)} value={targetKey(t)}>{t.label}</option>)}
+            </select>
+          </label>
+        )}
+        {targets.length === 1 && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>Work in {targets[0].label}</div>
+        )}
+        {targetsLoaded && targets.length === 0 && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>No branch is linked to this context yet.</div>
+        )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button
             className="btn-primary"
             style={{ fontSize: 11, padding: "4px 12px" }}
-            disabled={loading}
+            disabled={loading || !target}
             onClick={() => void handleConfirm()}
           >
             {loading ? "Solving…" : "Solve"}

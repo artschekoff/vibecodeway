@@ -171,6 +171,16 @@ func (r *ReviewRequestRepo) UpdateMergeable(ctx context.Context, repoID string, 
 // column untouched. Callers must invoke this only when they actually resolved the
 // PR's reviews — a PR whose reviews were not fetched must keep its stored value
 // rather than be silently reset to "".
+// UpdateUnresolvedCount refreshes only the unresolved review-thread count for a
+// stored review request. Callers must invoke this only when the count was actually
+// fetched — a failed fetch must keep the stored value.
+func (r *ReviewRequestRepo) UpdateUnresolvedCount(ctx context.Context, repoID string, prNumber, count int) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vcs_review_requests SET unresolved_count = ? WHERE repo_id = ? AND pr_number = ?`,
+		count, repoID, prNumber)
+	return err
+}
+
 func (r *ReviewRequestRepo) UpdateMyReviewState(ctx context.Context, repoID string, prNumber int, state string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE vcs_review_requests SET my_review_state = ? WHERE repo_id = ? AND pr_number = ?`,
@@ -183,7 +193,8 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 	q := `
 		SELECT id, repo_id, pr_number, pr_title, pr_author, pr_url,
 		       review_status, head_branch, requested_at, fetched_at, reviewed_at, dismissed_at,
-		       viewed_at, reviewers, mergeable, kind, ci_status, my_review_state, merge_state_status
+		       viewed_at, reviewers, mergeable, kind, ci_status, my_review_state, merge_state_status,
+		       unresolved_count
 		FROM vcs_review_requests
 		WHERE dismissed_at IS NULL`
 	var args []any
@@ -208,6 +219,7 @@ func (r *ReviewRequestRepo) ListReviewRequests(ctx context.Context, repoID strin
 			&rr.PRURL, &rr.ReviewStatus, &rr.HeadBranch, &rr.RequestedAt, &rr.FetchedAt,
 			&rr.ReviewedAt, &rr.DismissedAt, &rr.ViewedAt, &reviewersJSON, &rr.Mergeable,
 			&rr.Kind, &rr.CIStatus, &rr.MyReviewState, &rr.MergeStateStatus,
+			&rr.UnresolvedCount,
 		); err != nil {
 			return nil, fmt.Errorf("scan review request: %w", err)
 		}
@@ -236,21 +248,4 @@ func (r *ReviewRequestRepo) DeletePRsForBranch(ctx context.Context, branchID str
 		return fmt.Errorf("delete prs for branch: %w", err)
 	}
 	return nil
-}
-
-// scanReviewRequest scans a single review request row.
-func scanReviewRequest(row *sql.Row) (*ReviewRequest, error) {
-	var rr ReviewRequest
-	err := row.Scan(
-		&rr.ID, &rr.RepoID, &rr.PRNumber, &rr.PRTitle, &rr.PRAuthor,
-		&rr.PRURL, &rr.ReviewStatus, &rr.HeadBranch, &rr.RequestedAt, &rr.FetchedAt,
-		&rr.ReviewedAt, &rr.DismissedAt,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &rr, nil
 }

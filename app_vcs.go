@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/artschekoff/vibecodeway/internal/repofiles"
 	"github.com/artschekoff/vibecodeway/internal/vcs"
+	vcsservice "github.com/artschekoff/vibecodeway/internal/vcs/service"
 	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
@@ -113,11 +116,6 @@ func (a *App) AddVCSBranch(contextID, platform, ownerRepo, branch, label string,
 // RemoveVCSBranch removes a branch link (and cascades to its PRs/comments).
 func (a *App) RemoveVCSBranch(branchID string) error {
 	return a.vcsStore.Branches.DeleteBranch(a.ctx, branchID)
-}
-
-// UpdateVCSBranchLabel sets or clears the label for an existing branch link.
-func (a *App) UpdateVCSBranchLabel(branchID, label string) error {
-	return a.vcsStore.Branches.UpdateBranchLabel(a.ctx, branchID, label)
 }
 
 // AddSpecificPR fetches a single PR from the VCS platform by number, resolves its head
@@ -340,12 +338,6 @@ func (a *App) GetRepoFileTree(repoPath string) ([]string, error) {
 	return repofiles.FileTree(repoPath)
 }
 
-// ReadRepoFiles returns contents for the given repo-relative paths, path-confined to
-// repoPath and size-bounded. Used to inject code context into analysis prompts.
-func (a *App) ReadRepoFiles(repoPath string, paths []string) (map[string]string, error) {
-	return repofiles.ReadFiles(repoPath, paths)
-}
-
 // --- Pending Code Reviews ---
 
 // GetPendingCodeReviews returns stored review requests across all tracked repos.
@@ -357,13 +349,17 @@ func (a *App) GetPendingCodeReviews() ([]vcsstore.ReviewRequest, error) {
 // RefreshPendingReviews fetches review requests for the authenticated user
 // across all tracked repos for all enabled and authenticated platforms.
 func (a *App) RefreshPendingReviews() error {
-	if err := a.vcsSvc.SyncReviewRequests(a.ctx, vcs.PlatformGitHub); err != nil {
+	err := a.vcsSvc.SyncReviews(a.ctx, vcs.PlatformGitHub)
+	if errors.Is(err, vcsservice.ErrReviewSyncRunning) {
+		a.logger.Info("refresh: reviews sync already running, skipped")
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	// Authored PRs are additive; a failure here should not blank the requested list.
-	if err := a.vcsSvc.SyncAuthoredPRs(a.ctx, vcs.PlatformGitHub); err != nil {
-		a.logger.Warn("refresh: sync authored PRs failed", zap.Error(err))
-	}
+	// Every review assigned to me gets its own context up front, so artifacts
+	// can be attached to it before the review starts.
+	a.ensureReviewContexts()
 	return nil
 }
 
@@ -443,18 +439,6 @@ func (a *App) SetTrackedRepoPath(repoID, localPath string) error {
 	return nil
 }
 
-// CheckoutBranch switches to branch in localPath, then opens the configured terminal there.
-// Deprecated: use CheckoutInWorkspace for worktree-based isolation.
-func (a *App) CheckoutBranch(localPath, branch string) error {
-	if _, err := os.Stat(localPath); err != nil {
-		return fmt.Errorf("local path not accessible: %w", err)
-	}
-	if err := vcs.GitCheckout(localPath, branch); err != nil {
-		return err
-	}
-	return a.openWithCheckout("", localPath)
-}
-
 // knownAgentDirs is the minimal set of directories checked when the app's
 // PATH doesn't include Homebrew or user-local installs.
 var knownAgentDirs = []string{
@@ -478,12 +462,13 @@ func resolveAgentPath(name string) string {
 	return name
 }
 
-// openWithCheckout runs onCheckoutCommand (if set) via the user's shell, then
-// opens the configured terminal at path and/or the coding agent directly.
-func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
+// openTerminalAt opens the configured terminal and/or coding agent at path.
+// It never runs the on-checkout script — that is checkoutBranch's job, so every
+// checkout path runs it exactly once.
+func (a *App) openTerminalAt(path string) error {
 	settings, err := a.db.GetAppSettings(a.ctx)
 	if err != nil {
-		a.logger.Sugar().Warnf("openWithCheckout: failed to load settings: %v", err)
+		a.logger.Sugar().Warnf("openTerminalAt: failed to load settings: %v", err)
 		return nil
 	}
 
@@ -492,88 +477,6 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 
 	if terminalApp == "" && agentApp == "" {
 		return nil
-	}
-
-	// Run the checkout command to completion before opening the agent so the
-	// environment is ready (e.g. deps installed) when the editor opens.
-
-	// Emits checkout:start/log/done events. These are only surfaced in the UI on
-	// tabs that mount the useCheckout hook (Contexts, Context Detail, Pending Code
-	// Reviews today). Callers adding checkout triggers from other tabs need to
-	// mount the hook there too.
-	if onCheckoutCommand != "" {
-		shell := os.Getenv("SHELL")
-		if shell == "" {
-			shell = "sh"
-		}
-		cmd := exec.Command(shell, "-c", onCheckoutCommand)
-		cmd.Dir = path
-
-		stdout, _ := cmd.StdoutPipe()
-		stderr, _ := cmd.StderrPipe()
-
-		runtime.EventsEmit(a.ctx, "checkout:start", map[string]interface{}{
-			"path": path,
-			"cmd":  onCheckoutCommand,
-		})
-
-		if err := cmd.Start(); err != nil {
-			a.logger.Sugar().Warnf("on_checkout_command start failed: cmd=%q workDir=%q err=%v", onCheckoutCommand, path, err)
-			runtime.EventsEmit(a.ctx, "checkout:done", map[string]interface{}{
-				"exitCode": -1,
-				"error":    err.Error(),
-			})
-		} else {
-			// Besides streaming to the UI, keep a bounded tail of the output so
-			// the run is diagnosable later from the Logs page — the checkout:log
-			// events are visible only on tabs that mount useCheckout.
-			var outMu sync.Mutex
-			var outTail []string
-			const maxTailLines = 200
-			streamPipe := func(r io.Reader, stream string) {
-				sc := bufio.NewScanner(r)
-				sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // ponytail: 1MB cap per line, enough for npm/yarn output
-				for sc.Scan() {
-					runtime.EventsEmit(a.ctx, "checkout:log", map[string]interface{}{
-						"line":   sc.Text(),
-						"stream": stream,
-					})
-					outMu.Lock()
-					outTail = append(outTail, "["+stream+"] "+sc.Text())
-					if len(outTail) > maxTailLines {
-						outTail = outTail[len(outTail)-maxTailLines:]
-					}
-					outMu.Unlock()
-				}
-			}
-			var wg sync.WaitGroup
-			wg.Add(2)
-			go func() { defer wg.Done(); streamPipe(stdout, "stdout") }()
-			go func() { defer wg.Done(); streamPipe(stderr, "stderr") }()
-			wg.Wait()
-			runErr := cmd.Wait()
-			exitCode := 0
-			errStr := ""
-			output := strings.Join(outTail, "\n")
-			if runErr != nil {
-				exitCode = -1
-				if ee, ok := runErr.(*exec.ExitError); ok {
-					exitCode = ee.ExitCode()
-				}
-				errStr = runErr.Error()
-				a.logger.Warn("on_checkout_command failed",
-					zap.String("cmd", onCheckoutCommand), zap.String("workDir", path),
-					zap.Int("exitCode", exitCode), zap.String("output", output), zap.Error(runErr))
-			} else {
-				a.logger.Info("on_checkout_command ok",
-					zap.String("cmd", onCheckoutCommand), zap.String("workDir", path),
-					zap.String("output", output))
-			}
-			runtime.EventsEmit(a.ctx, "checkout:done", map[string]interface{}{
-				"exitCode": exitCode,
-				"error":    errStr,
-			})
-		}
 	}
 
 	// No terminal configured: launch coding agent directly.
@@ -603,6 +506,109 @@ func (a *App) openWithCheckout(onCheckoutCommand, path string) error {
 	}
 
 	return nil
+}
+
+// runOnCheckout runs the repo's on-checkout script in path via the user's
+// shell, streaming output as checkout:start/log/done events (CheckoutLogModal).
+// Blocks until the script finishes so the workspace is ready for the launch.
+func (a *App) runOnCheckout(onCheckoutCommand, path string) {
+	if onCheckoutCommand == "" {
+		return
+	}
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "sh"
+	}
+	cmd := exec.Command(shell, "-c", onCheckoutCommand)
+	cmd.Dir = path
+
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+
+	runtime.EventsEmit(a.ctx, "checkout:start", map[string]interface{}{
+		"path": path,
+		"cmd":  onCheckoutCommand,
+	})
+
+	if err := cmd.Start(); err != nil {
+		a.logger.Sugar().Warnf("on_checkout_command start failed: cmd=%q workDir=%q err=%v", onCheckoutCommand, path, err)
+		runtime.EventsEmit(a.ctx, "checkout:done", map[string]interface{}{
+			"exitCode": -1,
+			"error":    err.Error(),
+		})
+	} else {
+		// Besides streaming to the UI, keep a bounded tail of the output so
+		// the run is diagnosable later from the Logs page — the checkout:log
+		// events are visible only on tabs that mount useCheckout.
+		var outMu sync.Mutex
+		var outTail []string
+		const maxTailLines = 200
+		streamPipe := func(r io.Reader, stream string) {
+			sc := bufio.NewScanner(r)
+			sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // ponytail: 1MB cap per line, enough for npm/yarn output
+			for sc.Scan() {
+				runtime.EventsEmit(a.ctx, "checkout:log", map[string]interface{}{
+					"line":   sc.Text(),
+					"stream": stream,
+				})
+				outMu.Lock()
+				outTail = append(outTail, "["+stream+"] "+sc.Text())
+				if len(outTail) > maxTailLines {
+					outTail = outTail[len(outTail)-maxTailLines:]
+				}
+				outMu.Unlock()
+			}
+		}
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); streamPipe(stdout, "stdout") }()
+		go func() { defer wg.Done(); streamPipe(stderr, "stderr") }()
+		wg.Wait()
+		runErr := cmd.Wait()
+		exitCode := 0
+		errStr := ""
+		output := strings.Join(outTail, "\n")
+		if runErr != nil {
+			exitCode = -1
+			if ee, ok := runErr.(*exec.ExitError); ok {
+				exitCode = ee.ExitCode()
+			}
+			errStr = runErr.Error()
+			a.logger.Warn("on_checkout_command failed",
+				zap.String("cmd", onCheckoutCommand), zap.String("workDir", path),
+				zap.Int("exitCode", exitCode), zap.String("output", output), zap.Error(runErr))
+		} else {
+			a.logger.Info("on_checkout_command ok",
+				zap.String("cmd", onCheckoutCommand), zap.String("workDir", path),
+				zap.String("output", output))
+		}
+		runtime.EventsEmit(a.ctx, "checkout:done", map[string]interface{}{
+			"exitCode": exitCode,
+			"error":    errStr,
+		})
+	}
+}
+
+// worktreeAdd creates a git worktree, surfacing progress through the same
+// checkout:start/log/done events the on-checkout script uses — `git worktree
+// add` on a large repo takes seconds and silence reads as a frozen UI.
+// a.emit is nil in tests and before startup; events are then skipped.
+func (a *App) worktreeAdd(baseDir, worktreePath, branch string) error {
+	if a.emit != nil {
+		a.emit("checkout:start", map[string]interface{}{
+			"path": worktreePath,
+			"cmd":  "git worktree add — " + branch,
+		})
+	}
+	err := vcs.GitWorktreeAdd(baseDir, worktreePath, branch)
+	if a.emit != nil {
+		exitCode, errStr := 0, ""
+		if err != nil {
+			exitCode, errStr = -1, err.Error()
+		}
+		a.emit("checkout:done", map[string]interface{}{"exitCode": exitCode, "error": errStr})
+	}
+	return err
 }
 
 // ensureWorktreesIgnored appends ".worktrees" to baseDir/.gitignore if not already present.
@@ -651,22 +657,36 @@ func samePath(p, q string) bool {
 }
 
 func (a *App) FindWorkspaceForBranch(repoID, branch string) (*vcsstore.VCSWorkspace, error) {
-	// Fast path: DB record exists.
-	if ws, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, repoID, branch); err != nil || ws != nil {
-		return ws, err
-	}
-	// Fallback: scan all registered local paths for an existing git worktree.
-	paths, err := a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
-	if err != nil || len(paths) == 0 {
+	if branch == "" {
 		return nil, nil
 	}
+	paths, err := a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	// Fast path: DB record exists — but only if it still points inside a
+	// registered clone's .worktrees. Rows discovered from ad-hoc worktrees
+	// (/tmp checkouts made by agents or scripts) are dropped, not reused.
+	if ws, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, repoID, branch); err != nil {
+		return nil, err
+	} else if ws != nil {
+		if ownedWorktree(paths, ws.WorktreePath) {
+			return ws, nil
+		}
+		a.logger.Sugar().Infof("workspace %s for %s lives outside the repo's .worktrees; forgetting it", ws.WorktreePath, branch)
+		_ = a.vcsStore.Workspaces.Delete(a.ctx, ws.ID)
+	}
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	// Fallback: scan the registered clones for a worktree of ours on that branch.
 	for _, rp := range paths {
 		worktrees, wErr := vcs.GitWorktreeList(rp.Path)
 		if wErr != nil {
 			continue
 		}
 		for _, wt := range worktrees {
-			if wt.Branch != branch || samePath(wt.Path, rp.Path) {
+			if wt.Branch != branch || samePath(wt.Path, rp.Path) || !ownedWorktree(paths, wt.Path) {
 				continue
 			}
 			ws := &vcsstore.VCSWorkspace{
@@ -683,79 +703,32 @@ func (a *App) FindWorkspaceForBranch(repoID, branch string) (*vcsstore.VCSWorksp
 	return nil, nil
 }
 
-// CheckoutInWorkspace creates a git worktree for branch at the given repo path and opens terminal.
-// The worktree is created at <repoPath>/.worktrees/<branch-safe-name>.
+// CheckoutInWorkspace checks out branch as a worktree of the repo owning
+// repoPathID (reusing an existing checkout), runs the on-checkout script and
+// opens the terminal/agent there.
 func (a *App) CheckoutInWorkspace(repoPathID, branch string) error {
-	repoPath, err := a.vcsStore.RepoPaths.Get(a.ctx, repoPathID)
+	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, repoPathID)
 	if err != nil {
 		return fmt.Errorf("repo path not found: %w", err)
 	}
-	baseDir := repoPath.Path
-	if _, err := os.Stat(baseDir); err != nil {
-		return fmt.Errorf("local path not accessible: %w", err)
-	}
-	if err := ensureWorktreesIgnored(baseDir); err != nil {
-		a.logger.Sugar().Warnf("CheckoutInWorkspace: .gitignore update failed: %v", err)
-	}
-
-	// If the branch is already checked out in a git worktree, reuse it.
-	if existing, err := vcs.GitWorktreeList(baseDir); err == nil {
-		for _, wt := range existing {
-			if wt.Branch == branch {
-				ws := &vcsstore.VCSWorkspace{
-					RepoPathID:   repoPathID,
-					RepoID:       repoPath.RepoID,
-					Branch:       branch,
-					WorktreePath: wt.Path,
-					Status:       "active",
-				}
-				// Best-effort: record the workspace if not already tracked.
-				_ = a.vcsStore.Workspaces.Create(a.ctx, ws)
-				repo, err := a.vcsStore.Repos.GetRepo(a.ctx, repoPath.RepoID)
-				onCheckout := ""
-				if err == nil {
-					onCheckout = repo.OnCheckoutCommand
-				}
-				return a.openWithCheckout(onCheckout, wt.Path)
-			}
-		}
-	}
-
-	worktreeName := vcs.BranchToWorktreeName(branch)
-	worktreePath := filepath.Join(baseDir, ".worktrees", worktreeName)
-	if err := vcs.GitWorktreeAdd(baseDir, worktreePath, branch); err != nil {
+	p, err := a.checkoutBranch(rp.RepoID, branch)
+	if err != nil {
 		return err
 	}
-	w := &vcsstore.VCSWorkspace{
-		RepoPathID:   repoPathID,
-		RepoID:       repoPath.RepoID,
-		Branch:       branch,
-		WorktreePath: worktreePath,
-		Status:       "active",
+	if p == "" {
+		return fmt.Errorf("local path not accessible")
 	}
-	if err := a.vcsStore.Workspaces.Create(a.ctx, w); err != nil {
-		return fmt.Errorf("storing workspace record: %w", err)
-	}
-	repo, err := a.vcsStore.Repos.GetRepo(a.ctx, repoPath.RepoID)
-	onCheckout := ""
-	if err == nil {
-		onCheckout = repo.OnCheckoutCommand
-	}
-	return a.openWithCheckout(onCheckout, worktreePath)
+	return a.openTerminalAt(p)
 }
 
-// OpenWorkspaceTerminal runs on_checkout_command (if configured) and opens terminal at the workspace path.
+// OpenWorkspaceTerminal re-enters a known workspace: runs the on-checkout
+// script and opens the terminal/agent at its worktree.
 func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
 	w, err := a.vcsStore.Workspaces.Get(a.ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("workspace not found: %w", err)
 	}
-	repo, err := a.vcsStore.Repos.GetRepo(a.ctx, w.RepoID)
-	onCheckout := ""
-	if err == nil {
-		onCheckout = repo.OnCheckoutCommand
-	}
-	return a.openWithCheckout(onCheckout, w.WorktreePath)
+	return a.CheckoutInWorkspace(w.RepoPathID, w.Branch)
 }
 
 // ensureWorktreeForBranch finds or creates a git worktree for (repoID, branch)
@@ -764,54 +737,118 @@ func (a *App) OpenWorkspaceTerminal(workspaceID string) error {
 // Returns "" (no error) when the repo has no accessible local path to host a
 // worktree, so callers can skip that repo.
 func (a *App) ensureWorktreeForBranch(repoID, branch string) (string, error) {
+	p, _, err := a.ensureWorktree(repoID, branch)
+	return p, err
+}
+
+// ensureWorktree is ensureWorktreeForBranch reporting whether it had to
+// create the worktree. A freshly created worktree gets the repo's on-checkout
+// script run in it right away (the log window shows it); an existing one is
+// returned untouched — callers that represent an explicit "go there" action
+// (checkoutBranch) run the script themselves in that case.
+func (a *App) ensureWorktree(repoID, branch string) (path string, created bool, err error) {
+	if branch == "" {
+		return "", false, nil
+	}
 	if ws, err := a.FindWorkspaceForBranch(repoID, branch); err == nil && ws != nil {
-		return ws.WorktreePath, nil
+		if _, serr := os.Stat(ws.WorktreePath); serr == nil {
+			return ws.WorktreePath, false, nil
+		}
+		// Stale record: the worktree was deleted/moved on disk. Drop it so the
+		// editor never opens into a nonexistent directory, then rebuild below.
+		_ = a.vcsStore.Workspaces.Delete(a.ctx, ws.ID)
 	}
 	paths, err := a.vcsStore.RepoPaths.ListForRepo(a.ctx, repoID)
 	if err != nil || len(paths) == 0 {
-		return "", nil
+		return "", false, nil
+	}
+	// Reuse any existing checkout of the branch — a worktree of any registered
+	// clone, or a clone's main checkout itself (git refuses to check the same
+	// branch out twice, so creating a copy would fail anyway).
+	for _, rp := range paths {
+		if _, err := os.Stat(rp.Path); err != nil {
+			continue
+		}
+		existing, lerr := vcs.GitWorktreeList(rp.Path)
+		if lerr != nil {
+			continue
+		}
+		for _, wt := range existing {
+			if wt.Branch != branch {
+				continue
+			}
+			if samePath(wt.Path, rp.Path) {
+				// Main checkout: return the registered (possibly symlinked) path
+				// the rest of the app uses, and persist nothing — the checkout
+				// switches branches over time, a DB row would go stale.
+				return rp.Path, false, nil
+			}
+			if !ownedWorktree(paths, wt.Path) {
+				continue // someone else's checkout (e.g. /tmp): not our workspace
+			}
+			_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
+				RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: wt.Path, Status: "active",
+			})
+			return wt.Path, false, nil
+		}
 	}
 	rp := paths[0]
 	baseDir := rp.Path
 	if _, err := os.Stat(baseDir); err != nil {
-		return "", nil
+		return "", false, nil
 	}
 	if err := ensureWorktreesIgnored(baseDir); err != nil {
 		a.logger.Sugar().Warnf("ensureWorktreeForBranch: .gitignore update failed: %v", err)
 	}
-	// Reuse an existing on-disk worktree for the branch if one is already present.
-	if existing, err := vcs.GitWorktreeList(baseDir); err == nil {
-		for _, wt := range existing {
-			if wt.Branch == branch && !samePath(wt.Path, baseDir) {
-				_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
-					RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: wt.Path, Status: "active",
-				})
-				return wt.Path, nil
-			}
-		}
-	}
 	worktreePath := filepath.Join(baseDir, ".worktrees", vcs.BranchToWorktreeName(branch))
-	if err := vcs.GitWorktreeAdd(baseDir, worktreePath, branch); err != nil {
-		return "", err
+	// Deleted ad-hoc worktrees still "hold" their branch until pruned.
+	vcs.GitWorktreePrune(baseDir)
+	if err := a.worktreeAdd(baseDir, worktreePath, branch); err != nil {
+		return "", false, err
 	}
 	_ = a.vcsStore.Workspaces.Create(a.ctx, &vcsstore.VCSWorkspace{
 		RepoPathID: rp.ID, RepoID: repoID, Branch: branch, WorktreePath: worktreePath, Status: "active",
 	})
-	return worktreePath, nil
+	if repo, rerr := a.vcsStore.Repos.GetRepo(a.ctx, repoID); rerr == nil {
+		a.runOnCheckout(repo.OnCheckoutCommand, worktreePath)
+	}
+	return worktreePath, true, nil
 }
 
-// ensureContextWorkspaces creates/finds a git worktree for every repo+branch
-// attached to contextID and returns the first worktree path (used to open a
-// single terminal). Per-repo failures are logged and skipped.
-func (a *App) ensureContextWorkspaces(contextID string) (string, error) {
-	wts, err := a.contextWorktrees(contextID)
-	if err != nil {
-		return "", err
+// ownedWorktree reports whether path is a workspace of ours: inside the
+// .worktrees folder of one of the repo's registered clones.
+func ownedWorktree(paths []vcsstore.VCSRepoPath, path string) bool {
+	real := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return filepath.Clean(p)
 	}
-	if len(wts) == 0 {
-		return "", nil
+	wt := real(path)
+	for _, rp := range paths {
+		root := real(filepath.Join(rp.Path, ".worktrees")) + string(filepath.Separator)
+		if strings.HasPrefix(wt+string(filepath.Separator), root) || strings.HasPrefix(wt, root) {
+			return true
+		}
 	}
-	return wts[0].WorktreePath, nil
+	return false
+}
+
+// checkoutBranch is the single checkout entry point: find or create the
+// worktree for (repoID, branch) and run the repo's on-checkout script there,
+// streaming it to the checkout log. Every "go to this branch" action in the
+// app — Contexts, Code Reviews, editor, Ask AI — goes through here so the
+// script behaves the same everywhere. Returns "" (no error) when the repo has
+// no accessible local path.
+func (a *App) checkoutBranch(repoID, branch string) (string, error) {
+	p, created, err := a.ensureWorktree(repoID, branch)
+	if err != nil || p == "" || created {
+		return p, err // a fresh worktree already ran the script
+	}
+	if repo, rerr := a.vcsStore.Repos.GetRepo(a.ctx, repoID); rerr == nil {
+		a.runOnCheckout(repo.OnCheckoutCommand, p)
+	}
+	return p, nil
 }
 
 // OpenRepoPathTerminal opens the configured terminal at the given repo local path.
@@ -820,7 +857,22 @@ func (a *App) OpenRepoPathTerminal(pathID string) error {
 	if err != nil {
 		return fmt.Errorf("repo path not found: %w", err)
 	}
-	return a.openWithCheckout("", rp.Path)
+	return a.openTerminalAt(rp.Path)
+}
+
+// EnsureBranchWorktree finds or creates a git worktree for (repoID, branch) and
+// returns its path. The on-checkout script runs only when the worktree is
+// created here. Used by Ask AI and by the editor once the user picked a
+// context branch to open.
+func (a *App) EnsureBranchWorktree(repoID, branch string) (string, error) {
+	p, err := a.ensureWorktreeForBranch(repoID, branch)
+	if err != nil {
+		return "", err
+	}
+	if p == "" {
+		return "", fmt.Errorf("repo has no local checkout on disk")
+	}
+	return p, nil
 }
 
 // FetchPruneRepoPath runs `git fetch --prune` for the given repo path.
@@ -914,22 +966,8 @@ func (a *App) SwitchMainWorkingTree(repoPathID, branch string) error {
 	return nil
 }
 
-// CheckoutLocalBranch checks out a local branch as a worktree (or opens the
-// existing workspace terminal if already checked out) and opens terminal.
+// CheckoutLocalBranch is CheckoutInWorkspace for a local branch.
 func (a *App) CheckoutLocalBranch(repoPathID, branch string) error {
-	rp, err := a.vcsStore.RepoPaths.Get(a.ctx, repoPathID)
-	if err != nil {
-		return fmt.Errorf("repo path not found: %w", err)
-	}
-	existing, err := a.vcsStore.Workspaces.FindByBranch(a.ctx, rp.RepoID, branch)
-	if err == nil && existing != nil {
-		repo, rErr := a.vcsStore.Repos.GetRepo(a.ctx, rp.RepoID)
-		onCheckout := ""
-		if rErr == nil {
-			onCheckout = repo.OnCheckoutCommand
-		}
-		return a.openWithCheckout(onCheckout, existing.WorktreePath)
-	}
 	return a.CheckoutInWorkspace(repoPathID, branch)
 }
 
@@ -1017,14 +1055,9 @@ func (a *App) MarkWorkspaceShouldDelete(workspaceID string) error {
 
 // --- AI Branch Matching ---
 
-const (
-	// maxMatchRepos caps how many tracked repos per platform are scanned for
-	// candidate branches, to keep AIMatchBranches bounded on large repo lists.
-	maxMatchRepos = 40
-	// maxMatchCandidates caps the total number of candidate branches sent to
-	// the AI matcher across all platforms/repos.
-	maxMatchCandidates = 400
-)
+// maxMatchRepos caps how many tracked repos per platform are scanned for
+// candidate branches, to keep AIMatchBranches bounded on large repo lists.
+const maxMatchRepos = 40
 
 // defaultBranchNames lists common default/trunk branch names that are never
 // useful match candidates and are dropped by dedupeMatches.
@@ -1142,12 +1175,17 @@ func (a *App) contextMatchSignal(contextID string) (key, summary string, ticketK
 				continue
 			}
 			for _, issue := range issues {
-				if seenKey[issue.JiraKey] {
-					continue
+				if !seenKey[issue.JiraKey] {
+					seenKey[issue.JiraKey] = true
+					ticketKeys = append(ticketKeys, issue.JiraKey)
+					lines = append(lines, issue.JiraKey+": "+issue.Summary)
 				}
-				seenKey[issue.JiraKey] = true
-				ticketKeys = append(ticketKeys, issue.JiraKey)
-				lines = append(lines, issue.JiraKey+": "+issue.Summary)
+				// Branches are often named after the PARENT ticket (a subtask's
+				// work lands on the story's branch) — match on it too.
+				if issue.ParentKey != "" && !seenKey[issue.ParentKey] {
+					seenKey[issue.ParentKey] = true
+					ticketKeys = append(ticketKeys, issue.ParentKey)
+				}
 			}
 		}
 	}
@@ -1155,17 +1193,23 @@ func (a *App) contextMatchSignal(contextID string) (key, summary string, ticketK
 }
 
 // AIMatchBranches enumerates branches across tracked repos (capped by
-// maxMatchRepos/maxMatchCandidates) and asks the AI matcher which ones
-// likely belong to contextID, based on branch names/titles only. Fail-soft:
-// per-repo enumeration errors are skipped rather than aborting the whole
-// scan. Returns an empty slice (not nil) when there are no candidates.
+// maxMatchRepos) and matches them STRICTLY by ticket number: a branch belongs
+// to the context iff its name contains one of the context's Jira ticket keys
+// or their parent ticket keys as a whole token. No AI/fuzzy fallback —
+// matching is deterministic and free. Fail-soft: per-repo enumeration errors
+// are skipped rather than aborting the whole scan. Returns an empty slice
+// (not nil) when nothing matches.
 func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
-	key, summary, ticketKeys, err := a.contextMatchSignal(contextID)
+	_, _, ticketKeys, err := a.contextMatchSignal(contextID)
 	if err != nil {
 		return nil, err
 	}
+	matchers := buildIdentifierMatchers(ticketKeys)
+	if len(matchers) == 0 {
+		return []MatchedBranch{}, nil
+	}
 
-	var candidates []MatchedBranch
+	var hits []MatchedBranch
 	for _, p := range vcs.KnownPlatforms() {
 		if !vcs.IsPlatformEnabled(p) {
 			continue
@@ -1177,7 +1221,7 @@ func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
 			continue
 		}
 		for ri, repo := range repos {
-			if ri >= maxMatchRepos || len(candidates) >= maxMatchCandidates {
+			if ri >= maxMatchRepos {
 				break
 			}
 			ownerRepo := repo.FullName()
@@ -1187,44 +1231,16 @@ func (a *App) AIMatchBranches(contextID string) ([]MatchedBranch, error) {
 				continue
 			}
 			for _, name := range names {
-				candidates = append(candidates, MatchedBranch{Platform: platform, OwnerRepo: ownerRepo, Branch: name})
-				if len(candidates) >= maxMatchCandidates {
-					break
-				}
+				mb := MatchedBranch{Platform: platform, OwnerRepo: ownerRepo, Branch: name}
+				hits = append(hits, regexMatchBranches([]MatchedBranch{mb}, matchers)...)
 			}
 		}
 	}
-
-	candidates = dedupeMatches(candidates)
-	if len(candidates) == 0 {
+	hits = dedupeMatches(hits)
+	if hits == nil {
 		return []MatchedBranch{}, nil
 	}
-
-	// Cheap deterministic pass first: match the context/ticket keys against
-	// branch names. Only fall back to the (slower, paid) AI matcher when this
-	// finds nothing.
-	matchers := buildIdentifierMatchers(append([]string{key}, ticketKeys...))
-	if hits := regexMatchBranches(candidates, matchers); len(hits) > 0 {
-		return hits, nil
-	}
-
-	titles := make([]string, len(candidates))
-	for i, c := range candidates {
-		titles[i] = c.OwnerRepo + ": " + c.Branch
-	}
-	idx, merr := a.analysisSvc.MatchBranchesToContext(a.ctx, key, summary, titles)
-	if merr != nil {
-		a.logger.Sugar().Warnf("AIMatchBranches: ai match failed: %s", merr.Error())
-		return nil, merr
-	}
-	out := make([]MatchedBranch, 0, len(idx))
-	for _, i := range idx {
-		if i < 0 || i >= len(candidates) {
-			continue
-		}
-		out = append(out, candidates[i])
-	}
-	return out, nil
+	return hits, nil
 }
 
 // AutoLinkRepos runs AI branch matching for contextID in the background and
@@ -1278,6 +1294,10 @@ type RepoChange struct {
 	RepoPath string           `json:"repoPath"`
 	Branch   string           `json:"branch"` // context branch link this path serves ("" = main checkout)
 	Files    []vcs.FileChange `json:"files"`
+	// DidHitLimit is true when Files was truncated at StatusLimit (VS Code's
+	// git.statusLimit behavior) so the UI can warn instead of silently dropping.
+	DidHitLimit bool `json:"didHitLimit"`
+	StatusLimit int  `json:"statusLimit"` // the limit that was applied (0 = unlimited)
 }
 
 // dedupeRepoPaths removes entries with an empty RepoPath and collapses
@@ -1360,6 +1380,13 @@ func (a *App) ConfirmAction(title, message string) (bool, error) {
 	return sel == "Yes", nil
 }
 
+// GetFileDiff returns one file's diff on demand. GetContextChanges lists
+// names only (diffs are lazy, VS Code-style); the frontend calls this when a
+// file's diff is actually opened. mode: "untracked" | "branch" | "head".
+func (a *App) GetFileDiff(repoPath, path, mode string) (string, error) {
+	return vcs.FileDiffText(repoPath, path, mode)
+}
+
 // GetContextChanges returns the git working-tree changes for every repo
 // attached to contextID (deduped, only repos whose LocalPath exists on
 // disk). Diffing is fail-soft: a repo that errors during diff is left with
@@ -1400,12 +1427,32 @@ func (a *App) GetContextChanges(contextID string) ([]RepoChange, error) {
 		}
 	}
 	repos = dedupeRepoPaths(repos)
+	limit := a.gitStatusLimit()
 	for i := range repos {
-		files, derr := vcs.RepoDiff(repos[i].RepoPath)
+		files, hitLimit, derr := vcs.RepoDiffWithLimit(repos[i].RepoPath, limit)
 		if derr != nil {
 			continue // fail-soft: skip un-diffable repo, leave Files nil
 		}
 		repos[i].Files = files
+		repos[i].DidHitLimit = hitLimit
+		repos[i].StatusLimit = limit
 	}
 	return repos, nil
+}
+
+// gitStatusLimit reads the user's "statusLimit" from the editor-settings blob
+// (the frontend owns that JSON's shape), falling back to the VS Code-style
+// default. Read per call, like VS Code reads git.statusLimit per status run.
+func (a *App) gitStatusLimit() int {
+	blob, err := a.GetEditorSettings()
+	if err != nil || blob == "" {
+		return vcs.DefaultStatusLimit
+	}
+	var s struct {
+		StatusLimit *int `json:"statusLimit"`
+	}
+	if json.Unmarshal([]byte(blob), &s) != nil || s.StatusLimit == nil || *s.StatusLimit < 0 {
+		return vcs.DefaultStatusLimit
+	}
+	return *s.StatusLimit
 }

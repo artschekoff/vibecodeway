@@ -26,6 +26,16 @@ interface Props {
   onDismiss: () => void;
 }
 
+// Attach targets: active contexts of the given org — or, with no org known,
+// every active context except the service "Code Reviews" org's auto-created
+// PR-review contexts (keys like owner/repo#123).
+export function pickAttachTargets(all: Context[], orgs: Organization[], orgId?: string): Context[] {
+  const reviewsOrgId = orgs.find((o) => o.name === "Code Reviews")?.id;
+  return all.filter((c) =>
+    c.status === "active" &&
+    (orgId ? c.orgId === orgId : c.orgId !== reviewsOrgId));
+}
+
 export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }: Props) => {
   const [contexts, setContexts] = useState<Context[]>([]);
   const [filter, setFilter] = useState("");
@@ -61,7 +71,7 @@ export const QuickAttachOverlay = ({ visible, text, orgId, onAttach, onDismiss }
     setLoading(true);
     try {
       const [all, allOrgs] = await Promise.all([ListAllContexts(), ListOrganizations()]);
-      const active = all.filter((c) => c.status === "active" && (!orgId || c.orgId === orgId));
+      const active = pickAttachTargets(all, allOrgs ?? [], orgId);
       setContexts(active);
       setOrgs(allOrgs ?? []);
       if (active.length === 1) setSelectedId(active[0].id);

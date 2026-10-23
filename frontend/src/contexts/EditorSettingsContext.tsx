@@ -12,6 +12,9 @@ export type EditorSettings = {
   tabSize: number;
   renderWhitespace: "none" | "boundary" | "all";
   diffSideBySide: boolean;
+  // Max changed files listed per repo, VS Code's git.statusLimit. 0 = unlimited.
+  // Read by the Go side from the persisted blob on every status refresh.
+  statusLimit: number;
 };
 
 // Dark by default — the app shell is dark; a light Monaco pane reads as a hole in it.
@@ -24,6 +27,7 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   tabSize: 2,
   renderWhitespace: "none",
   diffSideBySide: true,
+  statusLimit: 10000,
 };
 
 const MONACO_THEME: Record<EditorTheme, string> = {
@@ -41,6 +45,8 @@ export function toMonacoOptions(s: EditorSettings): { theme: string; options: Re
       originalEditable: false,
       renderSideBySide: s.diffSideBySide,
       wordWrap: s.wordWrap ? "on" : "off",
+      // The diff editor reads its own option, not `wordWrap`.
+      diffWordWrap: s.wordWrap ? "on" : "off",
       fontSize: s.fontSize,
       minimap: { enabled: s.minimap },
       lineNumbers: s.lineNumbers,

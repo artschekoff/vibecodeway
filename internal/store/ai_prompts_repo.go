@@ -16,6 +16,9 @@ var todoActionPlaceholders = []PromptPlaceholder{
 
 // knownPlaceholders defines the available {{placeholder}} variables for each prompt.
 var knownPlaceholders = map[string][]PromptPlaceholder{
+	"agent_hydration": {
+		{Name: "context-name", Description: "Current context key — substituted on terminal insertion (keep the prompt single-line)"},
+	},
 	"event_extraction": {
 		{Name: "context_key", Description: "Project/module key (e.g. JH-2210)"},
 		{Name: "raw_content", Description: "Raw formatted content from all providers (Jira, Slack, GitHub)"},

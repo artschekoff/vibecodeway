@@ -15,8 +15,8 @@ func TestInsertAndListStatEventsRoundTrip(t *testing.T) {
 	require.NoError(t, s.InsertStatEvent(ctx, StatEvent{
 		Kind:       "pr_merged",
 		ExternalID: "https://github.com/org/repo/pull/1",
-		Org:        "juna-api",
-		Repo:       "juna-api",
+		Org:        "acme-api",
+		Repo:       "acme-api",
 		JiraKey:    "JH-1",
 		OccurredAt: "2026-08-15T10:00:00Z",
 	}))
@@ -26,8 +26,8 @@ func TestInsertAndListStatEventsRoundTrip(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "pr_merged", got[0].Kind)
 	assert.Equal(t, "https://github.com/org/repo/pull/1", got[0].ExternalID)
-	assert.Equal(t, "juna-api", got[0].Org)
-	assert.Equal(t, "juna-api", got[0].Repo)
+	assert.Equal(t, "acme-api", got[0].Org)
+	assert.Equal(t, "acme-api", got[0].Repo)
 	assert.Equal(t, "JH-1", got[0].JiraKey)
 	assert.Equal(t, "2026-08-15T10:00:00Z", got[0].OccurredAt)
 }

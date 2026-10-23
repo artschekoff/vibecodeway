@@ -103,6 +103,15 @@ export function EditorSettingsMenu() {
               </select>
             </label>
 
+            <label style={rowStyle} title="Max changed files listed per repo (VS Code's git.statusLimit). 0 = unlimited.">
+              <span>Git status limit</span>
+              <input
+                type="number" min={0} step={1000} value={settings.statusLimit}
+                onChange={(e) => update({ statusLimit: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                style={{ width: 72, fontSize: 11 }}
+              />
+            </label>
+
             <div style={rowStyle}>
               <span>Diff layout</span>
               <div style={{ display: "flex", gap: 2 }}>

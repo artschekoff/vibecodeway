@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/artschekoff/vibecodeway/internal/jira"
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
@@ -36,6 +38,12 @@ func (a *App) RefreshMyAssignedJiraIssues(orderBy string) ([]appstore.BoardJiraA
 	if err != nil {
 		return nil, fmt.Errorf("refresh assigned jira: %w", err)
 	}
+	parents := a.parentsOfMySubtasks(results)
+	parentKeys := make(map[string]bool, len(parents))
+	for _, p := range parents {
+		parentKeys[p.Key] = true
+	}
+	results = append(results, parents...)
 	issues := make([]appstore.BoardJiraAssignment, 0, len(results))
 	for _, r := range results {
 		issues = append(issues, appstore.BoardJiraAssignment{
@@ -46,6 +54,9 @@ func (a *App) RefreshMyAssignedJiraIssues(orderBy string) ([]appstore.BoardJiraA
 			Priority:  r.Priority,
 			Created:   r.Created,
 			Org:       r.Org,
+			// Parents ride along for visibility; their transitions are someone
+			// else's work and must not enter the productivity stats.
+			NotMine: parentKeys[r.Key],
 		})
 	}
 	if err := a.db.UpsertBoardJiraAssignments(a.ctx, issues); err != nil {
@@ -53,6 +64,74 @@ func (a *App) RefreshMyAssignedJiraIssues(orderBy string) ([]appstore.BoardJiraA
 	}
 	go a.backfillBoardOrgs()
 	return a.db.ListBoardJiraAssignments(a.ctx, orderBy)
+}
+
+// isSubtaskType matches Jira's subtask issue type across spellings
+// ("Subtask", "Sub-task", "Sub task").
+func isSubtaskType(t string) bool {
+	s := strings.ToLower(strings.NewReplacer("-", "", " ", "").Replace(t))
+	return s == "subtask"
+}
+
+// parentsOfMySubtasks returns board rows for parent tickets of the user's
+// assigned subtasks — a ticket whose subtask is mine belongs on the board even
+// when the ticket itself is assigned to someone else. Parent keys resolve via
+// one `workitem view` per subtask, cached permanently (a subtask's parent never
+// changes); parent details then come from a single `key in (...)` search.
+// Best-effort: any failure just leaves parents out of this refresh.
+func (a *App) parentsOfMySubtasks(results []jira.SearchResult) []jira.SearchResult {
+	present := make(map[string]bool, len(results))
+	var subtaskKeys []string
+	for _, r := range results {
+		present[r.Key] = true
+		if isSubtaskType(r.IssueType) {
+			subtaskKeys = append(subtaskKeys, r.Key)
+		}
+	}
+	if len(subtaskKeys) == 0 {
+		return nil
+	}
+	cached, err := a.db.GetSubtaskParents(a.ctx, subtaskKeys)
+	if err != nil {
+		a.logger.Warn("board: load subtask parents failed", zap.Error(err))
+		cached = map[string]string{}
+	}
+	for _, key := range subtaskKeys {
+		if _, ok := cached[key]; ok {
+			continue
+		}
+		parent, err := a.svc.SubtaskParent(a.ctx, key)
+		if err != nil {
+			// Not cached — retried on the next refresh.
+			a.logger.Warn("board: resolve subtask parent failed", zap.String("key", key), zap.Error(err))
+			continue
+		}
+		if parent == "" {
+			continue
+		}
+		cached[key] = parent
+		if err := a.db.SetSubtaskParent(a.ctx, key, parent); err != nil {
+			a.logger.Warn("board: cache subtask parent failed", zap.String("key", key), zap.Error(err))
+		}
+	}
+	var parentKeys []string
+	seen := map[string]bool{}
+	for _, parent := range cached {
+		if !present[parent] && !seen[parent] {
+			seen[parent] = true
+			parentKeys = append(parentKeys, parent)
+		}
+	}
+	if len(parentKeys) == 0 {
+		return nil
+	}
+	parents, err := a.svc.SearchJQL(a.ctx,
+		fmt.Sprintf("key in (%s) ORDER BY priority DESC, created DESC", strings.Join(parentKeys, ", ")))
+	if err != nil {
+		a.logger.Warn("board: fetch subtask parents failed", zap.Error(err))
+		return nil
+	}
+	return parents
 }
 
 // orgBackfillWorkers caps concurrent `acli workitem view` calls. Each takes ~5s
@@ -70,6 +149,9 @@ func (a *App) backfillBoardOrgs() {
 		return // a backfill is already walking the queue
 	}
 	defer a.orgBackfillRunning.Store(false)
+	if a.jiraClient == nil || a.jiraClient.OrgField() == "" {
+		return // no scope field configured — nothing to look up
+	}
 
 	keys, err := a.db.ListBoardKeysMissingOrg(a.ctx)
 	if err != nil {

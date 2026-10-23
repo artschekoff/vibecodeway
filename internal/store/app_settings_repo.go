@@ -45,6 +45,7 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		statsAuthorName    string
 		askChatRetention   int
 		updatedAt          string
+		jiraOrgField       string
 	)
 	err := s.db.QueryRowContext(
 		ctx,
@@ -53,12 +54,12 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		        terminal_app_path, coding_agent_app,
 		        auto_link_repos_on_context_create, editor_settings,
 		        pr_stale_threshold_days, workday_hours, task_hours,
-		        stats_author_name, ask_chat_retention_days, updated_at
+		        stats_author_name, ask_chat_retention_days, jira_org_field, updated_at
 		 FROM app_settings WHERE id = ?`,
 		appSettingsSingletonID,
 	).Scan(&contextEnabled, &contextIntervalMin, &reviewsEnabled, &reviewsIntervalMin,
 		&terminalAppPath, &codingAgentApp, &autoLink, &editorSettings, &prStaleThreshold,
-		&workdayHours, &taskHours, &statsAuthorName, &askChatRetention, &updatedAt)
+		&workdayHours, &taskHours, &statsAuthorName, &askChatRetention, &jiraOrgField, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return defaultAppSettings(), nil
 	}
@@ -79,6 +80,7 @@ func (s *Store) GetAppSettings(ctx context.Context) (*AppSettings, error) {
 		TaskHours:                    taskHours,
 		StatsAuthorName:              statsAuthorName,
 		AskChatRetentionDays:         askChatRetention,
+		JiraOrgField:                 jiraOrgField,
 		UpdatedAt:                    updatedAt,
 	}, nil
 }
@@ -108,8 +110,8 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		      terminal_app_path, coding_agent_app,
 		      auto_link_repos_on_context_create, editor_settings,
 		      pr_stale_threshold_days, workday_hours, task_hours,
-		      stats_author_name, ask_chat_retention_days, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		      stats_author_name, ask_chat_retention_days, jira_org_field, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     context_refetch_enabled           = excluded.context_refetch_enabled,
 		     context_refetch_interval_min      = excluded.context_refetch_interval_min,
@@ -124,6 +126,7 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		     task_hours                        = excluded.task_hours,
 		     stats_author_name                 = excluded.stats_author_name,
 		     ask_chat_retention_days           = excluded.ask_chat_retention_days,
+		     jira_org_field                    = excluded.jira_org_field,
 		     updated_at                        = excluded.updated_at`,
 		appSettingsSingletonID,
 		contextEnabled, settings.ContextRefetchIntervalMin,
@@ -137,6 +140,7 @@ func (s *Store) SetAppSettings(ctx context.Context, settings AppSettings) error 
 		settings.TaskHours,
 		settings.StatsAuthorName,
 		settings.AskChatRetentionDays,
+		settings.JiraOrgField,
 		now,
 	)
 	if err != nil {

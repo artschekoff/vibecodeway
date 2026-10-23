@@ -3,6 +3,7 @@ package tooling
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
@@ -401,10 +402,10 @@ func registerContextTools(r *Registry, d Deps) {
 
 	r.Register(Tool{
 		Name:        "find_contexts_by_jira_status",
-		Description: "Find every context that has at least one Jira issue in the given status (e.g. 'Closed', 'Done', 'In Progress'). Match is case-insensitive. Returns the matching contexts' id, key and status.",
+		Description: "Find every context that has at least one Jira issue in the given status. jiraStatus must be an EXACT Jira workflow status name (e.g. 'In Progress', 'Done', 'In Code Review') — case-insensitive. The special value 'open' matches any NOT-finished issue (anything that is not done/closed/cancelled/…). A zero-hit result includes availableStatuses — pick from it and retry.",
 		Params: map[string]any{
 			"type":       "object",
-			"properties": map[string]any{"jiraStatus": strProp("the Jira issue status to match, e.g. 'Closed'")},
+			"properties": map[string]any{"jiraStatus": strProp("exact Jira workflow status (e.g. 'In Progress'), or 'open' for any not-finished issue")},
 			"required":   []string{"jiraStatus"},
 		},
 		Handler: func(ctx context.Context, args map[string]any, tctx Ctx) (any, error) {
@@ -412,7 +413,15 @@ func registerContextTools(r *Registry, d Deps) {
 			if status == "" {
 				return nil, fmt.Errorf("jiraStatus is required")
 			}
-			ids, err := d.Store.ListContextIDsByJiraStatus(ctx, status)
+			var ids []string
+			var err error
+			// "open" is not a real Jira status — models reach for it constantly
+			// meaning "not finished yet", so honor that intent explicitly.
+			if strings.EqualFold(strings.TrimSpace(status), "open") {
+				ids, err = d.Store.ListContextIDsWithOpenTickets(ctx)
+			} else {
+				ids, err = d.Store.ListContextIDsByJiraStatus(ctx, status)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -427,7 +436,15 @@ func registerContextTools(r *Registry, d Deps) {
 				}
 				hits = append(hits, contextHit{ContextID: c.ID, Key: c.Key, Status: c.Status})
 			}
-			return map[string]any{"count": len(hits), "contexts": hits}, nil
+			out := map[string]any{"count": len(hits), "contexts": hits}
+			// Zero hits usually means a guessed status name. Hand back the real
+			// vocabulary so the model can self-correct instead of giving up.
+			if len(hits) == 0 {
+				if statuses, serr := d.Store.ListKnownJiraStatuses(ctx); serr == nil {
+					out["availableStatuses"] = append(statuses, "open")
+				}
+			}
+			return out, nil
 		},
 	})
 

@@ -53,6 +53,7 @@ describe("EditorSettingsContext", () => {
     const { theme, options } = toMonacoOptions({ ...DEFAULT_EDITOR_SETTINGS, theme: "dark", wordWrap: true, diffSideBySide: false });
     expect(theme).toBe("vs-dark");
     expect(options.wordWrap).toBe("on");
+    expect(options.diffWordWrap).toBe("on");
     expect(options.renderSideBySide).toBe(false);
   });
 });

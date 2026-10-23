@@ -132,6 +132,6 @@ func newBranchAddCmd() *cobra.Command {
 			"--label STRING (optional)\n"+
 			"--platform STRING (optional; default 'github')",
 		`{"id":"uuid","contextId":"uuid","repoId":"uuid","branch":"string","label":"string","createdAt":"RFC3339","repo":{"id":"uuid","platform":"github","owner":"string","name":"string"}}`,
-		`vibecodeway-cli branch-add --context-key sprint-42 --owner-repo juna-health/frontend --branch feat/JH-123-login`,
+		`vibecodeway-cli branch-add --context-key sprint-42 --owner-repo acme/frontend --branch feat/JH-123-login`,
 	)
 }

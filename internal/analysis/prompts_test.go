@@ -13,17 +13,17 @@ func TestFormatJiraIssuesForPrompt(t *testing.T) {
 		Summary:     "Update topline card labels for revenue referral framing",
 		Status:      "In Progress",
 		IssueType:   "Task",
-		Assignee:    "Artem Krivoshchekov",
+		Assignee:    "Alice Krivoshchekov",
 		Description: "Rename topline card labels.",
 		Comments: []jirastore.Comment{
-			{Author: "Artem", Body: "Branch feat_JH-4264_api-update-topline-card-labels created in juna-api from main"},
+			{Author: "Alice", Body: "Branch feat_JH-4264_api-update-topline-card-labels created in acme-api from main"},
 		},
 	}}
 	out := formatJiraIssuesForPrompt(issues)
 	assert.Contains(t, out, "[JH-4264] Update topline card labels for revenue referral framing")
 	assert.Contains(t, out, "Status: In Progress")
 	assert.Contains(t, out, "Type: Task")
-	assert.Contains(t, out, "Assignee: Artem Krivoshchekov")
+	assert.Contains(t, out, "Assignee: Alice Krivoshchekov")
 	assert.Contains(t, out, "Description: Rename topline card labels.")
 	assert.Contains(t, out, "feat_JH-4264_api-update-topline-card-labels")
 }

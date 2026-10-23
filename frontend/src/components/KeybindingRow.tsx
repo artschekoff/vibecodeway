@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil, RotateCcw } from "lucide-react";
 import type { Keybinding } from "../types";
+import { normalizeEventKey } from "../hotkeys/chord";
 
 interface Props {
   binding: Keybinding;
@@ -43,10 +44,9 @@ export function captureCombo(e: KeyboardEvent): Omit<PendingCombo, "sequence"> |
   if (e.altKey) mods.push("alt");
   if (mods.length === 0) return null;
 
-  const key = e.key.toLowerCase();
-  if (["meta", "control", "shift", "alt"].includes(key)) return null;
+  if (["meta", "control", "shift", "alt"].includes(e.key.toLowerCase())) return null;
 
-  return { modifierKeys: mods.join(","), keyCode: key };
+  return { modifierKeys: mods.join(","), keyCode: normalizeEventKey(e) };
 }
 
 export default function KeybindingRow({ binding, onSave, onReset }: Props) {

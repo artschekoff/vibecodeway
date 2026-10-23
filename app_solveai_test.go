@@ -55,8 +55,39 @@ func newAppWithContext(t *testing.T) (*App, string) {
 
 func TestSolveWithAI_noRepo_errors(t *testing.T) {
 	app, contextID := newAppWithContext(t)
-	_, err := app.SolveWithAI(contextID, "реализовать")
-	require.Error(t, err)
+	_, err := app.SolveWithAI(contextID, "реализовать", "", "")
+	require.Error(t, err, "a target must be picked first")
+
+	repo, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "nopath")
+	require.NoError(t, err)
+	_, err = app.SolveWithAI(contextID, "реализовать", repo.ID, "feat/x")
+	require.Error(t, err, "no local checkout on disk")
+}
+
+// Solve with AI checks out only the picked branch: the other repo attached to
+// the context gets no worktree (and so no on-checkout script run).
+func TestSolveWithAI_checksOutOnlyPickedBranch(t *testing.T) {
+	app, contextID := newAppWithContext(t)
+	dirA, dirB := initWorktreeTestRepo(t), initWorktreeTestRepo(t)
+	repoA, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "api")
+	require.NoError(t, err)
+	repoB, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "rdbms")
+	require.NoError(t, err)
+	for _, x := range []struct{ id, dir string }{{repoA.ID, dirA}, {repoB.ID, dirB}} {
+		_, err = app.vcsStore.RepoPaths.Add(app.ctx, x.id, x.dir)
+		require.NoError(t, err)
+		_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, x.id, "feat/x", "", true)
+		require.NoError(t, err)
+	}
+
+	res, err := app.SolveWithAI(contextID, "реализовать", repoA.ID, "feat/x")
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(dirA, ".worktrees", "feat-x"), res.WorktreePath)
+	require.NotEmpty(t, res.Instruction)
+
+	wsB, err := app.FindWorkspaceForBranch(repoB.ID, "feat/x")
+	require.NoError(t, err)
+	require.Nil(t, wsB, "the unpicked repo stays untouched")
 }
 
 func TestFirstAttachedRepoPath(t *testing.T) {
@@ -97,29 +128,4 @@ func TestFirstAttachedRepoPath_usesRepoPaths(t *testing.T) {
 	path, err := app.firstAttachedRepoPath(contextID)
 	require.NoError(t, err)
 	require.Equal(t, "/tmp/y", path)
-}
-
-// A branch link contextWorktrees had to skip (no worktree could be made) must
-// be reported by name, so SolveWithAI refuses to start an agent on a partial
-// repo set instead of silently dropping the repo from the prompt.
-func TestMissingWorktreeBranches_reportsSkippedBranch(t *testing.T) {
-	app, contextID := newAppWithContext(t)
-
-	repoA, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "api")
-	require.NoError(t, err)
-	repoB, err := app.vcsStore.Repos.EnsureRepo(app.ctx, "github", "acme", "rdbms")
-	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repoA.ID, "feat/x", "", true)
-	require.NoError(t, err)
-	_, err = app.vcsStore.Branches.AddBranch(app.ctx, contextID, repoB.ID, "feat/y", "", true)
-	require.NoError(t, err)
-
-	// Only repoA's branch has a ready worktree.
-	ready := []EditorWorktree{{RepoID: repoA.ID, RepoName: "acme/api", Branch: "feat/x", WorktreePath: "/wt/a"}}
-	missing := app.missingWorktreeBranches(contextID, ready)
-	require.Equal(t, []string{"acme/rdbms (feat/y)"}, missing)
-
-	// Every branch ready -> nothing missing.
-	ready = append(ready, EditorWorktree{RepoID: repoB.ID, RepoName: "acme/rdbms", Branch: "feat/y", WorktreePath: "/wt/b"})
-	require.Empty(t, app.missingWorktreeBranches(contextID, ready))
 }

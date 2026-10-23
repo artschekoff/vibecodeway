@@ -31,6 +31,8 @@ import (
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/artschekoff/vibecodeway/internal/symbols"
 	"github.com/artschekoff/vibecodeway/internal/tooling"
+	"github.com/artschekoff/vibecodeway/internal/tracker"
+	"github.com/artschekoff/vibecodeway/internal/tracker/jiratracker"
 	githubrunner "github.com/artschekoff/vibecodeway/internal/vcs/github"
 	vcsservice "github.com/artschekoff/vibecodeway/internal/vcs/service"
 	vcsstore "github.com/artschekoff/vibecodeway/internal/vcs/store"
@@ -92,6 +94,7 @@ type UploadPreviewBatchResult struct {
 type App struct {
 	ctx           context.Context
 	svc           *jiraservice.ContextService
+	jiraClient    *jira.Client
 	analysisSvc   *analysis.Service
 	symbolsSvc    *symbols.Service
 	agent         *agent.Agent
@@ -109,9 +112,13 @@ type App struct {
 	pendingMu      sync.Mutex
 	pendingUploads map[string]*PendingUpload
 
-	hotkeyService  *hotkey.Service
-	pickerMu       sync.Mutex
-	pendingText    string
+	hotkeyService *hotkey.Service
+	pickerMu      sync.Mutex
+	pendingText   string
+	// Window frame to restore after the quick-attach picker: the app window
+	// shrinks to a small picker-sized window while it is open (Wails v2 is
+	// single-window, so this is the closest thing to a separate popup).
+	pickerPrev     *[4]int // w, h, x, y
 	hotkeyInFlight atomic.Bool
 	a11yPolling    atomic.Bool
 
@@ -166,6 +173,10 @@ func (a *App) startup(ctx context.Context) {
 
 	aRunner := acli.NewRunner(logger)
 	jiraClient := jira.NewClient(aRunner, logger)
+	if st, err := s.GetAppSettings(ctx); err == nil {
+		jiraClient.SetOrgField(st.JiraOrgField)
+	}
+	a.jiraClient = jiraClient
 	slackRunner := slack.NewRunner(logger)
 	a.slackRunner = slackRunner
 	a.cliRunner = cliclient.NewRunner(logger, cliclient.WithPassphraseFunc(slackRunner.Passphrase))
@@ -229,6 +240,7 @@ func (a *App) startup(ctx context.Context) {
 	vcsProvider := a.vcsSvc
 
 	a.svc = jiraservice.NewContextService(s, jiraClient, jiraRepo, slackRepo, slackRunner, logger, jiraProvider, slackProvider, textProvider, vcsProvider)
+	tracker.Register(jiratracker.New(a.svc))
 	a.svc.SetVCSStore(a.vcsStore)
 
 	openAI := openaiclient.NewClient(s, logger)
@@ -236,7 +248,7 @@ func (a *App) startup(ctx context.Context) {
 	a.analysisSvc = analysis.NewService(s, a.svc, openAI, logger)
 	a.analysisSvc.SetVCSStore(a.vcsStore)
 	a.symbolsSvc = symbols.NewService(logger)
-	reg := tooling.NewRegistry(tooling.Deps{Store: s, Svc: a.svc, VCS: ghRunner, Repos: a.vcsStore, Logger: logger})
+	reg := tooling.NewRegistry(tooling.Deps{Store: s, Svc: a.svc, VCS: ghRunner, Repos: a.vcsStore, VCSStore: a.vcsStore, Logger: logger})
 	a.agent = agent.New(openAI, reg, s, logger)
 
 	a.hotkeyService = hotkey.New(a.onHotkey)
@@ -263,6 +275,35 @@ func (a *App) startup(ctx context.Context) {
 // domReady is called by Wails once the frontend DOM is loaded and event listeners
 // are active.
 func (a *App) domReady(_ context.Context) {}
+
+// beforeClose guards against quitting while terminals (typically coding
+// agents) are still running — closing the app kills their PTYs and loses the
+// in-flight work. Returning true prevents the close.
+func (a *App) beforeClose(ctx context.Context) bool {
+	if a.ptyMgr == nil {
+		return false
+	}
+	n := len(a.ptyMgr.Pids())
+	if n == 0 {
+		return false
+	}
+	plural := "s"
+	if n == 1 {
+		plural = ""
+	}
+	sel, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
+		Type:          runtime.QuestionDialog,
+		Title:         "Quit VibeCodeWay?",
+		Message:       fmt.Sprintf("%d terminal%s still running (coding agents may be working). Quitting will kill them and their progress will be lost. Quit anyway?", n, plural),
+		Buttons:       []string{"Quit", "Cancel"},
+		DefaultButton: "Cancel",
+		CancelButton:  "Cancel",
+	})
+	if err != nil {
+		return false // dialog failed — do not trap the user in the app
+	}
+	return sel != "Quit"
+}
 
 // shutdown is called by Wails when the app is closing.
 func (a *App) shutdown(_ context.Context) {
@@ -310,12 +351,6 @@ func (a *App) TransitionJiraIssue(key, status string) error {
 // Feeds the status-change dropdown, which would otherwise offer invented names.
 func (a *App) ListKnownJiraStatuses() ([]string, error) {
 	return a.db.ListKnownJiraStatuses(a.ctx)
-}
-
-// SetSlackPassphrase stores the SLACK_MCP_PASSPHRASE value that will be injected
-// as an environment variable into every subsequent slack-cli invocation.
-func (a *App) SetSlackPassphrase(passphrase string) error {
-	return a.slackRunner.SetPassphrase(passphrase)
 }
 
 // HasSlackPassphrase reports whether a non-empty Slack passphrase is currently held
@@ -367,16 +402,6 @@ func (a *App) SearchContexts(query string) ([]appstore.ContextSearchHit, error) 
 // text matches the query, grouped by element type. Powers the in-context filter.
 func (a *App) SearchContextItems(contextID, query string) (*appstore.ContextItemMatches, error) {
 	return a.db.SearchContextItems(a.ctx, contextID, query)
-}
-
-// AskAI answers a natural-language question by letting an LLM agent navigate the
-// stored contexts through read-only tools (cross-context search, drill-down,
-// full-text read, and relation following). Returns the answer plus the tool trace.
-// orgID restricts search to one organisation; empty string searches all.
-func (a *App) AskAI(question, orgID string) (*agent.Answer, error) {
-	return a.agent.Ask(a.ctx, question, orgID, func(ev agent.ProgressEvent) {
-		runtime.EventsEmit(a.ctx, "ask:progress", ev)
-	})
 }
 
 // AskAIChat is AskAI extended with session-scoped conversation memory.
@@ -1260,15 +1285,41 @@ func (a *App) onHotkey() {
 
 	runtime.WindowShow(a.ctx)
 	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	a.shrinkForPicker()
 	runtime.EventsEmit(a.ctx, "hotkey:show-picker", text)
 }
 
-// GetPendingText returns the last text captured by the hotkey. Useful as a
-// fallback if the frontend misses the event (e.g. during page navigation).
-func (a *App) GetPendingText() string {
+const pickerWinW, pickerWinH = 520, 680
+
+// shrinkForPicker turns the app window into a small picker-sized window,
+// remembering the frame to put back in endPicker. No-op in native fullscreen,
+// where macOS ignores frame changes.
+func (a *App) shrinkForPicker() {
+	if runtime.WindowIsFullscreen(a.ctx) {
+		return
+	}
+	w, h := runtime.WindowGetSize(a.ctx)
+	x, y := runtime.WindowGetPosition(a.ctx)
 	a.pickerMu.Lock()
-	defer a.pickerMu.Unlock()
-	return a.pendingText
+	a.pickerPrev = &[4]int{w, h, x, y}
+	a.pickerMu.Unlock()
+	runtime.WindowSetMinSize(a.ctx, pickerWinW, pickerWinH)
+	runtime.WindowSetSize(a.ctx, pickerWinW, pickerWinH)
+}
+
+// endPicker drops always-on-top and restores the pre-picker window frame.
+func (a *App) endPicker() {
+	runtime.WindowSetAlwaysOnTop(a.ctx, false)
+	a.pickerMu.Lock()
+	prev := a.pickerPrev
+	a.pickerPrev = nil
+	a.pickerMu.Unlock()
+	if prev == nil {
+		return
+	}
+	runtime.WindowSetMinSize(a.ctx, appMinW, appMinH)
+	runtime.WindowSetSize(a.ctx, prev[0], prev[1])
+	runtime.WindowSetPosition(a.ctx, prev[2], prev[3])
 }
 
 // QuickAttachText saves content to the given context as a new ContextText entry.
@@ -1293,7 +1344,7 @@ func (a *App) QuickAttachText(contextID, content string) (*appstore.ContextText,
 	}
 
 	// Always clear always-on-top, even on error, so the window is not stuck on top.
-	defer runtime.WindowSetAlwaysOnTop(a.ctx, false)
+	defer a.endPicker()
 
 	name := content
 	if len([]rune(name)) > 80 {
@@ -1310,12 +1361,6 @@ func (a *App) QuickAttachText(contextID, content string) (*appstore.ContextText,
 	a.pendingText = ""
 	a.pickerMu.Unlock()
 	return result, nil
-}
-
-// CheckAccessibility returns true when this process has the Accessibility
-// permission needed to simulate keyboard input via System Events.
-func (a *App) CheckAccessibility() bool {
-	return hotkey.CheckAccessibility()
 }
 
 // OpenAccessibilityPreferences opens the macOS Privacy & Security → Accessibility
@@ -1360,7 +1405,7 @@ func (a *App) DismissPicker() {
 	a.pickerMu.Lock()
 	a.pendingText = ""
 	a.pickerMu.Unlock()
-	runtime.WindowSetAlwaysOnTop(a.ctx, false)
+	a.endPicker()
 	// Return focus to the source app so the user can immediately select more
 	// text and use Cmd+Shift+C again without having to manually switch apps.
 	hotkey.DeactivateApp()
@@ -1371,13 +1416,6 @@ func (a *App) DismissPicker() {
 // ListOrgUsers returns all users for an org (empty orgID = all orgs).
 func (a *App) ListOrgUsers(orgID string) ([]appstore.User, error) {
 	return a.db.ListUsers(a.ctx, orgID)
-}
-
-// CreateOrgUser creates a new org-level user.
-func (a *App) CreateOrgUser(displayName, email, orgID string) (*appstore.User, error) {
-	return a.db.CreateUser(a.ctx, appstore.CreateUserArgs{
-		OrgID: orgID, DisplayName: displayName, Email: email,
-	})
 }
 
 // GetUnresolvedAuthors returns unresolved (source, rawAuthor) pairs for a context.
@@ -1397,11 +1435,6 @@ func (a *App) CreateUserAndAssign(displayName, email, orgID, sourceID, rawAuthor
 		appstore.CreateUserArgs{OrgID: orgID, DisplayName: displayName, Email: email},
 		sourceID, rawAuthor,
 	)
-}
-
-// ListMessages returns all messages for a context ordered by created_at ASC.
-func (a *App) ListMessages(contextID string) ([]appstore.Message, error) {
-	return a.db.ListMessagesSince(a.ctx, contextID, time.Time{})
 }
 
 func buildLogger() (*zap.Logger, error) {

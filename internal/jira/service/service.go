@@ -1112,12 +1112,14 @@ func (svc *ContextService) RefreshContext(ctx context.Context, contextID string,
 		svc.logger.Warn("refresh: touch context failed", zap.String("contextID", contextID), zap.Error(err))
 	}
 
-	// Auto-deactivate once every Jira ticket is terminal: the work is finished, so
-	// the context should leave the board and stop being background-refreshed.
-	// ContextAllTicketsDone is false for contexts with no tickets, so those are
-	// never archived on this basis.
-	if allDone, err := svc.store.ContextAllTicketsDone(ctx, contextID); err != nil {
-		svc.logger.Warn("refresh: all-tickets-done check failed", zap.String("contextID", contextID), zap.Error(err))
+	// Auto-deactivate once every tracked work item is finished: all Jira tickets
+	// terminal AND all linked PRs closed/merged — so the context leaves the board
+	// and stops being background-refreshed. PR-only contexts (e.g. per-PR code
+	// reviews) archive when their PR closes; an open PR keeps a context active
+	// even with all tickets done. Contexts with no tickets and no PRs are never
+	// archived on this basis.
+	if allDone, err := svc.store.ContextWorkDone(ctx, contextID); err != nil {
+		svc.logger.Warn("refresh: work-done check failed", zap.String("contextID", contextID), zap.Error(err))
 	} else if allDone {
 		if _, err := svc.store.ArchiveContexts(ctx, []string{contextID}); err != nil {
 			svc.logger.Warn("refresh: auto-archive failed", zap.String("contextID", contextID), zap.Error(err))
@@ -1416,6 +1418,29 @@ func (svc *ContextService) IssueOrg(ctx context.Context, key string) (string, er
 	return svc.jira.IssueOrg(ctx, key)
 }
 
+// ViewIssue returns the full issue (parent, links, subtasks) via `workitem
+// view`. ~5s per call; callers must cache.
+func (svc *ContextService) ViewIssue(ctx context.Context, key string) (*jira.IssueDetail, error) {
+	if key == "" {
+		return nil, fmt.Errorf("issue key is required")
+	}
+	return svc.jira.ViewIssue(ctx, key)
+}
+
+// SubtaskParent returns a subtask's parent issue key via `workitem view` — the
+// only acli command that exposes the parent field (search rejects it). ~5s per
+// call, so callers must cache the result.
+func (svc *ContextService) SubtaskParent(ctx context.Context, key string) (string, error) {
+	if key == "" {
+		return "", fmt.Errorf("issue key is required")
+	}
+	detail, err := svc.jira.ViewIssue(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	return detail.ParentKey, nil
+}
+
 func (svc *ContextService) SearchJQL(ctx context.Context, jql string) ([]jira.SearchResult, error) {
 	if jql == "" {
 		return nil, fmt.Errorf("jql query is required")
@@ -1545,7 +1570,17 @@ func (svc *ContextService) RefreshAllContexts(ctx context.Context, notify Reload
 						DMsRefreshed:     res.DMsRefreshed,
 					}
 				}
-				done.Add(1)
+				n := done.Add(1)
+				// Terminal step per context: contexts refresh in parallel
+				// (refreshAllWorkers), and without an explicit done/error the
+				// progress UI cannot tell a finished context from a hung one.
+				if notify != nil {
+					if err != nil {
+						notify(int(n), total, c.Key, "error")
+					} else {
+						notify(int(n), total, c.Key, "done")
+					}
+				}
 			}
 		}()
 	}

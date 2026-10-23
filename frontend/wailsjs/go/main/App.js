@@ -30,10 +30,6 @@ export function AddTerminalCommand(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddTerminalCommand'](arg1, arg2, arg3);
 }
 
-export function AddTodoNextItem(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['AddTodoNextItem'](arg1, arg2, arg3, arg4, arg5);
-}
-
 export function AddTrackedRepo(arg1, arg2) {
   return window['go']['main']['App']['AddTrackedRepo'](arg1, arg2);
 }
@@ -50,6 +46,10 @@ export function AdjustTodoNext(arg1) {
   return window['go']['main']['App']['AdjustTodoNext'](arg1);
 }
 
+export function AgentNotificationsStatus() {
+  return window['go']['main']['App']['AgentNotificationsStatus']();
+}
+
 export function AgentResumeCommand(arg1, arg2) {
   return window['go']['main']['App']['AgentResumeCommand'](arg1, arg2);
 }
@@ -64,10 +64,6 @@ export function AppVersion() {
 
 export function ApplyContextUpdateActions(arg1, arg2) {
   return window['go']['main']['App']['ApplyContextUpdateActions'](arg1, arg2);
-}
-
-export function AskAI(arg1, arg2) {
-  return window['go']['main']['App']['AskAI'](arg1, arg2);
 }
 
 export function AskAIChat(arg1, arg2, arg3) {
@@ -92,14 +88,6 @@ export function AutoLinkRepos(arg1) {
 
 export function CancelRefresh() {
   return window['go']['main']['App']['CancelRefresh']();
-}
-
-export function CheckAccessibility() {
-  return window['go']['main']['App']['CheckAccessibility']();
-}
-
-export function CheckoutBranch(arg1, arg2) {
-  return window['go']['main']['App']['CheckoutBranch'](arg1, arg2);
 }
 
 export function CheckoutInWorkspace(arg1, arg2) {
@@ -152,10 +140,6 @@ export function CreateContextFromJiraIssue(arg1, arg2) {
 
 export function CreateGlobalEventHook(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateGlobalEventHook'](arg1, arg2, arg3);
-}
-
-export function CreateOrgUser(arg1, arg2, arg3) {
-  return window['go']['main']['App']['CreateOrgUser'](arg1, arg2, arg3);
 }
 
 export function CreateOrganization(arg1) {
@@ -260,6 +244,14 @@ export function DismissReviewRequest(arg1) {
 
 export function DraftTodoMessage(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['DraftTodoMessage'](arg1, arg2, arg3, arg4);
+}
+
+export function EnableAgentNotifications() {
+  return window['go']['main']['App']['EnableAgentNotifications']();
+}
+
+export function EnsureBranchWorktree(arg1, arg2) {
+  return window['go']['main']['App']['EnsureBranchWorktree'](arg1, arg2);
 }
 
 export function EnsureContextEditorWorkspace(arg1) {
@@ -378,10 +370,6 @@ export function GetKeybindings() {
   return window['go']['main']['App']['GetKeybindings']();
 }
 
-export function GetLatestHandoffPacket(arg1) {
-  return window['go']['main']['App']['GetLatestHandoffPacket'](arg1);
-}
-
 export function GetMyBoard(arg1) {
   return window['go']['main']['App']['GetMyBoard'](arg1);
 }
@@ -392,10 +380,6 @@ export function GetPendingCodeReviews() {
 
 export function GetPendingMessages(arg1) {
   return window['go']['main']['App']['GetPendingMessages'](arg1);
-}
-
-export function GetPendingText() {
-  return window['go']['main']['App']['GetPendingText']();
 }
 
 export function GetPersonAssignmentSteps(arg1) {
@@ -418,12 +402,12 @@ export function GetRepoFileTree(arg1) {
   return window['go']['main']['App']['GetRepoFileTree'](arg1);
 }
 
-export function GetStatusLog(arg1) {
-  return window['go']['main']['App']['GetStatusLog'](arg1);
-}
-
 export function GetSupportedPlatforms() {
   return window['go']['main']['App']['GetSupportedPlatforms']();
+}
+
+export function GetTaskGraph(arg1) {
+  return window['go']['main']['App']['GetTaskGraph'](arg1);
 }
 
 export function GetUnresolvedAuthors(arg1) {
@@ -482,10 +466,6 @@ export function ListContextEventHooks(arg1) {
   return window['go']['main']['App']['ListContextEventHooks'](arg1);
 }
 
-export function ListContextPlans(arg1) {
-  return window['go']['main']['App']['ListContextPlans'](arg1);
-}
-
 export function ListContextTexts(arg1) {
   return window['go']['main']['App']['ListContextTexts'](arg1);
 }
@@ -512,10 +492,6 @@ export function ListKnownJiraStatuses() {
 
 export function ListLocalBranches(arg1) {
   return window['go']['main']['App']['ListLocalBranches'](arg1);
-}
-
-export function ListMessages(arg1) {
-  return window['go']['main']['App']['ListMessages'](arg1);
 }
 
 export function ListMyAssignedJiraIssues(arg1) {
@@ -554,6 +530,10 @@ export function ListSlackWorkspaces() {
   return window['go']['main']['App']['ListSlackWorkspaces']();
 }
 
+export function ListTaskProviders() {
+  return window['go']['main']['App']['ListTaskProviders']();
+}
+
 export function ListTerminalCommands() {
   return window['go']['main']['App']['ListTerminalCommands']();
 }
@@ -572,10 +552,6 @@ export function ListUploadedFiles(arg1) {
 
 export function ListVCSBranches(arg1) {
   return window['go']['main']['App']['ListVCSBranches'](arg1);
-}
-
-export function ListVCSRepos(arg1) {
-  return window['go']['main']['App']['ListVCSRepos'](arg1);
 }
 
 export function ListWorkflowStatuses() {
@@ -650,6 +626,10 @@ export function MarkWorkspaceShouldDelete(arg1) {
   return window['go']['main']['App']['MarkWorkspaceShouldDelete'](arg1);
 }
 
+export function NotifyNative(arg1, arg2) {
+  return window['go']['main']['App']['NotifyNative'](arg1, arg2);
+}
+
 export function OpenAccessibilityPreferences() {
   return window['go']['main']['App']['OpenAccessibilityPreferences']();
 }
@@ -706,10 +686,6 @@ export function ReadRepoFileHead(arg1, arg2) {
   return window['go']['main']['App']['ReadRepoFileHead'](arg1, arg2);
 }
 
-export function ReadRepoFiles(arg1, arg2) {
-  return window['go']['main']['App']['ReadRepoFiles'](arg1, arg2);
-}
-
 export function RebuildAssignmentChainFrom(arg1, arg2, arg3) {
   return window['go']['main']['App']['RebuildAssignmentChainFrom'](arg1, arg2, arg3);
 }
@@ -740,6 +716,10 @@ export function RefreshMyAssignedJiraIssues(arg1) {
 
 export function RefreshPendingReviews() {
   return window['go']['main']['App']['RefreshPendingReviews']();
+}
+
+export function RefreshTaskGraph(arg1, arg2) {
+  return window['go']['main']['App']['RefreshTaskGraph'](arg1, arg2);
 }
 
 export function RefreshWorkspacesForRepo(arg1) {
@@ -798,6 +778,10 @@ export function ResolveConflict(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResolveConflict'](arg1, arg2, arg3);
 }
 
+export function ResolveReadiness(arg1) {
+  return window['go']['main']['App']['ResolveReadiness'](arg1);
+}
+
 export function ResolveToolConfirmation(arg1, arg2) {
   return window['go']['main']['App']['ResolveToolConfirmation'](arg1, arg2);
 }
@@ -808,6 +792,10 @@ export function ReviewPRWithAI(arg1, arg2, arg3, arg4) {
 
 export function RunAssignmentStepWithCustomPrompt(arg1, arg2, arg3) {
   return window['go']['main']['App']['RunAssignmentStepWithCustomPrompt'](arg1, arg2, arg3);
+}
+
+export function RunReadinessChecks() {
+  return window['go']['main']['App']['RunReadinessChecks']();
 }
 
 export function RunSingleAssignmentStep(arg1, arg2, arg3) {
@@ -914,6 +902,10 @@ export function SetJiraConfig(arg1, arg2) {
   return window['go']['main']['App']['SetJiraConfig'](arg1, arg2);
 }
 
+export function SetJiraOrgField(arg1) {
+  return window['go']['main']['App']['SetJiraOrgField'](arg1);
+}
+
 export function SetOrganizationsOrder(arg1) {
   return window['go']['main']['App']['SetOrganizationsOrder'](arg1);
 }
@@ -930,10 +922,6 @@ export function SetSlackConfig(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetSlackConfig'](arg1, arg2, arg3);
 }
 
-export function SetSlackPassphrase(arg1) {
-  return window['go']['main']['App']['SetSlackPassphrase'](arg1);
-}
-
 export function SetStatsAuthorName(arg1) {
   return window['go']['main']['App']['SetStatsAuthorName'](arg1);
 }
@@ -942,8 +930,8 @@ export function SetTrackedRepoPath(arg1, arg2) {
   return window['go']['main']['App']['SetTrackedRepoPath'](arg1, arg2);
 }
 
-export function SolveWithAI(arg1, arg2) {
-  return window['go']['main']['App']['SolveWithAI'](arg1, arg2);
+export function SolveWithAI(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SolveWithAI'](arg1, arg2, arg3, arg4);
 }
 
 export function StageFile(arg1, arg2) {
@@ -1072,14 +1060,6 @@ export function UpdateUserEvent(arg1, arg2, arg3, arg4) {
 
 export function UpdateUserNextSteps(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateUserNextSteps'](arg1, arg2, arg3, arg4);
-}
-
-export function UpdateVCSBranchLabel(arg1, arg2) {
-  return window['go']['main']['App']['UpdateVCSBranchLabel'](arg1, arg2);
-}
-
-export function UpdateVCSRepoMeta(arg1, arg2, arg3) {
-  return window['go']['main']['App']['UpdateVCSRepoMeta'](arg1, arg2, arg3);
 }
 
 export function UpdateWorkflowStatus(arg1, arg2, arg3, arg4) {

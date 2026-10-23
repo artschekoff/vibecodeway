@@ -4,7 +4,7 @@ import { WorkspacePicker } from "./WorkspacePicker";
 
 const worktrees = [
   { repoId: "a", repoName: "acme/api", branch: "feat/x", worktreePath: "/wt/api" },
-  { repoId: "b", repoName: "acme/rdbms", branch: "feat/y", worktreePath: "/wt/rdbms" },
+  { repoId: "b", repoName: "acme/rdbms", branch: "feat/y", worktreePath: "" },
 ];
 
 describe("WorkspacePicker", () => {
@@ -13,11 +13,12 @@ describe("WorkspacePicker", () => {
     render(<WorkspacePicker worktrees={worktrees as never} onPick={onPick} onCancel={vi.fn()} />);
     expect(screen.getByText("acme/api")).toBeInTheDocument();
     expect(screen.getByText("acme/rdbms")).toBeInTheDocument();
+    expect(screen.getByText(/not checked out yet/)).toBeInTheDocument();
 
-    // Select the second worktree, then confirm.
+    // Select the second branch, then confirm.
     fireEvent.click(screen.getByText("acme/rdbms"));
     fireEvent.click(screen.getByText("Open"));
-    expect(onPick).toHaveBeenCalledWith("/wt/rdbms");
+    expect(onPick).toHaveBeenCalledWith(worktrees[1]);
   });
 
   it("cancels", () => {
@@ -33,7 +34,7 @@ describe("WorkspacePicker", () => {
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(onPick).toHaveBeenCalledWith("/wt/rdbms");
+    expect(onPick).toHaveBeenCalledWith(worktrees[1]);
   });
 
   it("ArrowUp stops at the first row; Escape cancels", () => {
@@ -43,7 +44,7 @@ describe("WorkspacePicker", () => {
 
     fireEvent.keyDown(window, { key: "ArrowUp" });
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(onPick).toHaveBeenCalledWith("/wt/api");
+    expect(onPick).toHaveBeenCalledWith(worktrees[0]);
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onCancel).toHaveBeenCalled();

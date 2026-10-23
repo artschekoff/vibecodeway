@@ -16,7 +16,7 @@ func assignment(key, status string) BoardJiraAssignment {
 		IssueType: "Task",
 		Priority:  "Medium",
 		Created:   "2026-08-01T09:00:00Z",
-		Org:       "juna-api",
+		Org:       "acme-api",
 	}
 }
 
@@ -32,7 +32,7 @@ func TestBoardRefreshRecordsCompletionOnTransition(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "JH-1", got[0].Key)
 	assert.Equal(t, "Task", got[0].IssueType)
-	assert.Equal(t, "juna-api", got[0].Org)
+	assert.Equal(t, "acme-api", got[0].Org)
 	assert.Equal(t, "Done", got[0].Status)
 	assert.NotEmpty(t, got[0].CompletedAt)
 }
@@ -76,7 +76,7 @@ func TestBoardRefreshRecordsTaskStartedOnTransitionToInProgress(t *testing.T) {
 	assert.Equal(t, "task_started", got[0].Kind)
 	assert.Equal(t, "JH-10", got[0].ExternalID)
 	assert.Equal(t, "JH-10", got[0].JiraKey)
-	assert.Equal(t, "juna-api", got[0].Org)
+	assert.Equal(t, "acme-api", got[0].Org)
 	assert.NotEmpty(t, got[0].OccurredAt)
 }
 

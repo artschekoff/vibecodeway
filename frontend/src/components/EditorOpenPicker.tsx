@@ -47,7 +47,7 @@ export function EditorOpenPicker() {
       if (e.key === "Enter") {
         e.preventDefault();
         const wt = worktrees[highlight];
-        if (wt) opener.confirmWorkspace(wt.worktreePath);
+        if (wt) void opener.confirmWorkspace(wt);
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -68,14 +68,14 @@ export function EditorOpenPicker() {
           <div className="editor-open-list">
             {worktrees.map((wt, i) => (
               <div
-                key={wt.worktreePath}
+                key={`${wt.repoId}\u0000${wt.branch}`}
                 className={"editor-open-row" + (i === highlight ? " editor-open-row--highlighted" : "")}
                 onMouseEnter={() => setHighlight(i)}
-                onClick={() => opener.confirmWorkspace(wt.worktreePath)}
+                onClick={() => void opener.confirmWorkspace(wt)}
               >
                 <span className="editor-open-repo">{wt.repoName}</span>
                 <span className="editor-open-branch">{wt.branch}</span>
-                <span className="editor-open-path">{wt.worktreePath}</span>
+                <span className="editor-open-path">{wt.worktreePath || "not checked out yet"}</span>
               </div>
             ))}
           </div>
@@ -109,5 +109,3 @@ export function EditorOpenPicker() {
 
   return null;
 }
-
-export default EditorOpenPicker;

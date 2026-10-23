@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	appstore "github.com/artschekoff/vibecodeway/internal/store"
 	"github.com/artschekoff/vibecodeway/internal/vcs"
+	vcsservice "github.com/artschekoff/vibecodeway/internal/vcs/service"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
@@ -105,6 +108,39 @@ func (a *App) SetProductivitySettings(workdayHours, taskHours float64) error {
 	current.WorkdayHours = workdayHours
 	current.TaskHours = taskHours
 	return a.db.SetAppSettings(a.ctx, *current)
+}
+
+// jiraFieldRe validates a Jira custom field id.
+var jiraFieldRe = regexp.MustCompile(`^customfield_\d+$`)
+
+// SetJiraOrgField sets the Jira custom field whose value splits My Board by
+// scope/service ("" = off). Cached orgs are re-queued for backfill.
+func (a *App) SetJiraOrgField(id string) error {
+	id = strings.TrimSpace(id)
+	if id != "" && !jiraFieldRe.MatchString(id) {
+		return fmt.Errorf("expected customfield_NNNNN, got %q", id)
+	}
+	current, err := a.db.GetAppSettings(a.ctx)
+	if err != nil {
+		return err
+	}
+	if current.JiraOrgField == id {
+		return nil
+	}
+	current.JiraOrgField = id
+	if err := a.db.SetAppSettings(a.ctx, *current); err != nil {
+		return err
+	}
+	if a.jiraClient != nil {
+		a.jiraClient.SetOrgField(id)
+	}
+	if err := a.db.ResetBoardOrgChecks(a.ctx); err != nil {
+		return err
+	}
+	if id != "" {
+		go a.backfillBoardOrgs()
+	}
+	return nil
 }
 
 // SetAutoLinkRepos toggles whether matched repos are auto-linked when a new
@@ -267,7 +303,7 @@ func (a *App) backgroundRefreshLoop(ctx context.Context, settings appstore.AppSe
 
 		case <-reviewsC:
 			a.logger.Info("background refresh: refreshing pending reviews")
-			if err := a.vcsSvc.SyncReviewRequests(ctx, vcs.PlatformGitHub); err != nil {
+			if err := a.vcsSvc.SyncReviews(ctx, vcs.PlatformGitHub); err != nil && !errors.Is(err, vcsservice.ErrReviewSyncRunning) {
 				a.logger.Warn("background refresh: reviews error", zap.Error(err))
 			}
 			runtime.EventsEmit(a.ctx, "bg-refresh:reviews")

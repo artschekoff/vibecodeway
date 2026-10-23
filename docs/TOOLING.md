@@ -131,13 +131,13 @@ vibecodeway-cli agent-tool call --name list_contexts --args '{}'
 
 ## find_contexts_by_jira_status
 
-Find every context that has at least one Jira issue in the given status (e.g. 'Closed', 'Done', 'In Progress'). Match is case-insensitive. Returns the matching contexts' id, key and status.
+Find every context that has at least one Jira issue in the given status. jiraStatus must be an EXACT Jira workflow status name (e.g. 'In Progress', 'Done', 'In Code Review') — case-insensitive. The special value 'open' matches any NOT-finished issue (anything that is not done/closed/cancelled/…). A zero-hit result includes availableStatuses — pick from it and retry.
 
 **Write:** no
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `jiraStatus` | string | yes | the Jira issue status to match, e.g. 'Closed' |
+| `jiraStatus` | string | yes | exact Jira workflow status (e.g. 'In Progress'), or 'open' for any not-finished issue |
 
 ```sh
 vibecodeway-cli agent-tool call --name find_contexts_by_jira_status --args '{}'
@@ -294,6 +294,38 @@ Leave a comment on a pull request (a review with no approval state). Requires a 
 
 ```sh
 vibecodeway-cli agent-tool call --name comment_pr --args '{}'
+```
+
+## list_author_prs
+
+List a user's open pull requests in a repo. Defaults to the authenticated user (@me) and to the app's last-synced snapshot (lazy load); pass refresh=true to fetch the latest state from GitHub and update the snapshot first. Other users' PRs are always fetched live and not cached.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `refresh` | boolean | no | fetch the latest state from GitHub and update the snapshot before answering (default false) |
+| `repo` | string | yes | repository as 'owner/name' |
+| `user` | string | no | GitHub login of the PR author (optional, default @me) |
+
+```sh
+vibecodeway-cli agent-tool call --name list_author_prs --args '{}'
+```
+
+## get_pr_status
+
+Get one pull request's status (review decision, update-branch need, CI, unresolved comments) from the app's last-synced snapshot (lazy load). Pass refresh=true to fetch the latest state from GitHub, update the snapshot, and answer from it. An uncached PR is fetched automatically.
+
+**Write:** no
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `number` | number | yes | the pull request number |
+| `refresh` | boolean | no | fetch the latest state from GitHub and update the snapshot before answering (default false) |
+| `repo` | string | yes | repository as 'owner/name' |
+
+```sh
+vibecodeway-cli agent-tool call --name get_pr_status --args '{}'
 ```
 
 ## list_commits

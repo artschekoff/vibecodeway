@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVimMode } from "./vimMode";
 
-type VimMode = { dispose: () => void };
+type VimMode = {
+  dispose: () => void;
+  on?: (event: string, handler: (ev: { mode: string }) => void) => void;
+};
 
 /**
  * Binds monaco-vim to any Monaco editor, driven by the app-wide vim setting.
@@ -11,11 +14,21 @@ type VimMode = { dispose: () => void };
  * Usage: call `attach(editor)` from Monaco's `onMount`, and render
  * `<VimStatusBar />` wherever the ex/command line belongs.
  */
-export function useMonacoVim() {
+export function useMonacoVim(opts?: {
+  // Prose boxes start in INSERT mode: people type (or dictate) straight into
+  // them, and a NORMAL-mode start silently eats the first characters as vim
+  // commands until an `i`/`a` happens to land. Code editors keep NORMAL.
+  startInInsert?: boolean;
+}) {
   const enabled = useVimMode();
+  const startInInsert = opts?.startInInsert ?? false;
   const editorRef = useRef<unknown>(null);
   const statusRef = useRef<HTMLDivElement | null>(null);
   const modeRef = useRef<VimMode | null>(null);
+  // The current vim mode ("normal" | "insert" | "visual" | "replace"), kept
+  // for call sites that bind keys differently per mode (Enter submits a note
+  // in NORMAL, inserts a newline in INSERT).
+  const vimState = useRef("normal");
   // Bumped when the editor mounts, so the binding effect re-runs once the
   // instance exists (onMount fires after the first render).
   const [mounted, setMounted] = useState(0);
@@ -43,6 +56,16 @@ export function useMonacoVim() {
         }
         if (cancelled || !editorRef.current || !statusRef.current) return;
         modeRef.current = initVimMode(editorRef.current, statusRef.current);
+        modeRef.current.on?.("vim-mode-change", (ev) => { vimState.current = ev.mode; });
+        if (startInInsert) {
+          // VimMode.Vim is the CodeMirror vim API; the adapter instance stands
+          // in for `cm`. Feeding "i" flips the fresh NORMAL state to INSERT.
+          const VimModeCls = (mod.VimMode ??
+            (mod as { default?: { VimMode?: unknown } }).default?.VimMode) as
+            | { Vim?: { handleKey?: (cm: unknown, key: string) => void } }
+            | undefined;
+          VimModeCls?.Vim?.handleKey?.(modeRef.current, "i");
+        }
       })
       .catch((err) => console.error("monaco-vim failed to load:", err));
     // Disposing restores the editor's normal keybindings, so flipping the
@@ -52,7 +75,7 @@ export function useMonacoVim() {
       modeRef.current?.dispose();
       modeRef.current = null;
     };
-  }, [enabled, mounted]);
+  }, [enabled, mounted, startInInsert]);
 
   const VimStatusBar = useCallback(
     () => (
@@ -74,5 +97,7 @@ export function useMonacoVim() {
     [enabled],
   );
 
-  return { enabled, attach, VimStatusBar };
+  const getVimMode = useCallback(() => vimState.current, []);
+
+  return { enabled, attach, VimStatusBar, getVimMode };
 }

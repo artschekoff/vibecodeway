@@ -61,11 +61,6 @@ type Runner struct {
 // Option configures a Runner.
 type Option func(*Runner)
 
-// WithBinPath overrides the acli binary path (default: "acli" resolved via PATH).
-func WithBinPath(path string) Option {
-	return func(r *Runner) { r.binPath = path }
-}
-
 // WithTimeout overrides the per-command execution timeout (default 30s).
 func WithTimeout(d time.Duration) Option {
 	return func(r *Runner) { r.timeout = d }

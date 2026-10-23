@@ -423,6 +423,61 @@ type ghPR struct {
 		State       string                 `json:"state"`
 		SubmittedAt string                 `json:"submittedAt"`
 	} `json:"reviews"`
+	// ReviewRequests: users (login) or teams (name) whose review is pending.
+	ReviewRequests []struct {
+		Login string `json:"login"`
+		Name  string `json:"name"`
+	} `json:"reviewRequests"`
+}
+
+func (p ghPR) pendingReviewers() []string {
+	var out []string
+	for _, rr := range p.ReviewRequests {
+		if rr.Login != "" {
+			out = append(out, rr.Login)
+		} else if rr.Name != "" {
+			out = append(out, rr.Name)
+		}
+	}
+	return out
+}
+
+// withPendingReviewers marks re-requested reviewers as "pending" (their old
+// decision no longer stands) and adds never-reviewed requestees. When every
+// changes-requested reviewer has been re-requested, the PR is back to
+// "review_required": the ball is in the reviewers' court, not the author's.
+func withPendingReviewers(pr vcs.PRData) vcs.PRData {
+	if len(pr.PendingReviewers) == 0 {
+		return pr
+	}
+	seen := map[string]bool{}
+	for i := range pr.Reviewers {
+		seen[pr.Reviewers[i].Login] = true
+	}
+	for _, login := range pr.PendingReviewers {
+		found := false
+		for i := range pr.Reviewers {
+			if pr.Reviewers[i].Login == login {
+				pr.Reviewers[i].State = "pending"
+				found = true
+			}
+		}
+		if !found && !seen[login] {
+			pr.Reviewers = append(pr.Reviewers, vcs.ReviewerDecision{Login: login, State: "pending"})
+		}
+	}
+	if pr.ReviewStatus == "changes_requested" {
+		still := false
+		for _, rv := range pr.Reviewers {
+			if rv.State == "changes_requested" {
+				still = true
+			}
+		}
+		if !still {
+			pr.ReviewStatus = "review_required"
+		}
+	}
+	return pr
 }
 
 // parseGHPRList unmarshals the JSON output of `gh pr list --json ...` into []vcs.PRData.
@@ -437,7 +492,7 @@ func parseGHPRList(data []byte, errLabel string) ([]vcs.PRData, error) {
 		for i, c := range p.StatusCheckRollup {
 			states[i] = c.State
 		}
-		result = append(result, vcs.PRData{
+		pd := vcs.PRData{
 			Number:           p.Number,
 			Title:            p.Title,
 			Author:           p.Author.Login,
@@ -451,7 +506,19 @@ func parseGHPRList(data []byte, errLabel string) ([]vcs.PRData, error) {
 			CIStatus:         aggregateCIStatus(states),
 			CreatedAt:        p.CreatedAt,
 			UpdatedAt:        p.UpdatedAt,
-		})
+			PendingReviewers: p.pendingReviewers(),
+		}
+		// Per-reviewer decisions when the query asked for `reviews`
+		// (ListChangesRequestedByUser) — lets the sync tell whose decision
+		// the changes-requested state actually is.
+		if len(p.Reviews) > 0 {
+			entries := make([]reviewEntry, len(p.Reviews))
+			for i, rv := range p.Reviews {
+				entries[i] = reviewEntry{Login: rv.Author.Login, State: rv.State, SubmittedAt: rv.SubmittedAt}
+			}
+			pd.Reviewers = collapseReviewerDecisions(entries, p.Author.Login)
+		}
+		result = append(result, pd)
 	}
 	return result, nil
 }
@@ -491,7 +558,7 @@ func parseGHPRSingle(data []byte) (vcs.PRData, error) {
 }
 
 // prListJSONFields is the shared --json field set for `gh pr list` calls.
-const prListJSONFields = "number,title,author,state,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt"
+const prListJSONFields = "number,title,author,state,reviewDecision,url,headRefName,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,reviewRequests"
 
 // reviewRequestedSearch builds the `gh pr list --search` query for PRs awaiting a
 // given login's review. login may be "@me" or a concrete GitHub username.
@@ -540,6 +607,7 @@ func (r *Runner) ListAuthoredPRs(ctx context.Context, owner, repo, login string)
 		if raw, ok := reviewsByPR[prs[i].Number]; ok {
 			prs[i].Reviewers = latestReviewerDecisions(raw, prs[i].Author)
 		}
+		prs[i] = withPendingReviewers(prs[i])
 	}
 	return prs, nil
 }
@@ -616,6 +684,45 @@ func (r *Runner) ListChangesRequestedForUser(ctx context.Context, owner, repo, l
 	return parseGHPRList(out, "changes requested PRs")
 }
 
+// CountUnresolvedThreads returns the number of unresolved review threads on a PR.
+// Thread resolution only exists in the GraphQL API, hence the dedicated query.
+// ponytail: first 100 threads only; paginate if a PR ever exceeds that.
+func (r *Runner) CountUnresolvedThreads(ctx context.Context, owner, repo string, prNumber int) (int, error) {
+	out, err := r.run(ctx, []string{
+		"api", "graphql",
+		"-f", `query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}`,
+		"-F", "owner=" + owner,
+		"-F", "name=" + repo,
+		"-F", "number=" + strconv.Itoa(prNumber),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("gh api graphql reviewThreads: %w", err)
+	}
+	var resp struct {
+		Data struct {
+			Repository struct {
+				PullRequest struct {
+					ReviewThreads struct {
+						Nodes []struct {
+							IsResolved bool `json:"isResolved"`
+						} `json:"nodes"`
+					} `json:"reviewThreads"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return 0, fmt.Errorf("parse reviewThreads: %w", err)
+	}
+	count := 0
+	for _, n := range resp.Data.Repository.PullRequest.ReviewThreads.Nodes {
+		if !n.IsResolved {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // prReviewArgs builds the `gh pr review` argv for a review action. action is one
 // of "--approve", "--request-changes", "--comment". body is appended only when set.
 func prReviewArgs(owner, repo string, number int, action, body string) []string {
@@ -690,7 +797,7 @@ func (r *Runner) ListChangesRequestedByUser(ctx context.Context, owner, repo str
 		"--repo", owner + "/" + repo,
 		"--search", changesRequestedSearch("@me"),
 		"--state", "open",
-		"--json", prListJSONFields,
+		"--json", prListJSONFields + ",reviews",
 		"--limit", "100",
 	})
 	if err != nil {

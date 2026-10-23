@@ -51,7 +51,7 @@ func TestListTodoItems_ResolvesPRContext(t *testing.T) {
 	// vcs_pull_requests -> context_vcs_branches -> contexts.
 	_, err = s.DB().ExecContext(ctx,
 		`INSERT INTO vcs_repos (id, platform, owner, name, created_at)
-		 VALUES ('repo-1', 'github', 'juna-health', 'juna-api', datetime('now'))`)
+		 VALUES ('repo-1', 'github', 'acme', 'acme-api', datetime('now'))`)
 	require.NoError(t, err)
 	_, err = s.DB().ExecContext(ctx,
 		`INSERT INTO context_vcs_branches (id, context_id, repo_id, branch, created_at)
@@ -64,9 +64,9 @@ func TestListTodoItems_ResolvesPRContext(t *testing.T) {
 
 	require.NoError(t, s.ReplaceTodoItems(ctx, []AITodoItem{
 		// Bare "repoName#num" form (what the board data produces today).
-		{Kind: "rerequest_pr", Title: "Rerequest review for PR JH-3051", RefType: "pr", RefKey: "juna-api#247", Priority: "high", Position: 0, Source: "ai"},
+		{Kind: "rerequest_pr", Title: "Rerequest review for PR JH-3051", RefType: "pr", RefKey: "acme-api#247", Priority: "high", Position: 0, Source: "ai"},
 		// Owner-qualified "owner/repoName#num" form (prompt example).
-		{Kind: "rerequest_pr", Title: "Rerequest review for PR JH-3051", RefType: "pr", RefKey: "juna-health/juna-api#247", Priority: "high", Position: 1, Source: "ai"},
+		{Kind: "rerequest_pr", Title: "Rerequest review for PR JH-3051", RefType: "pr", RefKey: "acme/acme-api#247", Priority: "high", Position: 1, Source: "ai"},
 		// A pr ref with no matching PR row stays empty.
 		{Kind: "make_pr", Title: "PR work", RefType: "pr", RefKey: "other#9", Priority: "low", Position: 2, Source: "ai"},
 	}))

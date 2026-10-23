@@ -2,6 +2,7 @@ import { useHotkey } from "../hotkeys/HotkeyProvider";
 import { useTabContext } from "../contexts/TabContext";
 import { GetVCSPRsForContext, RefreshContextPRs } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
+import { jumpToNextWaiting } from "../lib/terminalAttention";
 
 /**
  * Registers shell-level (global scope) hotkey handlers that don't own a
@@ -9,7 +10,7 @@ import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
  * currently-active context tab. Mounted once inside TabProvider.
  */
 export function GlobalHotkeys() {
-  const { tabs, activeTabId, focusNextTab, focusPrevTab, closeTab, openBoardTab, openAskTab } = useTabContext();
+  const { tabs, activeTabId, focusNextTab, focusPrevTab, closeTab, openBoardTab, openAskTab, openEditorTab } = useTabContext();
   const active = tabs.find((t) => t.id === activeTabId);
   const contextId = active?.contextId;
   const contextKey = active?.contextKey;
@@ -20,6 +21,9 @@ export function GlobalHotkeys() {
   // ⌘⇧M / ⌘⇧A — jump to the My Board / Ask AI tab from anywhere.
   useHotkey("board.open", openBoardTab, { scope: "global" });
   useHotkey("ai.ask", openAskTab, { scope: "global" });
+
+  // ⌘⇧J — jump to the next terminal whose agent rang for input.
+  useHotkey("terminal.jumpWaiting", () => { jumpToNextWaiting({ openEditorTab, openAskTab }); }, { scope: "global" });
 
   // ⌘⇧W — close the active context tab. closeTab is a no-op on pinned tabs.
   useHotkey("tabs.close", () => {
@@ -47,5 +51,3 @@ export function GlobalHotkeys() {
 
   return null;
 }
-
-export default GlobalHotkeys;

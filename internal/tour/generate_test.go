@@ -59,7 +59,7 @@ func TestGenerate_ValidJSONOnFirstTry(t *testing.T) {
 	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{responses: []string{validTourJSON}}
 
-	f, err := Generate(context.Background(), fake, repoPath, "transcript tail here")
+	f, err := Generate(context.Background(), fake, repoPath, "transcript tail here", "")
 	require.NoError(t, err)
 	require.NotNil(t, f)
 	assert.Equal(t, 1, f.Version)
@@ -78,7 +78,7 @@ func TestGenerate_RetriesOnceOnInvalidJSONThenSucceeds(t *testing.T) {
 	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{responses: []string{"not json at all", validTourJSON}}
 
-	f, err := Generate(context.Background(), fake, repoPath, "transcript")
+	f, err := Generate(context.Background(), fake, repoPath, "transcript", "")
 	require.NoError(t, err)
 	require.NotNil(t, f)
 	assert.Equal(t, "Add analytics dashboard", f.Title)
@@ -97,7 +97,7 @@ func TestGenerate_BothAttemptsInvalid_ReturnsWrappedError(t *testing.T) {
 	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{responses: []string{"still not json", "also not json"}}
 
-	f, err := Generate(context.Background(), fake, repoPath, "transcript")
+	f, err := Generate(context.Background(), fake, repoPath, "transcript", "")
 	require.Error(t, err)
 	assert.Nil(t, f)
 	assert.True(t, errors.Is(err, ErrInvalid), "wrapped error must still satisfy errors.Is(err, ErrInvalid)")
@@ -111,7 +111,7 @@ func TestGenerate_ValidJSONButFailsSchemaValidation_RetriesThenFails(t *testing.
 	invalidSchema := `{"version": 1, "title": "x", "steps": []}`
 	fake := &fakeAIClient{responses: []string{invalidSchema, invalidSchema}}
 
-	f, err := Generate(context.Background(), fake, repoPath, "transcript")
+	f, err := Generate(context.Background(), fake, repoPath, "transcript", "")
 	require.Error(t, err)
 	assert.Nil(t, f)
 	assert.True(t, errors.Is(err, ErrInvalid))
@@ -122,7 +122,7 @@ func TestGenerate_LLMCallError_Propagates(t *testing.T) {
 	repoPath := repoWithChanges(t)
 	fake := &fakeAIClient{errs: []error{errors.New("boom"), errors.New("boom again")}}
 
-	_, err := Generate(context.Background(), fake, repoPath, "transcript")
+	_, err := Generate(context.Background(), fake, repoPath, "transcript", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "boom again")
 }
@@ -133,7 +133,7 @@ func TestGenerate_EmptyDiff_ReturnsErrNoChangesWithoutCallingTheLLM(t *testing.T
 
 	fake := &fakeAIClient{responses: []string{validTourJSON}}
 
-	f, err := Generate(context.Background(), fake, repoPath, "transcript")
+	f, err := Generate(context.Background(), fake, repoPath, "transcript", "")
 	require.Error(t, err)
 	assert.Nil(t, f)
 	assert.True(t, errors.Is(err, ErrNoChanges), "expected errors.Is(err, ErrNoChanges), got %v", err)

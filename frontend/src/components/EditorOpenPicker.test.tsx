@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const H = vi.hoisted(() => ({
   EnsureContextEditorWorkspace: vi.fn(),
   CheckoutInWorkspace: vi.fn(),
+  EnsureBranchWorktree: vi.fn(),
 }));
 vi.mock("../../wailsjs/go/main/App", () => H);
 
@@ -32,20 +33,23 @@ describe("EditorOpenPicker", () => {
     vi.clearAllMocks();
   });
 
-  it("Cmd+E with 2 worktrees shows a picker; ArrowDown+Enter opens the 2nd worktree", async () => {
+  it("Cmd+E with 2 branches shows a picker; ArrowDown+Enter checks out and opens the 2nd", async () => {
     H.EnsureContextEditorWorkspace.mockResolvedValue({
       ready: true,
       worktrees: [
         { repoId: "r1", repoName: "auth", branch: "main", worktreePath: "/wt/a" },
-        { repoId: "r1", repoName: "auth", branch: "feat", worktreePath: "/wt/b" },
+        { repoId: "r1", repoName: "auth", branch: "feat", worktreePath: "" },
       ],
       choices: [],
     });
+    H.EnsureBranchWorktree.mockResolvedValue("/wt/b");
     renderPicker();
     fireEvent.keyDown(window, { key: "e", metaKey: true });
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(H.EnsureBranchWorktree).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: "ArrowDown" });
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(openEditorTab).toHaveBeenCalledWith("ctx1", "ENG-1", "/wt/b");
+    await waitFor(() => expect(openEditorTab).toHaveBeenCalledWith("ctx1", "ENG-1", "/wt/b"));
+    expect(H.EnsureBranchWorktree).toHaveBeenCalledWith("r1", "feat");
   });
 });

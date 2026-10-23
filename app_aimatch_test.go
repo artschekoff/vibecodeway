@@ -83,6 +83,31 @@ func TestContextMatchSignal_NoRelations_OnlyOwnIssues(t *testing.T) {
 	assert.Equal(t, []string{"JIRA-1"}, ticketKeys)
 }
 
+func TestContextMatchSignal_IncludesParentTicketKeys(t *testing.T) {
+	a, jiraRepo := newAIMatchTestApp(t)
+	org, err := a.db.CreateOrganization(a.ctx, "org")
+	require.NoError(t, err)
+
+	c, err := a.db.CreateContext(a.ctx, "CTX-A", org.ID)
+	require.NoError(t, err)
+	// Subtask JIRA-10 whose parent is JIRA-1: branches named after the parent
+	// (feat_JIRA-1_...) must match too.
+	_, err = jiraRepo.UpsertIssue(a.ctx, c.ID, "JIRA-10", "Subtask", "", "", "", "", "", "JIRA-1", "")
+	require.NoError(t, err)
+
+	_, _, ticketKeys, err := a.contextMatchSignal(c.ID)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"JIRA-10", "JIRA-1"}, ticketKeys)
+
+	matchers := buildIdentifierMatchers(ticketKeys)
+	hits := regexMatchBranches([]MatchedBranch{
+		{Platform: "github", OwnerRepo: "o/r", Branch: "feat_JIRA-1_parent-work"},
+		{Platform: "github", OwnerRepo: "o/r", Branch: "feat_JIRA-100_other"},
+	}, matchers)
+	require.Len(t, hits, 1)
+	assert.Equal(t, "feat_JIRA-1_parent-work", hits[0].Branch)
+}
+
 func TestContextMatchSignal_DedupesSharedJiraKey(t *testing.T) {
 	a, jiraRepo := newAIMatchTestApp(t)
 	org, err := a.db.CreateOrganization(a.ctx, "org")

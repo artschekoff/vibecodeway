@@ -85,7 +85,7 @@ import {
   GetContextChanges,
   ConfirmAction,
 } from "../../wailsjs/go/main/App";
-import { BrowserOpenURL, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { BrowserOpenURL, ClipboardSetText, EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useCheckout } from "../lib/useCheckout";
 import { applyStatusChange } from "../lib/statusChange";
 import StatusToggle from "../components/StatusToggle";
@@ -109,9 +109,10 @@ import { ReasoningChainGraph } from "../components/ReasoningChainGraph";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
-import CheckoutLogModal from "../components/CheckoutLogModal";
 import { SolveWithAIModal } from "../components/SolveWithAIModal";
 import FileDiff from "../components/FileDiff";
+import { AIMatchPicker, type AIMatchCandidate } from "../components/AIMatchPicker";
+import { MarkdownBody } from "../components/MarkdownBody";
 import { PRStatusBadge } from "../components/PRStatusBadge";
 import { OpenEditorPicker } from "../components/OpenEditorPicker";
 import { WorkspacePicker } from "../components/WorkspacePicker";
@@ -242,7 +243,7 @@ function PRCommentItem({ comment, depth = 0, onMarkViewed }: { comment: import("
           <button className="mark-viewed-btn" onClick={() => onMarkViewed(comment.id)} title="Mark as viewed"><Check size={13} /></button>
         )}
       </div>
-      <div className="pr-comment-body">{comment.body}</div>
+      <div className="pr-comment-body"><MarkdownBody text={comment.body} /></div>
       {(comment.replies ?? []).map((r) => (
         <PRCommentItem key={r.id} comment={r} depth={depth + 1} onMarkViewed={onMarkViewed} />
       ))}
@@ -382,14 +383,24 @@ export function WorkspaceMenu({
   const ref = useRef<HTMLDivElement>(null);
   // Anchored with position:fixed to the trigger's viewport rect: the branches
   // list scrolls (overflow), which clips an absolutely-positioned child menu.
-  // Same technique as the terminal's insert-command popover.
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  // Same technique as the terminal's insert-command popover. Flips above the
+  // trigger when the menu would run off the bottom of the window (the delete
+  // confirmation grows it, so this re-measures on confirmDelete too).
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) { setMenuPos(null); return; }
     const r = ref.current?.getBoundingClientRect();
-    if (r) setMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
-  }, [open]);
+    if (!r) return;
+    const menuH = menuRef.current?.getBoundingClientRect().height ?? 0;
+    const right = window.innerWidth - r.right;
+    if (r.bottom + 4 + menuH > window.innerHeight - 8) {
+      setMenuPos({ bottom: window.innerHeight - r.top + 4, right });
+    } else {
+      setMenuPos({ top: r.bottom + 4, right });
+    }
+  }, [open, confirmDelete]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -416,8 +427,11 @@ export function WorkspaceMenu({
         </span>
         {checkoutLoading ? <Spinner size={10} /> : <ChevronDown size={10} />}
       </button>
-      {open && menuPos && (
-        <div className="workspace-menu-dropdown" style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}>
+      {open && (
+        <div ref={menuRef} className="workspace-menu-dropdown"
+          // First pass renders off-screen so the flip logic can measure the
+          // menu's real height before placing it.
+          style={{ position: "fixed", top: menuPos?.top, bottom: menuPos?.bottom, right: menuPos?.right ?? 0, visibility: menuPos ? "visible" : "hidden" }}>
           <button
             className="workspace-menu-item"
             onClick={() => { onCheckout(); setOpen(false); }}
@@ -426,7 +440,14 @@ export function WorkspaceMenu({
           </button>
           <button
             className="workspace-menu-item"
-            onClick={() => { void navigator.clipboard.writeText(workspace.worktreePath); setOpen(false); }}
+            // Native clipboard via the Wails runtime: navigator.clipboard
+            // rejects silently in the WKWebView (same class of problem as
+            // window.confirm — see ConfirmAction), leaving nothing copied.
+            onClick={() => {
+              void ClipboardSetText(workspace.worktreePath).catch(() =>
+                navigator.clipboard.writeText(workspace.worktreePath).catch(() => {}));
+              setOpen(false);
+            }}
             title="Copy workspace local path"
           >
             Copy local path
@@ -487,6 +508,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [loading, setLoading] = useState(true);
   // In-context element filter: matches item ids by type for the current query.
   const [itemQuery, setItemQuery] = useState("");
+  const itemFilterRef = useRef<HTMLInputElement>(null);
   const [itemMatch, setItemMatch] = useState<store.ContextItemMatches | null>(null);
   const itemSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshError, setRefreshError] = useState("");
@@ -498,6 +520,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [editInitialTab, setEditInitialTab] = useState<"vcs" | undefined>(undefined);
   const [gitMatching, setGitMatching] = useState(false);
   const [gitMatchNote, setGitMatchNote] = useState("");
+  // AI Match proposals awaiting the user's pick — nothing links until Accept.
+  const [gitMatchCandidates, setGitMatchCandidates] = useState<AIMatchCandidate[] | null>(null);
+  const [gitMatchAccepting, setGitMatchAccepting] = useState(false);
   const [editJqlQuery, setEditJqlQuery] = useState<string | undefined>(undefined);
   const [editJiraIssues, setEditJiraIssues] = useState<Issue[] | undefined>(undefined);
   const [editSlackChannels, setEditSlackChannels] = useState<SlackChannel[] | undefined>(undefined);
@@ -519,8 +544,13 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   const [siblingContexts, setSiblingContexts] = useState<{ id: string; key: string }[]>([]);
   const [estimationHistory, setEstimationHistory] = useState<EstimationLog[]>([]);
   const [events, setEvents] = useState<ContextEvent[]>([]);
+  // The store returns events oldest-first (analysis reads them chronologically);
+  // the sidepanel shows newest-first.
+  const eventsNewestFirst = useMemo(() => [...events].reverse(), [events]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [sidepanelTab, setSidepanelTab] = useState<"events" | "changes">("events");
+  // Diffs render collapsed by default; this toggles them all at once.
+  const [changesExpandAll, setChangesExpandAll] = useState(false);
   const [changes, setChanges] = useState<main.RepoChange[]>([]);
   const [isLoadingChanges, setIsLoadingChanges] = useState(false);
   const [snapshotError, setSnapshotError] = useState("");
@@ -567,12 +597,6 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     checkoutLoading,
     checkoutError,
     setCheckoutError,
-    logs,
-    logRunning,
-    logExitCode,
-    logCommand,
-    logOpen,
-    dismissLog,
   } = useCheckout(
     (ws) => setWorkspaces(ws),
     "No local path set for this repository. Add one in the Repositories tab."
@@ -752,6 +776,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
   // ⌘⇧R — same as the Refresh button. This page is mounted only while its tab
   // is active (NonEditorContent), so a plain global registration is safe.
   useHotkey("context.refresh", () => { if (!refreshing) void handleRefresh(); }, { scope: "global" });
+  // The rest of the topbar, one chord per button (same mounted-only-when-active
+  // reasoning as context.refresh above).
+  useHotkey("context.back", () => navigateBack(_tabId), { scope: "global" });
+  useHotkey("context.markAllViewed", () => { if (!markingAllViewed && breakdown && breakdown.total > 0) void handleMarkAllViewed(); }, { scope: "global" });
+  useHotkey("context.assignAuthors", () => setShowAuthorModal(true), { scope: "global" });
+  useHotkey("context.edit", () => void openEditForm(), { scope: "global" });
+  useHotkey("context.solveAI", () => setSolveOpen(true), { scope: "global" });
+  useHotkey("context.filterItems", () => itemFilterRef.current?.focus(), { scope: "global" });
 
   const handleRefresh = async () => {
     if (!id) return;
@@ -825,26 +857,42 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     }
   };
 
+  // Fetch AI-matched branches and PROPOSE them — the user picks which to link.
   const handleGitAIMatch = async () => {
     if (!id) return;
     setGitMatching(true);
     setGitMatchNote("");
+    setGitMatchCandidates(null);
     try {
       const matches = (await AIMatchBranches(id)) ?? [];
-      let added = 0;
-      for (const m of matches) {
-        try {
-          await AddVCSBranch(id, m.platform, m.ownerRepo, m.branch, m.label, true);
-          added++;
-        } catch { /* skip individual failures (e.g. already linked) */ }
+      const fresh = matches.filter((m) =>
+        !vcsBranches.some((b) => b.repo && `${b.repo.owner}/${b.repo.name}` === m.ownerRepo && b.branch === m.branch));
+      if (fresh.length === 0) {
+        setGitMatchNote("No new matching branches found.");
+      } else {
+        setGitMatchCandidates(fresh);
       }
-      setGitMatchNote(added > 0 ? `Linked ${added} branch${added === 1 ? "" : "es"}.` : "No new matching branches found.");
-      window.dispatchEvent(new CustomEvent("context:updated", { detail: { id } }));
     } catch (e) {
       setGitMatchNote(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setGitMatching(false);
     }
+  };
+
+  const handleAcceptGitMatches = async (selected: AIMatchCandidate[]) => {
+    if (!id) return;
+    setGitMatchAccepting(true);
+    let added = 0;
+    for (const m of selected) {
+      try {
+        await AddVCSBranch(id, m.platform, m.ownerRepo, m.branch, m.label, true);
+        added++;
+      } catch { /* skip individual failures (e.g. already linked) */ }
+    }
+    setGitMatchAccepting(false);
+    setGitMatchCandidates(null);
+    setGitMatchNote(added > 0 ? `Linked ${added} branch${added === 1 ? "" : "es"}.` : "Nothing linked.");
+    window.dispatchEvent(new CustomEvent("context:updated", { detail: { id } }));
   };
 
   const openEditForm = async (initialTab?: "vcs") => {
@@ -898,7 +946,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     status: string | undefined,
     slackPayload?: SlackSavePayload,
     selectedJiraKeys?: string[],
-    _removedJiraIssueIds?: string[],
+    removedJiraIssueIds?: string[],
     textFilesPayload?: TextFilesPayload,
     removedUploadedFileIds?: string[],
     _pendingUploadTempIds?: string[],
@@ -934,6 +982,9 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       for (const jiraKey of jiraKeys) {
         progress.next(`Adding issue ${jiraKey}`);
         try { await AddIssuesToContext(id, [jiraKey]); } catch { /* best-effort */ }
+      }
+      for (const issueId of (removedJiraIssueIds ?? [])) {
+        try { await DeleteJiraIssue(issueId); } catch { /* best-effort */ }
       }
       for (const chanId of removedChannelIds) {
         try { await RemoveSlackChannel(chanId); } catch { /* best-effort */ }
@@ -1156,6 +1207,19 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
     try {
       await DeleteWorkspace(workspaceId);
       setWorkspaces((await ListAllWorkspaces() as VCSWorkspace[]) ?? []);
+    } catch (e) {
+      showToast(String(e), "error");
+    }
+  };
+
+  // Unlink a repo/branch from this context (its PRs disappear from the view;
+  // the branch itself and any workspace on disk are untouched).
+  const handleRemoveBranch = async (b: VCSBranch) => {
+    const label = b.repo ? `${b.repo.owner}/${b.repo.name}${b.branch ? `:${b.branch}` : ""}` : b.branch || b.id;
+    if (!(await ConfirmAction("Remove branch", `Remove ${label} from this context? Its PRs will no longer show here. The branch and any local workspace stay untouched.`))) return;
+    try {
+      await RemoveVCSBranch(b.id);
+      load(true);
     } catch (e) {
       showToast(String(e), "error");
     }
@@ -1715,6 +1779,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
         {!isEmpty && (
           <div className="context-search context-search--topbar">
             <input
+              ref={itemFilterRef}
               className="context-search-input"
               placeholder="Filter items…"
               value={itemQuery}
@@ -1737,7 +1802,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             >
               {markingAllViewed
                 ? <span className="btn-label">Marking…</span>
-                : <><CheckCheck size={16} /> <span className="btn-label">Mark all viewed ({breakdown.total})</span></>}
+                : <><CheckCheck size={16} /> <span className="btn-label">Mark all viewed ({breakdown.total})<ChordHint id="context.markAllViewed" /></span></>}
             </button>
           )}
           <button
@@ -1752,14 +1817,14 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             onClick={() => void openEditForm()}
             title="Edit context"
           >
-            <Pencil size={16} /> <span className="btn-label">Edit</span>
+            <Pencil size={16} /> <span className="btn-label">Edit<ChordHint id="context.edit" /></span>
           </button>
           <button
             className="btn-secondary"
             onClick={() => setSolveOpen(true)}
             title="Solve with AI"
           >
-            <Bot size={16} /> <span className="btn-label">Solve with AI</span>
+            <Bot size={16} /> <span className="btn-label">Solve with AI<ChordHint id="context.solveAI" /></span>
           </button>
           <button
             className="btn-secondary"
@@ -2151,6 +2216,16 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 {gitMatchNote && (
                   <div style={{ padding: "0 14px 8px", fontSize: 12, color: "var(--text-muted)" }}>{gitMatchNote}</div>
                 )}
+                {gitMatchCandidates && (
+                  <div style={{ padding: "0 14px" }}>
+                    <AIMatchPicker
+                      matches={gitMatchCandidates}
+                      accepting={gitMatchAccepting}
+                      onAccept={(sel) => void handleAcceptGitMatches(sel)}
+                      onCancel={() => setGitMatchCandidates(null)}
+                    />
+                  </div>
+                )}
                 {checkoutError && (
                   <div className="error-banner" style={{ margin: "0 14px 8px" }}>
                     {checkoutError}
@@ -2233,28 +2308,40 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                           {b.label && (
                             <span className="vcs-label-badge" title="Repo label">{b.label}</span>
                           )}
-                          {checkoutNode && (
-                            <span
-                              style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {checkoutNode}
-                            </span>
-                          )}
-                          {hasUnread && (
+                          {/* Controls, grouped by meaning: [workspace] | [card: viewed / unlink / count] */}
+                          <span
+                            style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {checkoutNode}
+                            {checkoutNode && (
+                              <span aria-hidden style={{ width: 1, alignSelf: "stretch", background: "var(--border)", margin: "2px 2px" }} />
+                            )}
+                            {/* Always visible: mark-viewed-btn is opacity-0 outside
+                                its whitelisted hover parents, and this header isn't one. */}
+                            {hasUnread && (
+                              <button
+                                type="button"
+                                title="Mark all PRs and comments as viewed"
+                                style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "1px 4px", borderRadius: 4 }}
+                                onClick={() => void (async () => { await MarkBranchAllViewed(b.id); load(true); void loadBreakdown(); })()}
+                              ><Check size={13} /></button>
+                            )}
                             <button
                               type="button"
-                              className="mark-viewed-btn"
-                              style={{ marginLeft: checkoutNode ? 6 : "auto" }}
-                              title="Mark all PRs and comments as viewed"
-                              onClick={() => void (async () => { await MarkBranchAllViewed(b.id); load(true); void loadBreakdown(); })()}
-                            ><Check size={13} /></button>
-                          )}
-                          {branchPRs.length > 0 && (
-                            <span className="detail-section-count" style={{ marginLeft: checkoutNode || hasUnread ? 0 : "auto" }}>
-                              {branchPRs.length}
-                            </span>
-                          )}
+                              aria-label={`remove branch ${b.branch || repoLabel}`}
+                              title="Remove this branch from the context"
+                              style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "1px 4px", borderRadius: 4 }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger, #e5534b)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                              onClick={() => void handleRemoveBranch(b)}
+                            ><Trash2 size={13} /></button>
+                            {branchPRs.length > 0 && (
+                              <span className="detail-section-count">
+                                {branchPRs.length}
+                              </span>
+                            )}
+                          </span>
                         </div>
 
                         {/* PRs for this branch */}
@@ -2363,7 +2450,16 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
             </div>
             {sidepanelTab === "changes" ? (
               <div className="sidepanel-body" style={{ overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 8 }}>
+                  {changes.length > 0 && (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 10px" }}
+                      onClick={() => setChangesExpandAll((v) => !v)}
+                    >
+                      {changesExpandAll ? "Collapse all" : "Expand all"}
+                    </button>
+                  )}
                   <button
                     className="btn-secondary"
                     style={{ fontSize: 11, padding: "2px 10px" }}
@@ -2387,8 +2483,15 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--text)" }}>
                         {repo.repoName}
                       </div>
-                      {repo.files.map((f) => (
-                        <FileDiff key={f.path} path={f.path} status={f.status} diff={f.diff} />
+                      {repo.didHitLimit && (
+                        <div role="alert" style={{ fontSize: 11, color: "#d29922", marginBottom: 6 }}>
+                          Too many active changes — only the first {repo.statusLimit.toLocaleString()} are shown.
+                        </div>
+                      )}
+                      {/* files is null (not []) for a repo with no diff — Go nil slice */}
+                      {(repo.files ?? []).map((f) => (
+                        <FileDiff key={`${f.path}:${f.commitStatus ? "branch" : "local"}`} repoPath={repo.repoPath} path={f.path} status={f.status}
+                          mode={f.commitStatus ? "branch" : f.status === "untracked" ? "untracked" : "head"} expandAll={changesExpandAll} />
                       ))}
                     </div>
                   ))
@@ -2413,7 +2516,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
                 <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", paddingTop: 24 }}>
                   No events
                 </div>
-              ) : events.map((ev) => (
+              ) : eventsNewestFirst.map((ev) => (
                 <div key={ev.id} style={{ fontSize: 12, borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 6 }}>
                   {editingEventId === ev.id ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -2632,19 +2735,11 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
           </div>
         </div>
       )}
-      <CheckoutLogModal
-        open={logOpen}
-        running={logRunning}
-        logs={logs}
-        command={logCommand}
-        exitCode={logExitCode}
-        onClose={dismissLog}
-      />
       {solveOpen && (
         <SolveWithAIModal
           contextId={contextId}
           onClose={() => setSolveOpen(false)}
-          onOpenEditor={() => void editorOpener.open(contextId, context.key)}
+          onOpenEditor={(worktreePath) => openEditorTab(contextId, context.key, worktreePath)}
         />
       )}
       {editorOpener.picker && (
@@ -2659,7 +2754,7 @@ export default function ContextDetailPage({ contextId, tabId: _tabId }: ContextD
       {editorOpener.workspacePicker && (
         <WorkspacePicker
           worktrees={editorOpener.workspacePicker.worktrees}
-          onPick={(p) => editorOpener.confirmWorkspace(p)}
+          onPick={(w) => void editorOpener.confirmWorkspace(w)}
           onCancel={editorOpener.cancel}
         />
       )}

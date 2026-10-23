@@ -448,8 +448,24 @@ func (s *Store) SearchContextIDs(ctx context.Context, query string) ([]string, e
 	}
 
 	// FTS5 query: quote each token and append * for prefix matching.
-	ftsQuery := fts5PrefixQuery(query)
+	// All-terms first (precise), then any-term: a multi-token query whose
+	// tokens live in different contexts (e.g. several Jira keys pasted at
+	// once) must still find each of them instead of returning nothing.
+	for _, ftsQuery := range []string{fts5PrefixQuery(query, "AND"), fts5PrefixQuery(query, "OR")} {
+		ids, err := s.searchContextIDsFTS(ctx, ftsQuery)
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) > 0 {
+			return ids, nil
+		}
+	}
 
+	// ponytail: LIKE fallback for short queries or tokens FTS5 skips (e.g. "pa", "ENG-")
+	return s.searchContextIDsLike(ctx, query)
+}
+
+func (s *Store) searchContextIDsFTS(ctx context.Context, ftsQuery string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT DISTINCT context_id
 		FROM context_search_fts
@@ -468,16 +484,7 @@ func (s *Store) SearchContextIDs(ctx context.Context, query string) ([]string, e
 		}
 		ids = append(ids, id)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if len(ids) > 0 {
-		return ids, nil
-	}
-
-	// ponytail: LIKE fallback for short queries or tokens FTS5 skips (e.g. "pa", "ENG-")
-	return s.searchContextIDsLike(ctx, query)
+	return ids, rows.Err()
 }
 
 // SearchContexts returns ranked cross-org search hits (id, key, org, primary
@@ -586,7 +593,7 @@ func (s *Store) SearchContextItems(ctx context.Context, contextID, query string)
 		return nil, err
 	}
 
-	ftsQuery := fts5PrefixQuery(query)
+	ftsQuery := fts5PrefixQuery(query, "AND")
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT DISTINCT source, item_id
 		FROM context_search_fts
@@ -677,14 +684,14 @@ func scanContextRows(rows *sql.Rows) ([]Context, error) {
 
 // fts5PrefixQuery converts a user query like "batch met" into FTS5 syntax "batch" * AND "met" *.
 // Each whitespace-separated token becomes a prefix term.
-func fts5PrefixQuery(input string) string {
+func fts5PrefixQuery(input, op string) string {
 	words := strings.Fields(input)
 	parts := make([]string, 0, len(words))
 	for _, w := range words {
 		escaped := strings.ReplaceAll(w, `"`, `""`)
 		parts = append(parts, `"`+escaped+`"*`)
 	}
-	return strings.Join(parts, " AND ")
+	return strings.Join(parts, " "+op+" ")
 }
 
 // TouchContext updates the updated_at timestamp of a context.

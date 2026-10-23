@@ -17,6 +17,9 @@ var assets embed.FS
 // `-ldflags "-X main.appVersion=<git describe>"` (see Makefile build-desktop).
 var appVersion = "dev"
 
+// Main window minimum; also restored after the quick-attach picker shrinks it.
+const appMinW, appMinH = 900, 600
+
 func main() {
 	app := NewApp()
 
@@ -24,8 +27,8 @@ func main() {
 		Title:     "VibeCodeWay",
 		Width:     1280,
 		Height:    800,
-		MinWidth:  900,
-		MinHeight: 600,
+		MinWidth:  appMinW,
+		MinHeight: appMinH,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
@@ -33,6 +36,7 @@ func main() {
 		OnStartup:        app.startup,
 		OnDomReady:       app.domReady,
 		OnShutdown:       app.shutdown,
+		OnBeforeClose:    app.beforeClose,
 		Bind: []interface{}{
 			app,
 		},

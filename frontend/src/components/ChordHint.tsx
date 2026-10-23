@@ -6,5 +6,3 @@ export function ChordHint({ id }: { id: string }) {
   if (!chord) return null;
   return <span className="chord-hint"> ({chord})</span>;
 }
-
-export default ChordHint;

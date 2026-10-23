@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, Terminal, ChevronsDownUp, ChevronsUpDown, RefreshCw, Folder, File as FileIcon } from "lucide-react";
+import { Copy, Terminal, ChevronsDownUp, ChevronsUpDown, Folder, File as FileIcon, ExternalLink } from "lucide-react";
+import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 import { GetContextChanges, StageFile, UnstageFile, DiscardFile, ConfirmAction, ResolveConflict } from "../../../wailsjs/go/main/App";
+import { useTabVisible } from "../../contexts/TabVisibleContext";
 import { main } from "../../../wailsjs/go/models";
 
 type Props = {
@@ -9,8 +11,6 @@ type Props = {
   // Open a new in-app terminal at the repo's local path.
   onOpenTerminal?: (repoPath: string) => void;
   // Re-sync the context from GitHub (icon shown in the repo header).
-  onRefresh?: () => void;
-  refreshing?: boolean;
   // When set, show only the repo whose repoPath matches (follows the editor's
   // repo selector). Unset => show all repos.
   activeRepoPath?: string;
@@ -188,7 +188,7 @@ const toggleAllBtnStyle: React.CSSProperties = {
   borderRadius: 4, cursor: "pointer", color: "var(--text-muted)", padding: "3px 5px", flexShrink: 0,
 };
 
-export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRefresh, refreshing, activeRepoPath, refreshSignal }: Props) {
+export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, activeRepoPath, refreshSignal }: Props) {
   const [repos, setRepos] = useState<main.RepoChange[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
   const [filter, setFilter] = useState("");
@@ -230,23 +230,38 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
     });
   };
 
+  // Single-flight (VS Code git-extension Throttler style): a slow
+  // GetContextChanges must not pile up with the 2s poll — overlapping calls
+  // resolved out of order and the sections flapped between snapshots.
+  const inFlightRef = useRef(false);
   const load = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const r = await GetContextChanges(contextId);
       if (mountedRef.current) setRepos(r ?? []);
     } catch {
       /* transient; keep last known */
+    } finally {
+      inFlightRef.current = false;
     }
   }, [contextId]);
 
+  // Poll ONLY while this editor tab is visible: hidden tabs stay mounted
+  // (display:none keeps their terminals alive), and each poll spawns git
+  // diff/status per repo — N open editor tabs used to multiply into dozens of
+  // git forks per second, pinning the CPU. document.hidden also pauses the
+  // visible tab's poll while the whole app is in the background.
+  const tabVisible = useTabVisible();
   useEffect(() => {
     let active = true;
     mountedRef.current = true; // re-arm on every (re)run — deps now include refreshSignal
-    const tick = async () => { if (active) await load(); };
+    if (!tabVisible) return () => { active = false; mountedRef.current = false; };
+    const tick = async () => { if (active && !document.hidden) await load(); };
     void tick();
     const t = setInterval(tick, POLL_MS);
     return () => { active = false; mountedRef.current = false; clearInterval(t); };
-  }, [load, refreshSignal]);
+  }, [load, refreshSignal, tabVisible]);
 
   const act = async (fn: (repoPath: string, path: string) => Promise<void>, repoPath: string, path: string) => {
     try {
@@ -374,14 +389,24 @@ export function ChangedFilesPanel({ contextId, onOpenFile, onOpenTerminal, onRef
           <div key={repo.repoName} style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
               <span style={{ flex: 1, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={repo.repoPath}>{repo.repoName}</span>
-              <button aria-label={`copy path for ${repo.repoName}`} title="Copy repo path" style={actionBtnStyle} onClick={() => void navigator.clipboard?.writeText(repo.repoPath)}><Copy size={12} /></button>
-              <button aria-label={`open terminal in ${repo.repoName}`} title="Open terminal here" style={actionBtnStyle} onClick={() => onOpenTerminal?.(repo.repoPath)}><Terminal size={12} /></button>
-              {onRefresh && (
-                <button aria-label="refresh from github" title="Refresh from GitHub" style={actionBtnStyle} disabled={refreshing} onClick={onRefresh}>
-                  <RefreshCw size={12} className={refreshing ? "spinning" : undefined} />
-                </button>
+              {repo.branch && (
+                <button aria-label={`open branch ${repo.branch} on GitHub`} title={`Open ${repo.branch} on GitHub`} style={actionBtnStyle}
+                  onClick={() => BrowserOpenURL(`https://github.com/${repo.repoName}/tree/${repo.branch}`)}><ExternalLink size={12} /></button>
               )}
+              <button aria-label={`copy path for ${repo.repoName}`} title="Copy repo path" style={actionBtnStyle} onClick={() => void navigator.clipboard?.writeText(repo.repoPath)}><Copy size={12} /></button>
+              {/* No per-repo refresh button: local changes auto-poll while the
+                  tab is visible, and the sidebar's reload button (⌘⇧R) does
+                  the full re-sync — a third refresh here was duplicate noise. */}
+              <button aria-label={`open terminal in ${repo.repoName}`} title="Open terminal here" style={actionBtnStyle} onClick={() => onOpenTerminal?.(repo.repoPath)}><Terminal size={12} /></button>
             </div>
+
+            {repo.didHitLimit && (
+              /* VS Code's git.statusLimit warning, adapted: the list is truncated, say so. */
+              <div role="alert" style={{ fontSize: 11, color: "#d29922", margin: "0 0 6px", lineHeight: 1.4 }}>
+                Too many active changes — only the first {repo.statusLimit.toLocaleString()} are shown.
+                Add noise to .gitignore, or raise “Git status limit” in editor settings (0 = unlimited).
+              </div>
+            )}
 
             {conflicts.length > 0 && (
               <div style={{ marginBottom: 6 }}>

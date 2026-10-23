@@ -16,7 +16,8 @@ const AGENT_RULE_SNIPPET = `When you finish an implementation, write a code tour
       "file": "src/x.ts",
       "anchor": "func computeDashboard(",
       "what": "Added the dashboard compute entry point",
-      "why": "Keeps aggregation out of the HTTP layer so it can be unit-tested"
+      "why": "Keeps aggregation out of the HTTP layer so it can be unit-tested",
+      "review": "optional: the PR reviewer comment this step addresses, quoted verbatim"
     }
   ]
 }`;
@@ -59,6 +60,10 @@ const actionBtnStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", background: "none", border: "1px solid var(--border)", borderRadius: 4,
   cursor: "pointer", color: "var(--text)", padding: "2px 6px",
 };
+// Disabled must LOOK disabled — an unchanged button that ignores clicks reads
+// as a bug (a broken step disables stage/discard/edit).
+const actionBtn = (disabled: boolean): React.CSSProperties =>
+  disabled ? { ...actionBtnStyle, opacity: 0.35, cursor: "default" } : actionBtnStyle;
 const badgeStyle = (color: string): React.CSSProperties => ({
   display: "inline-block", fontSize: 10, fontWeight: 600, color, background: `${color}22`,
   border: `1px solid ${color}`, borderRadius: 4, padding: "1px 6px", marginBottom: 6,
@@ -256,11 +261,12 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, 
           {step.file}
         </div>
 
-        {broken && <div role="status" style={badgeStyle("#f85149")}>File missing — step broken</div>}
-        {!broken && anchorStatus === "lost" && <div role="status" style={badgeStyle("#d29922")}>Anchor lost</div>}
-        {decision && <div role="status" style={badgeStyle("#3fb950")}>{decisionLabel(decision)}</div>}
-        {actionError && <div role="alert" style={{ fontSize: 11, color: "#f85149", marginBottom: 6 }}>{actionError}</div>}
-
+        {step.review && (
+          <div data-testid="tour-review" style={{ marginBottom: 8, padding: "6px 8px", borderLeft: "3px solid var(--warning)", background: "rgba(240, 165, 0, 0.08)", borderRadius: 4, whiteSpace: "pre-wrap" }}>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--warning)", marginBottom: 2 }}>Reviewer remark</div>
+            <div>{step.review}</div>
+          </div>
+        )}
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--text-muted)", marginBottom: 2 }}>What</div>
           <div>{step.what}</div>
@@ -323,6 +329,16 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, 
         </div>
       </div>
 
+      {/* Status strip OUTSIDE the scrollable body: a scrolled description must
+          never hide "Staged"/"File missing"/errors — that read as a dead button. */}
+      {(broken || anchorStatus === "lost" || decision || actionError) && (
+        <div style={{ padding: "6px 10px 0", flexShrink: 0 }}>
+          {broken && <div role="status" style={badgeStyle("#f85149")}>File missing — step broken</div>}
+          {!broken && anchorStatus === "lost" && <div role="status" style={badgeStyle("#d29922")}>Anchor lost</div>}
+          {decision && <div role="status" style={badgeStyle("#3fb950")}>{decisionLabel(decision)}</div>}
+          {actionError && <div role="alert" style={{ fontSize: 11, color: "#f85149", marginBottom: 6 }}>{actionError}</div>}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", borderTop: "1px solid var(--border)" }}>
         <button aria-label="previous step" title="Previous step" disabled={stepIndex === 0} onClick={() => goto(stepIndex - 1)} style={navBtnStyle}>
           <ChevronLeft size={14} />
@@ -331,13 +347,13 @@ export function TourCard({ tour, repoName, onClose, onOpenFile, onLocateAnchor, 
           <ChevronRight size={14} />
         </button>
         <div style={{ flex: 1 }} />
-        <button aria-label="stage step" title="Stage this change" disabled={broken} onClick={() => void handleStage()} style={actionBtnStyle}>
+        <button aria-label="stage step" title={broken ? "File missing — step broken" : "Stage this change"} disabled={broken} onClick={() => void handleStage()} style={actionBtn(broken)}>
           <Check size={13} />
         </button>
-        <button aria-label="discard step" title="Discard this change" disabled={broken} onClick={() => void handleDiscard()} style={actionBtnStyle}>
+        <button aria-label="discard step" title={broken ? "File missing — step broken" : "Discard this change"} disabled={broken} onClick={() => void handleDiscard()} style={actionBtn(broken)}>
           <Undo2 size={13} />
         </button>
-        <button aria-label="edit step" title="Edit in place" disabled={broken} onClick={handleEdit} style={actionBtnStyle}>
+        <button aria-label="edit step" title={broken ? "File missing — step broken" : "Edit in place"} disabled={broken} onClick={handleEdit} style={actionBtn(broken)}>
           <Pencil size={13} />
         </button>
         <button

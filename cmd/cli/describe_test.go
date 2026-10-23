@@ -126,3 +126,54 @@ func TestDescribe_JiraAddAcceptsContextKey(t *testing.T) {
 	}
 	t.Fatal("jira-add not found in describe output")
 }
+
+func TestDescribe_ContextGetOutputMatchesNestedShape(t *testing.T) {
+	got := runDescribe(t)
+	for _, c := range got["commands"].([]any) {
+		m := c.(map[string]any)
+		if m["name"] != "context-get" {
+			continue
+		}
+		out, _ := m["output"].(string)
+		// Agents historically invented flat keys (jiraConfig, .repos, .texts).
+		// The live payload nests metadata under .context and uses vcsBranches / contextTexts.
+		for _, want := range []string{`"context"`, `vcsBranches`, `contextTexts`, `pullRequests`, `issues`} {
+			if !strings.Contains(out, want) {
+				t.Errorf("context-get output schema missing %q:\n%s", want, out)
+			}
+		}
+		for _, stale := range []string{`jiraConfig`, `slackConfig`} {
+			if strings.Contains(out, stale) {
+				t.Errorf("context-get output schema still documents stale key %q:\n%s", stale, out)
+			}
+		}
+		return
+	}
+	t.Fatal("context-get not found in describe output")
+}
+
+func TestDescribe_TextListRejectsContextKey(t *testing.T) {
+	got := runDescribe(t)
+	for _, c := range got["commands"].([]any) {
+		m := c.(map[string]any)
+		if m["name"] != "text-list" {
+			continue
+		}
+		input, _ := m["input"].(string)
+		if !strings.Contains(input, "--context-id") {
+			t.Fatalf("text-list input must require --context-id, got %q", input)
+		}
+		if strings.Contains(input, "--context-key") {
+			t.Fatalf("text-list must not advertise --context-key, got %q", input)
+		}
+		if flags, ok := m["flags"].([]any); ok {
+			for _, f := range flags {
+				if f.(map[string]any)["name"] == "context-key" {
+					t.Fatal("text-list must not expose --context-key flag")
+				}
+			}
+		}
+		return
+	}
+	t.Fatal("text-list not found in describe output")
+}

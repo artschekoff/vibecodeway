@@ -107,7 +107,6 @@ import WorkflowStatusBadge from "../components/WorkflowStatusBadge";
 import { useProgress } from "../contexts/ProgressContext";
 import { usePassphrase } from "../contexts/PassphraseContext";
 import { useCheckout } from "../lib/useCheckout";
-import CheckoutLogModal from "../components/CheckoutLogModal";
 import { workspaceMatchesQuery, branchMatchesQuery } from "../lib/repoFilter";
 
 // ─── Reviews helpers ──────────────────────────────────────────────────────────
@@ -248,11 +247,11 @@ function ReviewCard({
           {review.reviewers.map((rv) => (
             <span
               key={rv.login}
-              className={`pr-status-badge${rv.state === "approved" ? " pr-status--approved" : rv.state === "changes_requested" ? " pr-status--changes-requested" : ""}`}
+              className={`pr-status-badge${rv.state === "approved" ? " pr-status--approved" : rv.state === "changes_requested" ? " pr-status--changes-requested" : rv.state === "pending" ? " pr-status--pending" : ""}`}
               style={{ fontSize: 10 }}
-              title={`${rv.login}: ${rv.state}`}
+              title={rv.state === "pending" ? `${rv.login}: review re-requested, waiting for the reviewer` : `${rv.login}: ${rv.state}`}
             >
-              {rv.state === "approved" ? "✓" : rv.state === "changes_requested" ? "✗" : "💬"} <span>{rv.login}</span>
+              {rv.state === "approved" ? "✓" : rv.state === "changes_requested" ? "✗" : rv.state === "pending" ? "⏳" : "💬"} <span>{rv.login}</span>
             </span>
           ))}
         </div>
@@ -418,13 +417,13 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
       return !v;
     });
   };
-  // "My PRs": show/hide the PRs I authored (independent of attention mode).
-  const [showMyPRs, setShowMyPRs] = useState<boolean>(
-    () => localStorage.getItem("vibecodeway:reviews:showMyPRs") !== "0"
+  // "My PRs": show only the PRs I authored (hides requested reviews).
+  const [myPRsOnly, setMyPRsOnly] = useState<boolean>(
+    () => localStorage.getItem("vibecodeway:reviews:myPRsOnly") === "1"
   );
-  const toggleShowMyPRs = () => {
-    setShowMyPRs((v) => {
-      localStorage.setItem("vibecodeway:reviews:showMyPRs", v ? "0" : "1");
+  const toggleMyPRsOnly = () => {
+    setMyPRsOnly((v) => {
+      localStorage.setItem("vibecodeway:reviews:myPRsOnly", v ? "0" : "1");
       return !v;
     });
   };
@@ -476,12 +475,6 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
     checkoutLoading: reviewCheckoutLoading,
     checkoutError: reviewCheckoutError,
     setCheckoutError: setReviewCheckoutError,
-    logs: reviewLogs,
-    logRunning: reviewLogRunning,
-    logExitCode: reviewLogExitCode,
-    logCommand: reviewLogCommand,
-    logOpen: reviewLogOpen,
-    dismissLog: dismissReviewLog,
   } = useCheckout(() => {}, "No local path set for this repository. Add one in the Repositories tab.");
 
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -1540,14 +1533,14 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   Needs my attention
                 </label>
                 <label
-                  title="Show the PRs I authored (My PRs section)"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: showMyPRs ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}
+                  title="Show only the PRs I authored"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: myPRsOnly ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}
                 >
                   <input
                     type="checkbox"
-                    checked={showMyPRs}
-                    onChange={toggleShowMyPRs}
-                    aria-label="show my PRs"
+                    checked={myPRsOnly}
+                    onChange={toggleMyPRsOnly}
+                    aria-label="my PRs only"
                     style={{ accentColor: "var(--accent)" }}
                   />
                   My PRs
@@ -1588,7 +1581,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
               <div data-testid="reviews-refresh-progress" style={{ margin: "8px 0 4px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
                   <span>
-                    {reviewsProgress.phase === "authored" ? "My PRs" : "Requested reviews"} · {reviewsProgress.repo}
+                    {reviewsProgress.phase === "authored" ? "My PRs" : reviewsProgress.phase === "requested" ? "Requested reviews" : "Syncing"} · {reviewsProgress.repo}
                   </span>
                   <span>{reviewsProgress.current}/{reviewsProgress.total}</span>
                 </div>
@@ -1618,7 +1611,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                 const url = repoUrl(repo);
                 const q = reviewFilter.trim().toLowerCase();
                 const match = (r: ReviewRequest) => !q || r.prNumber.toString().includes(q) || (r.prTitle ?? "").toLowerCase().includes(q) || (r.prAuthor ?? "").toLowerCase().includes(q);
-                const requested = reviews.filter((r) => (r.kind ?? "requested") === "requested" && match(r))
+                const requested = reviews.filter((r) => !myPRsOnly && (r.kind ?? "requested") === "requested" && match(r))
                   .filter((r) => {
                     if (!attentionOnly) return true;
                     const s = reviewStage(r);
@@ -1626,7 +1619,7 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
                   });
                 // In attention mode my own PRs surface only when they need MY fix:
                 // a merge conflict on a still-open PR.
-                const authored = reviews.filter((r) => showMyPRs && r.kind === "authored" && match(r))
+                const authored = reviews.filter((r) => r.kind === "authored" && match(r))
                   .filter((r) => !attentionOnly ||
                     ((r.mergeable === "CONFLICTING" || r.mergeStateStatus === "BEHIND") &&
                       !reviewStatusMeta(r.reviewStatus).terminal));
@@ -2209,14 +2202,6 @@ export default function ContextList({ orgId, tabId: _tabId }: ContextListProps) 
           </div>
         </div>
       )}
-      <CheckoutLogModal
-        open={reviewLogOpen}
-        running={reviewLogRunning}
-        logs={reviewLogs}
-        command={reviewLogCommand}
-        exitCode={reviewLogExitCode}
-        onClose={dismissReviewLog}
-      />
     </div>
   );
 }

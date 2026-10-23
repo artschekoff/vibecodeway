@@ -35,18 +35,20 @@ describe("TerminalPanel", () => {
     expect(terms.every((t) => t.textContent === "/r/api")).toBe(true);
   });
 
-  it("existing terminals keep their folder when spawnCwd changes; new + uses active cwd", async () => {
+  it("repo switch hides other-repo tabs (still mounted); + opens at the selected repo", async () => {
     const { rerender } = render(<TerminalPanel spawnCwd="/r/api" />, { wrapper: Wrap });
     await waitFor(() => expect(screen.getAllByTestId("term")).toHaveLength(1));
 
-    // Repo selector changes the spawn folder for future terminals only.
+    // Tabs are repo-bound: switching the selector hides /r/api's tab chip but
+    // keeps its terminal mounted (PTY alive).
     rerender(<TerminalPanel spawnCwd="/r/other" />);
     expect(screen.getByTestId("term")).toHaveTextContent("/r/api");
+    expect(screen.queryByRole("button", { name: /close terminal/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "new terminal" }));
     const terms = screen.getAllByTestId("term");
     expect(terms).toHaveLength(2);
-    expect(terms.every((t) => t.textContent === "/r/api")).toBe(true); // active cwd, not /r/other
+    expect(terms.map((t) => t.textContent).sort()).toEqual(["/r/api", "/r/other"]);
   });
 
   it("× removes a terminal", async () => {

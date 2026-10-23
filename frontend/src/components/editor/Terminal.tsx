@@ -6,6 +6,8 @@ import "@xterm/xterm/css/xterm.css";
 import { TerminalStart, TerminalWrite, TerminalResize, TerminalClose } from "../../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { useTabVisible } from "../../contexts/TabVisibleContext";
+import { markWaiting, clearWaiting, readPrefs } from "../../lib/terminalAttention";
+import { NotifyNative } from "../../../wailsjs/go/main/App";
 
 export function Terminal({ cwd, onSession, onExit }: {
   cwd: string;
@@ -29,6 +31,8 @@ export function Terminal({ cwd, onSession, onExit }: {
   // until a window resize happens to poke the observers. Refit explicitly on
   // every show, after the browser has laid the pane out (rAF).
   const tabVisible = useTabVisible();
+  const tabVisibleRef = useRef(tabVisible);
+  tabVisibleRef.current = tabVisible;
   useEffect(() => {
     if (!tabVisible) return;
     const raf = requestAnimationFrame(() => refitRef.current());
@@ -48,6 +52,11 @@ export function Terminal({ cwd, onSession, onExit }: {
       fontSize: 12,
       cursorBlink: true,
       convertEol: true,
+      // TUI agents redraw via Erase-in-Display; with this on, each erased
+      // screen is pushed into scrollback (PuTTY-style) and xterm's NATIVE
+      // bottom-following keeps working through redraws — the manual rAF
+      // correction below is then just a rarely-hit safety net.
+      scrollOnEraseInDisplay: true,
       linkHandler: { activate: openLink },
     });
     const fit = new FitAddon();
@@ -57,6 +66,32 @@ export function Terminal({ cwd, onSession, onExit }: {
     if (host.offsetWidth && host.offsetHeight) fit.fit();
 
     let sessionID = "";
+
+    // Agent "waiting for input" signals: BEL (Claude Code, terminal_bell),
+    // OSC 9 (Codex tui.notifications, iTerm2 style) and OSC 777 (notify;title;body).
+    // A terminal that is on screen is marked but not toasted; the OS
+    // notification fires only while the app window is in the background.
+    const attention = (title: string, body: string) => {
+      if (!sessionID) return;
+      const visible = tabVisibleRef.current && host.offsetParent !== null;
+      markWaiting(sessionID, title, body, visible);
+      if (readPrefs().native && !document.hasFocus()) {
+        try { void NotifyNative(title, body).catch(() => {}); } catch { /* binding absent */ }
+      }
+    };
+    term.onBell?.(() => attention("Agent is waiting for input", ""));
+    term.parser?.registerOscHandler?.(9, (data: string) => { attention("Agent notification", data); return true; });
+    term.parser?.registerOscHandler?.(777, (data: string) => {
+      const [kind, title, ...rest] = data.split(";");
+      if (kind === "notify") attention(title || "Agent notification", rest.join(";"));
+      return true;
+    });
+    const onFocus = () => { if (sessionID) clearWaiting(sessionID); };
+    term.textarea?.addEventListener("focus", onFocus);
+
+    // Writes enqueued into xterm but not yet parsed; 0 = buffer is current.
+    let pendingWrites = 0;
+    let burstStick = true;
     let cancelled = false;
     let offData: (() => void) | undefined;
     let offExit: (() => void) | undefined;
@@ -87,9 +122,22 @@ export function Terminal({ cwd, onSession, onExit }: {
       // the terminal looks "stuck at the top". If the user scrolled up
       // themselves, atBottom() is false BEFORE the write and we leave their
       // position alone.
+      //
+      // term.write() is ASYNC: the chunk is parsed later, in xterm's own
+      // scheduler. A rAF-based correction raced that parser — it could fire
+      // before the queued chunks were applied, after which a TUI redraw
+      // shifted the viewport up with no correction pending (terminal "jumps
+      // to the top", then the next burst yanks it back down — visible jerk).
+      // The write-completion callback is the only ordering guarantee xterm
+      // gives, so decide stickiness when the queue is empty (buffer state ==
+      // what the user sees) and correct once, after the whole burst parsed.
       offData = EventsOn(`term:data:${id}`, (chunk: string) => {
-        const stick = atBottom();
-        term.write(chunk, () => { if (stick && !atBottom()) term.scrollToBottom(); });
+        if (pendingWrites === 0) burstStick = atBottom();
+        pendingWrites++;
+        term.write(chunk, () => {
+          pendingWrites--;
+          if (pendingWrites === 0 && burstStick && !atBottom()) term.scrollToBottom();
+        });
       });
       offExit = EventsOn(`term:exit:${id}`, () => {
         term.write("\r\n[process exited]\r\n");
@@ -99,7 +147,7 @@ export function Terminal({ cwd, onSession, onExit }: {
     });
 
     const disposeInput = term.onData((data) => {
-      if (sessionID) void TerminalWrite(sessionID, data);
+      if (sessionID) { clearWaiting(sessionID); void TerminalWrite(sessionID, data); }
     });
 
     // Whether the viewport currently shows the live bottom of the buffer.
@@ -142,7 +190,9 @@ export function Terminal({ cwd, onSession, onExit }: {
       disposeInput.dispose();
       offData?.();
       offExit?.();
+      term.textarea?.removeEventListener("focus", onFocus);
       if (sessionID) {
+        clearWaiting(sessionID);
         onSessionRef.current?.("");
         void TerminalClose(sessionID);
         EventsOff(`term:data:${sessionID}`);

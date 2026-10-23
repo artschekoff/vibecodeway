@@ -14,7 +14,7 @@ import { EditorPRInfo } from "./EditorPRInfo";
 const pr = {
   id: "pr1", repoId: "r", branchId: "b", prNumber: 349, title: "Add note composer",
   author: "artschekoff", state: "open", isDraft: false, reviewStatus: "approved",
-  mergeable: "MERGEABLE", ciStatus: "SUCCESS", url: "https://github.com/juna-health/juna-api/pull/349",
+  mergeable: "MERGEABLE", ciStatus: "SUCCESS", url: "https://github.com/acme/acme-api/pull/349",
   headBranch: "feat_JH-2575", prCreatedAt: "", prUpdatedAt: "", fetchedAt: "",
   comments: [{ id: "c1", viewedAt: undefined }, { id: "c2", viewedAt: "2026-01-01" }],
 };
@@ -38,7 +38,7 @@ describe("EditorPRInfo", () => {
     render(<EditorPRInfo contextId="ctx1" />);
     await waitFor(() => expect(screen.getByText("Add note composer")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Add note composer"));
-    expect(BrowserOpenURL).toHaveBeenCalledWith("https://github.com/juna-health/juna-api/pull/349");
+    expect(BrowserOpenURL).toHaveBeenCalledWith("https://github.com/acme/acme-api/pull/349");
   });
 
   it("shows only the selected repo's PR when activeRepoId is set", async () => {

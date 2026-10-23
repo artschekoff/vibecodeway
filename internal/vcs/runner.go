@@ -41,14 +41,18 @@ func PlatformLabel(p Platform) string {
 
 // PRData contains the fields returned by ListPRsForBranch and ListReviewRequests.
 type PRData struct {
-	Number       int
-	Title        string
-	Author       string
-	State        string
-	ReviewStatus string
-	URL          string
-	HeadBranch   string
-	IsDraft      bool
+	// PendingReviewers are logins whose review is currently requested (GitHub
+	// reviewRequests) — after a re-request this includes reviewers whose
+	// earlier decision still stands.
+	PendingReviewers []string
+	Number           int
+	Title            string
+	Author           string
+	State            string
+	ReviewStatus     string
+	URL              string
+	HeadBranch       string
+	IsDraft          bool
 	// Mergeable is the GitHub mergeability status: "MERGEABLE", "CONFLICTING", or "UNKNOWN".
 	Mergeable string
 	// MergeStateStatus is GitHub's merge-state: "BEHIND" means the head branch is out of
@@ -75,7 +79,7 @@ type PRData struct {
 // ReviewerDecision is one reviewer's latest effective decision on a PR.
 type ReviewerDecision struct {
 	Login       string `json:"login"`
-	State       string `json:"state"` // approved | changes_requested | commented
+	State       string `json:"state"` // approved | changes_requested | commented | pending (re-requested, no new review yet)
 	SubmittedAt string `json:"submittedAt"`
 }
 
@@ -138,6 +142,10 @@ type VCSRunner interface {
 	// ListAuthoredPRs fetches the given user's open authored PRs (login "" = @me),
 	// with reviewer decisions, CI rollup, and mergeability populated.
 	ListAuthoredPRs(ctx context.Context, owner, repo, login string) ([]PRData, error)
+
+	// CountUnresolvedThreads returns the number of unresolved review threads on a PR
+	// (GitHub "Resolve conversation" state).
+	CountUnresolvedThreads(ctx context.Context, owner, repo string, prNumber int) (int, error)
 
 	// ListRepoBranches returns branch names for the given repository (up to 100).
 	ListRepoBranches(ctx context.Context, owner, repo string) ([]string, error)

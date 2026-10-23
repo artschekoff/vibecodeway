@@ -33,3 +33,20 @@ func TestApp_MyAssignedJiraIssues_listMarkAndBoard(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, list[0].Seen)
 }
+
+func TestIsSubtaskType(t *testing.T) {
+	assert.True(t, isSubtaskType("Subtask"))
+	assert.True(t, isSubtaskType("Sub-task"))
+	assert.True(t, isSubtaskType("sub task"))
+	assert.False(t, isSubtaskType("Task"))
+	assert.False(t, isSubtaskType("Story"))
+}
+
+func TestSubtaskParentCache(t *testing.T) {
+	a := newAutoLinkTestApp(t)
+	require.NoError(t, a.db.SetSubtaskParent(a.ctx, "JH-2", "JH-1"))
+	require.NoError(t, a.db.SetSubtaskParent(a.ctx, "JH-2", "JH-9")) // upsert wins
+	m, err := a.db.GetSubtaskParents(a.ctx, []string{"JH-2", "JH-404"})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"JH-2": "JH-9"}, m)
+}

@@ -16,6 +16,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useTabContext } from "../contexts/TabContext";
 import { useContextBadges, type ContextBadge } from "../hooks/useContextBadges";
+import { useWaitingTerminals, readPrefs } from "../lib/terminalAttention";
 import { TabContextMenu } from "./TabContextMenu";
 import type { Tab } from "../types";
 
@@ -74,7 +75,7 @@ function shortLabel(tab: Tab): string {
   return tab.contextKey ?? tab.title ?? "…";
 }
 
-function TabItem({ tab, isActive, orgColor, badge, onOpenMenu }: { tab: Tab; isActive: boolean; orgColor?: string; badge?: ContextBadge; onOpenMenu: (x: number, y: number, tab: Tab) => void }) {
+function TabItem({ tab, isActive, orgColor, badge, waiting, onOpenMenu }: { tab: Tab; isActive: boolean; orgColor?: string; badge?: ContextBadge; waiting?: boolean; onOpenMenu: (x: number, y: number, tab: Tab) => void }) {
   const { setActiveTab, closeTab, unpinTab } = useTabContext();
   const {
     attributes,
@@ -111,8 +112,9 @@ function TabItem({ tab, isActive, orgColor, badge, onOpenMenu }: { tab: Tab; isA
       {...attributes}
       {...listeners}
     >
-      <div className={`tab-item__icon${badge?.needsAttention ? " tab-item__icon--attention" : ""}`}>
+      <div className={`tab-item__icon${badge?.needsAttention ? " tab-item__icon--attention" : ""}${waiting ? " tab-item__icon--waiting" : ""}`}>
         <TabIcon tab={tab} orgColor={orgColor} />
+        {waiting && <span className="tab-item__waiting" title="Agent is waiting for input" aria-label="agent waiting" />}
         {badge && badge.unviewedCount > 0 && (
           <span className="tab-item__badge">{badge.unviewedCount > 99 ? "99+" : badge.unviewedCount}</span>
         )}
@@ -148,6 +150,8 @@ function TabItem({ tab, isActive, orgColor, badge, onOpenMenu }: { tab: Tab; isA
 export default function TabBar() {
   const { tabs, activeTabId, reorderTabs, forceCloseTab, closeOtherTabs, pinTab, unpinTab } = useTabContext();
   const badges = useContextBadges(activeTabId);
+  const waitingTerms = useWaitingTerminals();
+  const waitingCtx = useMemo(() => new Set(readPrefs().highlight ? waitingTerms.map((e) => e.contextId).filter(Boolean) : []), [waitingTerms]);
   const [menu, setMenu] = useState<{ x: number; y: number; tab: Tab } | null>(null);
   const orgColorMap = useOrgColorMap(tabs);
   const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs]);
@@ -179,6 +183,7 @@ export default function TabBar() {
                 isActive={tab.id === activeTabId}
                 orgColor={orgColor}
                 badge={tab.contextId ? badges.get(tab.contextId) : undefined}
+                waiting={!!tab.contextId && waitingCtx.has(tab.contextId)}
                 onOpenMenu={(x, y, tab) => setMenu({ x, y, tab })}
               />
             );
